@@ -288,7 +288,11 @@ export function trackConsoleErrors(page, { ignore = [] } = {}) {
     if (allIgnore.some((re) => re.test(text) || re.test(location))) return;
     errors.push(text);
   });
-  page.on("pageerror", (err) => errors.push(String(err)));
+  page.on("pageerror", (err) => {
+    const text = String(err);
+    if (allIgnore.some((re) => re.test(text))) return;
+    errors.push(text);
+  });
   return errors;
 }
 

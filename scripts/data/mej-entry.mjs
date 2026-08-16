@@ -44,7 +44,16 @@ const MEJ_DEFAULT_OBJECTS = {
  * @returns {Promise<JournalEntryPage>}
  */
 export async function createMejEntry(type, name, htmlContent, extraFlags = {}) {
-  const [entry] = await JournalEntry.create({
+  // JournalEntry.create() returns the created document directly (not an
+  // array) when called with a single plain-object `data` argument - an
+  // array result only happens when `data` itself is an array. Destructuring
+  // it as `const [entry] = await JournalEntry.create({...})` tried to
+  // iterate the returned Document, which isn't iterable: confirmed live via
+  // Task 14's e2e suite, this threw "TypeError: (intermediate value) is not
+  // iterable" on every real call, silently swallowed by auto-capture.mjs's
+  // own try/catch (console.error only) - createEncounter() never actually
+  // created a page.
+  const entry = await JournalEntry.create({
     name,
     pages: [{
       name,
