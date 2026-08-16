@@ -70,6 +70,33 @@ function personExtractor(page) {
   };
 }
 
+/**
+ * Partition a person's raw attribute values (flags["monks-enhanced-journal"]
+ * .attributes, a flat key->string map) into a publicly-searchable joined
+ * string and a GM-only joined string, by key membership in `hiddenKeys`.
+ *
+ * Exists as a small pure function specifically so the split itself is
+ * vitest-testable: this module has no access to `game.settings`, so it
+ * can't determine which attribute keys MEJ's per-attribute `playerHidden`
+ * sheet-settings marks hidden (see sheets/EnhancedJournalSheet.js's
+ * `fieldlist()`, a world SETTING, not page data) - the caller
+ * (scripts/search/live-index.mjs) resolves `hiddenKeys` and this function
+ * just does the mechanical split.
+ *
+ * @param {object} attributes  raw key->string map
+ * @param {Iterable<string>} hiddenKeys
+ * @returns {{visible: string, hidden: string}}
+ */
+export function splitHiddenAttributes(attributes, hiddenKeys) {
+  const hidden = new Set(hiddenKeys ?? []);
+  const visibleValues = {};
+  const hiddenValues = {};
+  for (const [key, value] of Object.entries(attributes ?? {})) {
+    (hidden.has(key) ? hiddenValues : visibleValues)[key] = value;
+  }
+  return { visible: joinValues(visibleValues), hidden: joinValues(hiddenValues) };
+}
+
 function questExtractor(page) {
   const flags = mejFlags(page);
   const objectives = Object.values(flags.objectives ?? {});

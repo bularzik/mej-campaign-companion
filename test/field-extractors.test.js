@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { EXTRACTORS, extractRecord, registerExtractor } from "../scripts/logic/field-extractors.mjs";
+import { EXTRACTORS, extractRecord, registerExtractor, splitHiddenAttributes } from "../scripts/logic/field-extractors.mjs";
 
 // Fixtures below mirror real MEJ flag/system shapes, verified against the
 // MEJ worktree (see task-8 report for the exact evidence per type):
@@ -197,5 +197,35 @@ describe("registerExtractor", () => {
     const record = extractRecord({ name: "Widget", text: { content: "a widget" } }, "custom-type");
     expect(record.fields.custom).toBe("yes");
     expect(EXTRACTORS["custom-type"]).toBeTypeOf("function");
+  });
+});
+
+describe("splitHiddenAttributes", () => {
+  // Pure split used by scripts/search/live-index.mjs to route playerHidden
+  // person attributes (a world SETTING - see sheets/EnhancedJournalSheet.js's
+  // fieldlist(), `f.shown && (game.user.isGM || !f.playerHidden)` - that
+  // this Foundry-free module has no access to) out of the public
+  // `fields.attributes` and into `gmFields.attributes`. live-index.mjs
+  // resolves `hiddenKeys`; this function just does the mechanical split.
+  const attributes = { race: "Vampire", secret: "Actually a doppelganger", occupation: "Dark Lord" };
+
+  it("partitions attribute values by key membership in hiddenKeys", () => {
+    const { visible, hidden } = splitHiddenAttributes(attributes, ["secret"]);
+    expect(visible).toContain("Vampire");
+    expect(visible).toContain("Dark Lord");
+    expect(visible).not.toContain("doppelganger");
+    expect(hidden).toBe("Actually a doppelganger");
+  });
+
+  it("returns everything as visible when hiddenKeys is empty", () => {
+    const { visible, hidden } = splitHiddenAttributes(attributes, []);
+    expect(visible).toContain("Vampire");
+    expect(visible).toContain("doppelganger");
+    expect(hidden).toBe("");
+  });
+
+  it("defensively handles missing attributes / hiddenKeys", () => {
+    expect(splitHiddenAttributes(undefined, undefined)).toEqual({ visible: "", hidden: "" });
+    expect(splitHiddenAttributes({}, ["race"])).toEqual({ visible: "", hidden: "" });
   });
 });
