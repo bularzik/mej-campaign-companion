@@ -57,15 +57,19 @@ export async function sendRevealWhisper({ audience, previousAudience, groups, ht
     let recipients;
     if (next.all && !prev.all) {
       recipients = game.users.filter((u) => !u.isGM).map((u) => u.id);
+    } else if (next.all && prev.all) {
+      recipients = [];
     } else {
-      const before = new Set(resolveRecipients(prev, groups));
+      const before = prev.all
+        ? new Set(game.users.filter((u) => !u.isGM).map((u) => u.id))
+        : new Set(resolveRecipients(prev, groups));
       recipients = resolveRecipients(next, groups).filter((id) => !before.has(id));
     }
     if (!recipients.length) return;
     const content = `<div class="mej-cc-reveal-whisper">
       <p><strong>${game.i18n.format(`${I18N}.secrets.whisperHeader`, { name: foundry.utils.escapeHTML(entryName) })}</strong></p>
       ${html}
-      <p>@UUID[${entryUuid}]{${entryName}}</p></div>`;
+      <p>@UUID[${entryUuid}]{${foundry.utils.escapeHTML(entryName)}}</p></div>`;
     await ChatMessage.implementation.create({ content, whisper: recipients });
   } catch (err) {
     console.error(`${MODULE_ID} | reveal whisper failed`, err);
