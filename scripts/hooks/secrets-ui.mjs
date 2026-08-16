@@ -25,13 +25,6 @@ function mejPageOf(sheet) {
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
 const revealsOf = (entry) => entry?.getFlag?.(MODULE_ID, REVEALS_FLAG) ?? {};
 
-/** Same shell-reload necessity as knowledge-ui.mjs's refresh (see its comment). */
-function refresh(sheet, shellHosted) {
-  const shell = shellHosted ? game.MonksEnhancedJournal?.journal : null;
-  if (shell?.rendered) shell.render({ tempOwnership: shell.tempOwnership, reload: true });
-  else sheet.render?.({ parts: ["main"] });
-}
-
 /** Short "who knows this" chip text for the GM button. */
 function chipText(audience, groups) {
   const a = normalizeAudience(audience);
@@ -64,10 +57,11 @@ async function injectGmOverlay(sheet, element, shellHosted) {
     } else {
       const audience = normalizeAudience(reveals[id]);
       button.innerHTML = `<i class="fa-solid fa-user-secret"></i> <span class="mej-cc-secret-chips">${foundry.utils.escapeHTML(chipText(audience, groups))}</span>`;
-      button.addEventListener("click", async (event) => {
+      button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        await editAudience(entry, page, id, section, sheet, shellHosted);
+        editAudience(entry, page, id, section, sheet, shellHosted)
+          .catch((err) => console.error(`${MODULE_ID} | secret reveal failed`, err));
       });
     }
     section.prepend(button);
@@ -91,7 +85,13 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
     audience, previousAudience: previous, groups,
     html: clone.innerHTML, entryUuid: entry.uuid, entryName: entry.name
   });
-  refresh(sheet, shellHosted);
+  // The updateJournalEntry hook below reloads the shell for the acting GM
+  // too - it fires locally on every client that receives the update,
+  // including this one, not just other clients - so an explicit shell
+  // refresh here would double-reload it. Popped-out sheets are not shell-
+  // hosted, so the hook's shell-only check never covers them; refresh those
+  // directly.
+  if (!shellHosted) sheet.render?.({ parts: ["main"] });
 }
 
 /** Drop reveal records whose section no longer exists in the content (spec §5). GM-side only. */
@@ -101,7 +101,13 @@ async function pruneOrphans(entry, page) {
   if (!keys.length) return;
   const liveIds = [...String(page.text?.content ?? "").matchAll(/<section\b[^>]*id="([^"]+)"[^>]*>/gi)].map((m) => m[1]);
   const { map, changed } = pruneReveals(reveals, liveIds);
-  if (changed) await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}`]: map }, { diff: false });
+  // recursive:false replaces the whole secretReveals object outright -
+  // Document#update otherwise merges nested objects key-by-key by default
+  // (diff:false only trims the payload sent over the wire, it doesn't force
+  // replacement), so a plain update here would leave pruned ids' audience
+  // records still present in storage, ready to silently reattach if a
+  // section id is ever reused.
+  if (changed) await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}`]: map }, { recursive: false });
 }
 
 /**
