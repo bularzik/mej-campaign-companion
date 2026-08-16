@@ -206,6 +206,12 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     const { registerQueryEnricher } = await import("./hooks/query-enricher.mjs");
     registerQueryEnricher();
 
+    // Phase C: block-level secret reveal UI (GM overlay + player
+    // re-enrichment). Dynamic import — it reaches live Foundry globals and
+    // the audience dialog; nothing MEJ-static, but keep the pattern.
+    const { registerSecretsUi } = await import("./hooks/secrets-ui.mjs");
+    registerSecretsUi();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.
