@@ -46,6 +46,12 @@
                             {{#if index.query}}
                             <span class="mej-cc-filtered-count">{{localize "MEJCampaignCompanion.hub.filteredCount" shown=index.rows.length total=index.total}}</span>
                             {{/if}}
+                            {{#if isGM}}
+                            <button type="button" class="mej-cc-import-open" data-action="openImportWizard"
+                                    data-tooltip="{{localize 'MEJCampaignCompanion.import.title'}}">
+                                <i class="fa-solid fa-file-import"></i> {{localize 'MEJCampaignCompanion.import.button'}}
+                            </button>
+                            {{/if}}
                         </div>
                         <ol class="mej-cc-index-list item-list scrollable">
                             {{#each index.rows}}

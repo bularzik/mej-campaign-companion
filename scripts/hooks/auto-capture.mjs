@@ -42,6 +42,7 @@ import {
 } from "../constants.mjs";
 import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import { getTimepoints, addLink } from "../data/timepoints.mjs";
+import { createMejEntry } from "../data/mej-entry.mjs";
 import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
   resolveSharedMediaShare, installShareImageWrap
@@ -147,27 +148,17 @@ const encounterPagesByCombatId = new Map();
  * onto the timeline's newest timepoint, and remember its uuid in
  * encounterPagesByCombatId so a repeat deleteCombat firing for this same
  * combat id merges into it instead of creating a duplicate (see the map's
- * doc comment above).
+ * doc comment above). Page shape (native type "text" + the
+ * monks-enhanced-journal.type flag + defaultObject seed) comes from
+ * data/mej-entry.mjs's createMejEntry, shared with the docx import wizard
+ * (Task 11) - see that module's header comment for why MEJ pages are
+ * shaped this way.
  */
 async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
   const name = buildEncounterName(sceneName, new Date().toLocaleDateString());
-  const [entry] = await JournalEntry.create({
-    name,
-    pages: [{
-      name,
-      type: "text",
-      text: { content: buildDescriptionHtml(outcome, unlinkedNames) },
-      flags: {
-        "monks-enhanced-journal": {
-          type: MEJ_ENCOUNTER_TYPE,
-          items: {},
-          dcs: {},
-          actors: buildEncounterActorRows(participants)
-        }
-      }
-    }]
+  const page = await createMejEntry(MEJ_ENCOUNTER_TYPE, name, buildDescriptionHtml(outcome, unlinkedNames), {
+    actors: buildEncounterActorRows(participants)
   });
-  const page = entry.pages.contents[0];
   encounterPagesByCombatId.set(combat.id, page.uuid);
   await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
   return page;

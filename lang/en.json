@@ -123,6 +123,40 @@
           "gmNotes": "GM Notes"
         }
       }
+    },
+    "import": {
+      "title": "Import Document",
+      "button": "Import Document",
+      "sourceLocal": "Word document (.docx)",
+      "sourceLocalHint": "Choose a .docx file. In Google Docs use File → Download → Microsoft Word (.docx); from Word, any .docx works.",
+      "chooseFile": "Choose .docx file",
+      "readingDocument": "Reading document…",
+      "cancel": "Cancel",
+      "parseError": "Could not read that file as a Word document.",
+      "noSections": "No usable content was found in the document.",
+      "reviewHint": "Review the detected sections. Choose a type for each, or skip/merge them, then create.",
+      "sectionTitle": "Title",
+      "sectionType": "Type",
+      "timepoint": "Timepoint",
+      "adjust": "Adjust",
+      "mergeUp": "Merge into previous",
+      "split": "Split section",
+      "splitTitle": "Split “{title}”",
+      "splitHere": "Split before this",
+      "splitConfirm": "Split",
+      "words": "words",
+      "typeText": "Text page",
+      "typeSkip": "Skip",
+      "introduction": "Introduction",
+      "back": "Back",
+      "create": "Import",
+      "ok": "OK",
+      "resultTitle": "Import Results",
+      "created": "Created {pages} entries and {timepoints} timepoints.",
+      "someFailed": "Some sections could not be imported:",
+      "imagesDropped": "Some images could not be uploaded and were left out.",
+      "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
+      "nothingToImport": "Every section is set to skip — nothing to import."
     }
   }
 }

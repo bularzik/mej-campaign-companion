@@ -25,6 +25,7 @@ import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchAll } from "../search/live-index.mjs";
+import { ImportWizard } from "./import-wizard.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -67,7 +68,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       deleteTimepoint: CampaignHubPage.onDeleteTimepoint,
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
-      toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers
+      toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
+      openImportWizard: CampaignHubPage.onOpenImportWizard
     }
   };
 
@@ -220,6 +222,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       orderOptions: buildOrderOptions(order, (m) => game.i18n.localize(`${I18N}.hub.order.${m}`)),
       canEdit
     };
+  }
+
+  // GM-only "Import Document" entry point (Task 11) - lives on the Index
+  // tab's toolbar, next to the type filter/sort controls (see hub.hbs). The
+  // action itself is registered regardless of GM status (Foundry always
+  // wires data-action handlers); the button is only rendered for a GM
+  // (context.isGM, set in _prepareBodyContext above), and ImportWizard.open()
+  // re-checks game.user.isGM itself as a second guard.
+  static onOpenImportWizard() {
+    ImportWizard.open();
   }
 
   static onOpenIndexRow(event, target) {

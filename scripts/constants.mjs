@@ -23,3 +23,22 @@ export const MEJ_ENCOUNTER_TYPE = "encounter";
 
 /** i18n prefix for all companion strings. */
 export const I18N = "MEJCampaignCompanion";
+
+/**
+ * Docx import wizard: the wizard's per-section type dropdown, seeded by
+ * suggestType() (logic/doc-import.mjs) and consumed by buildImportPlan().
+ * This replaces campaign-record's RECORD_TYPES: it is every MEJ type the
+ * import wizard knows how to create a page for via createMejEntry()
+ * (data/mej-entry.mjs), plus "session" (the companion's own JournalEntryPage
+ * subtype, created separately - see apps/import-wizard.mjs). The wizard's
+ * type dropdown also offers "text" (a plain, unflagged page) and "skip",
+ * same as campaign-record - those aren't part of this list because
+ * buildImportPlan special-cases them regardless of the recordTypes list.
+ */
+export const COMPANION_IMPORT_TYPES = [
+  "person", "place", "quest", "shop", "loot", "encounter",
+  "organization", "poi", "event", "list", "session", "journalentry"
+];
+
+/** Directory (under the "data" FilePicker source) inline import images upload into. */
+export const IMPORT_MEDIA_DIR = () => `worlds/${game.world.id}/${MODULE_ID}`;

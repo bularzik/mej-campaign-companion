@@ -37,6 +37,11 @@
   flex: 1;
 }
 
+.mej-cc-import-open {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .mej-cc-doctype-filter,
 .mej-cc-sort-filter {
   position: relative;
@@ -287,4 +292,71 @@
 
 .mej-cc-search-match-field::after {
   content: ":";
+}
+
+/* Import wizard: keep the review step's actions reachable when a document
+   splits into many sections. Cap the window height, scroll only the section
+   list, and pin the title and the footer buttons. Ported from
+   campaign-record's .import-wizard-app rules (styles/campaign-record.css). */
+.mej-cc-import-wizard-app {
+  max-height: 90vh;
+}
+
+.mej-cc-import-wizard-app .window-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mej-cc-import-wizard-app .mej-cc-import-wizard {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.mej-cc-import-wizard-app .mej-cc-import-review {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.mej-cc-import-wizard-app .mej-cc-import-review > .mej-cc-import-doctitle,
+.mej-cc-import-wizard-app .mej-cc-import-review > .form-footer {
+  flex: 0 0 auto;
+}
+
+.mej-cc-import-wizard-app .mej-cc-import-sections-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mej-cc-import-wizard-app .mej-cc-import-sections thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--color-bg-option, var(--color-bg, #e8e6dc));
+}
+
+.mej-cc-import-wizard-app .form-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mej-cc-import-wizard-app .form-footer button {
+  flex: 0 0 auto;
+}
+
+/* Split-section dialog: keep the Cancel/Split buttons reachable when a
+   section has many blocks — scroll the block list instead of growing the
+   dialog past the viewport. */
+.mej-cc-import-split-modal {
+  max-height: 70vh;
+  overflow-y: auto;
 }

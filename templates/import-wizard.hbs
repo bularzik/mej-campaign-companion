@@ -1,0 +1,71 @@
+<div class="mej-cc-import-wizard">
+  {{#if isSource}}
+  <p class="hint">{{localize "MEJCampaignCompanion.import.reviewHint"}}</p>
+  <fieldset class="mej-cc-import-source">
+    <legend>{{localize "MEJCampaignCompanion.import.sourceLocal"}}</legend>
+    <p class="hint">{{localize "MEJCampaignCompanion.import.sourceLocalHint"}}</p>
+    <input type="file" name="file" accept=".docx"
+           aria-label="{{localize "MEJCampaignCompanion.import.chooseFile"}}">
+  </fieldset>
+  <p class="mej-cc-import-reading" hidden>{{localize "MEJCampaignCompanion.import.readingDocument"}}</p>
+  <footer class="form-footer">
+    <button type="button" data-action="cancel">{{localize "MEJCampaignCompanion.import.cancel"}}</button>
+  </footer>
+  {{/if}}
+
+  {{#if isReview}}
+  <form class="mej-cc-import-review">
+    {{#if docTitle}}<h3 class="mej-cc-import-doctitle">{{docTitle}}</h3>{{/if}}
+    <div class="mej-cc-import-sections-scroll">
+    <table class="mej-cc-import-sections">
+      <thead><tr>
+        <th>{{localize "MEJCampaignCompanion.import.sectionTitle"}}</th>
+        <th>{{localize "MEJCampaignCompanion.import.sectionType"}}</th>
+        <th>{{localize "MEJCampaignCompanion.import.timepoint"}}</th>
+        <th>{{localize "MEJCampaignCompanion.import.adjust"}}</th>
+      </tr></thead>
+      <tbody>
+        {{#each rows}}
+        <tr data-index="{{this.index}}">
+          <td>
+            <input type="text" name="title-{{this.index}}" value="{{this.title}}">
+            <p class="hint">{{this.preview}} ({{this.wordCount}} {{localize "MEJCampaignCompanion.import.words"}})</p>
+          </td>
+          <td>
+            <select name="type-{{this.index}}">
+              {{#each this.typeOptions}}
+              <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+              {{/each}}
+            </select>
+          </td>
+          <td>
+            <input type="checkbox" name="timepoint-{{this.index}}" {{#if this.timepoint}}checked{{/if}}>
+            {{#if this.date}}<span class="hint">{{this.date}}</span>{{/if}}
+          </td>
+          <td class="mej-cc-import-adjust">
+            <button type="button" data-action="mergeUp" data-tooltip="MEJCampaignCompanion.import.mergeUp"
+                    aria-label="{{localize "MEJCampaignCompanion.import.mergeUp"}}"
+                    {{#unless this.canMergeUp}}disabled{{/unless}}>
+              <i class="fa-solid fa-arrow-up-to-line"></i>
+            </button>
+            <button type="button" data-action="splitSection" data-tooltip="MEJCampaignCompanion.import.split"
+                    aria-label="{{localize "MEJCampaignCompanion.import.split"}}"
+                    {{#unless this.canSplit}}disabled{{/unless}}>
+              <i class="fa-solid fa-scissors"></i>
+            </button>
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    </div>
+    <footer class="form-footer">
+      <button type="button" data-action="cancel">{{localize "MEJCampaignCompanion.import.cancel"}}</button>
+      <button type="button" data-action="backToSource">{{localize "MEJCampaignCompanion.import.back"}}</button>
+      <button type="button" data-action="createImport" class="bright">
+        {{localize "MEJCampaignCompanion.import.create"}}
+      </button>
+    </footer>
+  </form>
+  {{/if}}
+</div>
