@@ -72,6 +72,7 @@
   flex: 1;
 }
 
+.mej-cc-graph-open,
 .mej-cc-import-open,
 .mej-cc-export-open {
   flex: 0 0 auto;
@@ -649,4 +650,97 @@
 .mej-cc-query-embed-error {
   color: var(--color-level-error, #b91c1c);
   font-style: italic;
+}
+
+/* Relationship graph app (Task 12): standalone ApplicationV2 window, svg
+   fills the body below a slim controls row. Node/edge visuals are drawn as
+   raw SVG elements by graph-app.mjs, not templated - only the controls row
+   and svg host come from templates/graph.hbs. */
+.mej-cc-graph-app .window-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mej-cc-graph-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.mej-cc-graph-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex: 0 0 auto;
+  padding: 0.4em;
+  border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+}
+
+.mej-cc-graph-controls button {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.mej-cc-graph-controls button.active {
+  font-weight: bold;
+  border-color: var(--color-border-highlight, #ff6400);
+}
+
+.mej-cc-graph-backlinks {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  flex: 0 0 auto;
+}
+
+.mej-cc-graph-truncated {
+  flex: 1;
+  text-align: right;
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.mej-cc-graph-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.mej-cc-graph-edge {
+  stroke: var(--color-border-dark-secondary, #888);
+  stroke-width: 1.25;
+  opacity: 0.65;
+}
+
+.mej-cc-graph-edge.backlink {
+  stroke-dasharray: 4 3;
+  opacity: 0.45;
+}
+
+.mej-cc-graph-node {
+  cursor: pointer;
+}
+
+.mej-cc-graph-node circle {
+  stroke: var(--color-border-dark-secondary, #333);
+  stroke-width: 1;
+}
+
+.mej-cc-graph-node.center circle {
+  stroke-width: 3;
+  stroke: var(--color-border-highlight, #ff6400);
+}
+
+.mej-cc-graph-node text {
+  font-size: var(--font-size-11, 11px);
+  text-anchor: middle;
+  fill: var(--color-text-primary, #191813);
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--color-cool-5, #fff);
+  stroke-width: 3px;
 }

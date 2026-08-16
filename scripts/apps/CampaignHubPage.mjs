@@ -74,6 +74,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
+      openGraph: CampaignHubPage.onOpenGraph,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
       deleteDashboard: CampaignHubPage.onDeleteDashboard
@@ -342,6 +343,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // re-checks game.user.isGM as a second guard.
   static onOpenExportDialog() {
     openExportDialog();
+  }
+
+  // Player-visible "Open graph" entry point (Task 12): lives on the Index
+  // tab's toolbar, outside the isGM guard around the import/export buttons -
+  // the relationship graph itself is a read-only view any observer-level
+  // player can open (spec §5).
+  static async onOpenGraph() {
+    const { openGraph } = await import("./graph-app.mjs");
+    openGraph();
   }
 
   static onOpenIndexRow(event, target) {

@@ -224,6 +224,24 @@ Hooks.on("activateControls", (ej, ctrls) => {
   });
 });
 
+// "Open graph" header button on every MEJ subsheet (spec §5). MEJ's shell
+// fires this hook while assembling v1-style header buttons for the mounted
+// subsheet; label is an i18n key (MEJ's i18n() localizes it).
+Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
+  const doc = subsheet?.document;
+  if (!(doc instanceof JournalEntryPage)) return;
+  if (!game.MonksEnhancedJournal?.getMEJType?.(doc)) return;
+  buttons.unshift({
+    label: `${I18N}.graph.open`,
+    class: "mej-cc-open-graph",
+    icon: "fas fa-circle-nodes",
+    onclick: async () => {
+      const { openGraph } = await import("./apps/graph-app.mjs");
+      openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
+    }
+  });
+});
+
 // GM-side scene-controls entry point, mirroring how MEJ itself adds a toggle
 // to the notes control group (see monks-enhanced-journal.js's own
 // getSceneControlButtons listener: controls.notes.tools[key] = {...}, the

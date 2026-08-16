@@ -46,6 +46,8 @@
                             {{#if index.query}}
                             <span class="mej-cc-filtered-count">{{localize "MEJCampaignCompanion.hub.filteredCount" shown=index.rows.length total=index.total}}</span>
                             {{/if}}
+                            <button type="button" class="mej-cc-graph-open" data-action="openGraph"
+                                    title="{{localize 'MEJCampaignCompanion.graph.open'}}"><i class="fa-solid fa-circle-nodes"></i></button>
                             {{#if isGM}}
                             <button type="button" class="mej-cc-import-open" data-action="openImportWizard"
                                     data-tooltip="{{localize 'MEJCampaignCompanion.import.title'}}">

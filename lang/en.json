@@ -218,6 +218,14 @@
       "gmNotesHeading": "GM Notes",
       "done": "Exported {count} entries to a Word document.",
       "failed": "Could not generate the Word document. See the console for details."
+    },
+    "graph": {
+      "title": "Relationship Graph",
+      "open": "Graph",
+      "ego": "Focus",
+      "all": "Whole campaign",
+      "backlinks": "Show mention links",
+      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
     }
   }
 }
