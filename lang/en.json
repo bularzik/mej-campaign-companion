@@ -72,7 +72,8 @@
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
-        "search": "Search"
+        "search": "Search",
+        "dashboards": "Dashboards"
       },
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
@@ -133,7 +134,39 @@
           "secrets": "Secrets",
           "gmNotes": "GM Notes"
         }
+      },
+      "mentions": "Mentions",
+      "dashboards": {
+        "add": "Add dashboard",
+        "edit": "Edit dashboard",
+        "delete": "Delete dashboard",
+        "name": "Name",
+        "query": "Query",
+        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>; anything else is full-text search.",
+        "showPlayers": "Visible to players",
+        "visibleToPlayers": "Visible to players",
+        "badQuery": "That query can't be parsed.",
+        "noResults": "No matches.",
+        "empty": "No dashboards yet."
       }
+    },
+    "enricher": {
+      "noResults": "No matches.",
+      "badQuery": "Invalid @CampaignQuery."
+    },
+    "knowledge": {
+      "tags": "Tags",
+      "addTag": "Add tag…",
+      "removeTag": "Remove tag",
+      "noTags": "No tags",
+      "attributes": "Attributes",
+      "addAttribute": "Add attribute",
+      "deleteAttribute": "Delete attribute",
+      "playerHidden": "Hidden from players",
+      "newKey": "key",
+      "mentionedIn": "Mentioned in",
+      "noMentions": "No mentions yet",
+      "gmOnlyMention": "Mentioned only in GM-only content"
     },
     "import": {
       "title": "Import Document",
@@ -185,6 +218,14 @@
       "gmNotesHeading": "GM Notes",
       "done": "Exported {count} entries to a Word document.",
       "failed": "Could not generate the Word document. See the console for details."
+    },
+    "graph": {
+      "title": "Relationship Graph",
+      "open": "Graph",
+      "ego": "Focus",
+      "all": "Whole campaign",
+      "backlinks": "Show mention links",
+      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
     }
   }
 }

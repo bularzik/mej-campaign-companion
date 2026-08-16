@@ -33,15 +33,15 @@ function buildCandidates(selfEntryId) {
  * text.content as @UUID content links.
  *
  * Baseline note: campaign-record anchors its diff baseline to the last full
- * sheet render (scripts/logic/auto-link-baseline.mjs, set from
- * BaseRecordSheet#_onRender) because its inline-edit fields autosave quietly
- * (`{ render: false }`) between renders, and preUpdateJournalEntryPage skips
- * those quiet saves - so the document's live field value can silently drift
- * past the last-processed state. MEJ's page text.content has no such quiet
+ * sheet render (tracked separately, set from BaseRecordSheet#_onRender)
+ * because its inline-edit fields autosave quietly (`{ render: false }`)
+ * between renders, and preUpdateJournalEntryPage skips those quiet saves -
+ * so the document's live field value can silently drift past the
+ * last-processed state. MEJ's page text.content has no such quiet
  * autosave path: it's only written by an explicit editor "save" commit, which
  * always reaches this hook. So the pre-update `page.text.content` (the
  * content as of the last save that *did* run this hook) is already the
- * correct baseline, and the baseline module is unnecessary here.
+ * correct baseline - no separate baseline tracking is needed here.
  */
 export function registerAutoLink() {
   Hooks.on("preUpdateJournalEntryPage", (page, changes, options) => {

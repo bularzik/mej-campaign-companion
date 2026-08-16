@@ -38,6 +38,9 @@ export const MEDIA_CAPTURE_SETTING = "autoCaptureSharedMedia";
 /** World setting: Session entries created via the companion's own creation paths default to player-writable ownership. */
 export const PLAYERS_WRITE_SESSIONS_SETTING = "playersWriteSessions";
 
+/** World setting: saved dashboard queries [{id, name, query, showPlayers}] (GM-managed; world settings replicate to all clients). */
+export const SAVED_QUERIES_SETTING = "savedQueries";
+
 /** Combat flag: combatants that left mid-fight, for the end-of-combat summary. */
 export const DEPARTED_FLAG = "departed";
 

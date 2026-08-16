@@ -1,0 +1,153 @@
+// Injects the Phase B "knowledge panel" (tags, attributes, Mentioned in)
+// into every MEJ-typed journal sheet, both shell-hosted and popped out.
+// Injection hooks (no libWrapper - see the spec's §5 refinement):
+//  - "renderJournalPageSheet": fired by MEJ's shell at the end of
+//    renderSubSheet (apps/enhanced-journal.js:691) with the subsheet, its
+//    root element, and a context carrying `enhancedjournal`.
+//  - "renderEnhancedJournalSheet": the standard ApplicationV2 inheritance-
+//    chain render hook, fired when an MEJ sheet renders standalone
+//    (popped out) - the shell path never calls _onRender, so these two
+//    hooks are disjoint in practice; the injector is idempotent anyway.
+import { MODULE_ID, I18N } from "../constants.mjs";
+import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
+import { backlinksForEntry } from "../search/live-index.mjs";
+
+function asElement(html) {
+  if (!html) return null;
+  if (html instanceof HTMLElement) return html;
+  return html[0] instanceof HTMLElement ? html[0] : null; // jQuery
+}
+
+/** The page this sheet fronts, only if it's a real MEJ-typed JournalEntryPage. */
+function mejPageOf(sheet) {
+  const doc = sheet?.document;
+  if (!(doc instanceof JournalEntryPage)) return null;
+  return game.MonksEnhancedJournal?.getMEJType?.(doc) ? doc : null;
+}
+
+async function injectPanel(sheet, element, { shellHosted = false } = {}) {
+  const page = mejPageOf(sheet);
+  if (!page || !element) return;
+  element.querySelector(":scope .mej-cc-knowledge")?.remove();
+
+  const entryUuid = page.parent?.uuid ?? page.uuid;
+  const canEdit = game.user.isGM;
+  const backlinks = backlinksForEntry(entryUuid).map((row) => ({
+    ...row, icon: `fas ${game.MonksEnhancedJournal.getIcon(row.type)}`
+  }));
+  // playerHidden attribute rows must never reach a non-GM template context -
+  // the read-only branch of knowledge-panel.hbs has no playerHidden check of
+  // its own (unlike the editable branch's tag-remove/attr-hidden controls,
+  // which are already gated behind {{#if canEdit}}), so an unfiltered array
+  // here leaked hidden attribute values verbatim to any viewer with mere
+  // OBSERVER access (confirmed live via 07-knowledge.spec.mjs's leak check).
+  const attributes = canEdit ? getAttributes(page) : getAttributes(page).filter((a) => !a.playerHidden);
+  const html = await foundry.applications.handlebars.renderTemplate(
+    `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
+    { pageUuid: page.uuid, canEdit, tags: getTags(page), attributes, backlinks }
+  );
+  const panel = document.createRange().createContextualFragment(html).firstElementChild;
+  bindPanel(panel, page, sheet, shellHosted);
+  element.appendChild(panel);
+}
+
+async function saveAttributes(panel, page) {
+  const rows = [...panel.querySelectorAll("[data-attr-id]")].map((tr) => ({
+    id: tr.dataset.attrId,
+    key: tr.querySelector(".mej-cc-attr-key")?.value?.trim() ?? "",
+    value: tr.querySelector(".mej-cc-attr-value")?.value ?? "",
+    playerHidden: tr.querySelector(".mej-cc-attr-hidden")?.checked === true
+  })).filter((r) => r.key);
+  await page.update({ [`flags.${MODULE_ID}.attributes`]: rows });
+}
+
+function bindPanel(panel, page, sheet, shellHosted) {
+  if (!game.user.isGM) {
+    bindBacklinks(panel);
+    return;
+  }
+  // MEJ only auto-re-renders the shell for updates under its OWN flag
+  // namespace (enhanced-journal.js's updateJournalEntryPage hook checks a
+  // fixed renderUpdateKeys allowlist against flags["monks-enhanced-
+  // journal"], plus a few top-level keys - flags["mej-campaign-companion"]
+  // writes match none of it) - confirmed live, a tag/attribute edit through
+  // this panel left the shell showing stale content indefinitely with no
+  // fix. Shell-hosted subsheets need an explicit reload of the shell itself
+  // (mirroring MEJ's own hook's `{reload: true}` render call - a plain
+  // subsheet-only render() doesn't refire "renderJournalPageSheet", which is
+  // a custom hook MEJ's renderSubSheet fires by hand, not a generic
+  // Application render event); a standalone popped-out sheet (shellHosted
+  // false) IS itself the Application "renderEnhancedJournalSheet" fires for,
+  // so a plain render() there already re-triggers injection correctly
+  // (confirmed live).
+  const refresh = () => {
+    const shell = shellHosted ? game.MonksEnhancedJournal?.journal : null;
+    if (shell?.rendered) {
+      shell.render({ tempOwnership: shell.tempOwnership, reload: true });
+    } else {
+      sheet.render?.({ parts: ["main"] });
+    }
+  };
+
+  // Attribute field edits are coalesced through a single debounced writer:
+  // each "change" listener below fires its own async page.update() carrying
+  // the FULL current attributes array (saveAttributes reads every row fresh
+  // off the DOM), so two edits made close together - one field committed via
+  // blur, a second field edited and blurred before the first write's round
+  // trip completes - raced two concurrent page.update() calls against the
+  // same document. Confirmed live: whichever call's response arrived second
+  // won regardless of send order, so the first-sent edit could silently
+  // clobber the second-sent one's already-persisted value. Debouncing to one
+  // write per burst removes the possibility of two in-flight updates
+  // entirely - by the time the write fires, the DOM (and thus the array it
+  // reads) already reflects every edit in the burst.
+  const commitAttributes = foundry.utils.debounce(async () => {
+    await saveAttributes(panel, page);
+    refresh();
+  }, 300);
+
+  panel.querySelector(".mej-cc-tag-input")?.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const added = normalizeTagInput(event.target.value);
+    if (!added.length) return;
+    const tags = [...new Set([...getTags(page), ...added])];
+    await page.update({ [`flags.${MODULE_ID}.tags`]: tags });
+    refresh();
+  });
+  panel.querySelectorAll(".mej-cc-tag-remove").forEach((a) => a.addEventListener("click", async () => {
+    const tags = getTags(page).filter((t) => t !== a.dataset.tag);
+    await page.update({ [`flags.${MODULE_ID}.tags`]: tags });
+    refresh();
+  }));
+  panel.querySelector(".mej-cc-attr-add")?.addEventListener("click", async () => {
+    const rows = [...getAttributes(page), { id: foundry.utils.randomID(8), key: game.i18n.localize(`${I18N}.knowledge.newKey`), value: "", playerHidden: false }];
+    await page.update({ [`flags.${MODULE_ID}.attributes`]: rows });
+    refresh();
+  });
+  panel.querySelectorAll(".mej-cc-attr-delete").forEach((a) => a.addEventListener("click", () => {
+    a.closest("[data-attr-id]").remove();
+    commitAttributes();
+  }));
+  panel.querySelectorAll(".mej-cc-attr-key, .mej-cc-attr-value, .mej-cc-attr-hidden").forEach((input) =>
+    input.addEventListener("change", commitAttributes)
+  );
+  bindBacklinks(panel);
+}
+
+function bindBacklinks(panel) {
+  panel.querySelectorAll(".mej-cc-backlink-row").forEach((li) => li.addEventListener("click", async () => {
+    const entry = await fromUuid(li.dataset.uuid);
+    if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
+  }));
+}
+
+export function registerKnowledgePanel() {
+  Hooks.on("renderJournalPageSheet", (sheet, html) => {
+    injectPanel(sheet, asElement(html), { shellHosted: true }).catch((err) => console.error(`${MODULE_ID} | knowledge panel injection failed`, err));
+  });
+  Hooks.on("renderEnhancedJournalSheet", (sheet, html) => {
+    injectPanel(sheet, asElement(html), { shellHosted: false }).catch((err) => console.error(`${MODULE_ID} | knowledge panel injection failed`, err));
+  });
+}

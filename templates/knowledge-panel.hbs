@@ -1,0 +1,47 @@
+<section class="mej-cc-knowledge" data-page-uuid="{{pageUuid}}">
+    <details class="mej-cc-knowledge-tags" open>
+        <summary><i class="fa-solid fa-tags"></i> {{localize "MEJCampaignCompanion.knowledge.tags"}}</summary>
+        <div class="mej-cc-tag-chips">
+            {{#each tags}}
+            <span class="mej-cc-tag-chip">{{this}}{{#if @root.canEdit}}<a class="mej-cc-tag-remove" data-tag="{{this}}" title="{{localize 'MEJCampaignCompanion.knowledge.removeTag'}}"><i class="fa-solid fa-xmark"></i></a>{{/if}}</span>
+            {{/each}}
+            {{#if canEdit}}
+            <input type="text" class="mej-cc-tag-input" placeholder="{{localize 'MEJCampaignCompanion.knowledge.addTag'}}">
+            {{/if}}
+            {{#unless tags}}{{#unless canEdit}}<span class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.knowledge.noTags"}}</span>{{/unless}}{{/unless}}
+        </div>
+    </details>
+    <details class="mej-cc-knowledge-attrs">
+        <summary><i class="fa-solid fa-table-list"></i> {{localize "MEJCampaignCompanion.knowledge.attributes"}}</summary>
+        <table class="mej-cc-attr-table">
+            {{#each attributes}}
+            <tr data-attr-id="{{this.id}}">
+                {{#if @root.canEdit}}
+                <td><input type="text" class="mej-cc-attr-key" value="{{this.key}}"></td>
+                <td><input type="text" class="mej-cc-attr-value" value="{{this.value}}"></td>
+                <td><label title="{{localize 'MEJCampaignCompanion.knowledge.playerHidden'}}"><input type="checkbox" class="mej-cc-attr-hidden" {{#if this.playerHidden}}checked{{/if}}><i class="fa-solid fa-eye-slash"></i></label></td>
+                <td><a class="mej-cc-attr-delete" title="{{localize 'MEJCampaignCompanion.knowledge.deleteAttribute'}}"><i class="fa-solid fa-trash"></i></a></td>
+                {{else}}
+                <td class="mej-cc-attr-key-ro">{{this.key}}</td>
+                <td class="mej-cc-attr-value-ro">{{this.value}}</td>
+                {{/if}}
+            </tr>
+            {{/each}}
+        </table>
+        {{#if canEdit}}<a class="mej-cc-attr-add"><i class="fa-solid fa-plus"></i> {{localize "MEJCampaignCompanion.knowledge.addAttribute"}}</a>{{/if}}
+    </details>
+    <details class="mej-cc-knowledge-backlinks" open>
+        <summary><i class="fa-solid fa-link"></i> {{localize "MEJCampaignCompanion.knowledge.mentionedIn"}} ({{backlinks.length}})</summary>
+        <ol class="mej-cc-backlink-list">
+            {{#each backlinks}}
+            <li class="mej-cc-backlink-row" data-uuid="{{this.uuid}}">
+                <i class="{{this.icon}}"></i>
+                <span class="mej-cc-backlink-name">{{this.name}}</span>
+                {{#if this.gmOnly}}<i class="fa-solid fa-eye-slash mej-cc-backlink-gm" title="{{localize 'MEJCampaignCompanion.knowledge.gmOnlyMention'}}"></i>{{/if}}
+                <span class="mej-cc-backlink-count">×{{this.count}}</span>
+            </li>
+            {{/each}}
+        </ol>
+        {{#unless backlinks}}<span class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.knowledge.noMentions"}}</span>{{/unless}}
+    </details>
+</section>

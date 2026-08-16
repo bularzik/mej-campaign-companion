@@ -9,6 +9,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "d3-force": "^3.0.0",
+    "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "vitest": "^3.0.0"
   }

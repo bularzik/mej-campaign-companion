@@ -1,6 +1,6 @@
 import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
-  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, I18N
+  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, I18N
 } from "./constants.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
@@ -57,6 +57,13 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: false
+  });
+
+  game.settings.register(MODULE_ID, SAVED_QUERIES_SETTING, {
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
   });
 });
 
@@ -181,6 +188,17 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     // (each gated on its own world setting, checked inside the hook itself).
     registerAutoCapture();
 
+    // Injects the Phase B knowledge panel (tags/attributes/backlinks) into
+    // every MEJ-typed sheet. Dynamic import: knowledge-ui.mjs imports
+    // live-index.mjs (safe) but keep the pattern consistent and cheap.
+    const { registerKnowledgePanel } = await import("./hooks/knowledge-ui.mjs");
+    registerKnowledgePanel();
+
+    // Registers the @CampaignQuery[...] text enricher for embedding live
+    // permission-filtered query results into journal pages.
+    const { registerQueryEnricher } = await import("./hooks/query-enricher.mjs");
+    registerQueryEnricher();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.
@@ -203,6 +221,24 @@ Hooks.on("activateControls", (ej, ctrls) => {
     type: "button",
     visible: true,
     callback: () => game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID)
+  });
+});
+
+// "Open graph" header button on every MEJ subsheet (spec §5). MEJ's shell
+// fires this hook while assembling v1-style header buttons for the mounted
+// subsheet; label is an i18n key (MEJ's i18n() localizes it).
+Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
+  const doc = subsheet?.document;
+  if (!(doc instanceof JournalEntryPage)) return;
+  if (!game.MonksEnhancedJournal?.getMEJType?.(doc)) return;
+  buttons.unshift({
+    label: `${I18N}.graph.open`,
+    class: "mej-cc-open-graph",
+    icon: "fas fa-circle-nodes",
+    onclick: async () => {
+      const { openGraph } = await import("./apps/graph-app.mjs");
+      openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
+    }
   });
 });
 

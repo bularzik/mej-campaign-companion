@@ -46,6 +46,8 @@
                             {{#if index.query}}
                             <span class="mej-cc-filtered-count">{{localize "MEJCampaignCompanion.hub.filteredCount" shown=index.rows.length total=index.total}}</span>
                             {{/if}}
+                            <button type="button" class="mej-cc-graph-open" data-action="openGraph"
+                                    title="{{localize 'MEJCampaignCompanion.graph.open'}}"><i class="fa-solid fa-circle-nodes"></i></button>
                             {{#if isGM}}
                             <button type="button" class="mej-cc-import-open" data-action="openImportWizard"
                                     data-tooltip="{{localize 'MEJCampaignCompanion.import.title'}}">
@@ -62,6 +64,7 @@
                             <li class="mej-cc-index-row item flexrow" data-uuid="{{this.uuid}}" data-action="openIndexRow">
                                 <i class="mej-cc-index-icon {{this.icon}}"></i>
                                 <span class="mej-cc-index-name">{{this.name}}</span>
+                                {{#if this.mentions}}<span class="mej-cc-mention-badge" title="{{localize 'MEJCampaignCompanion.hub.mentions'}}"><i class="fa-solid fa-link"></i>{{this.mentions}}</span>{{/if}}
                                 <span class="mej-cc-index-type">{{this.typeLabel}}</span>
                             </li>
                             {{else}}
@@ -151,6 +154,45 @@
                                 {{#if search.hasQuery}}{{localize 'MEJCampaignCompanion.hub.search.noResults'}}{{else}}{{localize 'MEJCampaignCompanion.hub.search.typeToSearch'}}{{/if}}
                             </li>
                             {{/each}}
+                        </ol>
+                    </div>
+                </div>
+                <div class="tab{{#if subtabs.dashboards.active}} active{{/if}}" data-group="primary" data-tab="dashboards">
+                    <div class="tab-inner flexcol mej-cc-dashboards">
+                        {{#if dashboards.isGM}}
+                        <div class="mej-cc-dashboards-controls">
+                            <button type="button" data-action="addDashboard"><i class="fa-solid fa-plus"></i> {{localize "MEJCampaignCompanion.hub.dashboards.add"}}</button>
+                        </div>
+                        {{/if}}
+                        <ol class="mej-cc-dashboards-list scrollable">
+                            {{#each dashboards.rows}}
+                            <li class="mej-cc-dashboard" data-dashboard-id="{{this.id}}">
+                                <div class="mej-cc-dashboard-head">
+                                    <span class="mej-cc-dashboard-name">{{this.name}}</span>
+                                    <code class="mej-cc-dashboard-query">{{this.query}}</code>
+                                    {{#if @root.dashboards.isGM}}
+                                    {{#if this.showPlayers}}<i class="fa-solid fa-eye" title="{{localize 'MEJCampaignCompanion.hub.dashboards.visibleToPlayers'}}"></i>{{/if}}
+                                    <a data-action="editDashboard" title="{{localize 'MEJCampaignCompanion.hub.dashboards.edit'}}"><i class="fa-solid fa-pen"></i></a>
+                                    <a data-action="deleteDashboard" title="{{localize 'MEJCampaignCompanion.hub.dashboards.delete'}}"><i class="fa-solid fa-trash"></i></a>
+                                    {{/if}}
+                                </div>
+                                {{#if this.error}}
+                                <p class="mej-cc-dashboard-error">{{this.error}}</p>
+                                {{else}}
+                                <ol class="mej-cc-dashboard-results">
+                                    {{#each this.results}}
+                                    <li class="mej-cc-index-row item flexrow" data-uuid="{{this.uuid}}" data-action="openIndexRow">
+                                        <i class="mej-cc-index-icon {{this.icon}}"></i>
+                                        <span class="mej-cc-index-name">{{this.name}}</span>
+                                        <span class="mej-cc-index-type">{{this.typeLabel}}</span>
+                                    </li>
+                                    {{/each}}
+                                    {{#unless this.results}}<li class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.hub.dashboards.noResults"}}</li>{{/unless}}
+                                </ol>
+                                {{/if}}
+                            </li>
+                            {{/each}}
+                            {{#unless dashboards.rows}}<li class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.hub.dashboards.empty"}}</li>{{/unless}}
                         </ol>
                     </div>
                 </div>

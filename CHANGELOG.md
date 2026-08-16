@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+**Added:**
+- **Backlinks panel** ("Mentioned in") on every MEJ sheet type, showing which campaign entries link to the current entry; Hub entry index displays mention-count badges.
+- **Tags and attributes** — custom annotations on MEJ entries with per-row `playerHidden` flag for sensitive attributes.
+- **Relationship graph** — visual d3-force graph of entries connected via MEJ's `relationships` flags, ego-mode and whole-campaign toggle, an optional dashed backlink overlay for `@UUID` mentions, 200-node connection cap.
+- **Hub Dashboards tab** — saved queries with grammar support (`type:`, `tag:`, `attr:`, free-text); `@CampaignQuery[...]` page enricher for inline query results on any MEJ sheet.
+
+**Fixed / Internal:**
+- Added comprehensive unit coverage for `handleUploadRequest` validation and docx run segmentation.
+- Documented the claimed-senderId trust model for the media-upload relay (`scripts/hooks/media-relay.mjs`).
+- Removed dead `auto-link-baseline` module.
+- Added GitHub Actions CI running the unit test suite on every push.
+
 ## 0.1.0
 
 Initial release.

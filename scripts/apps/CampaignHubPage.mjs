@@ -14,7 +14,7 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, I18N } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, I18N } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -25,7 +25,8 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchAll } from "../search/live-index.mjs";
+import { searchAll, mentionBadgeCounts, runQueryAll } from "../search/live-index.mjs";
+import { parseQuery } from "../logic/query-grammar.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 
@@ -72,7 +73,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       removeLink: CampaignHubPage.onRemoveLink,
       toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
-      openExportDialog: CampaignHubPage.onOpenExportDialog
+      openExportDialog: CampaignHubPage.onOpenExportDialog,
+      openGraph: CampaignHubPage.onOpenGraph,
+      addDashboard: CampaignHubPage.onAddDashboard,
+      editDashboard: CampaignHubPage.onEditDashboard,
+      deleteDashboard: CampaignHubPage.onDeleteDashboard
     }
   };
 
@@ -81,7 +86,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       root: true,
       template: `modules/${MODULE_ID}/templates/hub.hbs`,
       templates: ["templates/generic/tab-navigation.hbs"],
-      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list"]
+      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list", ".mej-cc-dashboards-list"]
     }
   };
 
@@ -90,7 +95,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       tabs: [
         { id: "index", icon: "fa-solid fa-list" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
-        { id: "search", icon: "fa-solid fa-magnifying-glass" }
+        { id: "search", icon: "fa-solid fa-magnifying-glass" },
+        { id: "dashboards", icon: "fa-solid fa-table-columns" }
       ],
       initial: "index",
       labelPrefix: `${I18N}.hub.tabs`
@@ -144,6 +150,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     context.index = this.#indexContext();
     context.timeline = this.#timelineContext(journal, isGM);
     context.search = this.#searchContext();
+    context.dashboards = this.#dashboardsContext(isGM);
 
     return context;
   }
@@ -160,6 +167,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   #indexContext() {
     const source = buildIndexSource(game.journal.contents, game.user, game.MonksEnhancedJournal.getMEJType, this.#typeIcon.bind(this));
     const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
+    const mentionCounts = mentionBadgeCounts();
+    for (const row of rows) row.mentions = mentionCounts.get(row.uuid) ?? 0;
     const allTypes = [...new Set(source.map((r) => r.type))].sort((a, b) => this.#typeLabel(a).localeCompare(this.#typeLabel(b)));
     return {
       rows,
@@ -227,6 +236,96 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     };
   }
 
+  // Saved dashboard queries (Task 9): each stored {id, name, query,
+  // showPlayers} is re-run live through runQueryAll() on every render (never
+  // cached), so results always reflect the current index and the current
+  // user's permissions - runQueryAll() itself does the GM/OBSERVER filtering
+  // (see live-index.mjs). Players only ever see rows for queries with
+  // showPlayers === true; a GM sees every saved query regardless of that
+  // flag. A stored query that no longer parses (e.g. after a tag rename)
+  // renders as an error row via the catch below, rather than crashing the
+  // whole Hub render (spec §6).
+  #dashboardsContext(isGM) {
+    const saved = game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [];
+    const rows = saved.filter((q) => isGM || q.showPlayers === true).map((q) => {
+      try {
+        const results = runQueryAll(q.query).map((hit) => ({
+          uuid: hit.uuid, name: hit.name,
+          icon: this.#typeIcon(hit.type), typeLabel: this.#typeLabel(hit.type)
+        }));
+        return { ...q, error: null, results };
+      } catch (err) {
+        // A stored query that no longer parses renders as an error row, not a crash (spec §6).
+        return { ...q, error: game.i18n.localize(`${I18N}.hub.dashboards.badQuery`), results: [] };
+      }
+    });
+    return { rows, isGM };
+  }
+
+  /** Name + query + showPlayers prompt; returns {name, query, showPlayers} or null. */
+  static async #promptDashboard(initial = {}, { titleKey }) {
+    const esc = foundry.utils.escapeHTML;
+    return foundry.applications.api.DialogV2.prompt({
+      window: { title: titleKey },
+      content: `
+        <div class="form-group"><label>${game.i18n.localize(`${I18N}.hub.dashboards.name`)}</label>
+          <input type="text" name="name" value="${esc(initial.name ?? "")}" required autofocus></div>
+        <div class="form-group"><label>${game.i18n.localize(`${I18N}.hub.dashboards.query`)}</label>
+          <input type="text" name="query" value="${esc(initial.query ?? "")}" placeholder="type:person tag:villain text"></div>
+        <p class="hint">${game.i18n.localize(`${I18N}.hub.dashboards.queryHint`)}</p>
+        <div class="form-group"><label><input type="checkbox" name="showPlayers"${initial.showPlayers ? " checked" : ""}>
+          ${game.i18n.localize(`${I18N}.hub.dashboards.showPlayers`)}</label></div>`,
+      ok: {
+        label: `${I18N}.hub.save`,
+        callback: (event, button) => {
+          const form = button.form.elements;
+          const name = form.name.value.trim();
+          const query = form.query.value.trim();
+          if (!name || !query) return null;
+          try {
+            parseQuery(query);
+          } catch {
+            ui.notifications.warn(game.i18n.localize(`${I18N}.hub.dashboards.badQuery`));
+            return null;
+          }
+          return { name, query, showPlayers: form.showPlayers.checked === true };
+        }
+      },
+      rejectClose: false
+    });
+  }
+
+  static async onAddDashboard() {
+    if (!game.user.isGM) return;
+    const result = await CampaignHubPage.#promptDashboard({}, { titleKey: `${I18N}.hub.dashboards.add` });
+    if (!result) return;
+    const saved = [...(game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [])];
+    saved.push({ id: foundry.utils.randomID(8), ...result });
+    await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
+    this.render({ parts: ["main"] });
+  }
+
+  static async onEditDashboard(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-dashboard-id]")?.dataset.dashboardId;
+    const saved = [...(game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [])];
+    const existing = saved.find((q) => q.id === id);
+    if (!existing) return;
+    const result = await CampaignHubPage.#promptDashboard(existing, { titleKey: `${I18N}.hub.dashboards.edit` });
+    if (!result) return;
+    Object.assign(existing, result);
+    await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
+    this.render({ parts: ["main"] });
+  }
+
+  static async onDeleteDashboard(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-dashboard-id]")?.dataset.dashboardId;
+    const saved = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).filter((q) => q.id !== id);
+    await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
+    this.render({ parts: ["main"] });
+  }
+
   // GM-only "Import Document" entry point (Task 11) - lives on the Index
   // tab's toolbar, next to the type filter/sort controls (see hub.hbs). The
   // action itself is registered regardless of GM status (Foundry always
@@ -244,6 +343,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // re-checks game.user.isGM as a second guard.
   static onOpenExportDialog() {
     openExportDialog();
+  }
+
+  // Player-visible "Open graph" entry point (Task 12): lives on the Index
+  // tab's toolbar, outside the isGM guard around the import/export buttons -
+  // the relationship graph itself is a read-only view any observer-level
+  // player can open (spec §5).
+  static async onOpenGraph() {
+    const { openGraph } = await import("./graph-app.mjs");
+    openGraph();
   }
 
   static onOpenIndexRow(event, target) {

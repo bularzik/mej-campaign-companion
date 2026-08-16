@@ -16,11 +16,15 @@
 // is the one place that overrides the record's uuid/name to the parent
 // entry's before handing it to indexRecord/removeRecord.
 import { createIndex, indexRecord, removeRecord, search } from "../logic/search-index.mjs";
+import { runQuery } from "../logic/query-grammar.mjs";
 import { extractRecord, splitHiddenAttributes } from "../logic/field-extractors.mjs";
+import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
+import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
 let index = null;
+let backlinks = null;
 let hooksRegistered = false;
 
 /** True for any JournalEntryPage MEJ recognizes, including this module's own "session" type. */
@@ -87,18 +91,32 @@ function recordFor(page, type) {
     }
   }
 
+  // Phase B knowledge flags: tags feed the already-supported record.tags
+  // field (search-index.mjs joins them into fields.tags), companion
+  // attributes get their own public/GM field pair, and both land in
+  // record.meta for the query grammar's structured type:/tag:/attr: filters.
+  record.tags = getTags(page);
+  const ccAttrs = getAttributes(page);
+  const { visible, hidden } = splitAttributeText(ccAttrs);
+  if (visible) record.fields.companionAttributes = visible;
+  if (hidden) record.gmFields.companionAttributes = hidden;
+  record.meta = { tags: record.tags, attrs: ccAttrs };
+
   return record;
 }
 
 function indexPage(page) {
   const type = mejType(page);
   if (!type) return;
-  indexRecord(index, recordFor(page, type));
+  const record = recordFor(page, type);
+  indexRecord(index, record);
+  setSourceRefs(backlinks, record.uuid, extractRefs(record));
 }
 
 function unindexPage(page) {
   const uuid = page.parent?.uuid ?? page.uuid;
   removeRecord(index, uuid);
+  removeSourceRefs(backlinks, uuid);
 }
 
 /** Re-index every MEJ-typed page belonging to `entry` (used on entry rename). */
@@ -113,25 +131,34 @@ function reindexEntry(entry) {
  * and this module's own permission filter), not by excluding pages here. */
 function buildIndex() {
   const idx = createIndex();
+  const blx = createBacklinkIndex();
   for (const entry of game.journal?.contents ?? []) {
     for (const page of entry.pages?.contents ?? []) {
       const type = mejType(page);
       if (!type) continue;
-      indexRecord(idx, recordFor(page, type));
+      const record = recordFor(page, type);
+      indexRecord(idx, record);
+      setSourceRefs(blx, record.uuid, extractRefs(record));
     }
   }
-  return idx;
+  return { idx, blx };
 }
 
 /** Lazily build the index on first use. */
 export function ensureIndex() {
-  if (!index) index = buildIndex();
+  if (!index) {
+    const built = buildIndex();
+    index = built.idx;
+    backlinks = built.blx;
+  }
   return index;
 }
 
 /** Force a full rebuild, discarding any incremental drift. */
 export function rebuildIndex() {
-  index = buildIndex();
+  const built = buildIndex();
+  index = built.idx;
+  backlinks = built.blx;
   return index;
 }
 
@@ -149,6 +176,55 @@ export function searchAll(query) {
     if (!entry) return false;
     return game.user.isGM || entry.testUserPermission(game.user, "OBSERVER") === true;
   });
+}
+
+/**
+ * Run a grammar query (logic/query-grammar.mjs) against the live index and
+ * drop hits the current user can't observe - same gate as searchAll().
+ * Throws Error("empty-query") for blank queries (callers surface it).
+ */
+export function runQueryAll(queryString) {
+  const hits = runQuery(ensureIndex(), queryString, { gm: game.user.isGM });
+  return hits.filter((hit) => userCanSee(hit.uuid));
+}
+
+/** Can the current user see this entry uuid at all (spec §2's OBSERVER gate)? */
+function userCanSee(uuid) {
+  const entry = fromUuidSync(uuid);
+  if (!entry) return false;
+  return game.user.isGM || entry.testUserPermission(game.user, "OBSERVER") === true;
+}
+
+/**
+ * "Mentioned in" rows for one entry, permission-filtered for the current
+ * user: gmOnly mentions are GM-only, and a source entry the user can't
+ * observe is dropped entirely (its existence must not leak).
+ */
+export function backlinksForEntry(targetUuid) {
+  const idx = ensureIndex();
+  return backlinksFor(backlinks, targetUuid, { gm: game.user.isGM })
+    .filter(({ uuid }) => userCanSee(uuid))
+    .map(({ uuid, count, gmOnly }) => {
+      const rec = idx.records.get(uuid);
+      return { uuid, count, gmOnly, name: rec?.name ?? fromUuidSync(uuid)?.name ?? uuid, type: rec?.type ?? "" };
+    });
+}
+
+/** Per-entry visible-mention counts for the Hub index badges. */
+export function mentionBadgeCounts() {
+  ensureIndex();
+  return visibleMentionCounts(backlinks, { gm: game.user.isGM, canSee: (uuid) => userCanSee(uuid) });
+}
+
+/** Raw source→target pairs for the graph overlay (gmOnly pairs GM-only). */
+export function backlinkPairs() {
+  ensureIndex();
+  const pairs = [];
+  for (const [source, { refs, gmRefs }] of backlinks.outbound) {
+    for (const [target, count] of refs) pairs.push({ source, target, count, gmOnly: false });
+    if (game.user.isGM) for (const [target, count] of gmRefs) pairs.push({ source, target, count, gmOnly: true });
+  }
+  return pairs;
 }
 
 /** Register the incremental-update hooks. Call once (from campaign-companion.mjs's init/ready). */
@@ -192,6 +268,16 @@ export function initSearchHooks() {
   Hooks.on("deleteJournalEntryPage", (page) => {
     if (!index) return;
     unindexPage(page);
+  });
+
+  // Deleting a whole JournalEntry fires no per-page deleteJournalEntryPage
+  // hooks - without this, the entry's record (and its outbound backlink
+  // refs) would linger until the next rebuild. Records are keyed by the
+  // entry uuid, so one removal call each suffices.
+  Hooks.on("deleteJournalEntry", (entry) => {
+    if (!index) return;
+    removeRecord(index, entry.uuid);
+    removeSourceRefs(backlinks, entry.uuid);
   });
 
   // A renamed JournalEntry doesn't touch its page at all, so

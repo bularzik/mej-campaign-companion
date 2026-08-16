@@ -1,0 +1,12 @@
+<div class="mej-cc-graph-body">
+    <div class="mej-cc-graph-controls">
+        <button type="button" data-action="setMode" data-mode="ego" class="{{#if isEgo}}active{{/if}}" {{#unless centerUuid}}disabled{{/unless}}>
+            <i class="fa-solid fa-bullseye"></i> {{localize "MEJCampaignCompanion.graph.ego"}}</button>
+        <button type="button" data-action="setMode" data-mode="all" class="{{#unless isEgo}}active{{/unless}}">
+            <i class="fa-solid fa-circle-nodes"></i> {{localize "MEJCampaignCompanion.graph.all"}}</button>
+        <label class="mej-cc-graph-backlinks"><input type="checkbox" data-action-change="toggleBacklinks" {{#if includeBacklinks}}checked{{/if}}>
+            {{localize "MEJCampaignCompanion.graph.backlinks"}}</label>
+        {{#if truncated}}<span class="mej-cc-graph-truncated">{{localize "MEJCampaignCompanion.graph.truncated"}}</span>{{/if}}
+    </div>
+    <svg class="mej-cc-graph-svg"></svg>
+</div>

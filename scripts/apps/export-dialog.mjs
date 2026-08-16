@@ -19,6 +19,7 @@ import {
   eligibleEntries, orderEligibleEntries, recordSnapshot, pageRelationships,
   buildGroupSnapshot, SESSION_KIND
 } from "../logic/doc-export-snapshot.mjs";
+import { segmentRunText, subtitleRuns } from "../logic/docx-runs.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
@@ -210,9 +211,7 @@ async function renderDocx(nodes) {
       text, bold: r.bold, italics: r.italics,
       underline: r.underline ? {} : undefined, strike: r.strike, ...extra
     });
-    const segments = r.text.split("\n")
-      .map((seg, i) => (i === 0 ? (seg ? make(seg) : null) : make(seg, { break: 1 })))
-      .filter(Boolean);
+    const segments = segmentRunText(r.text).map((seg) => make(seg.text, seg.lineBreak ? { break: 1 } : {}));
     return r.link ? new ExternalHyperlink({ children: segments, link: r.link }) : segments;
   }).flat();
 
@@ -221,11 +220,7 @@ async function renderDocx(nodes) {
     if (node.kind === "heading") {
       children.push(new Paragraph({ text: node.text, heading: HEADINGS[node.level - 1] }));
     } else if (node.kind === "paragraph") {
-      // "IntenseQuote" is absent from the vendored docx build (would silently
-      // render as Normal); render subtitle paragraphs as italics instead.
-      const runs = node.style === "subtitle"
-        ? node.runs.map((r) => ({ ...r, italics: true }))
-        : node.runs;
+      const runs = subtitleRuns(node);
       children.push(new Paragraph({ children: toRuns(runs) }));
     } else if (node.kind === "list") {
       for (const item of node.items) {
