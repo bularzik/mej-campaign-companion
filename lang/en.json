@@ -7,9 +7,23 @@
       "autoLink": {
         "name": "Auto-Link Entry Names",
         "hint": "When enabled, newly-typed mentions of other Monk's Enhanced Journal entry names in a page's text are automatically turned into links as the page is saved. Existing links, code blocks, and pages flagged to opt out are left untouched."
+      },
+      "autoCaptureEncounters": {
+        "name": "Auto-Capture Encounters",
+        "hint": "When enabled, ending a combat creates (or updates) an Encounter journal entry summarizing the participants and outcome, and files it onto the campaign timeline's newest timepoint."
+      },
+      "autoCaptureSharedMedia": {
+        "name": "Auto-Capture Shared Media",
+        "hint": "When enabled, images and videos a GM shows to players are automatically filed onto the campaign timeline's newest timepoint."
       }
     },
     "sheettype": { "session": "Session" },
+    "autoCapture": {
+      "died": "Died",
+      "injured": "Injured",
+      "fled": "Fled",
+      "noCasualties": "All combatants unharmed."
+    },
     "placeholder": { "session": "New Session" },
     "tabs": {
       "description": "Recap",

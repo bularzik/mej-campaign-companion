@@ -1,8 +1,12 @@
-import { MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING, I18N } from "./constants.mjs";
+import {
+  MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
+  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, I18N
+} from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
 import { CampaignHubPage } from "./apps/CampaignHubPage.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
+import { registerAutoCapture } from "./hooks/auto-capture.mjs";
 
 let apiReceived = false;
 
@@ -17,6 +21,24 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, AUTO_LINK_SETTING, {
     name: `${I18N}.settings.autoLink.name`,
     hint: `${I18N}.settings.autoLink.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, AUTO_CAPTURE_SETTING, {
+    name: `${I18N}.settings.autoCaptureEncounters.name`,
+    hint: `${I18N}.settings.autoCaptureEncounters.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, MEDIA_CAPTURE_SETTING, {
+    name: `${I18N}.settings.autoCaptureSharedMedia.name`,
+    hint: `${I18N}.settings.autoCaptureSharedMedia.hint`,
     scope: "world",
     config: true,
     type: Boolean,
@@ -53,6 +75,10 @@ Hooks.on("setupMonksEnhancedJournal", (api) => {
   // MEJ entry names in a page's text.content (gated on the "autoLink"
   // world setting, checked per-update inside the hook itself).
   registerAutoLink();
+
+  // Wires the combat-end Encounter capture and shareImage capture wraps
+  // (each gated on its own world setting, checked inside the hook itself).
+  registerAutoCapture();
 });
 
 // Toolbar entry: a button alongside MEJ's own header controls on every tab,
