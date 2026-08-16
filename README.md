@@ -98,3 +98,9 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the ful
 - Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
 
 See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.
+
+## License
+
+Copyright © 2026 Dan Bularzik. Licensed under the [GNU General Public License v3.0](LICENSE), matching Monk's Enhanced Journal (whose `EnhancedJournalSheet` this module extends).
+
+Vendored third-party libraries retain their own licenses: [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause), [docx](https://github.com/dolanmiu/docx) (MIT), [d3-force](https://github.com/d3/d3-force) (ISC).
