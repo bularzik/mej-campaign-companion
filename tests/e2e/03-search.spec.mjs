@@ -2,8 +2,10 @@ import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX,
   trackConsoleErrors, assertNoConsoleErrors, settle,
-  KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
+  KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
+
+const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 
 async function openHubSearch(page) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
@@ -29,7 +31,7 @@ async function search(shell, page, query) {
 
 test.describe("03 search", () => {
   test("finds a word in a person description, with a snippet", async ({ page }) => {
-    const errors = trackConsoleErrors(page);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Search Person`;
     const personId = await page.evaluate(async (n) => {
@@ -81,7 +83,7 @@ test.describe("03 search", () => {
 
     const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const playerPage = await playerContext.newPage();
-    const errors = trackConsoleErrors(playerPage, { ignore: [KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
+    const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
     await login(playerPage, "User 1");
     const playerShell = await openHubSearch(playerPage);
     await search(playerShell, playerPage, "banshee");
@@ -94,7 +96,7 @@ test.describe("03 search", () => {
   });
 
   test("index updates after an edit", async ({ page }) => {
-    const errors = trackConsoleErrors(page);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Search Reindex`;
     const personId = await page.evaluate(async (n) => {
