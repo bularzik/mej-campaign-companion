@@ -24,6 +24,7 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
+import { searchAll } from "../search/live-index.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -45,7 +46,9 @@ const HUB_STATE = {
   typeMenuOpen: false,
   sortMenuOpen: false,
   timelineOrder: "manual",
-  restoreIndexFilterFocus: false
+  restoreIndexFilterFocus: false,
+  searchQuery: "",
+  restoreSearchFocus: false
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -73,7 +76,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       root: true,
       template: `modules/${MODULE_ID}/templates/hub.hbs`,
       templates: ["templates/generic/tab-navigation.hbs"],
-      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list"]
+      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list"]
     }
   };
 
@@ -135,7 +138,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
     context.index = this.#indexContext();
     context.timeline = this.#timelineContext(journal, isGM);
-    context.search = {}; // placeholder pane - wired in Task 8
+    context.search = this.#searchContext();
 
     return context;
   }
@@ -161,6 +164,31 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
       sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`))
+    };
+  }
+
+  #fieldLabel(field) {
+    const key = `${I18N}.hub.search.fields.${field}`;
+    const localized = game.i18n.localize(key);
+    return localized === key ? field : localized;
+  }
+
+  // live-index.mjs's searchAll() already GM/player-filters both the field
+  // set (search-index.mjs's `gm` option) and the result set itself
+  // (testUserPermission LIMITED on the resolved entry) - this just shapes
+  // the hits for the template (type icon/label, localized field names).
+  #searchContext() {
+    const results = searchAll(this.state.searchQuery).map((hit) => ({
+      uuid: hit.uuid,
+      name: hit.name,
+      icon: this.#typeIcon(hit.type),
+      typeLabel: this.#typeLabel(hit.type),
+      matches: hit.matches.map((m) => ({ fieldLabel: this.#fieldLabel(m.field), snippet: m.snippet }))
+    }));
+    return {
+      query: this.state.searchQuery,
+      hasQuery: this.state.searchQuery.trim().length > 0,
+      results
     };
   }
 
@@ -484,6 +512,30 @@ export class CampaignHubPage extends EnhancedJournalSheet {
             HUB_STATE.restoreIndexFilterFocus = true;
             this.render({ parts: ["main"] });
           }, 250)
+        );
+      }
+    }
+
+    const searchInput = html.querySelector('input[name="search-query"]');
+    if (searchInput) {
+      // Same restore-focus-from-activateListeners pattern as the index
+      // filter above (see its comment) - the search input re-renders on
+      // every keystroke (debounced), so losing focus/caret each time would
+      // make typing unusable.
+      if (HUB_STATE.restoreSearchFocus) {
+        HUB_STATE.restoreSearchFocus = false;
+        searchInput.focus();
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      }
+      if (!searchInput.dataset.ccBound) {
+        searchInput.dataset.ccBound = "1";
+        searchInput.addEventListener(
+          "input",
+          foundry.utils.debounce((event) => {
+            HUB_STATE.searchQuery = event.target.value;
+            HUB_STATE.restoreSearchFocus = true;
+            this.render({ parts: ["main"] });
+          }, 150)
         );
       }
     }

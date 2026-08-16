@@ -1,6 +1,7 @@
 import { MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, I18N } from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
 import { CampaignHubPage } from "./apps/CampaignHubPage.mjs";
+import { initSearchHooks } from "./search/live-index.mjs";
 
 let apiReceived = false;
 
@@ -31,6 +32,12 @@ Hooks.on("setupMonksEnhancedJournal", (api) => {
     icon: "fa-timeline",
     appClass: CampaignHubPage
   });
+
+  // Registers the createJournalEntryPage/updateJournalEntryPage/
+  // deleteJournalEntryPage listeners once. The index itself builds lazily
+  // (ensureIndex(), first called from the Hub's search pane) - this only
+  // wires the hooks that keep it current afterward.
+  initSearchHooks();
 });
 
 // Toolbar entry: a button alongside MEJ's own header controls on every tab,

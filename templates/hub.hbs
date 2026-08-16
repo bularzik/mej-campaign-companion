@@ -117,10 +117,31 @@
                 </div>
                 <div class="tab{{#if subtabs.search.active}} active{{/if}}" data-group="primary" data-tab="search">
                     <div class="tab-inner flexcol mej-cc-search">
-                        <input type="search" name="search-query" class="mej-cc-search-input" disabled
-                               placeholder="{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}"
-                               data-tooltip="{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}" />
-                        <p class="instruction">{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}</p>
+                        <input type="search" name="search-query" class="mej-cc-search-input" value="{{search.query}}" autocomplete="off"
+                               placeholder="{{localize 'MEJCampaignCompanion.hub.search.placeholder'}}" />
+                        <ol class="mej-cc-search-list item-list scrollable">
+                            {{#each search.results}}
+                            <li class="mej-cc-search-row" data-uuid="{{this.uuid}}" data-action="openIndexRow">
+                                <div class="mej-cc-search-row-head">
+                                    <i class="mej-cc-search-icon {{this.icon}}"></i>
+                                    <span class="mej-cc-search-name">{{this.name}}</span>
+                                    <span class="mej-cc-search-type">{{this.typeLabel}}</span>
+                                </div>
+                                <ul class="mej-cc-search-matches">
+                                    {{#each this.matches}}
+                                    <li class="mej-cc-search-match">
+                                        <span class="mej-cc-search-match-field">{{this.fieldLabel}}</span>
+                                        <span class="mej-cc-search-match-snippet">{{this.snippet}}</span>
+                                    </li>
+                                    {{/each}}
+                                </ul>
+                            </li>
+                            {{else}}
+                            <li class="instruction">
+                                {{#if search.hasQuery}}{{localize 'MEJCampaignCompanion.hub.search.noResults'}}{{else}}{{localize 'MEJCampaignCompanion.hub.search.typeToSearch'}}{{/if}}
+                            </li>
+                            {{/each}}
+                        </ol>
                     </div>
                 </div>
             </section>

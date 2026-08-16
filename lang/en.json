@@ -85,7 +85,23 @@
       "showImageToPlayers": "Show Image to Players?",
       "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
       "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
-      "searchComingSoon": "Search is coming in a future update."
+      "search": {
+        "placeholder": "Search everything...",
+        "noResults": "No matches.",
+        "typeToSearch": "Type at least 2 characters to search.",
+        "fields": {
+          "name": "Name",
+          "tags": "Tags",
+          "text": "Description",
+          "role": "Role",
+          "attributes": "Attributes",
+          "status": "Status",
+          "objectives": "Objectives",
+          "items": "Items",
+          "secrets": "Secrets",
+          "gmNotes": "GM Notes"
+        }
+      }
     }
   }
 }
