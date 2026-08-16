@@ -101,6 +101,6 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the man
 
 ## License
 
-Copyright © 2026 Dan Bularzik. Licensed under the [GNU General Public License v3.0](LICENSE), matching Monk's Enhanced Journal (whose `EnhancedJournalSheet` this module extends).
+Copyright © 2026 Dan Bularzik. Licensed under the [MIT License](LICENSE). This module extends [Monk's Enhanced Journal](https://github.com/ironmonk108/monks-enhanced-journal) (GPL-3.0) through its extension API without bundling any of its code; MIT is GPL-compatible, so combined use complies with MEJ's terms.
 
 Vendored third-party libraries retain their own licenses: [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause), [docx](https://github.com/dolanmiu/docx) (MIT), [d3-force](https://github.com/d3/d3-force) (ISC).
