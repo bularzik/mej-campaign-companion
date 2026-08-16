@@ -157,6 +157,64 @@ export async function login(page, userName) {
   await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
 }
 
+/**
+ * Run `fn(page)` against a *fresh*, logged-in-as-Gamemaster page in its own
+ * browser context, then close that context. For cleanup in specs whose
+ * tests use `browser` to open their own multi-client contexts rather than
+ * the default `page` fixture: a `test.afterEach(async ({ page }) => ...)`
+ * hook still gets Playwright's default (never-navigated, never-logged-in)
+ * `page` fixture regardless of what the test itself used, so
+ * `page.evaluate(() => game...)` against it throws "game is not defined" —
+ * silently, if the caller wraps it in `.catch(() => {})` as earlier drafts
+ * of this suite did, meaning cleanup for those specs never actually ran and
+ * state leaked between tests (confirmed live: a leftover
+ * playersWriteSessions=true from one test changing the next test's
+ * ownership scenario; a leftover timepoint from one test being picked up as
+ * "newest" by the next). Route afterEach cleanup through this instead.
+ */
+export async function withGmPage(browser, fn) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await login(page, "Gamemaster");
+    await fn(page);
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Cleanup helper for afterEach hooks in specs that mix the default `page`
+ * fixture with tests that open their own `browser` contexts: reuses `page`
+ * directly when the test itself already left it as a live, ready Gamemaster
+ * session (true for every test using `page` — cheaper, and avoids a genuine
+ * bug confirmed live: opening a *second* simultaneous Gamemaster session via
+ * withGmPage() while the test's own `page` is still connected as the same
+ * user — Playwright doesn't tear down `page` until after all hooks for that
+ * test complete — silently produced a socket/session conflict where
+ * deleteDocuments() calls from the second session appeared to succeed
+ * (no thrown error, deletedCount > 0 in the response) but never actually
+ * stuck: a "Campaign Timeline" journal reliably survived cleanup on the very
+ * next check, every time, only when done this way). Falls back to
+ * withGmPage() (a genuine fresh session) only when `page` isn't already a
+ * live GM session — true for tests that used `browser` instead, where the
+ * default `page` fixture never navigated anywhere.
+ */
+export async function cleanupAsGm(page, browser, fn) {
+  const alreadyGm = await page.evaluate(() => {
+    try {
+      return globalThis.game?.ready === true && game.user?.isGM === true;
+    } catch {
+      return false;
+    }
+  }).catch(() => false);
+  if (alreadyGm) {
+    await fn(page);
+    return;
+  }
+  await withGmPage(browser, fn);
+}
+
 /** As a logged-in GM page: enable a module by id if needed (reloads on change). */
 export async function ensureModuleEnabled(page, moduleId = MODULE_ID) {
   const active = await page.evaluate((id) => game.modules.get(id)?.active === true, moduleId);
@@ -227,17 +285,30 @@ export async function settle(page, ms = 300) {
   await page.waitForTimeout(ms);
 }
 
-// Known, cosmetic MEJ-side gap (see task-14-report.md): MEJ's sidebar/tab
-// icon fallback (monks-enhanced-journal.js ~line 5287) guesses
-// `assets/${type}.png` for any recognized type lacking an explicit `img`,
-// without consulting `externalTypes[type].icon` the way its main
-// `getIcon()` does. MEJ's own "New Entry" dialog path already guards against
-// setting a *wrong* img this way for external types (see the `!externalType`
-// check near monks-enhanced-journal.js:1063, fix 1437846), but nothing sets
-// a *correct* one either, so any Session page without an explicit img still
-// hits this 404 the first time its icon renders. Non-blocking (a missing
-// icon image, not a functional break) — filtered here rather than fixed,
-// since it's MEJ-side, not companion-side.
+// Known, cosmetic MEJ-side gap (see task-14-report.md) — TWO distinct MEJ
+// bugs independently produce the identical-looking 404, confirmed live by
+// re-testing after the deeper one was fixed:
+//   1. (fixed in MEJ, commit f24cbac on feat/extension-api) preCreateJournalEntry
+//      (monks-enhanced-journal.js, was ~4556-4566) stamped
+//      `flags.img = assets/${type}.png` into every entry's *persisted* data
+//      for any type in getDocumentTypes(), with no external-type guard - this
+//      was the report's original diagnosis gap: the task-14-report.md first
+//      draft attributed the 404 entirely to bug #2 below and missed this one,
+//      which is the more serious of the two (it writes a wrong value into
+//      stored document data, not just a transient render guess). Same guard
+//      pattern as the `_onCreate` site's existing `!externalType` check
+//      (monks-enhanced-journal.js:1063, fix 1437846) now applied here too.
+//   2. (still present, unfixed, out of scope - MEJ-side) The sidebar/tab
+//      icon-render fallback (monks-enhanced-journal.js ~line 5292) guesses
+//      `assets/${pagetype}.png` for any type present in getDocumentTypes()
+//      with no explicit img *at render time*, independent of whatever flag
+//      value (if any) is actually stored - so even a freshly-created Session
+//      page with bug #1 now fixed (confirmed live: its persisted
+//      flags["monks-enhanced-journal"].img is `undefined`, not a bad path)
+//      still 404s the moment its icon renders, from this second, separate
+//      site. Non-blocking (a missing icon image, not a functional break) -
+//      filtered here rather than fixed, since it's MEJ-side, not
+//      companion-side, and outside this task's authorized fix list.
 export const KNOWN_MEJ_SESSION_ICON_404 = /assets\/session\.png/;
 
 // The headless viewport (1280x720, set for canvas-off perf per the harness
@@ -257,19 +328,27 @@ export const KNOWN_LOW_RESOLUTION_WARNING = /requires a screen resolution of/;
 export const EXPECTED_INVALID_TYPE_WHILE_DISABLED = /is not a valid type for the JournalEntryPage Document class/;
 
 // Real, live-discovered MEJ-side bug (not a companion bug, not fixed here —
-// see task-14-report.md): BlankJournal (apps/enhanced-journal.js's
-// placeholder document for shell pages) extends foundry.abstract.Document
-// directly and never implements the required `.compendium` getter.
-// EnhancedJournal._onRender's non-GM permission re-check
-// (`!game.user.isGM && testing && (!testing.compendium && ...)`) reads that
-// getter on every re-render of an open shell page (the Hub included) for a
-// non-GM client where `options.force`/`this.tempOwnership` aren't set (a
-// fresh open passes, a later re-render like the debounced Hub search input
-// often doesn't) — throwing "A subclass of Document must implement this
-// getter" and aborting that render. Cosmetic in every case observed (the
-// underlying data/UI update still lands; only this stray internal check
-// throws), but real: any module with an open shell page can hit it on any
-// non-GM client's re-render, not just campaign-companion's Hub.
+// see task-14-report.md): a module's registered shell-page document (the
+// Hub included) never implements the `.compendium` getter that
+// EnhancedJournal.renderSubSheet's non-GM permission re-check
+// (enhanced-journal.js ~486: `!game.user.isGM && testing && (!testing
+// .compendium && ...)`) reads on every re-render where `options.force` /
+// `this.tempOwnership` aren't set. A fresh open passes (something upstream
+// sets one of those first), but a later re-render — confirmed live: the
+// debounced Hub search input, which re-renders on every keystroke — throws
+// "A subclass of Document must implement this getter" and ABORTS that
+// render. Corrected characterization (task-14-report.md's original
+// "cosmetic, underlying update still lands" was wrong for this path,
+// verified live via 03-search.spec.mjs's finding-#5 positive control): the
+// aborted render means search results genuinely never paint for a non-GM
+// client (0 rows), and a second attempt can leave the shell's own inputs
+// unreachable. Real, and can hit any module with an open shell page on any
+// non-GM client's re-render, not just campaign-companion's Hub. Worked
+// around test-side in 03-search.spec.mjs's openHubSearch() by setting
+// `game.MonksEnhancedJournal.journal.tempOwnership = true` right after
+// opening (steers every later render around the buggy branch, same
+// mechanism MEJ's own code uses once it resolves the temp-ownership path)
+// — not a fix, since it touches only this test session's client instance.
 export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document must implement this getter/;
 
 /** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */

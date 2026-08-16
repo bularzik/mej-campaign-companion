@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX,
+  login, TT_PREFIX, cleanupAsGm,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -26,17 +26,34 @@ async function cleanupTimelineJournal(page) {
   // The world's singleton timeline journal (Task 6) is tracked by a world
   // setting storing its id (data/timeline-journal.mjs), named "Campaign
   // Timeline" by ensureTimelineJournal() — clear it back out (and reset the
-  // setting) so specs don't leak timepoints/links between runs.
+  // setting) so specs don't leak timepoints/links between runs. Deletes
+  // *every* matching doc, not just the first: CampaignHubPage.mjs's
+  // _prepareBodyContext preps the timeline tab's context (calling
+  // ensureTimelineJournal()) on every render regardless of which tab is
+  // active, so simply opening the Hub as GM can create this journal as a
+  // side effect even in tests that never touch a timepoint.
   await page.evaluate(async () => {
-    const j = game.journal.find((e) => e.name === "Campaign Timeline");
-    if (j) await JournalEntry.implementation.deleteDocuments([j.id]);
+    const ids = game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id);
+    if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
     await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
   });
 }
 
 test.describe("02 hub + timeline", () => {
-  test.afterEach(async ({ page }) => {
-    await cleanupTimelineJournal(page).catch(() => {});
+  // Tests in this spec mix the default `page` fixture with tests that open
+  // their own `browser` contexts (two-client tests) — an afterEach that
+  // takes `page` still gets Playwright's default, never-logged-in page for
+  // the latter regardless of what the test itself used. cleanupAsGm() reuses
+  // `page` directly when it's already a live GM session (every test using
+  // `page` alone); opening a *second* simultaneous GM session via
+  // withGmPage() while the test's own `page` was still connected (Playwright
+  // doesn't tear it down until after all hooks complete) was tried first and
+  // confirmed live to silently fail — deleteDocuments() reported success
+  // (deletedCount > 0, no thrown error) but the document reliably survived,
+  // every time, only in that combination. See cleanupAsGm()'s own doc
+  // comment.
+  test.afterEach(async ({ page, browser }) => {
+    await cleanupAsGm(page, browser, (gmPage) => cleanupTimelineJournal(gmPage));
   });
 
   test("opens from the toolbar; reopens cleanly after a reload", async ({ page }) => {
@@ -214,7 +231,13 @@ test.describe("02 hub + timeline", () => {
     const opened = await gmPage.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.constructor?.name);
     expect(opened).toBe("PersonSheet");
 
-    // Add a GM-hidden image link on a fresh timepoint for the player check.
+    // Add both a GM-hidden AND a player-visible image link on a fresh
+    // timepoint. The visible one is a positive control: without it, a
+    // player-side render that failed entirely (blank Hub, wrong tab, a
+    // client that never actually logged in) would make every "absence"
+    // assertion below pass vacuously. Asserting the visible link shows up
+    // proves the player's timeline tab genuinely rendered before we trust
+    // it to correctly *omit* the hidden one and the CRUD controls.
     await gmShell.locator(".nav-button.campaign-hub").click();
     await settle(gmPage, 300);
     await gmShell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
@@ -227,7 +250,10 @@ test.describe("02 hub + timeline", () => {
     await gmPage.evaluate(async () => {
       const j = game.journal.find((e) => e.name === "Campaign Timeline");
       const timeline = foundry.utils.duplicate(j.getFlag("mej-campaign-companion", "timeline"));
-      timeline.timepoints[0].links = [{ id: foundry.utils.randomID(), src: "icons/svg/hazard.svg", name: "GM-only", showPlayers: false }];
+      timeline.timepoints[0].links = [
+        { id: foundry.utils.randomID(), src: "icons/svg/hazard.svg", name: "GM-only", showPlayers: false },
+        { id: foundry.utils.randomID(), src: "icons/svg/mystery-man.svg", name: "Visible-to-players", showPlayers: true }
+      ];
       await j.setFlag("mej-campaign-companion", "timeline", timeline);
     });
 
@@ -239,6 +265,8 @@ test.describe("02 hub + timeline", () => {
     await settle(playerPage, 300);
     await playerShell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
     await settle(playerPage, 200);
+    // Positive control first.
+    await expect(playerShell.locator('.mej-cc-link-chip[data-src="icons/svg/mystery-man.svg"]')).toHaveCount(1);
     await expect(playerShell.locator('button.mej-cc-add-timepoint')).toHaveCount(0);
     await expect(playerShell.locator('.mej-cc-link-chip[data-src="icons/svg/hazard.svg"]')).toHaveCount(0);
 
@@ -276,18 +304,42 @@ test.describe("02 hub + timeline", () => {
     // menu open at a time) and the sort menu itself opens.
     await expect(shell.locator("div.mej-cc-sort-menu")).toBeVisible();
 
-    // Trigger a Hub re-render via something unrelated to either menu (a
-    // forced re-render, standing in for any of the re-renders CRUD actions
-    // elsewhere in this file already trigger) and confirm the sort menu is
-    // still open afterward — this is Task 7's instance-type/state fix under
-    // test: before it, the shell reconstructed a fresh CampaignHubPage
-    // instance on every re-render (this.subsheet.type != this.document.type
-    // always true without the instance `get type()` mirror), and since
-    // HUB_STATE now lives at module scope specifically to survive that,
-    // this also implicitly guards against a future regression that moves
-    // the state back onto the instance.
-    await page.evaluate(() => game.MonksEnhancedJournal.journal.subsheet.render());
-    await settle(page, 300);
+    // Trigger a re-render through the *shell* (not subsheet.render(), which
+    // just repaints the same instance in place and would pass here even if
+    // Task 7's fix were reverted — it never exercises the reuse-vs-
+    // reconstruct decision the fix is actually about). EnhancedJournal's own
+    // render() re-evaluates whether to *reuse* the mounted subsheet instance
+    // or construct a fresh CampaignHubPage
+    // (this.subsheet.type != this.document.type, apps/enhanced-journal.js's
+    // renderSubSheet). Task 7's fix is the instance `get type()` mirror that
+    // makes that comparison correctly evaluate to "equal" (reuse) for the
+    // Hub; before it, subsheet.type always read undefined, so the shell
+    // reconstructed a brand new instance on *every* render. So — counter to
+    // an earlier draft of this test, which had the polarity backwards — the
+    // fix being in place is what *avoids* reconstruction: assert the same
+    // instance survives the shell-level render (confirmed live: it does,
+    // with the fix present; reverting Task 7's `get type()` mirror would
+    // flip this to false, a fresh instance every time), and that its own
+    // `type`/`constructor.type` genuinely mirror HUB_PAGE_ID. The sort menu
+    // — HUB_STATE, module-scope regardless of instance identity — surviving
+    // on top of that is confirmation the whole path holds together, not the
+    // primary signal for Task 7's fix itself (module-scope state would
+    // survive a reconstruction too).
+    const beforeInfo = await page.evaluate(() => {
+      const s = game.MonksEnhancedJournal.journal.subsheet;
+      s.__task14Marker = true;
+      return { type: s.type, ctorType: s.constructor.type, className: s.constructor.name };
+    });
+    expect(beforeInfo).toEqual({ type: "campaign-hub", ctorType: "campaign-hub", className: "CampaignHubPage" });
+
+    await page.evaluate(async () => { await game.MonksEnhancedJournal.journal.render(); });
+    await settle(page, 400);
+    const afterInfo = await page.evaluate(() => {
+      const s = game.MonksEnhancedJournal.journal.subsheet;
+      return { className: s?.constructor?.name, sameInstance: s?.__task14Marker === true };
+    });
+    expect(afterInfo.className).toBe("CampaignHubPage");
+    expect(afterInfo.sameInstance).toBe(true);
     await expect(shell.locator("div.mej-cc-sort-menu")).toBeVisible();
 
     assertNoConsoleErrors(errors);
