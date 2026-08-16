@@ -270,6 +270,16 @@ export function initSearchHooks() {
     unindexPage(page);
   });
 
+  // Deleting a whole JournalEntry fires no per-page deleteJournalEntryPage
+  // hooks - without this, the entry's record (and its outbound backlink
+  // refs) would linger until the next rebuild. Records are keyed by the
+  // entry uuid, so one removal call each suffices.
+  Hooks.on("deleteJournalEntry", (entry) => {
+    if (!index) return;
+    removeRecord(index, entry.uuid);
+    removeSourceRefs(backlinks, entry.uuid);
+  });
+
   // A renamed JournalEntry doesn't touch its page at all, so
   // updateJournalEntryPage never fires for it - without this, an indexed
   // record's `name` (sourced from the entry, see recordFor()) would go

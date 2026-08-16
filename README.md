@@ -17,7 +17,7 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 
 - **Backlinks** — a "Mentioned in" panel on every MEJ sheet shows which other campaign entries link to this one, with badges on the Hub's entry index showing mention counts for each entry.
 - **Tags and attributes** — annotate MEJ entries with custom tags and per-row attributes (e.g. `trustworthiness` on Person entries), visible in the knowledge panel with a per-row `playerHidden` flag for attributes that should not appear on player sheets.
-- **Relationship graph** — a visual graph of `@UUID` links between entries, with vendored d3-force rendering, ego-mode and whole-campaign view toggle, backlink overlay, and a 200-node connection cap for performance.
+- **Relationship graph** — a visual graph of entries connected via MEJ's `relationships` flags, with vendored d3-force rendering, ego-mode and whole-campaign view toggle, an optional dashed backlink overlay for `@UUID` mentions between entries, and a 200-node connection cap for performance.
 - **Hub Dashboards** — a "Dashboards" tab on the Campaign Hub with saved queries using a simple grammar (`type:`, `tag:`, `attr:`, free-text search); search results appear directly inline with an `@CampaignQuery[...]` page enricher for inline results on any MEJ sheet.
 
 ## Requirements
@@ -89,12 +89,12 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the ful
 - **Knowledge layer (Phase B):**
   - Enricher results (`@CampaignQuery[...]`) refresh on page re-render only, not on live data updates; rebuild the Dashboard to see latest results.
   - Relationship graph caps at the 200 most-connected entries for performance; additional nodes and links to them are excluded from the visualization.
-  - Backlinks count only `@UUID` links; plain-text entry names that haven't yet been converted to auto-links (via `@CampaignQuery` or another pass) are caught only once a later auto-link pass has converted them.
+  - Backlinks count only `@UUID` links; plain-text entry names that haven't yet been converted into `@UUID` links by auto-link are caught only once a later auto-link pass has converted them.
 
 ## Development
 
 - `npm test` — unit tests (Vitest). No Foundry environment required.
-- `npm run test:e2e` — 7 Playwright spec files / 21 tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
+- `npm run test:e2e` — 9 Playwright spec files / 33 tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
 - Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
 
 See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.

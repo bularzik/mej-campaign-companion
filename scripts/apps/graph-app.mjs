@@ -193,6 +193,7 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
         return point.matrixTransform(svg.getScreenCTM().inverse());
       };
       const move = (event) => {
+        if (!this.#sim) return;
         this.#dragged = true;
         const p = toSvg(event);
         node.fx = p.x;
