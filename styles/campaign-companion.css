@@ -1,5 +1,22 @@
 .mej-campaign-companion {}
 
+/* Session sheet: MEJ's base .editor-edit rule (css/monks-journal-sheet.css)
+   is `position: absolute; top: 4px; right: 12px;` with no `position` set on
+   .editor-parent itself — it relies on .editor-parent being the *only*
+   editor in its tab, so it positions relative to whatever ancestor further
+   up the tree happens to be positioned. The Session sheet's description tab
+   has two (.recap and .player-recap-self), which land their edit buttons on
+   the exact same coordinates as a result — confirmed live via Task 14's e2e
+   suite (getBoundingClientRect() identical for both buttons), meaning a
+   click meant for "Edit Recap" on a freshly-created session (empty recap)
+   actually hits "Edit My Recap" underneath it. Giving each .editor-parent
+   its own positioning context fixes this without touching MEJ's shared CSS.
+   session.hbs and other-recap items also assume flex sizing similar to
+   MEJ's editor-parent - no functional CSS besides `position` is changed. */
+.session-container .editor-parent {
+  position: relative;
+}
+
 /* Campaign Hub shell page - shell pages get no MEJ per-type theming (see
    API.md's "Current limitation" section), so all Hub styling lives here,
    scoped under .mej-cc-hub. */
