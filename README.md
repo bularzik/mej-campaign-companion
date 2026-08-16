@@ -43,12 +43,15 @@ All settings are **world-scoped** (GM-only, apply to everyone in the world); the
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
+The world's singleton timeline JournalEntry that `timelineJournalId` points at is created with the literal name `"Campaign Timeline"` (`scripts/data/timeline-journal.mjs`) — also hardcoded English, not routed through `en.json`, the same deliberate scope as the docx field labels above.
+
 ## Docx round-trip notes
 
 - **Type markers.** Export writes a `Campaign Record type: <kind>` marker paragraph at the top of each entry's section (kept as that literal, English string for compatibility with documents exported by the predecessor `campaign-record` module, whose exports this importer also understands). On import, that marker — when present — takes priority over title-keyword heuristics when suggesting a type for a section.
 - **GM-content export toggle.** The export dialog's "Include GM Content" checkbox controls whether Session GM notes and relationships hidden from players are written into the `.docx` at all. Leave it unchecked to produce a document safe to hand to players.
 - **Date parsing and non-Gregorian calendars.** The import wizard detects session-header dates (`4/15/24`, `April 15, 2024`, …) and converts them into campaign-date components with a **numeric passthrough**: real-world year as-is, month/day mapped straight across. This assumes the world's active calendar's month numbering and count line up with the Gregorian calendar the source document was written against. For a non-Gregorian or non-12-month calendar, this is a known, deliberate approximation — there's no general way to map a real-world date onto an arbitrary in-world calendar without a mapping the source document doesn't provide. Out-of-range results (e.g. "month 14" against a calendar with fewer months) are rejected and reported as a per-section warning rather than silently stored.
 - Import/export use the vendored `mammoth` (docx → HTML) and `docx` (HTML model → docx) libraries under `vendor/`; no network calls are made during import or export.
+- **Field labels are English-only, regardless of world locale.** The per-type field labels the export writes into the `.docx` itself (Role, Location, Race, Faction, Type, Rarity, …) are literal strings with no i18n hook — a French-speaking GM's exported document will still say "Role" in English. This matches the module's English-only scope (see [Development](#development)) but is worth flagging since it's document *content*, not UI chrome that a future translation could cover.
 
 ## Player collaboration notes
 
@@ -73,7 +76,7 @@ What this **doesn't** eliminate: the "impersonate another user's recap" risk fro
 ## Development
 
 - `npm test` — unit tests (Vitest). No Foundry environment required.
-- `npm run test:e2e` — Playwright end-to-end tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
+- `npm run test:e2e` — 7 Playwright spec files / 21 tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
 - Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
 
 See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.

@@ -1,6 +1,6 @@
 # Manual test checklist
 
-Items here are either not automatable at all, or not currently covered by the automated suites (`npm test` — 359 unit tests; `npm run test:e2e` — 24 Playwright specs against a live Foundry v14 test world). Run through these by hand before cutting a release, or whenever you touch the area they cover.
+Items here are either not automatable at all, or not currently covered by the automated suites (`npm test` — 359 unit tests; `npm run test:e2e` — 7 Playwright spec files / 21 tests against a live Foundry v14 test world). Run through these by hand before cutting a release, or whenever you touch the area they cover.
 
 ## Second-display / popout behavior
 
@@ -35,13 +35,17 @@ Auto-capture's shared-media capture installs a `libWrapper` wrap around `ImagePo
 
 ## Player search rendering (known open issue — e2e workaround in place)
 
-`tests/e2e/03-search.spec.mjs` works around a **live MEJ-side render-abort bug**: `EnhancedJournal`'s subsheet render path throws (`AppV2` "did not implement this getter") for a document a non-owner client doesn't have at least temp ownership of, aborting the render entirely (not merely a cosmetic glitch — search results paint zero rows, and a second render attempt can leave shell inputs unreachable). The e2e spec steers around it by setting `game.MonksEnhancedJournal.journal.tempOwnership = true` before exercising the Hub as a player — which means **the automated suite has never verified player-facing search rendering without that workaround.**
+`tests/e2e/03-search.spec.mjs` works around non-GM render obstacles in MEJ's `EnhancedJournal` shell by setting `game.MonksEnhancedJournal.journal.tempOwnership = true` before exercising the Hub as a player. There are **two distinct obstacles** on this path, not one, and only the first has actually been fixed:
+
+- **(a) `BlankJournal.compendium` render-abort — FIXED upstream, MEJ commit `ec97385`.** The base `foundry.abstract.Document#compendium` getter is `@abstract` and unconditionally throws `"A subclass of Document must implement this getter."` (the throw comes from Foundry's core `Document` class itself, not from an AppV2 getter, and not from anything MEJ-authored). `BlankJournal` — the synthetic placeholder document behind any `registerShellPage` tab, the Hub included — extends `Document` directly and never overrode it, so `EnhancedJournal.renderSubSheet`'s non-GM permission re-check (which reads `testing.compendium`) crashed and aborted the render on every re-render where `options.force`/`this.tempOwnership` weren't already set (e.g. the debounced Hub search input, which re-renders on every keystroke). MEJ commit `ec97385` added a `get compendium() { return null; }` override to `BlankJournal`, closing this specific abort.
+- **(b) A second, non-GM render obstacle — STILL OPEN, root cause not identified.** Task 14b's investigation confirmed live (against `ec97385`, with the `tempOwnership` workaround removed) that `.compendium` was no longer the blocker, but one `03-search.spec.mjs` test — the GM-only-content positive control, where a player's search for `cartographerslodge` should return 0 rows and a matching non-GM-content search should return 1 — still failed deterministically (reproduced on rerun) with the player's positive-control search returning 0 rows instead of 1. This second obstacle has not been root-caused; no MEJ source change has been made for it. **This, not (a), is the actual reason the `tempOwnership` workaround is still in the e2e spec.**
 
 Manually verify, as a real player client, with the workaround *not* applied (fresh player login, no console `tempOwnership` poke):
 
 - Open the Campaign Hub as a player and run a search. Confirm results actually paint (not just that no error is thrown).
-- Try a second search immediately after the first, to check for the "shell inputs become unreachable" symptom described above.
-- If the bug still reproduces, this is an MEJ-side issue (not a companion bug) — file/track it against MEJ rather than attempting a companion-side patch; the e2e workaround should stay in place in the meantime, and this checklist item should be re-tested against the next MEJ release that touches `EnhancedJournal`'s subsheet render path.
+- Try a second search immediately after the first, to check for a stuck/unreachable shell.
+- Try a search that should return only non-GM-content matches (mirroring `03-search.spec.mjs`'s positive control) and confirm it actually returns rows for a player client, not zero.
+- If any of the above still reproduces, that's obstacle (b) above (not a companion bug) — file/track it against MEJ. **Do not treat a future MEJ release as sufficient to drop the workaround on its own**: the workaround can only come out once obstacle (b) is specifically root-caused and fixed, since (a) being fixed already left it in place. Re-test this item whenever MEJ's `EnhancedJournal` subsheet render path changes, and check the actual failing case above, not just the absence of a `.compendium` throw.
 
 ## Auto-advance / timing
 
