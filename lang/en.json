@@ -1,7 +1,8 @@
 {
   "MEJCampaignCompanion": {
     "errors": {
-      "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled."
+      "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled.",
+      "init-failed": "Campaign Companion failed to initialize. Check the console for details; the module may not work correctly."
     },
     "settings": {
       "autoLink": {
