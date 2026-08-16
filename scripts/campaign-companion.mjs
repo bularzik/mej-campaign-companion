@@ -2,8 +2,6 @@ import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, I18N
 } from "./constants.mjs";
-import { SessionSheet } from "./sheets/SessionSheet.mjs";
-import { CampaignHubPage } from "./apps/CampaignHubPage.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
 import { registerAutoCapture } from "./hooks/auto-capture.mjs";
@@ -73,8 +71,34 @@ Hooks.on("preCreateJournalEntry", (entry, data) => {
   entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
 
-Hooks.on("setupMonksEnhancedJournal", (api) => {
+Hooks.on("setupMonksEnhancedJournal", async (api) => {
   apiReceived = true;
+
+  // SessionSheet.mjs and CampaignHubPage.mjs both statically import MEJ's
+  // EnhancedJournalSheet.js. Foundry emits each active module's <script
+  // type=module> tags sorted by module id, with no regard for
+  // relationships.requires - "mej-campaign-companion" sorts before
+  // "monks-enhanced-journal" alphabetically, so this module's own script
+  // tag runs FIRST. A static top-level import of EnhancedJournalSheet.js
+  // (the pattern API.md's own worked example shows) would then make this
+  // module the first to touch it, re-entering MEJ's own monks-enhanced-
+  // journal.js -> apps/enhanced-journal.js -> sheets/BlankSheet.js import
+  // chain *while EnhancedJournalSheet.js's own class statement is still
+  // mid-evaluation* - a `ReferenceError: Cannot access 'EnhancedJournalSheet'
+  // before initialization` that aborts monks-enhanced-journal.js's entire
+  // module evaluation (game.MonksEnhancedJournal never gets assigned, no
+  // hooks fire, both modules go dark). Confirmed live via Task 14's e2e
+  // suite (00-mej-api.spec.mjs) - see task-14-report.md.
+  //
+  // Deferring these two imports to inside this hook (which only runs once
+  // MEJ's own init() has already run to completion and fired
+  // setupMonksEnhancedJournal - i.e. after EnhancedJournalSheet.js's class
+  // statement has long since executed via MEJ's own script tag) sidesteps
+  // the race entirely without needing an MEJ-side fix.
+  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+    import("./sheets/SessionSheet.mjs"),
+    import("./apps/CampaignHubPage.mjs")
+  ]);
 
   api.registerSheetType({
     key: SESSION_TYPE,
