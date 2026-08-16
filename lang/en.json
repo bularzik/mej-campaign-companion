@@ -135,6 +135,20 @@
         }
       }
     },
+    "knowledge": {
+      "tags": "Tags",
+      "addTag": "Add tag…",
+      "removeTag": "Remove tag",
+      "noTags": "No tags",
+      "attributes": "Attributes",
+      "addAttribute": "Add attribute",
+      "deleteAttribute": "Delete attribute",
+      "playerHidden": "Hidden from players",
+      "newKey": "key",
+      "mentionedIn": "Mentioned in",
+      "noMentions": "No mentions yet",
+      "gmOnlyMention": "Mentioned only in GM-only content"
+    },
     "import": {
       "title": "Import Document",
       "button": "Import Document",

@@ -181,6 +181,12 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     // (each gated on its own world setting, checked inside the hook itself).
     registerAutoCapture();
 
+    // Injects the Phase B knowledge panel (tags/attributes/backlinks) into
+    // every MEJ-typed sheet. Dynamic import: knowledge-ui.mjs imports
+    // live-index.mjs (safe) but keep the pattern consistent and cheap.
+    const { registerKnowledgePanel } = await import("./hooks/knowledge-ui.mjs");
+    registerKnowledgePanel();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.
