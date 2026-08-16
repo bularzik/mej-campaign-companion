@@ -56,8 +56,16 @@ async function cleanupAll(page) {
 }
 
 test.describe("04 auto-capture", () => {
+  // Both tests in this file use the default `page` fixture directly (no
+  // separate `browser` contexts), so this afterEach's `page` is the same
+  // real, logged-in page the test itself used — no withGmPage() needed
+  // here. (A leaked timepoint from a *different* spec file's afterEach
+  // failing silently — 02/06, before their own fixes — could still bleed
+  // into this file's ensureTimepoint()'s "reuse existing" behavior when the
+  // whole suite runs together; fixed at the source in those files instead
+  // of defensively here.)
   test.afterEach(async ({ page }) => {
-    await cleanupAll(page).catch(() => {});
+    await cleanupAll(page);
   });
 
   test("combat end creates an Encounter entry with merged quantities and a timepoint link", async ({ page }) => {
