@@ -159,7 +159,7 @@ export function handleUploadResult(payload) {
   // The GM-side reply claims a stored path; never trust it blindly - a compromised or
   // forged GM-side reply could otherwise point a requester at an arbitrary path outside
   // the relay's own upload directory. Only accept paths actually rooted under RELAY_UPLOAD_DIR().
-  if (typeof payload.path === "string" && payload.path && payload.path.startsWith(RELAY_UPLOAD_DIR())) {
+  if (typeof payload.path === "string" && payload.path && payload.path.startsWith(`${RELAY_UPLOAD_DIR()}/`)) {
     entry.resolve(payload.path);
   } else if (typeof payload.path === "string" && payload.path) {
     console.warn(`${MODULE_ID} | dropped relay upload result with path outside RELAY_UPLOAD_DIR()`, payload.path);
