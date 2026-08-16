@@ -46,3 +46,20 @@ With both fixed, the `tempOwnership` workaround has been removed from `openHubSe
 
 - Auto-capture's combat-end hook: end a combat that has **zero** rounds elapsed (immediately ended after starting) and confirm no Encounter entry is spuriously created (or that an empty-outcome entry is handled sensibly, matching whatever the current unit-tested behavior specifies) rather than throwing.
 - Auto-link's save-time tokenizer: confirm it doesn't re-trigger itself in a loop on a page whose own auto-link pass just added a link (i.e. saving the page a second time immediately after an auto-link pass doesn't add duplicate links or re-walk already-linked text).
+
+## Knowledge layer (Phase B)
+
+- **Relationship graph rendering:**
+  - Open the relationship graph from any Hub entry's "Mentioned in" panel or from the graph icon in the knowledge panel (if present on a sheet). Confirm it renders correctly in both light and dark themes, and under the current system's style choices if any.
+  - Test wheel-zoom (scroll to zoom in/out) and drag-to-pan behavior feel smooth and responsive; confirm nodes remain clickable after panning/zooming and edges remain visible.
+  - Confirm the 200-node connection cap is respected and the "truncated" notice appears when the graph includes more than 200 connected entries.
+
+- **Dashboards under non-`dnd5e` systems:**
+  - Switch to a non-`dnd5e` world and open the Campaign Hub's "Dashboards" tab. Save a query using the `type:` / `tag:` / `attr:` / free-text grammar and confirm results appear correctly without crashing, even if some fields may be sparse or absent compared to `dnd5e`.
+
+- **Enricher inside chat messages:**
+  - Post a message in Foundry's chat containing `@CampaignQuery[type:Person tag:villain]` (or any valid query) and confirm the enricher injects inline results into the message without breaking chat rendering. If results degrade (e.g., appearing as plain text or a simplified fallback), confirm this degradation is acceptable and documented.
+
+- **Knowledge panel on every MEJ type:**
+  - Open or create entries of each MEJ type (Person, Place, Quest, NPC, Custom, Session, Encounter, Loot, Shop, Compendium) and confirm the knowledge panel (tags, attributes, "Mentioned in" links) appears on each sheet type and renders without errors.
+  - For Session entries specifically, confirm the knowledge panel is visible alongside the recap sections and other Session-specific controls.

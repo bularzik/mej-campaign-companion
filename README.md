@@ -13,6 +13,13 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 - **Docx import and export** — a wizard imports a `.docx` (Word or Google Docs export) into MEJ entries and Session pages, with per-section type suggestions, inline images, and dated-header detection that creates timepoints. Export walks selected MEJ entries and the timeline into a round-trippable `.docx`, with an opt-in toggle to include GM-only content.
 - **Player collaboration** — an opt-in world setting lets players own the Session entries they help create, so they can write their own recaps directly; players without upload permission get a chunked socket relay through an active GM instead.
 
+### Knowledge layer (0.2.0)
+
+- **Backlinks** — a "Mentioned in" panel on every MEJ sheet shows which other campaign entries link to this one, with badges on the Hub's entry index showing mention counts for each entry.
+- **Tags and attributes** — annotate MEJ entries with custom tags and per-row attributes (e.g. `trustworthiness` on Person entries), visible in the knowledge panel with a per-row `playerHidden` flag for attributes that should not appear on player sheets.
+- **Relationship graph** — a visual graph of `@UUID` links between entries, with vendored d3-force rendering, ego-mode and whole-campaign view toggle, backlink overlay, and a 200-node connection cap for performance.
+- **Hub Dashboards** — a "Dashboards" tab on the Campaign Hub with saved queries using a simple grammar (`type:`, `tag:`, `attr:`, free-text search); search results appear directly inline with an `@CampaignQuery[...]` page enricher for inline results on any MEJ sheet.
+
 ## Requirements
 
 - Foundry VTT **v14**.
@@ -79,6 +86,10 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the ful
 
 - Non-`dnd5e` systems, second-display/popout behavior, and Word/Google Docs docx visual fidelity are exercised manually rather than by the automated suites; see the checklist's respective sections.
 - A `libWrapper`-vs-Monk's Common Display interaction on the shared-media capture path has a documented manual conflict scan, not an automated one.
+- **Knowledge layer (Phase B):**
+  - Enricher results (`@CampaignQuery[...]`) refresh on page re-render only, not on live data updates; rebuild the Dashboard to see latest results.
+  - Relationship graph caps at the 200 most-connected entries for performance; additional nodes and links to them are excluded from the visualization.
+  - Backlinks count only `@UUID` links; plain-text entry names that haven't yet been converted to auto-links (via `@CampaignQuery` or another pass) are caught only once a later auto-link pass has converted them.
 
 ## Development
 
