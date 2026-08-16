@@ -53,6 +53,38 @@ describe("buildEncounterActorRows", () => {
   it("returns {} when every row is actor-less", () => {
     expect(buildEncounterActorRows([{ id: "name:A", name: "A", count: 1, actor: null }])).toEqual({});
   });
+
+  it("merges three unlinked-token instances of one base actor into a single row with summed quantity", () => {
+    const rows = buildEncounterActorRows([
+      { id: "Scene.scn1.Token.tokAAAAAAAAAAAA.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.scn1.Token.tokAAAAAAAAAAAA.Actor.gob123456789012" },
+      { id: "Scene.scn1.Token.tokBBBBBBBBBBBB.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.scn1.Token.tokBBBBBBBBBBBB.Actor.gob123456789012" },
+      { id: "Scene.scn1.Token.tokCCCCCCCCCCCC.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.scn1.Token.tokCCCCCCCCCCCC.Actor.gob123456789012" }
+    ]);
+    expect(Object.keys(rows)).toEqual(["gob123456789012"]);
+    expect(rows["gob123456789012"].quantity).toBe("3");
+    expect(rows["gob123456789012"].name).toBe("Goblin");
+  });
+
+  it("merges a linked actor row and an unlinked token of the same base actor, summing counts", () => {
+    const rows = buildEncounterActorRows([
+      { id: "Actor.gob123456789012", name: "Goblin (linked)", count: 1, actor: "Actor.gob123456789012" },
+      { id: "Scene.scn1.Token.tokAAAAAAAAAAAA.Actor.gob123456789012", name: "Goblin", count: 2, actor: "Scene.scn1.Token.tokAAAAAAAAAAAA.Actor.gob123456789012" }
+    ]);
+    expect(Object.keys(rows)).toEqual(["gob123456789012"]);
+    expect(rows["gob123456789012"].quantity).toBe("3");
+    // First colliding row's identity wins.
+    expect(rows["gob123456789012"].name).toBe("Goblin (linked)");
+    expect(rows["gob123456789012"].uuid).toBe("Actor.gob123456789012");
+  });
+
+  it("leaves rows for distinct actors unaffected by the merge-on-collision logic", () => {
+    const rows = buildEncounterActorRows([
+      { id: "Actor.aaaaaaaaaaaaaaaa", name: "Aldric", count: 1, actor: "Actor.aaaaaaaaaaaaaaaa" },
+      { id: "Actor.bbbbbbbbbbbbbbbb", name: "Thorne", count: 1, actor: "Actor.bbbbbbbbbbbbbbbb" }
+    ]);
+    expect(rows["aaaaaaaaaaaaaaaa"].quantity).toBe("1");
+    expect(rows["bbbbbbbbbbbbbbbb"].quantity).toBe("1");
+  });
 });
 
 describe("rowsFromEncounterActors", () => {

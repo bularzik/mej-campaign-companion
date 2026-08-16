@@ -25,6 +25,20 @@
  * unlinked token's synthetic Actor uuid, since both end in the real actor's
  * plain id, which never itself contains a dot).
  *
+ * Collision correction (second-round review finding): stripping the
+ * token-id segment means every unlinked-token instance of the SAME base
+ * Actor - e.g. three unlinked "Goblin" tokens dragged from a compendium,
+ * the default way GMs place monster mobs - collapses onto one dot-free key.
+ * collapseParticipants() keys by the full (distinct) synthetic uuid, so
+ * each token is its own row with count 1; naively overwriting `actors[id]`
+ * per row would keep only the LAST one, silently losing the other two
+ * instead of recording three. buildEncounterActorRows instead MERGES on a
+ * key collision - summing quantities and keeping the first row's
+ * name/img/uuid - so three unlinked Goblin rows correctly become one
+ * `actors` entry with quantity "3" (also naturally collapsing same-actor
+ * duplicates into the readable "×N" form the brief's "collapsed counts"
+ * acceptance criterion calls for, rather than three separate rows).
+ *
  * Actor-less rows (no actor.uuid: a name-only combatant like "Mook" with no
  * linked actor) have nowhere safe to live in `actors`. MEJ's
  * EncounterSheet#getActors() (EncounterSheet.js:139-181) does NOT show an
@@ -51,20 +65,29 @@ function idFromUuid(uuid) {
  * Build MEJ's `actors` flag object from collapseParticipants()-shaped rows,
  * keyed by the dot-free document id (see module doc comment). Rows with no
  * linked actor (row.actor falsy) are skipped - fold them into the
- * description text with describeUnlinkedParticipants() instead.
+ * description text with describeUnlinkedParticipants() instead. Rows that
+ * collide on that dot-free key (distinct combatants resolving to the same
+ * base actor - most commonly several unlinked-token instances of one
+ * monster) are MERGED, not overwritten: their quantities are summed and the
+ * first colliding row's name/img/uuid is kept.
  */
 export function buildEncounterActorRows(participants) {
   const actors = {};
   for (const row of participants) {
     if (!row.actor) continue;
     const id = idFromUuid(row.actor);
-    actors[id] = {
-      id,
-      uuid: row.actor,
-      name: row.name,
-      img: FALLBACK_ACTOR_IMG,
-      quantity: String(row.count)
-    };
+    const existing = actors[id];
+    if (existing) {
+      existing.quantity = String((Number(existing.quantity) || 0) + row.count);
+    } else {
+      actors[id] = {
+        id,
+        uuid: row.actor,
+        name: row.name,
+        img: FALLBACK_ACTOR_IMG,
+        quantity: String(row.count)
+      };
+    }
   }
   return actors;
 }
