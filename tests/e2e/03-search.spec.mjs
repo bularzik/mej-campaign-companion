@@ -20,6 +20,26 @@ async function openHubSearch(page) {
   await settle(page, 500);
   await shell.locator('nav.sheet-tabs a[data-tab="search"]').click();
   await settle(page, 200);
+  // Live-confirmed MEJ-side bug (KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG,
+  // helpers/foundry.mjs): typing into the search box debounces a Hub
+  // re-render, and for a non-GM client EnhancedJournal.renderSubSheet's
+  // permission re-check (enhanced-journal.js ~486) reads
+  // `testing.compendium` on the companion's shell-page document, which
+  // never implements that getter, throwing "A subclass of Document must
+  // implement this getter" and ABORTING the render entirely - not merely
+  // cosmetic: the search results never paint (0 rows) and on a second
+  // attempt the shell's own inputs become unreachable. This is real and
+  // MEJ-side, not a companion bug, and out of scope to patch here - but
+  // renderSubSheet only takes that branch when `options.force ||
+  // this.tempOwnership` is falsy (line 479), so setting `tempOwnership`
+  // true on the shared EnhancedJournal instance steers every subsequent
+  // render around it, the same way MEJ's own code already does for a
+  // *real* document once it resolves the temp-ownership branch (line
+  // 504) - this just does it up front for GM and non-GM callers alike
+  // (a no-op for the GM path, which never reads `force` at all).
+  await page.evaluate(() => {
+    game.MonksEnhancedJournal.journal.tempOwnership = true;
+  });
   return shell;
 }
 
@@ -70,7 +90,14 @@ test.describe("03 search", () => {
           name: n,
           type: "mej-campaign-companion.session",
           flags: { "monks-enhanced-journal": { type: "session" } },
-          system: { gmNotes: "<p>The vault combination is whispered by a banshee.</p>" }
+          // recap is public (indexed as a plain field, unlike gmNotes) -
+          // the positive control below searches for this word to prove the
+          // player's search genuinely rendered results before trusting it
+          // to correctly *omit* the GM-only "banshee" hit.
+          system: {
+            recap: "<p>The party found a hidden cartographerslodge.</p>",
+            gmNotes: "<p>The vault combination is whispered by a banshee.</p>"
+          }
         }],
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
       });
@@ -86,6 +113,10 @@ test.describe("03 search", () => {
     const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
     await login(playerPage, "User 1");
     const playerShell = await openHubSearch(playerPage);
+    // Positive control: the player's search must find the public recap word.
+    await search(playerShell, playerPage, "cartographerslodge");
+    await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
+
     await search(playerShell, playerPage, "banshee");
     await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(0);
 
