@@ -3,6 +3,37 @@
     "errors": {
       "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled."
     },
-    "sheettype": { "session": "Session" }
+    "sheettype": { "session": "Session" },
+    "placeholder": { "session": "New Session" },
+    "tabs": {
+      "description": "Recap",
+      "session": "Session",
+      "relationships": "Relationships",
+      "notes": "Notes"
+    },
+    "session": {
+      "editRecap": "Edit Recap",
+      "sessionNumber": "Session Number",
+      "campaignDate": "Campaign Date",
+      "date": {
+        "year": "Year",
+        "month": "Month",
+        "day": "Day",
+        "hour": "Hour",
+        "minute": "Minute"
+      },
+      "attendees": "Attendees",
+      "removeAttendee": "Remove Attendee",
+      "dragActorHint": "Drag an Actor here to add them as an attendee.",
+      "secrets": "Secrets",
+      "addSecret": "Add Secret",
+      "deleteSecret": "Delete Secret",
+      "revealSecret": "Reveal to Players",
+      "hideSecret": "Hide from Players",
+      "secretPlaceholder": "Secret text...",
+      "noSecrets": "No secrets yet.",
+      "gmNotes": "GM Notes",
+      "editGmNotes": "Edit GM Notes"
+    }
   }
 }

@@ -1,0 +1,119 @@
+<div>
+    <div class="flexcol journal-subsheet" editable="{{editable}}">
+        <div class="sheet-container detailed session-container flexcol">
+            {{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs"}}
+            {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
+            <section class="sheet-body">
+                <div class="tab{{#if subtabs.description.active}} active{{/if}}" data-group="primary" data-tab="description">
+                    <div class="tab-inner flexcol">
+                        <div class="flexcol editor-parent" data-editor-id="recap">
+                            {{#if editable}}
+                            <button type="button" class="unbutton control-button always-interactive editor-edit" data-action="editRecap" data-tooltip="{{localize 'MEJCampaignCompanion.session.editRecap'}}">
+                                <i class="fas fa-feather" inert></i>
+                            </button>
+                            {{/if}}
+                            <div class="editor editor-display wrapper scrollable{{#unless owner}} not-owner{{/unless}}" data-key="system.recap">
+                                {{{ enrichedRecap }}}
+                            </div>
+                            <div class="editor editor-control wrapper">
+                                <prose-mirror name="system.recap" value="{{ data.system.recap }}" document-uuid="{{ document.uuid }}"></prose-mirror>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab{{#if subtabs.session.active}} active{{/if}}" data-group="primary" data-tab="session">
+                    <div class="tab-inner flexcol session-details">
+                        <div class="form-group">
+                            <label>{{localize 'MEJCampaignCompanion.session.sessionNumber'}}</label>
+                            <input type="number" name="flags.mej-campaign-companion.session.sessionNumber" value="{{session.sessionNumber}}" min="1" step="1" />
+                        </div>
+
+                        <fieldset class="campaign-date">
+                            <legend>{{localize 'MEJCampaignCompanion.session.campaignDate'}}</legend>
+                            <div class="form-group flexrow">
+                                <label>{{localize 'MEJCampaignCompanion.session.date.year'}}</label>
+                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.year" value="{{session.campaignDate.year}}" />
+                                <label>{{localize 'MEJCampaignCompanion.session.date.month'}}</label>
+                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.month" value="{{session.campaignDate.month}}" min="1" max="12" />
+                                <label>{{localize 'MEJCampaignCompanion.session.date.day'}}</label>
+                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.day" value="{{session.campaignDate.day}}" min="1" max="31" />
+                                <label>{{localize 'MEJCampaignCompanion.session.date.hour'}}</label>
+                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.hour" value="{{session.campaignDate.hour}}" min="0" max="23" />
+                                <label>{{localize 'MEJCampaignCompanion.session.date.minute'}}</label>
+                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.minute" value="{{session.campaignDate.minute}}" min="0" max="59" />
+                            </div>
+                        </fieldset>
+
+                        <div class="attendees-section">
+                            <h3>{{localize 'MEJCampaignCompanion.session.attendees'}}</h3>
+                            <ol class="attendees-list item-list scrollable">
+                                {{#each attendeeDetails as |attendee|}}
+                                <li class="item flexrow" data-uuid="{{attendee.uuid}}">
+                                    <img class="item-image" src="{{attendee.img}}" />
+                                    <div class="item-name">{{attendee.name}}</div>
+                                    {{#if @root.editable}}
+                                    <a class="item-delete" data-action="removeAttendee" data-uuid="{{attendee.uuid}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.removeAttendee'}}"><i class="fas fa-trash"></i></a>
+                                    {{/if}}
+                                </li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.session.dragActorHint'}}</li>
+                                {{/each}}
+                            </ol>
+                        </div>
+
+                        <div class="secrets-section">
+                            <h3>
+                                {{localize 'MEJCampaignCompanion.session.secrets'}}
+                                {{#if @root.isGM}}
+                                <button type="button" class="unbutton" data-action="addSecret" data-tooltip="{{localize 'MEJCampaignCompanion.session.addSecret'}}"><i class="fas fa-plus"></i></button>
+                                {{/if}}
+                            </h3>
+                            <ol class="secrets-list item-list scrollable">
+                                {{#each secrets as |secret|}}
+                                <li class="item flexrow{{#if secret.revealed}} revealed{{/if}}" data-id="{{secret.id}}">
+                                    {{#if @root.isGM}}
+                                    <input type="text" class="secret-text" value="{{secret.text}}" data-id="{{secret.id}}" data-change-action="updateSecretText" placeholder="{{localize 'MEJCampaignCompanion.session.secretPlaceholder'}}" />
+                                    <a class="secret-toggle" data-action="toggleSecret" data-id="{{secret.id}}" data-tooltip="{{#if secret.revealed}}{{localize 'MEJCampaignCompanion.session.hideSecret'}}{{else}}{{localize 'MEJCampaignCompanion.session.revealSecret'}}{{/if}}"><i class="fas {{#if secret.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                                    <a class="item-delete" data-action="deleteSecret" data-id="{{secret.id}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.deleteSecret'}}"><i class="fas fa-trash"></i></a>
+                                    {{else}}
+                                    <div class="secret-text">{{secret.text}}</div>
+                                    {{/if}}
+                                </li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.session.noSecrets'}}</li>
+                                {{/each}}
+                            </ol>
+                        </div>
+
+                        {{#if @root.isGM}}
+                        <div class="flexcol editor-parent gm-notes" data-editor-id="gmNotes">
+                            <h3>
+                                {{localize 'MEJCampaignCompanion.session.gmNotes'}}
+                                <button type="button" class="unbutton control-button always-interactive editor-edit" data-action="editGmNotes" data-tooltip="{{localize 'MEJCampaignCompanion.session.editGmNotes'}}">
+                                    <i class="fas fa-feather" inert></i>
+                                </button>
+                            </h3>
+                            <div class="editor editor-display wrapper scrollable" data-key="system.gmNotes">
+                                {{{ enrichedGmNotes }}}
+                            </div>
+                            <div class="editor editor-control wrapper">
+                                <prose-mirror name="system.gmNotes" value="{{ data.system.gmNotes }}" document-uuid="{{ document.uuid }}"></prose-mirror>
+                            </div>
+                        </div>
+                        {{/if}}
+                    </div>
+                </div>
+                <div class="tab{{#if subtabs.relationships.active}} active{{/if}}" data-group="primary" data-tab="relationships">
+                    <div class="tab-inner flexcol">
+                        {{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-relationships.hbs" groups=relationships hasRelationship=has.relationships}}
+                    </div>
+                </div>
+                <div class="tab notes{{#if subtabs.notes.active}} active{{/if}}" data-group="primary" data-tab="notes">
+                    <div class="tab-inner flexcol">
+                        {{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-notes.hbs"}}
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
