@@ -6,7 +6,7 @@ import {
 } from "../scripts/logic/doc-export-snapshot.mjs";
 import { snapshotToDocModel } from "../scripts/logic/doc-export.mjs";
 import { RECORD_TYPE_MARKER_RE, suggestType } from "../scripts/logic/doc-import.mjs";
-import { COMPANION_IMPORT_TYPES } from "../scripts/constants.mjs";
+import { COMPANION_IMPORT_TYPES, SESSION_DOCUMENT_TYPE } from "../scripts/constants.mjs";
 
 const labels = { relationships: "Relationships", sessionNumber: "Session Number", campaignDate: "Campaign Date" };
 
@@ -17,12 +17,12 @@ function mejEntry(uuid, name, kind, extra = {}) {
   };
 }
 
-function sessionEntry(uuid, name, sessionFlags = {}) {
+function sessionEntry(uuid, name, sessionFlags = {}, type = "session") {
   return {
     uuid, name,
     pages: {
       contents: [{
-        type: "session",
+        type,
         system: { recap: "<p>recap</p>", gmNotes: "" },
         getFlag: (scope, key) => (scope === "mej-campaign-companion" && key === "session" ? sessionFlags : undefined),
         flags: { "mej-campaign-companion": { session: sessionFlags } }
@@ -41,6 +41,12 @@ describe("eligibleEntries", () => {
   it("includes session entries by native page type even when getMEJType is false", () => {
     const getMEJType = () => false;
     const rows = eligibleEntries([sessionEntry("u2", "Session 1")], getMEJType);
+    expect(rows.map((r) => r.kind)).toEqual([SESSION_KIND]);
+  });
+
+  it("includes session entries by the real prefixed module-subtype page type (module.json's actual runtime type)", () => {
+    const getMEJType = () => false;
+    const rows = eligibleEntries([sessionEntry("u3", "Session 2", {}, SESSION_DOCUMENT_TYPE)], getMEJType);
     expect(rows.map((r) => r.kind)).toEqual([SESSION_KIND]);
   });
 

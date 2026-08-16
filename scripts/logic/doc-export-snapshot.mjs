@@ -20,6 +20,7 @@
  */
 
 import { sessionData } from "../sheets/session-data.mjs";
+import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const COMPANION_FLAGS = "mej-campaign-companion";
@@ -48,8 +49,12 @@ function bodyText(page) {
 /**
  * Whether a JournalEntry is eligible for export (default-selected too): its
  * single page is either MEJ-typed (getMEJType(entry) truthy) or this
- * module's own "session" native subtype. `getMEJType` is injected
- * (game.MonksEnhancedJournal.getMEJType) so this stays Foundry-free.
+ * module's own Session native subtype. `getMEJType` is injected
+ * (game.MonksEnhancedJournal.getMEJType) so this stays Foundry-free. A real
+ * Session page's `type` is the prefixed SESSION_DOCUMENT_TYPE
+ * (`${MODULE_ID}.session` - see constants.mjs's doc comment); the bare
+ * SESSION_TYPE is also accepted defensively, for any page shaped by a path
+ * outside this module's control.
  * @returns {{uuid:string, name:string, kind:string, page:object}[]}
  */
 export function eligibleEntries(entries, getMEJType) {
@@ -58,7 +63,8 @@ export function eligibleEntries(entries, getMEJType) {
     const page = entry?.pages?.contents?.[0];
     if (!page) continue;
     const mejType = getMEJType(entry);
-    const kind = mejType || (page.type === "session" ? SESSION_KIND : null);
+    const isSessionPage = page.type === SESSION_TYPE || page.type === SESSION_DOCUMENT_TYPE;
+    const kind = mejType || (isSessionPage ? SESSION_KIND : null);
     if (!kind) continue;
     rows.push({ uuid: entry.uuid, name: entry.name, kind, page });
   }

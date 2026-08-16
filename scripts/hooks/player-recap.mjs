@@ -22,13 +22,46 @@
 // scopes the write to ONLY `flags.mej-campaign-companion.playerRecaps.<senderId>`
 // - a malicious client can therefore, at worst, overwrite another real
 // user's recap text with content of the attacker's choosing, never touch
-// any other flag/field on the document or on any other document, and (c)
-// logs every rejection. That residual "impersonate another user's recap"
-// risk is NOT eliminated - it can't be, without a server-side authority
-// this module doesn't have - only bounded to that one flag path, which is
-// the same bound MEJ's own saveUserData accepts for its own per-user notes.
+// any other flag/field on the document or on any other document, (c) logs
+// every rejection, and (d) round-trips the claimed HTML through
+// ProseMirror's own schema before writing it (see sanitizeRecapHtml below) -
+// this is the part MEJ's saveUserData has no equivalent of, and matters
+// more here than it does there: saveUserData's own per-user notes only ever
+// render back to their own author (never shown to anyone else), so a
+// malicious payload there could at most attack the sender's own client.
+// Our recap is rendered to EVERY OTHER user (including the GM) via
+// `{{{recap.enrichedHtml}}}` in session.hbs - an unsanitized relay would let
+// any socket-reachable client plant markup (e.g. `<img onerror=...>`) that
+// executes in the GM's own client. Sanitizing GM-side, before the write,
+// means every reader (including the GM re-rendering their own client)
+// only ever sees ProseMirror-schema-clean HTML, never the raw claimed
+// payload. That residual "impersonate another user's recap" risk (the
+// sender id itself) is NOT eliminated - it can't be, without a server-side
+// authority this module doesn't have - only bounded to that one flag path,
+// which is the same bound MEJ's own saveUserData accepts for its own
+// per-user notes; the content-injection risk, unlike the identity risk,
+// IS closed by the sanitization step.
 import { MODULE_ID, SOCKET, SAVE_RECAP_ACTION, I18N } from "../constants.mjs";
 import { recapPayloadProblem, recapWriteRoute } from "../logic/player-recap.mjs";
+
+/**
+ * Round-trip claimed HTML through ProseMirror's own schema
+ * (parse -> serialize) before it's ever written to a flag another user's
+ * client will render. Drops anything out-of-schema - event handler
+ * attributes (onerror=...), <script>, and any other markup ProseMirror's
+ * schema doesn't itself model - the same sanitization boundary the
+ * prose-mirror editor element enforces for locally-typed content, just
+ * applied here to a relayed payload before it's trusted at all. Returns
+ * null (caller drops the message) if the input can't be parsed at all.
+ */
+function sanitizeRecapHtml(html) {
+  try {
+    return foundry.prosemirror.dom.serializeString(foundry.prosemirror.dom.parseString(html));
+  } catch (error) {
+    console.warn(`${MODULE_ID} | dropped player-recap relay - ProseMirror couldn't parse the payload`, error);
+    return null;
+  }
+}
 
 /**
  * Save the current user's own recap on `document` (a Session
@@ -75,8 +108,10 @@ export async function handleSaveRecapRequest(payload) {
     console.warn(`${MODULE_ID} | dropped player-recap relay for missing document`, payload.documentUuid);
     return;
   }
+  const sanitized = sanitizeRecapHtml(payload.html);
+  if (sanitized === null) return;
   try {
-    await document.update({ [`flags.${MODULE_ID}.playerRecaps.${payload.senderId}`]: payload.html });
+    await document.update({ [`flags.${MODULE_ID}.playerRecaps.${payload.senderId}`]: sanitized });
   } catch (error) {
     console.error(`${MODULE_ID} | writing relayed player recap failed`, error);
   }

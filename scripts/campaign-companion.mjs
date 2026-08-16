@@ -1,5 +1,5 @@
 import {
-  MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
+  MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, I18N
 } from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
@@ -69,7 +69,7 @@ Hooks.once("init", () => {
 Hooks.on("preCreateJournalEntry", (entry, data) => {
   if (!game.user.isGM) return;
   const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
-  if (!shouldOwnSessionEntry(data, { sessionType: SESSION_TYPE, playersWriteSessions })) return;
+  if (!shouldOwnSessionEntry(data, { sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions })) return;
   entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
 

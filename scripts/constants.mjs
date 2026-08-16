@@ -1,5 +1,25 @@
 export const MODULE_ID = "mej-campaign-companion";
+
+/**
+ * "session" (unprefixed) is the key the companion registered its Session
+ * sheet under (api.registerSheetType's `key`) and the exact value MEJ's own
+ * New Entry dialog stores in `flags.monks-enhanced-journal.pagetype` when a
+ * user picks it there (that <select>'s option value is the raw
+ * externalTypes key - see monks-enhanced-journal.js's renderDialogV2
+ * listener). It is NOT a valid JournalEntryPage `type` value on its own,
+ * though: Foundry's module-declared-subtype system (module.json's
+ * `documentTypes.JournalEntryPage.session`) registers the REAL runtime type
+ * as the prefixed `${MODULE_ID}.session` - `DocumentTypeField._validateType`
+ * rejects a bare "session" at Document.create with no such fallback. Use
+ * SESSION_DOCUMENT_TYPE below for anything that creates or compares an
+ * actual page's `type` field; SESSION_TYPE stays for the pagetype-flag/
+ * sheet-registration-key uses, which are genuinely always unprefixed.
+ */
 export const SESSION_TYPE = "session";
+
+/** The actual native JournalEntryPage `type` value for a Session page (module-declared subtype key). */
+export const SESSION_DOCUMENT_TYPE = `${MODULE_ID}.${SESSION_TYPE}`;
+
 export const HUB_PAGE_ID = "campaign-hub";
 export const SOCKET = `module.${MODULE_ID}`;
 
