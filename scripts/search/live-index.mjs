@@ -16,6 +16,7 @@
 // is the one place that overrides the record's uuid/name to the parent
 // entry's before handing it to indexRecord/removeRecord.
 import { createIndex, indexRecord, removeRecord, search } from "../logic/search-index.mjs";
+import { runQuery } from "../logic/query-grammar.mjs";
 import { extractRecord, splitHiddenAttributes } from "../logic/field-extractors.mjs";
 import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
@@ -175,6 +176,16 @@ export function searchAll(query) {
     if (!entry) return false;
     return game.user.isGM || entry.testUserPermission(game.user, "OBSERVER") === true;
   });
+}
+
+/**
+ * Run a grammar query (logic/query-grammar.mjs) against the live index and
+ * drop hits the current user can't observe - same gate as searchAll().
+ * Throws Error("empty-query") for blank queries (callers surface it).
+ */
+export function runQueryAll(queryString) {
+  const hits = runQuery(ensureIndex(), queryString, { gm: game.user.isGM });
+  return hits.filter((hit) => userCanSee(hit.uuid));
 }
 
 /** Can the current user see this entry uuid at all (spec §2's OBSERVER gate)? */
