@@ -20,6 +20,7 @@ import { runQuery } from "../logic/query-grammar.mjs";
 import { extractRecord, splitHiddenAttributes } from "../logic/field-extractors.mjs";
 import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
+import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
@@ -101,6 +102,12 @@ function recordFor(page, type) {
   if (visible) record.fields.companionAttributes = visible;
   if (hidden) record.gmFields.companionAttributes = hidden;
   record.meta = { tags: record.tags, attrs: ccAttrs };
+
+  // Phase C (spec §9): secret blocks in the prose body, for the GM-only
+  // Secrets tracker and prep board. GM-gated at the accessors below —
+  // meta.secrets never reaches non-GM consumers (search()/runQuery() read
+  // fields/gmFields/meta.tags/meta.attrs, never meta.secrets).
+  record.meta.secrets = extractSecretBlocks(page?.system?.recap ?? page?.text?.content ?? "");
 
   return record;
 }
@@ -289,4 +296,36 @@ export function initSearchHooks() {
     if (changes?.name === undefined) return;
     reindexEntry(entry);
   });
+}
+
+/**
+ * Entries this entry's own content references (outbound @UUID refs) — the
+ * prep board's "linked entries" (spec §8). Public refs for everyone
+ * (filtered to entries the user can observe); gmRefs added for the GM.
+ */
+export function outboundRefsForEntry(sourceUuid) {
+  const idx = ensureIndex();
+  const source = backlinks.outbound.get(sourceUuid);
+  if (!source) return [];
+  const rows = [];
+  const push = (target, count) => {
+    if (!userCanSee(target)) return;
+    const rec = idx.records.get(target);
+    rows.push({ uuid: target, count, name: rec?.name ?? fromUuidSync(target)?.name ?? target, type: rec?.type ?? "" });
+  };
+  for (const [target, count] of source.refs) push(target, count);
+  if (game.user.isGM) for (const [target, count] of source.gmRefs) push(target, count);
+  return rows;
+}
+
+/** GM-only: every indexed record carrying secret blocks (Secrets tracker, spec §7). Empty for non-GM. */
+export function gmSecretRecords() {
+  if (!game.user.isGM) return [];
+  const idx = ensureIndex();
+  const rows = [];
+  for (const record of idx.records.values()) {
+    const secrets = record.meta?.secrets ?? [];
+    if (secrets.length) rows.push({ uuid: record.uuid, name: record.name, type: record.type, secrets });
+  }
+  return rows;
 }
