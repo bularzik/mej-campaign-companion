@@ -11,8 +11,8 @@
 const SECTION_RE = /<section\b[^>]*>[\s\S]*?<\/section>/gi;
 
 function attr(openTag, name) {
-  const m = openTag.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i"));
-  return m ? m[1] : "";
+  const m = openTag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  return m ? m[2] : "";
 }
 
 function classesOf(block) {

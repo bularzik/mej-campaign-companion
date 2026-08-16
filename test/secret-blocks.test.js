@@ -26,6 +26,24 @@ describe("extractSecretBlocks", () => {
     const long = `<section class="secret" id="s"><p>${"x".repeat(300)}</p></section>`;
     expect(extractSecretBlocks(long)[0].preview).toHaveLength(140);
   });
+  it("parses single-quoted class and id attributes", () => {
+    const singleQuoted = `<section class='secret' id='secret-sq'><p>Single quoted.</p></section>`;
+    const blocks = extractSecretBlocks(singleQuoted);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toEqual({ id: "secret-sq", preview: "Single quoted.", revealedAll: false });
+  });
+  it("ignores data-class decoy and finds real class attribute", () => {
+    const decoy = `<section data-class="foo" class="secret" id="secret-decoy"><p>Found it.</p></section>`;
+    const blocks = extractSecretBlocks(decoy);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("secret-decoy");
+  });
+  it("ignores data-id decoy and finds real id attribute", () => {
+    const decoy = `<section class="secret" data-id="wrong" id="secret-correct"><p>Correct id.</p></section>`;
+    const blocks = extractSecretBlocks(decoy);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].id).toBe("secret-correct");
+  });
 });
 
 describe("stripSecretSections", () => {
@@ -39,5 +57,23 @@ describe("stripSecretSections", () => {
   });
   it("includeAll passes through untouched", () => {
     expect(stripSecretSections(HTML, { includeAll: true })).toBe(HTML);
+  });
+  it("strips single-quoted unrevealed secrets", () => {
+    const singleQuoted = `<p>Public.</p><section class='secret' id='sq'><p>Hidden.</p></section>`;
+    const out = stripSecretSections(singleQuoted);
+    expect(out).toContain("Public.");
+    expect(out).not.toContain("Hidden.");
+  });
+  it("strips unrevealed secrets with data-class decoy", () => {
+    const decoy = `<p>Safe.</p><section data-class="foo" class="secret"><p>Leak!</p></section>`;
+    const out = stripSecretSections(decoy);
+    expect(out).toContain("Safe.");
+    expect(out).not.toContain("Leak!");
+  });
+  it("strips unrevealed secrets with data-id decoy", () => {
+    const decoy = `<p>OK.</p><section class="secret" data-id="x" id="y"><p>Exposed!</p></section>`;
+    const out = stripSecretSections(decoy);
+    expect(out).toContain("OK.");
+    expect(out).not.toContain("Exposed!");
   });
 });
