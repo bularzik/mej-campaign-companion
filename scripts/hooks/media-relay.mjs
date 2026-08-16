@@ -22,6 +22,14 @@
 //  - Reply/upload destination: RELAY_UPLOAD_DIR() via
 //    apps/import-upload.mjs's uploadCompanionFile(), not campaign-record's
 //    per-group uploadHubMedia().
+//  - Trust model: module sockets carry no authenticated sender, so the
+//    payload's `senderId` is a CLAIM, not a verified identity - a malicious
+//    client can put any user id there. The GM-side checks below (sender
+//    exists, sender can observe the session context) therefore bound what an
+//    honest client can do, not what a hostile one can spoof; the real
+//    security floor is that uploads are still image-MIME-validated,
+//    size-capped, extension-forced, and land only in RELAY_UPLOAD_DIR().
+//    Same honest-trust posture as hooks/player-recap.mjs.
 import {
   MODULE_ID, SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION, RELAY_UPLOAD_DIR, SESSION_DOCUMENT_TYPE
 } from "../constants.mjs";
