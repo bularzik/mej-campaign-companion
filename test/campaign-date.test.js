@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  campaignSortKey, parseCampaignDateInput, formatComponentsFallback, formatCreateDate
+  campaignSortKey, parseCampaignDateInput, formatComponentsFallback, formatCreateDate,
+  validateCampaignComponents
 } from "../scripts/logic/campaign-date.mjs";
 
 const BOUNDS = { monthCount: 12, monthDayCounts: [31,28,31,30,31,30,31,31,30,31,30,31], hoursPerDay: 24, minutesPerHour: 60 };
@@ -73,6 +74,50 @@ describe("parseCampaignDateInput", () => {
       .toBe("MEJCampaignCompanion.hub.campaignDateBadTime");
     expect(parseCampaignDateInput({ year: "1492", month: "0", day: "1", time: "12:60" }, BOUNDS).error)
       .toBe("MEJCampaignCompanion.hub.campaignDateBadTime");
+  });
+});
+
+describe("validateCampaignComponents", () => {
+  it("rejects null/missing components", () => {
+    expect(validateCampaignComponents(null, BOUNDS)).toBe(false);
+  });
+
+  it("accepts a full in-bounds date, with or without a time", () => {
+    expect(validateCampaignComponents({ year: 1492, month: 6, day: 15, hour: null, minute: null }, BOUNDS)).toBe(true);
+    expect(validateCampaignComponents({ year: 1492, month: 6, day: 15, hour: 14, minute: 30 }, BOUNDS)).toBe(true);
+  });
+
+  it("rejects a month outside the active calendar's month count", () => {
+    // BOUNDS has 12 months (0-11); a docx-derived Gregorian passthrough
+    // could still produce month 11 (December) fine, but a shorter homebrew
+    // calendar would reject it - simulate that with a narrower bounds.
+    const shortCalendar = { monthCount: 8, monthDayCounts: [30, 30, 30, 30, 30, 30, 30, 30], hoursPerDay: 24, minutesPerHour: 60 };
+    expect(validateCampaignComponents({ year: 1492, month: 11, day: 1, hour: null, minute: null }, shortCalendar)).toBe(false);
+    expect(validateCampaignComponents({ year: 1492, month: 7, day: 1, hour: null, minute: null }, shortCalendar)).toBe(true);
+  });
+
+  it("rejects a day beyond the selected month's length", () => {
+    expect(validateCampaignComponents({ year: 1492, month: 1, day: 30, hour: null, minute: null }, BOUNDS)).toBe(false); // Feb=28
+  });
+
+  it("rejects out-of-range or non-integer hour/minute when present", () => {
+    expect(validateCampaignComponents({ year: 1492, month: 0, day: 1, hour: 24, minute: 0 }, BOUNDS)).toBe(false);
+    expect(validateCampaignComponents({ year: 1492, month: 0, day: 1, hour: 12, minute: 60 }, BOUNDS)).toBe(false);
+    expect(validateCampaignComponents({ year: 1492, month: 0, day: 1, hour: 1.5, minute: 0 }, BOUNDS)).toBe(false);
+  });
+
+  it("ignores hour/minute entirely when null", () => {
+    expect(validateCampaignComponents({ year: 1492, month: 0, day: 1, hour: null, minute: null }, BOUNDS)).toBe(true);
+  });
+
+  it("rejects a non-integer year", () => {
+    expect(validateCampaignComponents({ year: 1492.5, month: 0, day: 1, hour: null, minute: null }, BOUNDS)).toBe(false);
+  });
+
+  it("falls back to a 31-day max when a calendar has no monthDayCounts entry for the month", () => {
+    const noDayCounts = { monthCount: 12, monthDayCounts: [], hoursPerDay: 24, minutesPerHour: 60 };
+    expect(validateCampaignComponents({ year: 1492, month: 1, day: 31, hour: null, minute: null }, noDayCounts)).toBe(true);
+    expect(validateCampaignComponents({ year: 1492, month: 1, day: 32, hour: null, minute: null }, noDayCounts)).toBe(false);
   });
 });
 

@@ -156,7 +156,8 @@
       "someFailed": "Some sections could not be imported:",
       "imagesDropped": "Some images could not be uploaded and were left out.",
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
-      "nothingToImport": "Every section is set to skip — nothing to import."
+      "nothingToImport": "Every section is set to skip — nothing to import.",
+      "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date."
     }
   }
 }

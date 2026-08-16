@@ -19,6 +19,9 @@ import { uploadInlineImages } from "./import-upload.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
+import { queueFiling } from "../logic/filing-queue.mjs";
+import { validateCampaignComponents } from "../logic/campaign-date.mjs";
+import { calendarBounds } from "../logic/campaign-calendar.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -46,6 +49,23 @@ function isoDateToCampaignComponents(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   if (![y, m, d].every(Number.isInteger)) return null;
   return { year: y, month: m - 1, day: d, hour: null, minute: null };
+}
+
+/**
+ * isoDateToCampaignComponents() is a blind numeric passthrough - it has no
+ * idea whether the active calendar even has that many months/days (see its
+ * doc comment). Validate the result against the world's actual
+ * calendarBounds() (logic/campaign-calendar.mjs) before it's ever written:
+ * out of bounds -> null (write no campaign date for this row) plus a
+ * localized per-section warning surfaced in the result dialog, rather than
+ * silently storing a nonsensical month/day.
+ */
+function safeCampaignDate(iso, label, warnings) {
+  const components = isoDateToCampaignComponents(iso);
+  if (!components) return null;
+  if (validateCampaignComponents(components, calendarBounds())) return components;
+  warnings.push(game.i18n.format(`${I18N}.import.dateOutOfRange`, { label }));
+  return null;
 }
 
 /** Best-effort session number from a header like "Arc 2 Session 3" or "Session Zero". null when absent. */
@@ -319,11 +339,24 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   // session-header rows here DO get a campaign-date-stamped timepoint
   // (campaign-record's own wizard always passes null for campaignDate, even
   // though its addTimepoint supports one - see isoDateToCampaignComponents's
-  // doc comment above for the approximation this relies on).
+  // doc comment above for the approximation this relies on, and
+  // safeCampaignDate's for the bounds check that guards it).
   //
   // Per-section failures are collected rather than aborting the loop -
   // documents are only ever created after this confirm step, so there is no
   // partial state to roll back; a failed row simply doesn't get a page.
+  //
+  // Every timeline mutation (addTimepoint + addLink) is routed through
+  // logic/filing-queue.mjs's shared queueFiling(), the same queue
+  // hooks/auto-capture.mjs uses - both write the singleton timeline
+  // journal's whole timepoints array read-modify-write style, so a combat
+  // ending or a Show-Players share firing mid-import would otherwise race
+  // this loop's own writes. queueFiling() catches and logs its task's
+  // errors internally rather than rejecting (so one failure can't poison
+  // later queued tasks from other subsystems - see its header comment), so
+  // this loop's own task closes over a local `filingError` to still learn
+  // whether ITS filing failed, and re-throws it into this row's own
+  // try/catch below.
   static async #onCreate(event, target) {
     const rows = this.#formRows();
     let plan;
@@ -348,21 +381,26 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         page.html = html;
       }
 
-      // Sequential by construction (one async loop, awaited per row) - filings
-      // never overlap, so no queue/serialization is needed the way
-      // hooks/auto-capture.mjs needs one for concurrent hook-driven writers.
       let timeline = null;
       for (let i = 0; i < plan.pages.length; i++) {
         const page = plan.pages[i];
-        const campaignDate = isoDateToCampaignComponents(dates[i]);
+        const campaignDate = safeCampaignDate(dates[i], page.name, plan.warnings);
         try {
           const created = await this.#createPage(page, campaignDate);
           results.created++;
           if (page.timepoint) {
             timeline ??= await ensureTimelineJournal();
             if (timeline) {
-              const tp = await Timepoints.addTimepoint(timeline, page.timepoint, null, campaignDate);
-              await Timepoints.addLink(timeline, tp.id, { uuid: created.uuid, name: created.name, type: "JournalEntryPage" });
+              let filingError = null;
+              await queueFiling(async () => {
+                try {
+                  const tp = await Timepoints.addTimepoint(timeline, page.timepoint, null, campaignDate);
+                  await Timepoints.addLink(timeline, tp.id, { uuid: created.uuid, name: created.name, type: "JournalEntryPage" });
+                } catch (err) {
+                  filingError = err;
+                }
+              });
+              if (filingError) throw filingError;
               results.timepoints++;
             }
           }

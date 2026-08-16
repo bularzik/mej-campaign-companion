@@ -51,6 +51,33 @@ export function parseCampaignDateInput(raw, bounds) {
   return { components: { year, month, day, hour, minute }, error: null };
 }
 
+/**
+ * Validate an already-numeric campaign-date components object
+ * ({year, month (0-based), day, hour, minute}) against calendarBounds()
+ * (logic/campaign-calendar.mjs). Unlike parseCampaignDateInput (which parses
+ * raw modal-form strings and returns an i18n error key), this takes a
+ * components object built some other way - e.g. the docx import wizard's
+ * isoDateToCampaignComponents(), a numeric Gregorian passthrough that has no
+ * idea whether the active calendar even has that many months/days - and
+ * just says yes/no. hour/minute are only checked when present (many callers,
+ * including the docx importer, never set a time). year has no bound (any
+ * integer is a valid campaign year, matching parseCampaignDateInput).
+ * @param {{year:number, month:number, day:number, hour:?number, minute:?number}|null} components
+ * @param {{monthCount:number, monthDayCounts:number[], hoursPerDay:number, minutesPerHour:number}} bounds
+ * @returns {boolean}
+ */
+export function validateCampaignComponents(components, bounds) {
+  if (!components) return false;
+  const { year, month, day, hour, minute } = components;
+  if (!Number.isInteger(year)) return false;
+  if (!Number.isInteger(month) || month < 0 || month >= bounds.monthCount) return false;
+  const maxDay = bounds.monthDayCounts[month] ?? 31;
+  if (!Number.isInteger(day) || day < 1 || day > maxDay) return false;
+  if (hour != null && (!Number.isInteger(hour) || hour < 0 || hour >= bounds.hoursPerDay)) return false;
+  if (minute != null && (!Number.isInteger(minute) || minute < 0 || minute >= bounds.minutesPerHour)) return false;
+  return true;
+}
+
 /** In-world date label built from components + a resolved month name. */
 export function formatComponentsFallback(components, monthName) {
   if (!components) return "";

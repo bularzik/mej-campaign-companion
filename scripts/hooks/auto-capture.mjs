@@ -43,6 +43,7 @@ import {
 import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import { getTimepoints, addLink } from "../data/timepoints.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
+import { queueFiling } from "../logic/filing-queue.mjs";
 import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
   resolveSharedMediaShare, installShareImageWrap
@@ -75,20 +76,12 @@ async function recordDeparture(combat, combatant) {
   }
 }
 
-// Serializes all timepoint filings (Encounter links + shared-image links)
-// through one promise chain so concurrent writes can't race. addLink
-// (data/timepoints.mjs) rewrites the whole timepoints array read-modify-
-// write style, so two overlapping filings - e.g. a rapid double
-// Show-Players click, or an image share racing the encounter filing at
-// combat end - would otherwise silently drop whichever write loses the
-// race. Ported approach from campaign-record's queueMediaTask.
-let fileQueue = Promise.resolve();
-
-/** Queue a timepoint-filing task so it never overlaps a prior in-flight one. */
-function queueFiling(task) {
-  fileQueue = fileQueue.then(task).catch((err) => console.error(`${MODULE_ID} | auto-capture: filing failed`, err));
-  return fileQueue;
-}
+// Timepoint filings (Encounter links + shared-image links) are serialized
+// through logic/filing-queue.mjs's shared queueFiling(), NOT a queue local
+// to this file - the docx import wizard (apps/import-wizard.mjs) writes to
+// the same singleton timeline journal's timepoints flag, and a combat
+// ending or a Show-Players share firing while a GM is mid-import would
+// otherwise race that write too. See filing-queue.mjs's header comment.
 
 /** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
 async function fileOntoNewestTimepoint(link) {
