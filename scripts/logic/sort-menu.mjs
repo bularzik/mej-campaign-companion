@@ -1,8 +1,13 @@
-// Ported verbatim from campaign-record's scripts/logic/sort-menu.mjs — no
-// module-specific imports, no changes needed.
+// Ported from campaign-record's scripts/logic/sort-menu.mjs — no
+// module-specific imports needed, but SORT_KEYS drops "updated": campaign-record
+// tracked a per-record update timestamp its sort could key off; MEJ entries carry
+// no equivalent, en.json never gained a hub.sort.updated label, and
+// filterIndexRows (hub-index.mjs) never implemented it. Dropped rather than
+// wired up - YAGNI, and campaign-record's "updated" semantics don't map
+// cleanly onto MEJ journal entries.
 
 /** Index sort options, mirroring the doctype-filter view-model pattern. */
-export const SORT_KEYS = ["name", "type", "updated"];
+export const SORT_KEYS = ["name", "type"];
 
 /**
  * Build the sort popup view model.

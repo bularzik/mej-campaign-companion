@@ -88,7 +88,7 @@
                                               data-action="openLink" data-name="{{this.name}}"
                                               {{#if this.uuid}}data-uuid="{{this.uuid}}"{{/if}}
                                               {{#if this.src}}data-src="{{this.src}}"{{/if}}>
-                                            {{#if this.thumb}}<img class="mej-cc-link-thumb" src="{{this.thumb}}" alt="">{{else}}<i class="{{this.icon}}"></i>{{/if}}
+                                            {{#if this.thumb}}<img class="mej-cc-link-thumb nopopout" src="{{this.thumb}}" alt="">{{else}}<i class="{{this.icon}}"></i>{{/if}}
                                             {{this.name}}
                                             {{#if this.canToggleVisibility}}
                                             <a data-action="toggleLinkShowPlayers" data-tooltip="{{localize 'MEJCampaignCompanion.hub.toggleShowPlayers'}}"><i class="fas {{#if this.showPlayers}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>

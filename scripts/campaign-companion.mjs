@@ -39,7 +39,7 @@ Hooks.on("activateControls", (ej, ctrls) => {
   ctrls.push({
     id: HUB_PAGE_ID,
     label: game.i18n.localize(`${I18N}.hub.title`),
-    icon: "fa-timeline",
+    icon: "fa-solid fa-timeline",
     type: "button",
     visible: true,
     callback: () => game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID)

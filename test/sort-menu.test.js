@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { SORT_KEYS, buildSortMenu } from "../scripts/logic/sort-menu.mjs";
 
+describe("SORT_KEYS", () => {
+  it("does not include 'updated' - no MEJ-side timestamp backs it (Task 7 review)", () => {
+    expect(SORT_KEYS).toEqual(["name", "type"]);
+    expect(SORT_KEYS).not.toContain("updated");
+  });
+});
+
 describe("buildSortMenu", () => {
   const labelOf = (k) => `L:${k}`;
 
@@ -11,8 +18,8 @@ describe("buildSortMenu", () => {
   });
 
   it("marks the current key selected and no other", () => {
-    const { items } = buildSortMenu("updated", labelOf);
-    expect(items.filter((i) => i.selected).map((i) => i.value)).toEqual(["updated"]);
+    const { items } = buildSortMenu("type", labelOf);
+    expect(items.filter((i) => i.selected).map((i) => i.value)).toEqual(["type"]);
   });
 
   it("selects nothing when the current key is unknown", () => {

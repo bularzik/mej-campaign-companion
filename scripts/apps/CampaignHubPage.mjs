@@ -1,9 +1,11 @@
 // CampaignHubPage - registered as a shell page (api.registerShellPage, see
 // API.md) rather than a JournalEntryPage sheet type. Unlike SessionSheet its
 // `document` is MEJ's ephemeral BlankJournal placeholder, not a real,
-// persisted document - all Hub state (filters, pane, timeline order) lives
-// on `this.state` and CRUD writes go through Task 6's timepoints.mjs against
-// the world's singleton timeline JournalEntry.
+// persisted document - all Hub UI state (filters, sort, timeline order, open
+// menus) lives on the module-level HUB_STATE object below (read/written via
+// the `this.state` getter - see its comment for why it isn't an instance
+// field), and CRUD writes go through Task 6's timepoints.mjs against the
+// world's singleton timeline JournalEntry.
 //
 // Same rendering caveats as SessionSheet.mjs: the shell calls
 // _replaceHTML/activateListeners()/subRender() directly, never _onRender(),
@@ -24,6 +26,27 @@ import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
+
+// Module-level UI state (filters, sort, timeline order, open menus, and a
+// one-shot flag for restoring the index-filter input's focus/caret after a
+// re-render). The Hub has no backing document to key state off of, and
+// MEJ's shell decides whether to reconstruct the subsheet instance by
+// comparing `this.subsheet.type != this.document.type`
+// (apps/enhanced-journal.js's renderSubSheet) - an INSTANCE read. The
+// `get type()` override below makes that comparison work so the instance
+// normally survives renders, but hoisting state up here means it survives
+// even if the shell reconstructs the instance for some other reason.
+// Single Hub instance is assumed - MEJ only ever mounts one shell page per
+// id inside its own tab, so this isn't shared across concurrent Hubs.
+const HUB_STATE = {
+  types: new Set(),
+  query: "",
+  sort: "name",
+  typeMenuOpen: false,
+  sortMenuOpen: false,
+  timelineOrder: "manual",
+  restoreIndexFilterFocus: false
+};
 
 export class CampaignHubPage extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
@@ -70,6 +93,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return HUB_PAGE_ID;
   }
 
+  // Instance mirror of the static getter above. MEJ's shell (renderSubSheet,
+  // apps/enhanced-journal.js) decides whether to reuse or reconstruct the
+  // mounted subsheet by comparing `this.subsheet.type != this.document.type`
+  // - an INSTANCE property read. No MEJ sheet class defines one (only
+  // `static get type()`), so without this override it reads `undefined` and
+  // the shell reconstructs a fresh instance on every render. That's mostly
+  // harmless now that UI state lives on module-level HUB_STATE rather than
+  // an instance field, but a fresh instance still means losing anything
+  // instance-scoped (event-listener dedupe flags, etc.), so fix the
+  // comparison itself rather than relying solely on the state hoist.
+  get type() {
+    return this.constructor.type;
+  }
+
   static get defaultObject() {
     return {};
   }
@@ -78,16 +115,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return false;
   }
 
-  // Client-only UI state - never persisted, reset per hub instance (a fresh
-  // instance is synthesized each time the shell (re)opens the tab).
-  state = {
-    types: new Set(),
-    query: "",
-    sort: "name",
-    typeMenuOpen: false,
-    sortMenuOpen: false,
-    timelineOrder: "manual"
-  };
+  // Client-only UI state (filters, sort, open menus, timeline order) -
+  // module-level HUB_STATE (see above), not an instance field, so it
+  // survives subsheet reconstruction by the shell.
+  get state() {
+    return HUB_STATE;
+  }
 
   async _prepareBodyContext(context, options) {
     context = await super._prepareBodyContext(context, options);
@@ -429,19 +462,30 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
 
     const search = html.querySelector('input[name="index-filter"]');
-    if (search && !search.dataset.ccBound) {
-      search.dataset.ccBound = "1";
-      search.addEventListener(
-        "input",
-        foundry.utils.debounce((event) => {
-          this.state.query = event.target.value;
-          this.render({ parts: ["main"] }).then(() => {
-            const restored = this.element.querySelector('input[name="index-filter"]');
-            restored?.focus();
-            restored?.setSelectionRange(restored.value.length, restored.value.length);
-          });
-        }, 250)
-      );
+    if (search) {
+      // EnhancedJournalSheet#render has no return statement (it returns
+      // undefined), and this.element is never assigned for a subsheet
+      // hosted in the shell - both would make a `.then()`-chained
+      // focus/caret restore throw. Restore from here instead: activateListeners
+      // is handed the fresh `html` on every render (self-triggered or not),
+      // so a one-shot flag on the module-level state is enough to know a
+      // restore is due.
+      if (HUB_STATE.restoreIndexFilterFocus) {
+        HUB_STATE.restoreIndexFilterFocus = false;
+        search.focus();
+        search.setSelectionRange(search.value.length, search.value.length);
+      }
+      if (!search.dataset.ccBound) {
+        search.dataset.ccBound = "1";
+        search.addEventListener(
+          "input",
+          foundry.utils.debounce((event) => {
+            HUB_STATE.query = event.target.value;
+            HUB_STATE.restoreIndexFilterFocus = true;
+            this.render({ parts: ["main"] });
+          }, 250)
+        );
+      }
     }
   }
 }
