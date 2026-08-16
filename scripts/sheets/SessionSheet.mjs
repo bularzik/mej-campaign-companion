@@ -126,7 +126,14 @@ export class SessionSheet extends EnhancedJournalSheet {
     // sanitized non-GM shape still drops `revealed`/`audience` internals.
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     context.secrets = isGM
-      ? session.secrets.map((s) => ({ ...s, audienceCount: (normalizeAudience(s.audience).users.length + normalizeAudience(s.audience).groups.length) }))
+      ? session.secrets.map((s) => {
+          // audienceCount alone can't represent "revealed to everyone via
+          // the audience dialog" (all: true carries no users/groups) - the
+          // GM badge needs its own audienceAll flag so that case still
+          // renders a marker instead of silently showing no badge.
+          const a = normalizeAudience(s.audience);
+          return { ...s, audienceAll: a.all, audienceCount: a.users.length + a.groups.length };
+        })
       : session.secrets
           .filter((s) => s.revealed || canSee(s.audience, game.user.id, groups))
           .map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
@@ -407,7 +414,17 @@ export class SessionSheet extends EnhancedJournalSheet {
       audience: item.audience, groups
     });
     if (!audience) return;
-    const secrets = session.secrets.map((s) => (s.id === id ? { ...s, audience } : s));
+    // Re-read fresh data after the dialog closes rather than reusing the
+    // pre-dialog `session` snapshot: a co-GM or another window may have
+    // mutated secrets while this dialog was open, and writing back the
+    // stale array would silently revert that concurrent edit. The item may
+    // even have been deleted in the meantime - bail with no write if so.
+    // The whisper still uses the pre-dialog item.audience as
+    // previousAudience: that's the audience the GM actually saw and
+    // compared against in the dialog.
+    const current = sessionData(this.document).secrets;
+    if (!current.find((s) => s.id === id)) return;
+    const secrets = current.map((s) => (s.id === id ? { ...s, audience } : s));
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
     await sendRevealWhisper({
       audience, previousAudience: item.audience, groups,
