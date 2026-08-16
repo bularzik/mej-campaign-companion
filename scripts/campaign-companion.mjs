@@ -212,6 +212,12 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     const { registerSecretsUi } = await import("./hooks/secrets-ui.mjs");
     registerSecretsUi();
 
+    // Phase C: per-player/group relationship reveal overlay (row visibility
+    // for hidden relationship rows, secret-label audience for the free-text
+    // secret field). Same dynamic-import pattern as registerSecretsUi above.
+    const { registerRelationshipsUi } = await import("./hooks/relationships-ui.mjs");
+    registerRelationshipsUi();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.

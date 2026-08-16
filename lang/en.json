@@ -180,7 +180,10 @@
       "revealedToYou": "Revealed to you",
       "noId": "This secret block has no id — re-create it with the editor's Secret button to make it revealable.",
       "audienceButton": "Reveal to…",
-      "chipsNone": "Hidden from players"
+      "chipsNone": "Hidden from players",
+      "relRevealTitle": "Reveal relationship",
+      "relSecretRevealTitle": "Reveal secret relationship",
+      "knownConnections": "Known connections"
     },
     "import": {
       "title": "Import Document",

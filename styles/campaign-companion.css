@@ -750,3 +750,5 @@
 .mej-cc-secret-chips { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
 section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-border-highlight, #ff6400); }
 .mej-cc-audience-row { display: block; margin: 2px 0; }
+.mej-cc-rel-revealed .fa-eye { color: var(--color-text-hyperlink, #4a90d9); margin-right: 4px; }
+.mej-cc-rel-secret { opacity: 0.85; }
