@@ -34,25 +34,39 @@ export async function dataUriToFile(uri, basename) {
 }
 
 /**
- * Upload a converted import image into worlds/<world-id>/mej-campaign-companion/
- * in the "data" source. Mirrors campaign-record's uploadHubMedia incantation:
- * browse first (cheap existence check), create the directory on failure, then
- * upload with notify:false. Returns the stored path; throws on failure.
+ * Upload a file into an arbitrary directory under worlds/<world-id>/ in the
+ * "data" source. Mirrors campaign-record's uploadHubMedia incantation:
+ * browse first (cheap existence check), create every missing ancestor
+ * directory below the world root on failure (createDirectory is not
+ * recursive - the world's own "worlds/<world-id>/" directory always exists,
+ * so only segments below it are attempted), then upload with notify:false.
+ * Returns the stored path; throws on failure.
+ *
+ * Exported (beyond this file's own import-image use) for
+ * hooks/media-relay.mjs's GM-side upload assembler and SessionSheet's
+ * direct-upload path (a player who already holds FILES_UPLOAD) - both land
+ * in RELAY_UPLOAD_DIR() (constants.mjs), a sibling of IMPORT_MEDIA_DIR().
  */
-async function uploadImportFile(file) {
+export async function uploadCompanionFile(file, dir) {
   const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
-  const dir = IMPORT_MEDIA_DIR();
   await FilePickerImpl.browse("data", dir).catch(async () => {
-    // The parent "worlds/<world-id>/" directory always exists (that's where
-    // the world itself lives); only the module's own subdirectory needs
-    // creating. Tolerates an already-exists race; a directory that truly
-    // failed to create surfaces as an upload failure below.
-    await FilePickerImpl.createDirectory("data", dir)
-      .catch((err) => console.warn(`mej-campaign-companion | createDirectory ${dir}`, err));
+    const worldRoot = `worlds/${game.world.id}`;
+    const rest = dir.startsWith(`${worldRoot}/`) ? dir.slice(worldRoot.length + 1).split("/") : dir.split("/");
+    let path = worldRoot;
+    for (const segment of rest) {
+      path += `/${segment}`;
+      await FilePickerImpl.createDirectory("data", path)
+        .catch((err) => console.warn(`mej-campaign-companion | createDirectory ${path}`, err));
+    }
   });
   const result = await FilePickerImpl.upload("data", dir, file, {}, { notify: false });
   if (!result?.path) throw new Error(`mej-campaign-companion | upload failed for ${file.name}`);
   return result.path;
+}
+
+/** Import wizard's own inline-image destination: worlds/<world-id>/mej-campaign-companion/. */
+async function uploadImportFile(file) {
+  return uploadCompanionFile(file, IMPORT_MEDIA_DIR());
 }
 
 /**

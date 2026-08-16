@@ -11,10 +11,18 @@
 // come from an _onRender() override, or it will silently never bind while
 // the sheet is hosted inside MEJ's shell.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, I18N } from "../constants.mjs";
+import { MODULE_ID, I18N, RELAY_UPLOAD_DIR } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
+import { buildRecapEntries } from "../logic/player-recap.mjs";
+import { isRelayableImageType, MAX_RELAY_FILE_BYTES } from "../logic/media-relay.mjs";
+import { savePlayerRecap } from "../hooks/player-recap.mjs";
+import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
+import { uploadCompanionFile } from "../apps/import-upload.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
+
+/** Dotted flag path (both for form `name=` binding and document.update) for one user's own recap. */
+const myRecapFlag = (userId) => `flags.${MODULE_ID}.playerRecaps.${userId}`;
 
 export class SessionSheet extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
@@ -25,11 +33,22 @@ export class SessionSheet extends EnhancedJournalSheet {
     actions: {
       editRecap: SessionSheet.onEditRecap,
       editGmNotes: SessionSheet.onEditGmNotes,
+      editPlayerRecap: SessionSheet.onEditPlayerRecap,
       addSecret: SessionSheet.onAddSecret,
       deleteSecret: SessionSheet.onDeleteSecret,
       toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
       removeAttendee: SessionSheet.onRemoveAttendee
+    },
+    // Overrides EnhancedJournalSheet's own `form.handler` (a literal static
+    // reference set at that base class's own DEFAULT_OPTIONS evaluation
+    // time - inheriting the field would keep pointing at
+    // EnhancedJournalSheet.onSubmit even with a `static onSubmit` override
+    // below, since DEFAULT_OPTIONS.form.handler isn't dynamically resolved
+    // per-subclass). See SessionSheet.onSubmit's own doc comment for why
+    // this override exists at all.
+    form: {
+      handler: SessionSheet.onSubmit
     }
   };
 
@@ -134,6 +153,32 @@ export class SessionSheet extends EnhancedJournalSheet {
       delete context.data.system.gmNotes;
     }
 
+    // Player recaps: every user (GM included) gets their own editable
+    // section on any session they can see; every other user's recap (only
+    // once they've actually written something - buildRecapEntries omits
+    // empty other-user rows) renders read-only with their name attached.
+    // flags["mej-campaign-companion"].playerRecaps is a SIBLING flag key to
+    // `.session` (session-data.mjs), never nested inside it - Task 5's
+    // reserved shape.
+    const recaps = this.document.getFlag(MODULE_ID, "playerRecaps") ?? {};
+    const users = game.users.contents.map((u) => ({ id: u.id, name: u.name }));
+    const recapEntries = buildRecapEntries(recaps, users, game.user.id);
+    const selfEntry = recapEntries.find((e) => e.isSelf);
+    context.userId = game.user.id;
+    context.myRecap = selfEntry?.html ?? "";
+    context.enrichedMyRecap = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
+      context.myRecap, enrichmentOptions
+    );
+    context.otherRecaps = await Promise.all(
+      recapEntries
+        .filter((e) => !e.isSelf)
+        .map(async (e) => ({
+          userId: e.userId,
+          name: e.name,
+          enrichedHtml: await foundry.applications.ux.TextEditor.implementation.enrichHTML(e.html, enrichmentOptions)
+        }))
+    );
+
     return context;
   }
 
@@ -163,11 +208,75 @@ export class SessionSheet extends EnhancedJournalSheet {
         drop: this._onDropAttendee.bind(this)
       }
     }).bind(html);
+
+    // Every user (not gated on document ownership - see _canDragDrop's
+    // comment above for why that guard doesn't apply here) can drop an
+    // image file onto their OWN recap section. File drops carry no `type`
+    // TextEditor.getDragEventData() would recognize (that's for Foundry
+    // document links), so this is a separate DragDrop instance reading
+    // event.dataTransfer.files directly, rather than reusing _onDropAttendee's
+    // getDragEventData path.
+    new foundry.applications.ux.DragDrop.implementation({
+      dropSelector: ".player-recap-self",
+      permissions: {
+        drop: () => true
+      },
+      callbacks: {
+        drop: this._onDropRecapImage.bind(this)
+      }
+    }).bind(html);
   }
 
   async _onDropAttendee(event) {
     const data = foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
     if (data.type === "Actor") await this.addActor(data);
+  }
+
+  async _onDropRecapImage(event) {
+    const files = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type?.startsWith("image/"));
+    if (!files.length) return; // not a file drop (e.g. a stray Actor drag) - nothing for us to do
+    event.preventDefault();
+    event.stopPropagation();
+    for (const file of files) await this._ingestRecapImage(file);
+  }
+
+  async _onPasteRecapImage(event) {
+    const files = [...(event.originalEvent?.clipboardData?.files ?? event.clipboardData?.files ?? [])]
+      .filter((f) => f.type?.startsWith("image/"));
+    if (!files.length) return;
+    event.preventDefault();
+    for (const file of files) await this._ingestRecapImage(file);
+  }
+
+  /**
+   * Upload (directly if the user already holds FILES_UPLOAD, otherwise
+   * relayed through the active GM - see hooks/media-relay.mjs) and append
+   * the result into the user's own recap. Both paths land in the same
+   * RELAY_UPLOAD_DIR() and share the same type/size validation up front, so
+   * the player-facing outcome (accepted, or a specific rejection reason) is
+   * identical regardless of which upload path is actually used.
+   */
+  async _ingestRecapImage(file) {
+    if (!isRelayableImageType(file.type)) {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageTypeRejected`));
+      return;
+    }
+    if (file.size > MAX_RELAY_FILE_BYTES) {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageTooLarge`));
+      return;
+    }
+    try {
+      const path = game.user.can("FILES_UPLOAD")
+        ? await uploadCompanionFile(new File([file], relayFilename(file.name), { type: file.type }), RELAY_UPLOAD_DIR())
+        : await relayUploadMedia(this.document.uuid, file);
+      const recaps = this.document.getFlag(MODULE_ID, "playerRecaps") ?? {};
+      const current = recaps[game.user.id] ?? "";
+      await savePlayerRecap(this.document, `${current}<p><img src="${path}"></p>`);
+      this.render();
+    } catch (error) {
+      console.error(`${MODULE_ID} | image drop/paste into player recap failed`, error);
+      ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageUploadFailed`));
+    }
   }
 
   // Redirect MEJ's generic single-actor drop handling (header portrait
@@ -206,6 +315,17 @@ export class SessionSheet extends EnhancedJournalSheet {
   static onEditGmNotes(event, target) {
     const editing = $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).hasClass("editing");
     $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).toggleClass("editing", !editing);
+  }
+
+  // No isEditable/isOwner gate, unlike onEditRecap - every user (not just
+  // the document's owner) can toggle and edit their OWN recap section. The
+  // underlying prose-mirror control being reachable at all when
+  // !this.isEditable additionally depends on _disableFields's re-enable
+  // below (mirroring EnhancedJournalSheet's own precedent for its "notes"
+  // tab - see that method's doc comment).
+  static onEditPlayerRecap(event, target) {
+    const editing = $(".editor-parent[data-editor-id='playerRecap']", this.trueElement).hasClass("editing");
+    $(".editor-parent[data-editor-id='playerRecap']", this.trueElement).toggleClass("editing", !editing);
   }
 
   static async onAddSecret(event, target) {
@@ -248,5 +368,76 @@ export class SessionSheet extends EnhancedJournalSheet {
     const session = sessionData(this.document);
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
+  }
+
+  // EnhancedJournalSheet's own onSubmit (sheets/EnhancedJournalSheet.js)
+  // special-cases exactly ONE flag namespace for the "write my own field
+  // even though I don't own this document" relay path:
+  // `flags.monks-enhanced-journal.<userId>` (its own per-user "notes" tab,
+  // relayed via the "saveUserData" socket action). Our own
+  // `flags.mej-campaign-companion.playerRecaps.<userId>` falls through that
+  // check untouched, so a non-owner player's recap edit would otherwise be
+  // silently dropped on submit. This override intercepts our own field
+  // first (via savePlayerRecap's own owner-vs-relay branch, mirroring
+  // saveUserData's pattern under our own namespace - see
+  // hooks/player-recap.mjs) and only falls through to `super.onSubmit` when
+  // the user is a genuine document owner/GM (so every other field - session
+  // number, attendees, secrets, gmNotes, etc. - keeps saving exactly as
+  // before). When not editable, nothing else in the form should be
+  // submittable by this user anyway (secrets/attendees are separately
+  // GM-gated in their own action handlers, not via form submission), so
+  // super.onSubmit is skipped entirely rather than invoked for a no-op.
+  static async onSubmit(event, form, formData) {
+    const submitData = this._prepareSubmitData(event, form, formData, {});
+    const recapHtml = foundry.utils.getProperty(submitData, myRecapFlag(game.user.id));
+    if (recapHtml !== undefined) {
+      savePlayerRecap(this.document, recapHtml)
+        .catch((err) => console.error(`${MODULE_ID} | saving player recap failed`, err));
+    }
+    if (this.isEditable) return super.onSubmit(event, form, formData);
+    return true;
+  }
+
+  // Mirrors EnhancedJournalSheet's own _disableFields precedent for its
+  // "notes" tab exactly (sheets/EnhancedJournalSheet.js): the base
+  // ApplicationV2 render lifecycle disables every form control when
+  // `!this.isEditable`, then `_disableFields` selectively re-enables the
+  // ones that should stay live regardless of document ownership. Without
+  // this override our player-recap pencil button and its prose-mirror's
+  // internal <textarea> (the custom element's underlying form-associated
+  // control - confirmed against the base class's own equivalent selector
+  // for its notes prose-mirror) would stay disabled for every non-owner
+  // player, making the recap section rendered-but-inert.
+  _disableFields(form) {
+    super._disableFields(form);
+    const hasGM = game.users.some((u) => u.isGM && u.active);
+    if (!hasGM) return;
+    $(".player-recap-self .editor-edit", form).removeAttr("disabled");
+    $(`textarea[name="${myRecapFlag(game.user.id)}"]`, form).removeAttr("disabled").removeAttr("readonly");
+  }
+
+  // Companion half of the same "notes"-tab precedent: EnhancedJournalSheet's
+  // own subRender() re-enables its notes prose-mirror on its internal "open"
+  // event once a GM comes online mid-session, scoped to `.notes-container`.
+  // That selector doesn't reach our own player-recap element, so this
+  // mirrors it under `.player-recap-self` instead.
+  async subRender(context, options) {
+    await super.subRender(context, options);
+    const hasGM = game.users.some((u) => u.isGM && u.active);
+    if (hasGM) {
+      $(".player-recap-self .editor-edit", this.trueElement).removeAttr("disabled");
+      const editor = $(".player-recap-self prose-mirror.editor", this.trueElement).on("open", (ev) => {
+        editor.get(0).disabled = false;
+      });
+    }
+  }
+
+  // Header comment at the top of this file: any DOM listener beyond the
+  // native data-action bindings must be attached here (or subRender), never
+  // assumed from an _onRender() override. Paste has no native data-action
+  // equivalent, so it's bound directly.
+  async activateListeners(html) {
+    await super.activateListeners(html);
+    $(".player-recap-self", html).on("paste", this._onPasteRecapImage.bind(this));
   }
 }

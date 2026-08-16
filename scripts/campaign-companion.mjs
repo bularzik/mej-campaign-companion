@@ -1,12 +1,14 @@
 import {
   MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
-  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, I18N
+  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, I18N
 } from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
 import { CampaignHubPage } from "./apps/CampaignHubPage.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
 import { registerAutoCapture } from "./hooks/auto-capture.mjs";
+import { registerSocketDispatcher } from "./hooks/socket.mjs";
+import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 
 let apiReceived = false;
 
@@ -44,6 +46,31 @@ Hooks.once("init", () => {
     type: Boolean,
     default: false
   });
+
+  game.settings.register(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING, {
+    name: `${I18N}.settings.playersWriteSessions.name`,
+    hint: `${I18N}.settings.playersWriteSessions.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+});
+
+// Grants player-writable default ownership to Session entries created
+// through either of the companion's own creation paths (see
+// logic/session-ownership.mjs's header comment for why one hook covers
+// both), gated on the playersWriteSessions setting. GM-client-only: the
+// dialogs/wizard this covers are GM-only affordances, and preCreateX hooks
+// only ever fire locally on the client initiating the creation call (unlike
+// the broadcast _onCreate patch MEJ itself uses, which needs its own
+// `game.user.id !== userid` guard for that reason - no equivalent guard is
+// needed here).
+Hooks.on("preCreateJournalEntry", (entry, data) => {
+  if (!game.user.isGM) return;
+  const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
+  if (!shouldOwnSessionEntry(data, { sessionType: SESSION_TYPE, playersWriteSessions })) return;
+  entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
 
 Hooks.on("setupMonksEnhancedJournal", (api) => {
@@ -117,4 +144,8 @@ Hooks.once("ready", () => {
     ui.notifications.error(game.i18n.localize(`${I18N}.errors.mej-api-missing`), { permanent: true });
     return;
   }
+
+  // Single shared socket listener for the whole module (media relay +
+  // player recap relay) - see hooks/socket.mjs's header comment.
+  registerSocketDispatcher();
 });

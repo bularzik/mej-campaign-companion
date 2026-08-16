@@ -19,6 +19,32 @@
                                 <prose-mirror name="system.recap" value="{{ data.system.recap }}" document-uuid="{{ document.uuid }}"></prose-mirror>
                             </div>
                         </div>
+
+                        <div class="player-recaps-section">
+                            <h3>{{localize 'MEJCampaignCompanion.session.playerRecaps'}}</h3>
+                            {{#unless hasGM}}
+                            <div class="notes-information"><span class="warning">{{localize 'MEJCampaignCompanion.session.recapNoGM'}}</span></div>
+                            {{/unless}}
+                            <div class="flexcol editor-parent player-recap-self" data-editor-id="playerRecap">
+                                <button type="button" class="unbutton control-button always-interactive editor-edit" data-action="editPlayerRecap" data-tooltip="{{localize 'MEJCampaignCompanion.session.editMyRecap'}}">
+                                    <i class="fas fa-feather" inert></i>
+                                </button>
+                                <div class="editor editor-display wrapper scrollable" data-key="myRecap">
+                                    {{{ enrichedMyRecap }}}
+                                </div>
+                                <div class="editor editor-control wrapper">
+                                    <prose-mirror name="flags.mej-campaign-companion.playerRecaps.{{userId}}" value="{{ myRecap }}" document-uuid="{{ document.uuid }}"></prose-mirror>
+                                </div>
+                            </div>
+                            <ol class="other-recaps-list item-list">
+                                {{#each otherRecaps as |recap|}}
+                                <li class="item flexcol other-recap" data-user-id="{{recap.userId}}">
+                                    <div class="recap-author">{{recap.name}}</div>
+                                    <div class="recap-content">{{{ recap.enrichedHtml }}}</div>
+                                </li>
+                                {{/each}}
+                            </ol>
+                        </div>
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.session.active}} active{{/if}}" data-group="primary" data-tab="session">

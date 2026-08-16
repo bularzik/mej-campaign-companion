@@ -15,6 +15,10 @@
       "autoCaptureSharedMedia": {
         "name": "Auto-Capture Shared Media",
         "hint": "When enabled, images and videos a GM shows to players are automatically filed onto the campaign timeline's newest timepoint."
+      },
+      "playersWriteSessions": {
+        "name": "Players Write Sessions",
+        "hint": "When enabled, new Session entries created through the docx import wizard or Monk's Enhanced Journal's own New Entry dialog are owned by all players by default, so any player can add their own recap without a GM relaying the write."
       }
     },
     "sheettype": { "session": "Session" },
@@ -34,6 +38,12 @@
     },
     "session": {
       "editRecap": "Edit Recap",
+      "playerRecaps": "Player Recaps",
+      "editMyRecap": "Edit My Recap",
+      "recapNoGM": "No GM is currently online - your recap will be saved once one is, but drops/pastes need a GM online to relay an upload if you don't have upload permission.",
+      "recapImageTypeRejected": "That file isn't a supported image type.",
+      "recapImageTooLarge": "That image is too large to upload (10MB max).",
+      "recapImageUploadFailed": "Uploading that image failed. Try again, or ask your GM to check the console.",
       "sessionNumber": "Session Number",
       "campaignDate": "Campaign Date",
       "date": {
