@@ -50,7 +50,8 @@ export function indexRecord(index, record) {
     }
   }
   index.records.set(record.uuid, {
-    uuid: record.uuid, name: record.name, type: record.type, texts, gmOnly, tokens
+    uuid: record.uuid, name: record.name, type: record.type, texts, gmOnly, tokens,
+    meta: record.meta ?? { tags: record.tags ?? [], attrs: [] }
   });
 }
 

@@ -17,6 +17,7 @@
 // entry's before handing it to indexRecord/removeRecord.
 import { createIndex, indexRecord, removeRecord, search } from "../logic/search-index.mjs";
 import { extractRecord, splitHiddenAttributes } from "../logic/field-extractors.mjs";
+import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
@@ -86,6 +87,17 @@ function recordFor(page, type) {
       record.gmFields.attributes = hidden;
     }
   }
+
+  // Phase B knowledge flags: tags feed the already-supported record.tags
+  // field (search-index.mjs joins them into fields.tags), companion
+  // attributes get their own public/GM field pair, and both land in
+  // record.meta for the query grammar's structured type:/tag:/attr: filters.
+  record.tags = getTags(page);
+  const ccAttrs = getAttributes(page);
+  const { visible, hidden } = splitAttributeText(ccAttrs);
+  if (visible) record.fields.companionAttributes = visible;
+  if (hidden) record.gmFields.companionAttributes = hidden;
+  record.meta = { tags: record.tags, attrs: ccAttrs };
 
   return record;
 }

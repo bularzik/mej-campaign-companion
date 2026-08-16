@@ -129,3 +129,14 @@ describe("phase 3 polish", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 });
+
+describe("record meta", () => {
+  it("stores meta on the record and defaults it", () => {
+    const index = createIndex();
+    indexRecord(index, { uuid: "u1", name: "A", type: "person", tags: ["x"], fields: {}, gmFields: {},
+      meta: { tags: ["x"], attrs: [{ key: "k", value: "v", playerHidden: false }] } });
+    indexRecord(index, { uuid: "u2", name: "B", type: "place", fields: {}, gmFields: {} });
+    expect(index.records.get("u1").meta.attrs[0].key).toBe("k");
+    expect(index.records.get("u2").meta).toEqual({ tags: [], attrs: [] });
+  });
+});
