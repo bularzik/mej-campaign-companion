@@ -64,4 +64,22 @@ describe("edge labels (Phase C)", () => {
     expect(g.edges[0].label).toBe("Nemesis");
     expect(g.edges[0].hidden).toBe(true);
   });
+
+  it("a non-GM sees a hidden edge that was row-revealed to them (revealedToViewer: true), still dashed", () => {
+    const rows = [
+      { uuid: "U.a", name: "A", type: "person", relationships: [{ id: "r", uuid: "U.b", hidden: true, revealedToViewer: true, label: "Nemesis" }] },
+      { uuid: "U.b", name: "B", type: "person", relationships: [] }
+    ];
+    const g = buildGraph(rows, [], { isGM: false });
+    expect(g.edges).toEqual([{ source: "U.a", target: "U.b", kind: "relationship", label: "Nemesis", hidden: true }]);
+  });
+
+  it("a non-GM does NOT see a hidden edge without revealedToViewer", () => {
+    const rows = [
+      { uuid: "U.a", name: "A", type: "person", relationships: [{ id: "r", uuid: "U.b", hidden: true, label: "Nemesis" }] },
+      { uuid: "U.b", name: "B", type: "person", relationships: [] }
+    ];
+    const g = buildGraph(rows, [], { isGM: false });
+    expect(g.edges).toEqual([]);
+  });
 });

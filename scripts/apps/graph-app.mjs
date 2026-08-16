@@ -3,9 +3,12 @@
 // edited on MEJ sheets. All rows are pre-filtered to what the current user
 // can observe (spec §2's gate); relationships are additionally pre-filtered
 // per-viewer via visibleRelRows (Phase C, spec §6) so hidden/secret rows
-// never reach buildGraph unless this viewer can see them - buildGraph's own
-// `rel.hidden && !isGM` skip is now a no-op safety net for GM viewers, who
-// do receive hidden rows (marked hidden: true for the dashed edge style).
+// never reach buildGraph unless this viewer can see them. A hidden row that
+// was individually row-revealed to this viewer (visibleRelRows's
+// rowRevealedToUser) survives that filter and is passed through as
+// revealedToViewer: true, so buildGraph's `rel.hidden && !isGM` gate lets it
+// through for its beneficiary - `hidden: true` is kept regardless, so the
+// beneficiary still sees the dashed edge style.
 import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
@@ -42,7 +45,7 @@ function graphRows() {
         page.flags?.[MEJ_FLAGS]?.relationships,
         entry.getFlag(MODULE_ID, "relReveals") ?? {},
         { userId: game.user.id, groups, isGM: game.user.isGM }
-      ).map((r) => ({ id: r.id, uuid: r.uuid, hidden: r.hidden, label: combineLabel(r.label, r.secretText) }));
+      ).map((r) => ({ id: r.id, uuid: r.uuid, hidden: r.hidden, revealedToViewer: r.rowRevealedToUser, label: combineLabel(r.label, r.secretText) }));
       rows.push({ uuid: entry.uuid, name: entry.name, type, relationships });
       break;
     }

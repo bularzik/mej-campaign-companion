@@ -2,7 +2,10 @@
  * Pure graph assembly for the relationship graph app (spec §5). The caller
  * (apps/graph-app.mjs) supplies permission-filtered rows - every row here
  * is already visible to the viewing user, so edge visibility reduces to
- * "both endpoints present" (spec §2) plus the hidden-relationship GM gate.
+ * "both endpoints present" (spec §2) plus a hidden-relationship gate: GM-only,
+ * except a row a caller marks `revealedToViewer: true` (a hidden row
+ * individually row-revealed to this non-GM viewer, spec §6) still gets an
+ * edge, kept dashed via `hidden: true`.
  */
 
 export function normalizeRelationships(flagValue) {
@@ -25,12 +28,13 @@ const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = null, includeBacklinks = false, isGM = false, maxNodes = 200 } = {}) {
   const byUuid = new Map(rows.map((r) => [r.uuid, r]));
 
-  // Relationship edges (undirected, deduped), hidden ones GM-only.
+  // Relationship edges (undirected, deduped), hidden ones GM-only unless the
+  // caller pre-marked this row as individually revealed to the viewer.
   const edges = [];
   const seenPairs = new Set();
   for (const row of rows) {
     for (const rel of row.relationships ?? []) {
-      if (rel.hidden && !isGM) continue;
+      if (rel.hidden && !isGM && rel.revealedToViewer !== true) continue;
       if (!byUuid.has(rel.uuid)) continue;
       const key = pairKey(row.uuid, rel.uuid);
       if (seenPairs.has(key)) continue;
