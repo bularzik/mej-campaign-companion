@@ -1,3 +1,5 @@
+import { I18N } from "../constants.mjs";
+
 /**
  * Order-preserving numeric key for a campaign date's components, or null when
  * unset. month/day/hour/minute stay < 100 for every shipped calendar, so this
@@ -21,29 +23,29 @@ export function parseCampaignDateInput(raw, bounds) {
   const t = (raw.time ?? "").trim();
 
   if (!y && !m && !d) return { components: null, error: null };
-  if (!y || !m || !d) return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDatePartial" };
+  if (!y || !m || !d) return { components: null, error: `${I18N}.hub.campaignDatePartial` };
 
   const year = Number(y);
   const month = Number(m);
   const day = Number(d);
-  if (!Number.isInteger(year)) return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDateBadYear" };
+  if (!Number.isInteger(year)) return { components: null, error: `${I18N}.hub.campaignDateBadYear` };
   if (!Number.isInteger(month) || month < 0 || month >= bounds.monthCount) {
-    return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDateBadMonth" };
+    return { components: null, error: `${I18N}.hub.campaignDateBadMonth` };
   }
   const maxDay = bounds.monthDayCounts[month] ?? 31;
   if (!Number.isInteger(day) || day < 1 || day > maxDay) {
-    return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDateBadDay" };
+    return { components: null, error: `${I18N}.hub.campaignDateBadDay` };
   }
 
   let hour = null;
   let minute = null;
   if (t) {
     const match = /^(\d{1,2}):(\d{2})$/.exec(t);
-    if (!match) return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDateBadTime" };
+    if (!match) return { components: null, error: `${I18N}.hub.campaignDateBadTime` };
     hour = Number(match[1]);
     minute = Number(match[2]);
     if (hour < 0 || hour >= bounds.hoursPerDay || minute < 0 || minute >= bounds.minutesPerHour) {
-      return { components: null, error: "CAMPAIGNRECORD.Hub.CampaignDateBadTime" };
+      return { components: null, error: `${I18N}.hub.campaignDateBadTime` };
     }
   }
   return { components: { year, month, day, hour, minute }, error: null };

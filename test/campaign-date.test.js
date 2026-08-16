@@ -43,7 +43,7 @@ describe("parseCampaignDateInput", () => {
   it("errors when the date is partially filled", () => {
     const r = parseCampaignDateInput({ year: "1492", month: "6", day: "", time: "" }, BOUNDS);
     expect(r.components).toBe(null);
-    expect(r.error).toBe("CAMPAIGNRECORD.Hub.CampaignDatePartial");
+    expect(r.error).toBe("MEJCampaignCompanion.hub.campaignDatePartial");
   });
 
   it("parses a full date with no time", () => {
@@ -58,21 +58,21 @@ describe("parseCampaignDateInput", () => {
 
   it("rejects a day beyond the selected month's length", () => {
     const r = parseCampaignDateInput({ year: "1492", month: "1", day: "30", time: "" }, BOUNDS); // Feb=28
-    expect(r.error).toBe("CAMPAIGNRECORD.Hub.CampaignDateBadDay");
+    expect(r.error).toBe("MEJCampaignCompanion.hub.campaignDateBadDay");
   });
 
   it("rejects an out-of-range month", () => {
     const r = parseCampaignDateInput({ year: "1492", month: "12", day: "1", time: "" }, BOUNDS);
-    expect(r.error).toBe("CAMPAIGNRECORD.Hub.CampaignDateBadMonth");
+    expect(r.error).toBe("MEJCampaignCompanion.hub.campaignDateBadMonth");
   });
 
   it("rejects malformed or out-of-range time", () => {
     expect(parseCampaignDateInput({ year: "1492", month: "0", day: "1", time: "9am" }, BOUNDS).error)
-      .toBe("CAMPAIGNRECORD.Hub.CampaignDateBadTime");
+      .toBe("MEJCampaignCompanion.hub.campaignDateBadTime");
     expect(parseCampaignDateInput({ year: "1492", month: "0", day: "1", time: "24:00" }, BOUNDS).error)
-      .toBe("CAMPAIGNRECORD.Hub.CampaignDateBadTime");
+      .toBe("MEJCampaignCompanion.hub.campaignDateBadTime");
     expect(parseCampaignDateInput({ year: "1492", month: "0", day: "1", time: "12:60" }, BOUNDS).error)
-      .toBe("CAMPAIGNRECORD.Hub.CampaignDateBadTime");
+      .toBe("MEJCampaignCompanion.hub.campaignDateBadTime");
   });
 });
 

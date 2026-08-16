@@ -120,7 +120,7 @@ describe("displayLink", () => {
 describe("recordDragPayload", () => {
   it("carries the internal routing key plus Foundry's document shape", () => {
     expect(recordDragPayload("JournalEntry.g1.JournalEntryPage.p1")).toEqual({
-      kind: "campaign-record.record",
+      kind: "mej-campaign-companion.record",
       type: "JournalEntryPage",
       uuid: "JournalEntry.g1.JournalEntryPage.p1"
     });

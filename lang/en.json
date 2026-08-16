@@ -34,6 +34,58 @@
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
       "editGmNotes": "Edit GM Notes"
+    },
+    "hub": {
+      "title": "Campaign Hub",
+      "tabs": {
+        "index": "Index",
+        "timeline": "Timeline",
+        "search": "Search"
+      },
+      "allTypes": "All Types",
+      "typeFilter": "Filter by Type",
+      "sortBy": "Sort By",
+      "sort": {
+        "name": "Name",
+        "type": "Type"
+      },
+      "filterName": "Filter by name...",
+      "filteredCount": "{shown} of {total}",
+      "noEntries": "No journal entries yet.",
+      "orderBy": "Order By",
+      "order": {
+        "manual": "Manual",
+        "created": "Date Added",
+        "campaign": "Campaign Date"
+      },
+      "noTimepoints": "No timepoints yet.",
+      "addTimepoint": "Add Timepoint",
+      "editTimepoint": "Edit Timepoint",
+      "deleteTimepoint": "Delete Timepoint",
+      "deleteTimepointConfirm": "Delete the timepoint \"{label}\"? This cannot be undone.",
+      "save": "Save",
+      "create": "Create",
+      "timepointLabel": "Label",
+      "campaignDate": "Campaign Date",
+      "campaignYear": "Year",
+      "campaignMonth": "Month",
+      "campaignDay": "Day",
+      "campaignTime": "Time",
+      "campaignDateUnavailable": "No calendar is active; campaign dates are unavailable.",
+      "campaignDatePartial": "Year, month, and day must all be filled in together.",
+      "campaignDateBadYear": "Year must be a whole number.",
+      "campaignDateBadMonth": "Month is out of range for the active calendar.",
+      "campaignDateBadDay": "Day is out of range for the selected month.",
+      "campaignDateBadTime": "Time must be in HH:MM format and within range.",
+      "removeLink": "Remove Link",
+      "toggleShowPlayers": "Toggle Player Visibility",
+      "brokenLink": "That link no longer resolves to anything.",
+      "cannotAttach": "That item can't be attached to the timeline.",
+      "dropFilesUnsupported": "Dropping files directly isn't supported yet - upload them to a journal entry first.",
+      "showImageToPlayers": "Show Image to Players?",
+      "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
+      "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
+      "searchComingSoon": "Search is coming in a future update."
     }
   }
 }

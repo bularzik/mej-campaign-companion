@@ -1,1 +1,221 @@
 .mej-campaign-companion {}
+
+/* Campaign Hub shell page - shell pages get no MEJ per-type theming (see
+   API.md's "Current limitation" section), so all Hub styling lives here,
+   scoped under .mej-cc-hub. */
+.mej-cc-hub {
+  height: 100%;
+}
+
+.mej-cc-hub .sheet-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mej-cc-hub .tab-inner {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Index pane */
+.mej-cc-index {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-index-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.mej-cc-index-controls input[name="index-filter"] {
+  flex: 1;
+}
+
+.mej-cc-doctype-filter,
+.mej-cc-sort-filter {
+  position: relative;
+}
+
+.mej-cc-doctype-summary,
+.mej-cc-sort-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+
+.mej-cc-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  background: var(--color-form-background, #fff);
+  border: 1px solid var(--color-border-light-tertiary, #999);
+  border-radius: 4px;
+  padding: 0.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  min-width: 12em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.mej-cc-doctype-option,
+.mej-cc-sort-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+
+.mej-cc-filtered-count {
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.mej-cc-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mej-cc-index-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.4em;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+}
+
+.mej-cc-index-row:hover {
+  background: var(--color-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+.mej-cc-index-icon {
+  width: 1.2em;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.mej-cc-index-name {
+  flex: 1;
+}
+
+.mej-cc-index-type {
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.7;
+}
+
+/* Timeline pane */
+.mej-cc-timeline {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-order-menu {
+  display: flex;
+  gap: 0.3em;
+  flex: 0 0 auto;
+}
+
+.mej-cc-order-menu button.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.mej-cc-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.mej-cc-timepoint {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+  padding: 0.4em;
+  border: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+}
+
+.mej-cc-timepoint[data-drag-timepoint] {
+  cursor: grab;
+}
+
+.mej-cc-timepoint-date {
+  flex: 0 0 auto;
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.75;
+  min-width: 7em;
+}
+
+.mej-cc-timepoint-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.mej-cc-timepoint-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.mej-cc-timepoint-label {
+  flex: 1;
+  font-weight: bold;
+}
+
+.mej-cc-timepoint-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+}
+
+.mej-cc-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  background: var(--color-bg-option, rgba(0, 0, 0, 0.06));
+  cursor: pointer;
+}
+
+.mej-cc-link-chip.broken {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.mej-cc-link-thumb {
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+/* Search pane (placeholder - wired in Task 8) */
+.mej-cc-search {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-search-input {
+  cursor: not-allowed;
+}

@@ -1,0 +1,129 @@
+<div class="mej-cc-hub">
+    <div class="flexcol journal-subsheet" editable="{{editable}}">
+        <div class="sheet-container mej-cc-hub-container flexcol">
+            {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
+            <section class="sheet-body">
+                <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
+                    <div class="tab-inner flexcol mej-cc-index">
+                        <div class="mej-cc-index-controls">
+                            <div class="mej-cc-doctype-filter">
+                                <button type="button" class="mej-cc-doctype-summary" data-action="toggleTypeMenu"
+                                        aria-haspopup="true" aria-expanded="{{#if index.typeMenuOpen}}true{{else}}false{{/if}}"
+                                        data-tooltip="{{localize 'MEJCampaignCompanion.hub.typeFilter'}}">
+                                    <i class="fas fa-filter"></i>
+                                    <span class="mej-cc-doctype-summary-label">{{index.doctypeFilter.summary}}</span>
+                                </button>
+                                {{#if index.typeMenuOpen}}
+                                <div class="mej-cc-doctype-menu mej-cc-menu">
+                                    {{#each index.doctypeFilter.items}}
+                                    <label class="mej-cc-doctype-option">
+                                        <input type="checkbox" name="doctype-check" value="{{this.type}}" {{#if this.checked}}checked{{/if}}>
+                                        <i class="{{this.icon}}"></i> {{this.label}}
+                                    </label>
+                                    {{/each}}
+                                </div>
+                                {{/if}}
+                            </div>
+                            <div class="mej-cc-sort-filter">
+                                <button type="button" class="mej-cc-sort-summary" data-action="toggleSortMenu"
+                                        aria-haspopup="true" aria-expanded="{{#if index.sortMenuOpen}}true{{else}}false{{/if}}"
+                                        data-tooltip="{{localize 'MEJCampaignCompanion.hub.sortBy'}}">
+                                    <i class="fas fa-arrow-down-short-wide"></i>
+                                </button>
+                                {{#if index.sortMenuOpen}}
+                                <div class="mej-cc-sort-menu mej-cc-menu">
+                                    {{#each index.sortMenu.items}}
+                                    <label class="mej-cc-sort-option">
+                                        <input type="radio" name="sort-select" value="{{this.value}}" {{#if this.selected}}checked{{/if}}>
+                                        {{this.label}}
+                                    </label>
+                                    {{/each}}
+                                </div>
+                                {{/if}}
+                            </div>
+                            <input type="text" name="index-filter" value="{{index.query}}" autocomplete="off"
+                                   placeholder="{{localize 'MEJCampaignCompanion.hub.filterName'}}" />
+                            {{#if index.query}}
+                            <span class="mej-cc-filtered-count">{{localize "MEJCampaignCompanion.hub.filteredCount" shown=index.rows.length total=index.total}}</span>
+                            {{/if}}
+                        </div>
+                        <ol class="mej-cc-index-list item-list scrollable">
+                            {{#each index.rows}}
+                            <li class="mej-cc-index-row item flexrow" data-uuid="{{this.uuid}}" data-action="openIndexRow">
+                                <i class="mej-cc-index-icon {{this.icon}}"></i>
+                                <span class="mej-cc-index-name">{{this.name}}</span>
+                                <span class="mej-cc-index-type">{{this.typeLabel}}</span>
+                            </li>
+                            {{else}}
+                            <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noEntries'}}</li>
+                            {{/each}}
+                        </ol>
+                    </div>
+                </div>
+                <div class="tab{{#if subtabs.timeline.active}} active{{/if}}" data-group="primary" data-tab="timeline">
+                    <div class="tab-inner flexcol mej-cc-timeline">
+                        {{#if timeline.hasJournal}}
+                        <div class="mej-cc-order-menu" role="group" aria-label="{{localize 'MEJCampaignCompanion.hub.orderBy'}}">
+                            {{#each timeline.orderOptions}}
+                            <button type="button" data-action="setTimelineOrder" data-order="{{this.value}}"
+                                    class="{{#if this.selected}}active{{/if}}">{{this.label}}</button>
+                            {{/each}}
+                        </div>
+                        <ol class="mej-cc-timeline-list timepoints{{#unless timeline.showDateColumn}} manual{{/unless}}">
+                            {{#each timeline.rows}}
+                            <li class="mej-cc-timepoint" data-timepoint-id="{{this.id}}" data-position="{{this.position}}"
+                                data-drop-timepoint {{#if this.canEdit}}{{#unless @root.timeline.showDateColumn}}data-drag-timepoint draggable="true"{{/unless}}{{/if}}>
+                                {{#if @root.timeline.showDateColumn}}<div class="mej-cc-timepoint-date">{{this.dateLabel}}</div>{{/if}}
+                                <div class="mej-cc-timepoint-body">
+                                    <div class="mej-cc-timepoint-head">
+                                        <span class="mej-cc-timepoint-label">{{this.label}}</span>
+                                        {{#if this.canEdit}}
+                                        <button type="button" data-action="renameTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
+                                        <button type="button" data-action="deleteTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.deleteTimepoint'}}"><i class="fas fa-trash"></i></button>
+                                        {{/if}}
+                                    </div>
+                                    <div class="mej-cc-timepoint-links">
+                                        {{#each this.links}}
+                                        <span class="mej-cc-link-chip{{#if this.broken}} broken{{/if}}" data-link-id="{{this.id}}"
+                                              data-action="openLink" data-name="{{this.name}}"
+                                              {{#if this.uuid}}data-uuid="{{this.uuid}}"{{/if}}
+                                              {{#if this.src}}data-src="{{this.src}}"{{/if}}>
+                                            {{#if this.thumb}}<img class="mej-cc-link-thumb" src="{{this.thumb}}" alt="">{{else}}<i class="{{this.icon}}"></i>{{/if}}
+                                            {{this.name}}
+                                            {{#if this.canToggleVisibility}}
+                                            <a data-action="toggleLinkShowPlayers" data-tooltip="{{localize 'MEJCampaignCompanion.hub.toggleShowPlayers'}}"><i class="fas {{#if this.showPlayers}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                                            {{/if}}
+                                            {{#if ../canEdit}}
+                                            <a data-action="removeLink" data-tooltip="{{localize 'MEJCampaignCompanion.hub.removeLink'}}"><i class="fas fa-xmark"></i></a>
+                                            {{/if}}
+                                        </span>
+                                        {{/each}}
+                                    </div>
+                                </div>
+                            </li>
+                            {{else}}
+                            <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noTimepoints'}}</li>
+                            {{/each}}
+                        </ol>
+                        {{#if timeline.canEdit}}
+                        <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                            <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                        </button>
+                        {{/if}}
+                        {{else}}
+                        <p class="instruction">{{localize 'MEJCampaignCompanion.hub.timelineEmptyState'}}</p>
+                        {{/if}}
+                    </div>
+                </div>
+                <div class="tab{{#if subtabs.search.active}} active{{/if}}" data-group="primary" data-tab="search">
+                    <div class="tab-inner flexcol mej-cc-search">
+                        <input type="search" name="search-query" class="mej-cc-search-input" disabled
+                               placeholder="{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}"
+                               data-tooltip="{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}" />
+                        <p class="instruction">{{localize 'MEJCampaignCompanion.hub.searchComingSoon'}}</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

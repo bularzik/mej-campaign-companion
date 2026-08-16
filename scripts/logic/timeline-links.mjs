@@ -1,3 +1,5 @@
+import { MODULE_ID } from "../constants.mjs";
+
 /** Document classes accepted as timeline links. */
 export const LINKABLE_TYPES = ["JournalEntry", "JournalEntryPage", "Actor", "Scene", "Item"];
 
@@ -126,7 +128,7 @@ export function displayLink(link, { isGM, doc }) {
  * is the internal key the timeline drop handler checks first.
  */
 export function recordDragPayload(uuid) {
-  return { kind: "campaign-record.record", type: "JournalEntryPage", uuid };
+  return { kind: `${MODULE_ID}.record`, type: "JournalEntryPage", uuid };
 }
 
 /** Ids of timepoints whose links reference this document uuid. */
