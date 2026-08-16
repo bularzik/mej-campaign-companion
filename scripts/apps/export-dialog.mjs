@@ -116,6 +116,22 @@ function resolvedRelationships(page) {
   return pageRelationships(page, (uuid) => fromUuidSync(uuid)?.name ?? null);
 }
 
+/**
+ * Whether a document-linked timeline entry belongs in a player-safe
+ * (includeGM: false) export: resolvable, and its default ownership grants
+ * at least LIMITED to non-owners. Mirrors campaign-record's own
+ * isPlayerVisibleDoc (export-dialog.mjs), simplified to default-ownership
+ * only (no per-user grants, no INHERIT-from-parent walk - MEJ's timeline
+ * links point at top-level JournalEntry/Actor/Scene/Item documents, none of
+ * which have a parent to inherit from).
+ */
+function isDefaultPlayerVisible(uuid) {
+  const doc = fromUuidSync(uuid);
+  if (!doc) return false;
+  const levels = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+  return (doc.ownership?.default ?? levels.NONE) >= levels.LIMITED;
+}
+
 async function runExport(selectedRows, includeGM, timepoints) {
   try {
     const labels = {
@@ -130,7 +146,7 @@ async function runExport(selectedRows, includeGM, timepoints) {
       formatCampaignDate
     });
     const title = game.world.title || game.i18n.localize(`${I18N}.export.defaultTitle`);
-    const snapshot = buildGroupSnapshot(title, timepoints, selectedRows, buildRecord);
+    const snapshot = buildGroupSnapshot(title, timepoints, selectedRows, buildRecord, { includeGM, isVisible: isDefaultPlayerVisible });
 
     const nodes = snapshotToDocModel(snapshot, {
       includeGM,

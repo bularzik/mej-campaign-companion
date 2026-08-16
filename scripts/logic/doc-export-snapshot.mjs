@@ -192,22 +192,45 @@ export function pageRelationships(page, resolveName) {
 }
 
 /**
+ * Whether one timeline link belongs in a player-safe (includeGM: false)
+ * export. Document links (`.uuid`) are gated by the injected `isVisible`
+ * predicate (Foundry-side: default ownership >= LIMITED, mirroring
+ * campaign-record's own isPlayerVisibleDoc); raw-image links (`.src`) are
+ * gated by their own stored `showPlayers` flag (timepoints.mjs's
+ * toggleLinkShowPlayers). A link with neither (shouldn't occur with real
+ * MEJ data - see timepoints.mjs's addLink) passes through unfiltered.
+ */
+function linkVisible(link, includeGM, isVisible) {
+  if (includeGM) return true;
+  if (link.src) return link.showPlayers === true;
+  if (link.uuid) return isVisible ? isVisible(link.uuid) === true : false;
+  return true;
+}
+
+/**
  * Top-level snapshot for snapshotToDocModel(): { name, timeline, records }.
  * `timeline` items are raw stored link names (timepoints.mjs's addLink
- * stores `.name` on every link at write time), not re-resolved here - no
- * additional player-visibility filtering is applied to the timeline summary
- * beyond what the brief calls for (session gmNotes + hidden relationships).
+ * stores `.name` on every link at write time). When `includeGM` is false,
+ * a link is dropped unless linkVisible() (above) says it belongs in a
+ * player-safe export - restoring the same player-visibility filtering
+ * campaign-record's own export-dialog applies to its timeline summary.
  * @param {string} name  export document title
- * @param {{label:string, links?:{name:string}[]}[]} timepoints
+ * @param {{label:string, links?:{name:string, uuid?:string, src?:string, showPlayers?:boolean}[]}[]} timepoints
  * @param {{uuid:string, name:string, kind:string, page:object}[]} selectedRows  in export order
  * @param {(row:object) => object} buildRecord  per-row recordSnapshot(row, opts) closure
+ * @param {{includeGM?: boolean, isVisible?: (uuid:string) => boolean}} [opts]
+ *   isVisible is Foundry-side (fromUuidSync + default ownership check); only
+ *   consulted for document links, and only when includeGM is false.
  */
-export function buildGroupSnapshot(name, timepoints, selectedRows, buildRecord) {
+export function buildGroupSnapshot(name, timepoints, selectedRows, buildRecord, { includeGM = false, isVisible } = {}) {
   return {
     name,
     timeline: (timepoints ?? []).map((tp) => ({
       label: tp.label,
-      items: (tp.links ?? []).map((l) => l.name).filter(Boolean)
+      items: (tp.links ?? [])
+        .filter((l) => linkVisible(l, includeGM, isVisible))
+        .map((l) => l.name)
+        .filter(Boolean)
     })),
     records: (selectedRows ?? []).map(buildRecord)
   };

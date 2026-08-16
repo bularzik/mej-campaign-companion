@@ -184,6 +184,43 @@ describe("buildGroupSnapshot", () => {
     expect(snapshot.records).toHaveLength(1);
     expect(snapshot.records[0].name).toBe("Verity");
   });
+
+  it("drops document-linked timeline items an isVisible predicate rejects when includeGM is false", () => {
+    const timepoints = [{ label: "S1", links: [
+      { uuid: "hidden-uuid", name: "Secret Lair" },
+      { uuid: "visible-uuid", name: "Tavern" }
+    ] }];
+    const isVisible = (uuid) => uuid === "visible-uuid";
+    const snapshot = buildGroupSnapshot("G", timepoints, [], () => null, { includeGM: false, isVisible });
+    expect(snapshot.timeline[0].items).toEqual(["Tavern"]);
+  });
+
+  it("keeps every document-linked timeline item when includeGM is true, ignoring isVisible", () => {
+    const timepoints = [{ label: "S1", links: [{ uuid: "hidden-uuid", name: "Secret Lair" }] }];
+    const snapshot = buildGroupSnapshot("G", timepoints, [], () => null, { includeGM: true, isVisible: () => false });
+    expect(snapshot.timeline[0].items).toEqual(["Secret Lair"]);
+  });
+
+  it("treats a document link as hidden when includeGM is false and no isVisible predicate is supplied", () => {
+    const timepoints = [{ label: "S1", links: [{ uuid: "x", name: "X" }] }];
+    expect(buildGroupSnapshot("G", timepoints, [], () => null).timeline[0].items).toEqual([]);
+  });
+
+  it("gates raw-image links by their own showPlayers flag when includeGM is false", () => {
+    const timepoints = [{ label: "S1", links: [
+      { src: "a.png", name: "Map A", showPlayers: true },
+      { src: "b.png", name: "Map B", showPlayers: false },
+      { src: "c.png", name: "Map C" }
+    ] }];
+    const snapshot = buildGroupSnapshot("G", timepoints, [], () => null, { includeGM: false });
+    expect(snapshot.timeline[0].items).toEqual(["Map A"]);
+  });
+
+  it("keeps every image link when includeGM is true regardless of showPlayers", () => {
+    const timepoints = [{ label: "S1", links: [{ src: "b.png", name: "Map B", showPlayers: false }] }];
+    const snapshot = buildGroupSnapshot("G", timepoints, [], () => null, { includeGM: true });
+    expect(snapshot.timeline[0].items).toEqual(["Map B"]);
+  });
 });
 
 // The whole point of the type-marker line doc-export.mjs emits
