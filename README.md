@@ -1,0 +1,79 @@
+# Campaign Companion for Monk's Enhanced Journal
+
+Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced Journal](https://github.com/ironmonk108/monks-enhanced-journal) (MEJ) for Foundry VTT: a Session journal type, a campaign timeline with in-world dates, a searchable Campaign Hub, automatic capture of encounters and shared images, automatic entry linking, Word document import/export, and lightweight player collaboration. It adds zero data to MEJ's own flag namespace — everything the companion writes lives under its own `flags["mej-campaign-companion"]` — so the two modules stay independently upgradeable.
+
+## Features
+
+- **Session journal type** — a new MEJ page type (`mej-campaign-companion.session`) with session number, an in-world campaign date, a GM recap, per-player recaps, attendee tracking, a checklist of secrets with reveal/hide, and GM-only notes. Renders inside MEJ's own tabbed journal shell like any built-in MEJ type.
+- **Campaign Hub tab** — a "Campaign" home tab integrated into MEJ's shell (via MEJ's `registerShellPage` extension point), also reachable from the scene-controls notes group. Three panes: a filterable, sortable index of every campaign-relevant entry; a drag-reorderable timeline; and search.
+- **Timeline with campaign dates** — a single world timeline of timepoints, each optionally bound to an in-world calendar date (Foundry's v14 calendar API), holding links to any document or a raw image. Three ordering modes: manual (fractional-key drag-insert), creation order, and campaign date.
+- **Cross-journal search** — an inverted index over MEJ entry fields (names, descriptions, person attributes, quest objectives, shop items, …) plus Session fields. GM-only fields (secrets, GM notes) index under a separate prefix and are filtered out for non-GM searchers at query time. Builds lazily on first use and stays current via document-update hooks.
+- **Auto-link** — on page save, an opt-in world setting turns newly-typed mentions of existing MEJ entry names into `@UUID` links. Never rewrites inside an existing link or a code block; individual entries can opt out.
+- **Auto-capture** — on combat end, an opt-in world setting creates (or updates) an MEJ Encounter entry summarizing participants and outcome, filed onto the timeline's newest timepoint. A second, independent opt-in world setting auto-files GM "Show Players" images and video onto that same timepoint.
+- **Docx import and export** — a wizard imports a `.docx` (Word or Google Docs export) into MEJ entries and Session pages, with per-section type suggestions, inline images, and dated-header detection that creates timepoints. Export walks selected MEJ entries and the timeline into a round-trippable `.docx`, with an opt-in toggle to include GM-only content.
+- **Player collaboration** — an opt-in world setting lets players own the Session entries they help create, so they can write their own recaps directly; players without upload permission get a chunked socket relay through an active GM instead.
+
+## Requirements
+
+- Foundry VTT **v14**.
+- **Monk's Enhanced Journal**, a build that includes the extension API this module depends on — targeting **the MEJ release after 14.01** (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing). If MEJ is present but doesn't expose the API, Campaign Companion detects this at startup and disables itself with a single clear notification rather than half-loading; see [Error handling](#error-handling-and-troubleshooting) below.
+- A `dnd5e`-first companion whose core (search, timeline, docx, auto-link/capture, Session sheet itself) makes no `dnd5e`-specific assumptions — see [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for what to manually verify on other game systems.
+
+## Installation
+
+This module has no published Foundry package listing yet — install it manually:
+
+1. Download or clone this repository into your Foundry `Data/modules/mej-campaign-companion` directory (the folder name must match the module id).
+2. Restart Foundry (or reload the setup page) so it picks up the new module directory.
+3. Enable **both** "Monk's Enhanced Journal" and "Campaign Companion for Monk's Enhanced Journal" in your world's Manage Modules dialog. Load order doesn't matter for this — the companion listens for MEJ's setup hook at import time regardless of which module's script tag runs first.
+
+`module.json`'s `url`, `manifest`, and `download` fields point at `https://github.com/bularzik/mej-campaign-companion`, which doesn't exist yet — they're placeholders for when this module gets a real repo and release, not a working install-by-manifest-URL path today.
+
+## Settings
+
+All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Five settings are registered in total — four visible in the module settings menu, plus one internal setting with no UI:
+
+| Setting | Config visible? | Default | Purpose |
+|---|---|---|---|
+| `autoLink` | Yes | Off | Turn on auto-linking of newly-typed MEJ entry names in page text on save. |
+| `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
+| `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
+| `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so they can write their own recaps directly. |
+| `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
+
+The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
+
+## Docx round-trip notes
+
+- **Type markers.** Export writes a `Campaign Record type: <kind>` marker paragraph at the top of each entry's section (kept as that literal, English string for compatibility with documents exported by the predecessor `campaign-record` module, whose exports this importer also understands). On import, that marker — when present — takes priority over title-keyword heuristics when suggesting a type for a section.
+- **GM-content export toggle.** The export dialog's "Include GM Content" checkbox controls whether Session GM notes and relationships hidden from players are written into the `.docx` at all. Leave it unchecked to produce a document safe to hand to players.
+- **Date parsing and non-Gregorian calendars.** The import wizard detects session-header dates (`4/15/24`, `April 15, 2024`, …) and converts them into campaign-date components with a **numeric passthrough**: real-world year as-is, month/day mapped straight across. This assumes the world's active calendar's month numbering and count line up with the Gregorian calendar the source document was written against. For a non-Gregorian or non-12-month calendar, this is a known, deliberate approximation — there's no general way to map a real-world date onto an arbitrary in-world calendar without a mapping the source document doesn't provide. Out-of-range results (e.g. "month 14" against a calendar with fewer months) are rejected and reported as a per-section warning rather than silently stored.
+- Import/export use the vendored `mammoth` (docx → HTML) and `docx` (HTML model → docx) libraries under `vendor/`; no network calls are made during import or export.
+
+## Player collaboration notes
+
+Session entries can be made player-writable via the `playersWriteSessions` setting; owning players write their own recap directly through the sheet. Players without file-upload permission (or without ownership at all, when the setting is off) have their recap and inline-image writes relayed through an active GM instead, over the same world socket channel MEJ's own per-user notes save path uses.
+
+**Trust model, stated honestly rather than idealized** (see `scripts/hooks/player-recap.mjs`'s header comment for the full detail): Foundry's client-side socket API gives a receiving client no server-verified sender identity — only whatever the emitting client claims. This module is intentionally **stricter** than MEJ's own precedent (`saveUserData`), not just a copy of it:
+
+- The GM-side handler validates the claimed sender id resolves to a real user in the world before doing anything with it.
+- A relayed write is scoped to write **only** `flags.mej-campaign-companion.playerRecaps.<senderId>` on the target document — never any other flag, field, or document. At worst, a malicious client can overwrite another real user's recap text; it cannot touch anything else.
+- Every rejected relay is logged.
+- The claimed HTML is round-tripped through ProseMirror's own schema (parse → serialize) before it's ever written, dropping anything out-of-schema (event-handler attributes, `<script>`, …). This matters more here than for MEJ's own per-user notes, because a player recap renders to **every other user, including the GM** — an unsanitized relay would let any socket-reachable client plant markup that executes in someone else's client.
+
+What this **doesn't** eliminate: the "impersonate another user's recap" risk from the unverifiable sender id itself. That's a limitation of Foundry's client socket API, not something a module can close without a server-side authority it doesn't have — it's bounded to that one flag path (the same bound MEJ's own precedent accepts), not eliminated. The content-injection risk, unlike the identity risk, is fully closed by the sanitization step.
+
+## Error handling and troubleshooting
+
+- If Monk's Enhanced Journal isn't present, or is present but doesn't fire the `setupMonksEnhancedJournal` extension-API hook (a pre-API MEJ build), Campaign Companion disables itself at `ready` and shows one permanent error notification rather than half-loading with silent failures.
+- If MEJ's API is present but this module's own registration throws (a bug in this module), a second, more specific error notification is shown instead, and the error is logged to the console.
+- Auto-link and auto-capture are pure observers: a failure in either logs to the console and is skipped, and never blocks the underlying page-save or combat-end operation it hooked.
+- Docx import is transactional per wizard run — documents are only created on final confirmation, and a failure reports per-section errors with no partial writes.
+
+## Development
+
+- `npm test` — unit tests (Vitest). No Foundry environment required.
+- `npm run test:e2e` — Playwright end-to-end tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
+- Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
+
+See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.
