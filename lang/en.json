@@ -22,7 +22,8 @@
       "died": "Died",
       "injured": "Injured",
       "fled": "Fled",
-      "noCasualties": "All combatants unharmed."
+      "noCasualties": "All combatants unharmed.",
+      "unlinked": "No linked actor: {names}"
     },
     "placeholder": { "session": "New Session" },
     "tabs": {

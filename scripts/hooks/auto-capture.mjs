@@ -15,9 +15,12 @@
 //    `{ items: {}, actors: {}, dcs: {} }`.
 //  - sheets/EnhancedJournalSheet.js:2265-2283 `getItemData()` is what
 //    EncounterSheet#addActor() stores per actor row:
-//    `{ id, uuid, img, name, quantity: "1", type }`, keyed in the `actors`
-//    flag object by that same `id`. See logic/encounter-capture.mjs for the
-//    row-shape adapter (collapseParticipants() row -> MEJ actors-flag row).
+//    `{ id, uuid, img, name, quantity: "1", type }`. See
+//    logic/encounter-capture.mjs for the row-shape adapter (including the
+//    dot-free storage-key requirement - MEJ's monsters-tab form field names
+//    interpolate that key raw, so a dotted uuid key corrupts the flag via
+//    expandObject() on the next sheet save) and for why actor-less rows are
+//    excluded from `actors` entirely rather than stored with a made-up key.
 //  - monks-enhanced-journal.js's real page-creation path (the
 //    `JournalEntry.prototype._onCreate` patch, ~line 1032) creates the page
 //    with Foundry's *native* `type: "text"` and stores the actual MEJ type
@@ -35,8 +38,7 @@
 //    there is nothing to match against. Documented per the task's
 //    "decide from evidence and document" instruction.
 import {
-  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, ENCOUNTER_FLAG, DEPARTED_FLAG,
-  MEJ_ENCOUNTER_TYPE, I18N
+  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, DEPARTED_FLAG, MEJ_ENCOUNTER_TYPE, I18N
 } from "../constants.mjs";
 import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import { getTimepoints, addLink } from "../data/timepoints.mjs";
@@ -44,7 +46,9 @@ import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
   resolveSharedMediaShare, installShareImageWrap
 } from "../logic/auto-capture.mjs";
-import { buildEncounterActorRows, rowsFromEncounterActors, buildEncounterName } from "../logic/encounter-capture.mjs";
+import {
+  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName
+} from "../logic/encounter-capture.mjs";
 
 /** Live combatants as raw {actorUuid, name} entries. */
 function combatParticipants(combat) {
@@ -70,7 +74,22 @@ async function recordDeparture(combat, combatant) {
   }
 }
 
-/** File a document link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
+// Serializes all timepoint filings (Encounter links + shared-image links)
+// through one promise chain so concurrent writes can't race. addLink
+// (data/timepoints.mjs) rewrites the whole timepoints array read-modify-
+// write style, so two overlapping filings - e.g. a rapid double
+// Show-Players click, or an image share racing the encounter filing at
+// combat end - would otherwise silently drop whichever write loses the
+// race. Ported approach from campaign-record's queueMediaTask.
+let fileQueue = Promise.resolve();
+
+/** Queue a timepoint-filing task so it never overlaps a prior in-flight one. */
+function queueFiling(task) {
+  fileQueue = fileQueue.then(task).catch((err) => console.error(`${MODULE_ID} | auto-capture: filing failed`, err));
+  return fileQueue;
+}
+
+/** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
 async function fileOntoNewestTimepoint(link) {
   const journal = getTimelineJournal();
   if (!journal) {
@@ -102,28 +121,42 @@ function buildOutcome(combat) {
   });
 }
 
+/** Combine the outcome summary with an actor-less-participants line into the page's description HTML. */
+function buildDescriptionHtml(outcome, unlinkedNames) {
+  const parts = [];
+  if (outcome) parts.push(`<p>${outcome}</p>`);
+  if (unlinkedNames) parts.push(`<p>${game.i18n.format(`${I18N}.autoCapture.unlinked`, { names: unlinkedNames })}</p>`);
+  return parts.join("");
+}
+
+// combat.id -> created Encounter page uuid, for this session only. Replaces
+// a combat-flag-based merge guard: deleteCombat fires after the Combat
+// document is already deleted server-side (confirmed against Foundry's
+// ClientDatabaseBackend#_deleteDocuments - the "deleteX" hook fires from
+// the delete *response* handler, after the request already completed), so
+// combat.setFlag() there always fails/no-ops; CR's flag-at-combatStart
+// approach isn't reachable either, since the brief's creation timing is
+// deleteCombat-only. This in-memory map genuinely catches a repeat
+// deleteCombat firing for the same combat id within a session (e.g. a
+// module conflict or a dev hot-reload double-registering the hook), which
+// is the actual scenario this guard exists to protect against.
+const encounterPagesByCombatId = new Map();
+
 /**
  * Create a new Encounter JournalEntry+page for a just-ended combat, file it
- * onto the timeline's newest timepoint, and best-effort remember its uuid on
- * the combat flag so a repeat deleteCombat firing for this same combat id
- * (e.g. a module conflict or a dev hot-reload double-registering the hook)
- * merges into it instead of creating a duplicate. By the time deleteCombat
- * runs, the Combat document has already been deleted server-side (verified
- * against Foundry's ClientDatabaseBackend#_deleteDocuments: the "deleteX"
- * hook fires from the delete *response* handler, after the request already
- * completed) - so this write can legitimately fail, and does so silently:
- * the caller's try/catch (registerAutoCapture) is what makes that safe,
- * matching requirement #7's "never block combat end" contract. It is a
- * best-effort guard, not a guaranteed one.
+ * onto the timeline's newest timepoint, and remember its uuid in
+ * encounterPagesByCombatId so a repeat deleteCombat firing for this same
+ * combat id merges into it instead of creating a duplicate (see the map's
+ * doc comment above).
  */
-async function createEncounter(combat, participants, outcome, sceneName) {
+async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
   const name = buildEncounterName(sceneName, new Date().toLocaleDateString());
   const [entry] = await JournalEntry.create({
     name,
     pages: [{
       name,
       type: "text",
-      text: { content: outcome ? `<p>${outcome}</p>` : "" },
+      text: { content: buildDescriptionHtml(outcome, unlinkedNames) },
       flags: {
         "monks-enhanced-journal": {
           type: MEJ_ENCOUNTER_TYPE,
@@ -135,14 +168,8 @@ async function createEncounter(combat, participants, outcome, sceneName) {
     }]
   });
   const page = entry.pages.contents[0];
-  await fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" });
-  try {
-    await combat.setFlag(MODULE_ID, ENCOUNTER_FLAG, page.uuid);
-  } catch {
-    // Expected: the combat is already deleted by this point (see the
-    // doc comment above). Filing already succeeded; this flag is a
-    // best-effort merge guard only.
-  }
+  encounterPagesByCombatId.set(combat.id, page.uuid);
+  await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
   return page;
 }
 
@@ -150,12 +177,12 @@ async function createEncounter(combat, participants, outcome, sceneName) {
  * Additively merge a fresh roster + outcome into an already-linked Encounter
  * page (the merge-on-re-end path described in createEncounter's doc comment).
  */
-async function mergeEncounter(page, participants, outcome) {
+async function mergeEncounter(page, participants, outcome, unlinkedNames) {
   const existing = rowsFromEncounterActors(page.getFlag("monks-enhanced-journal", "actors"));
   const merged = mergeParticipants(existing, participants);
   await page.update({
     "flags.monks-enhanced-journal.actors": buildEncounterActorRows(merged),
-    "text.content": outcome ? `<p>${outcome}</p>` : ""
+    "text.content": buildDescriptionHtml(outcome, unlinkedNames)
   });
 }
 
@@ -174,11 +201,12 @@ async function captureCombatEnd(combat) {
   const scene = game.scenes?.current ?? combat.scene ?? null;
   const participants = collapseParticipants(combatParticipants(combat));
   const outcome = buildOutcome(combat);
+  const unlinkedNames = describeUnlinkedParticipants(participants);
 
-  const existingUuid = combat.getFlag(MODULE_ID, ENCOUNTER_FLAG);
+  const existingUuid = encounterPagesByCombatId.get(combat.id);
   const existingPage = existingUuid ? await fromUuid(existingUuid) : null;
-  if (existingPage) await mergeEncounter(existingPage, participants, outcome);
-  else await createEncounter(combat, participants, outcome, scene?.name ?? null);
+  if (existingPage) await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
+  else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
 }
 
 /**
@@ -188,8 +216,7 @@ async function captureCombatEnd(combat) {
 function captureSharedImage(src, caption) {
   if (!src) return;
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
-  fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" })
-    .catch((err) => console.error(`${MODULE_ID} | auto-capture: filing shared image failed`, err));
+  queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" }));
 }
 
 /** Install both shareImage capture wraps (see registerAutoCapture's comment for why two). */
@@ -269,7 +296,11 @@ function installShareCaptureWraps() {
 export function registerAutoCapture() {
   // Removal doesn't shrink the record; note who left (and whether defeated),
   // while the combat document is still alive so the flag write succeeds.
+  // Gated on the same autoCaptureEncounters setting as the deleteCombat
+  // capture below - there's no point tracking departures for an outcome
+  // summary the feature-off path will never build.
   Hooks.on("deleteCombatant", (combatant) => {
+    if (!game.settings.get(MODULE_ID, AUTO_CAPTURE_SETTING)) return;
     if (game.user !== game.users.activeGM) return;
     if (!combatant.combat) return;
     recordDeparture(combatant.combat, combatant);
@@ -280,5 +311,12 @@ export function registerAutoCapture() {
     captureCombatEnd(combat).catch((err) => console.error(`${MODULE_ID} | auto-capture: combat capture failed`, err));
   });
 
-  installShareCaptureWraps();
+  // Observer pattern: a throw while installing the shareImage wraps (e.g. an
+  // unexpected v14 API shape) must not abort registration of the combat
+  // hooks above.
+  try {
+    installShareCaptureWraps();
+  } catch (err) {
+    console.error(`${MODULE_ID} | auto-capture: installing shareImage wraps failed`, err);
+  }
 }

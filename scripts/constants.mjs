@@ -15,9 +15,6 @@ export const AUTO_CAPTURE_SETTING = "autoCaptureEncounters";
 /** World setting: auto-file GM-shared images/video onto the newest timepoint. */
 export const MEDIA_CAPTURE_SETTING = "autoCaptureSharedMedia";
 
-/** Combat flag: uuid of the Encounter page this combat is captured into. */
-export const ENCOUNTER_FLAG = "encounterUuid";
-
 /** Combat flag: combatants that left mid-fight, for the end-of-combat summary. */
 export const DEPARTED_FLAG = "departed";
 
