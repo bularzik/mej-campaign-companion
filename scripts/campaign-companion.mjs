@@ -1,7 +1,16 @@
-import { MODULE_ID, SESSION_TYPE, I18N } from "./constants.mjs";
+import { MODULE_ID, SESSION_TYPE, TIMELINE_JOURNAL_SETTING, I18N } from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
 
 let apiReceived = false;
+
+Hooks.once("init", () => {
+  game.settings.register(MODULE_ID, TIMELINE_JOURNAL_SETTING, {
+    scope: "world",
+    config: false,
+    type: String,
+    default: ""
+  });
+});
 
 Hooks.on("setupMonksEnhancedJournal", (api) => {
   apiReceived = true;
