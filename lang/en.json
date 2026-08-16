@@ -168,6 +168,20 @@
       "noMentions": "No mentions yet",
       "gmOnlyMention": "Mentioned only in GM-only content"
     },
+    "secrets": {
+      "everyone": "Everyone",
+      "players": "Players",
+      "groups": "Groups",
+      "noPlayers": "No player users in this world.",
+      "noGroups": "No groups defined yet — manage them on the Hub's Secrets tab.",
+      "apply": "Apply",
+      "revealTitle": "Reveal secret",
+      "whisperHeader": "A secret from {name} has been revealed to you:",
+      "revealedToYou": "Revealed to you",
+      "noId": "This secret block has no id — re-create it with the editor's Secret button to make it revealable.",
+      "audienceButton": "Reveal to…",
+      "chipsNone": "Hidden from players"
+    },
     "import": {
       "title": "Import Document",
       "button": "Import Document",
