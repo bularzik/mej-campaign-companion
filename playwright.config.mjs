@@ -22,6 +22,13 @@ export default defineConfig({
   use: {
     baseURL: process.env.FOUNDRY_URL ?? "http://localhost:30000",
     viewport: { width: 1440, height: 900 },
+    // window.screen defaults to 1280x720 in headless Chromium regardless of
+    // viewport size. Foundry checks window.screen (not the viewport) against
+    // its own recommended minimum (1366x768) and renders a warning banner
+    // that intercepts pointer events across the whole page when it's too
+    // small — setting `screen` here (a distinct context option from
+    // `viewport`) avoids both the banner and its click-blocking.
+    screen: { width: 1440, height: 900 },
     trace: "retain-on-failure",
     actionTimeout: 15_000
   },
