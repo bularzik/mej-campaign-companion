@@ -4,9 +4,9 @@ import { normalizeRelationships, buildGraph } from "../scripts/logic/graph-data.
 describe("normalizeRelationships", () => {
   it("handles the dict form, the legacy array form, and nullish", () => {
     expect(normalizeRelationships({ r1: { uuid: "JournalEntry.a", hidden: true } }))
-      .toEqual([{ id: "r1", uuid: "JournalEntry.a", hidden: true }]);
+      .toEqual([{ id: "r1", uuid: "JournalEntry.a", hidden: true, label: "" }]);
     expect(normalizeRelationships([{ id: "x", uuid: "JournalEntry.b" }]))
-      .toEqual([{ id: "x", uuid: "JournalEntry.b", hidden: false }]);
+      .toEqual([{ id: "x", uuid: "JournalEntry.b", hidden: false, label: "" }]);
     expect(normalizeRelationships(undefined)).toEqual([]);
     expect(normalizeRelationships({ r2: { hidden: false } })).toEqual([]);
   });
@@ -24,7 +24,7 @@ describe("buildGraph", () => {
   it("whole-campaign mode: relationship edges, hidden edges GM-only, edges only between present nodes", () => {
     const player = buildGraph(rows, [], { mode: "all", isGM: false });
     expect(player.nodes).toHaveLength(4);
-    expect(player.edges).toEqual([{ source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship" }]);
+    expect(player.edges).toEqual([{ source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false }]);
     const gm = buildGraph(rows, [], { mode: "all", isGM: true });
     expect(gm.edges).toHaveLength(2);
   });
@@ -32,7 +32,7 @@ describe("buildGraph", () => {
   it("backlink overlay adds dashed pairs without duplicating relationship edges", () => {
     const g = buildGraph(rows, [...pairs, { source: "JournalEntry.a", target: "JournalEntry.b", gmOnly: false }], { mode: "all", isGM: false, includeBacklinks: true });
     expect(g.edges).toEqual([
-      { source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship" },
+      { source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false },
       { source: "JournalEntry.d", target: "JournalEntry.a", kind: "backlink" }
     ]);
   });
@@ -47,5 +47,21 @@ describe("buildGraph", () => {
     const g = buildGraph(many, [], { mode: "all", isGM: true, maxNodes: 5 });
     expect(g.nodes).toHaveLength(5);
     expect(g.truncated).toBe(true);
+  });
+});
+
+describe("edge labels (Phase C)", () => {
+  it("normalizeRelationships carries the label", () => {
+    const rows = normalizeRelationships({ a: { id: "a", uuid: "U.a", relationship: "Rival", hidden: false } });
+    expect(rows[0].label).toBe("Rival");
+  });
+  it("buildGraph copies label and hidden onto the edge", () => {
+    const rows = [
+      { uuid: "U.a", name: "A", type: "person", relationships: [{ id: "r", uuid: "U.b", hidden: true, label: "Nemesis" }] },
+      { uuid: "U.b", name: "B", type: "person", relationships: [] }
+    ];
+    const g = buildGraph(rows, [], { isGM: true });
+    expect(g.edges[0].label).toBe("Nemesis");
+    expect(g.edges[0].hidden).toBe(true);
   });
 });

@@ -721,6 +721,17 @@
   opacity: 0.45;
 }
 
+.mej-cc-graph-edge.hidden-rel {
+  stroke-dasharray: 4 3;
+}
+
+.mej-cc-graph-edge-label {
+  font-size: 10px;
+  fill: var(--color-text-dark-secondary, #666);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
 .mej-cc-graph-node {
   cursor: pointer;
 }

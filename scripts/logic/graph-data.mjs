@@ -12,7 +12,12 @@ export function normalizeRelationships(flagValue) {
   else return [];
   return entries
     .filter(([, rel]) => rel && typeof rel.uuid === "string" && rel.uuid.length)
-    .map(([id, rel]) => ({ id: String(rel.id ?? id), uuid: rel.uuid, hidden: rel.hidden === true }));
+    .map(([id, rel]) => ({
+      id: String(rel.id ?? id),
+      uuid: rel.uuid,
+      hidden: rel.hidden === true,
+      label: typeof rel.relationship === "string" ? rel.relationship : ""
+    }));
 }
 
 const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -30,7 +35,7 @@ export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = nul
       const key = pairKey(row.uuid, rel.uuid);
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
-      edges.push({ source: row.uuid, target: rel.uuid, kind: "relationship" });
+      edges.push({ source: row.uuid, target: rel.uuid, kind: "relationship", label: rel.label ?? "", hidden: rel.hidden === true });
     }
   }
   if (includeBacklinks) {
