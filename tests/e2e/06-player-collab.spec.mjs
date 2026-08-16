@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX,
+  login, TT_PREFIX, cleanupAsGm,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -36,12 +36,23 @@ async function openSession(page, entryId) {
 }
 
 test.describe("06 player collaboration", () => {
-  test.afterEach(async ({ page }) => {
-    await page.evaluate(async () => {
-      const ids = game.journal.filter((j) => j.name?.startsWith("TT-")).map((j) => j.id);
-      if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-      await game.settings.set("mej-campaign-companion", "playersWriteSessions", false);
-    }).catch(() => {});
+  // Two of this file's three tests use their own `browser` contexts (GM +
+  // multiple players) rather than the default `page` fixture — an afterEach
+  // declared with `page` still gets Playwright's default, never-logged-in
+  // page for those tests regardless (see cleanupAsGm()'s doc comment for
+  // what silently broke before this: playersWriteSessions leaking `true`
+  // into the next test, changing its ownership scenario without anyone
+  // noticing). cleanupAsGm() reuses `page` directly for the one test that
+  // uses it alone (avoiding a second, conflicting simultaneous GM session),
+  // and falls back to a fresh session for the other two.
+  test.afterEach(async ({ page, browser }) => {
+    await cleanupAsGm(page, browser, async (gmPage) => {
+      await gmPage.evaluate(async () => {
+        const ids = game.journal.filter((j) => j.name?.startsWith("TT-")).map((j) => j.id);
+        if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
+        await game.settings.set("mej-campaign-companion", "playersWriteSessions", false);
+      });
+    });
   });
 
   test("a non-owner player can write their recap on a GM-owned session (relay path); persists; another player reads it read-only; only the author can edit it", async ({ browser }) => {
@@ -145,6 +156,16 @@ test.describe("06 player collaboration", () => {
     await login(p1Page, "User 1");
     const canUpload = await p1Page.evaluate(() => game.user.can("FILES_UPLOAD"));
     expect(canUpload).toBe(false);
+    // Confirms this really is the "GM-owned session" scenario the test name
+    // claims — not load-bearing for which upload path fires (that's gated
+    // on FILES_UPLOAD alone, not ownership) but was silently untrue before
+    // the afterEach fix above: a leaked playersWriteSessions=true from the
+    // previous test made createGmOwnedSession's explicit
+    // {default: OBSERVER} get overridden to OWNER for everyone at create
+    // time (preCreateJournalEntry -> shouldOwnSessionEntry), so this
+    // assertion would have failed had it existed then.
+    const isOwner = await p1Page.evaluate((id) => game.journal.get(id).isOwner, entryId);
+    expect(isOwner).toBe(false);
 
     const shell = await openSession(p1Page, entryId);
     const dropTarget = shell.locator(".player-recap-self");
