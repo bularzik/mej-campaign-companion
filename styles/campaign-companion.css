@@ -17,6 +17,24 @@
   position: relative;
 }
 
+/* MEJ's own base rule (css/monks-journal-sheet.css):
+   `.journal-subsheet[editable='false'] .tab[data-tab]:not([data-tab="notes"])
+   .editor-edit { display: none !important; }` — it assumes the only
+   per-user-always-editable content lives in its own built-in "notes" tab,
+   hiding every other tab's edit-toggle button whenever the sheet as a whole
+   is non-editable (i.e. for any non-owner). The player-recap-self editor is
+   deliberately always-interactive regardless of document ownership (see
+   SessionSheet.mjs's own header comment on _disableFields/subRender) and
+   lives in the "description" tab, not "notes" — so a non-owner player had a
+   genuinely interactive <prose-mirror> underneath a completely invisible
+   toggle button, with no way to ever open it. Confirmed live via Task 14's
+   e2e suite (getComputedStyle(button).display === "none" for a non-owner,
+   "flex" for the document owner/GM — restored here to match). Needs equal
+   specificity + !important to win over MEJ's rule. */
+.monks-journal-sheet .journal-subsheet[editable='false'] .tab[data-tab] .player-recap-self[data-editor-id="playerRecap"] .editor-edit[data-action="editPlayerRecap"] {
+  display: flex !important;
+}
+
 /* Campaign Hub shell page - shell pages get no MEJ per-type theming (see
    API.md's "Current limitation" section), so all Hub styling lives here,
    scoped under .mej-cc-hub. */
