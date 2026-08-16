@@ -194,6 +194,11 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     const { registerKnowledgePanel } = await import("./hooks/knowledge-ui.mjs");
     registerKnowledgePanel();
 
+    // Registers the @CampaignQuery[...] text enricher for embedding live
+    // permission-filtered query results into journal pages.
+    const { registerQueryEnricher } = await import("./hooks/query-enricher.mjs");
+    registerQueryEnricher();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.

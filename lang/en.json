@@ -150,6 +150,10 @@
         "empty": "No dashboards yet."
       }
     },
+    "enricher": {
+      "noResults": "No matches.",
+      "badQuery": "Invalid @CampaignQuery."
+    },
     "knowledge": {
       "tags": "Tags",
       "addTag": "Add tag…",
