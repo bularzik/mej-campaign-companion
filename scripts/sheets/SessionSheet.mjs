@@ -328,11 +328,22 @@ export class SessionSheet extends EnhancedJournalSheet {
     $(".editor-parent[data-editor-id='playerRecap']", this.trueElement).toggleClass("editing", !editing);
   }
 
+  // MEJ's shell hosts this sheet as a subsheet (see the header comment) and
+  // never wires an automatic re-render on document update for it the way a
+  // normally-rendered ApplicationV2 sheet gets for free - confirmed live via
+  // Task 14's e2e suite (a secret added via document.update() alone never
+  // appeared in the DOM without an explicit render(), even 6+ seconds
+  // later). Every handler below that mutates document data via a raw
+  // document.update()/setFlag() (as opposed to going through the form
+  // submission pipeline, which does its own re-render) must call
+  // this.render() itself, matching the existing pattern in
+  // _ingestRecapImage() above.
   static async onAddSecret(event, target) {
     if (!game.user.isGM) return;
     const session = sessionData(this.document);
     const secrets = [...session.secrets, { id: foundry.utils.randomID(), text: "", revealed: false, revealedAt: null }];
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    this.render();
   }
 
   static async onDeleteSecret(event, target) {
@@ -341,6 +352,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     const session = sessionData(this.document);
     const secrets = session.secrets.filter((s) => s.id !== id);
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    this.render();
   }
 
   static async onToggleSecret(event, target) {
@@ -353,6 +365,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       return { ...s, revealed, revealedAt: revealed ? Date.now() : null };
     });
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    this.render();
   }
 
   static async onUpdateSecretText(event, target) {
@@ -361,6 +374,9 @@ export class SessionSheet extends EnhancedJournalSheet {
     const session = sessionData(this.document);
     const secrets = session.secrets.map((s) => (s.id === id ? { ...s, text: target.value } : s));
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    // No this.render() here: this fires on "change" (blur), and re-rendering
+    // would just redundantly redraw the same text the user already sees -
+    // unlike add/delete/toggle, there's no new/removed/changed-shape row.
   }
 
   static async onRemoveAttendee(event, target) {
@@ -368,6 +384,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     const session = sessionData(this.document);
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
+    this.render();
   }
 
   // EnhancedJournalSheet's own onSubmit (sheets/EnhancedJournalSheet.js)
