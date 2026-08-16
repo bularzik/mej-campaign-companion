@@ -116,6 +116,41 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     appClass: CampaignHubPage
   });
 
+  // registerShellPage deliberately doesn't merge a shell page's id into
+  // CONFIG.JournalEntryPage.sheetClasses (API.md's own "shell pages are not
+  // full citizens of MEJ's theming/state system" limitation) - but Foundry's
+  // *base* DocumentSheetV2/ApplicationV2 machinery unconditionally needs an
+  // entry there regardless: EnhancedJournalSheet's own
+  // _initializeApplicationOptions() calls
+  // DocumentSheetConfig.getSheetThemeForDocument(), which does
+  // `Object.values(CONFIG.JournalEntryPage.sheetClasses[type])` - `undefined`
+  // for any id that never went through registerSheetType, so `.values()`
+  // throws and aborts construction of the Hub's sheet entirely (confirmed
+  // live via Task 14's e2e suite: the Hub tab opened but nothing ever
+  // rendered inside it). Directly poking CONFIG.JournalEntryPage.sheetClasses
+  // doesn't stick - it's a derived cache DocumentSheetConfig rebuilds from
+  // its own internal registry once `game.ready` becomes true (registrations
+  // made before that, like this whole hook's, are queued in a private
+  // #pending array and applied then - see
+  // client/applications/apps/document-sheet-config.mjs's registerSheet(),
+  // confirmed live: a directly-poked key was observably present
+  // immediately after this line but gone again ~1s later). Route through
+  // the same real DocumentSheetConfig.registerSheet() call registerSheetType
+  // itself uses instead, so this entry survives that rebuild like "session"'s
+  // does. CampaignHubPage never actually renders as a *real* JournalEntryPage
+  // of this type (the id is only ever used for the synthetic BlankJournal
+  // shell-page document), so this is purely additive - it only exists to
+  // make getSheetThemeForDocument's lookup resolve to "no configured
+  // classes" instead of throwing, exactly the no-per-type-theming
+  // degradation API.md already documents as expected for shell pages.
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
+    types: [HUB_PAGE_ID],
+    makeDefault: false,
+    canBeDefault: false,
+    canConfigure: false,
+    label: `${I18N}.hub.title`
+  });
+
   // Registers the createJournalEntryPage/updateJournalEntryPage/
   // deleteJournalEntryPage listeners once. The index itself builds lazily
   // (ensureIndex(), first called from the Hub's search pane) - this only
