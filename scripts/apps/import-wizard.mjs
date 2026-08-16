@@ -12,8 +12,9 @@
 // campaign-record's own ImportWizard already extended
 // HandlebarsApplicationMixin(ApplicationV2) - no AppV1-\>AppV2 migration was
 // needed here; this class is a straight structural port of that one.
-import { COMPANION_IMPORT_TYPES, I18N, MODULE_ID, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+import { COMPANION_IMPORT_TYPES, I18N, MODULE_ID } from "../constants.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt } from "../logic/doc-import.mjs";
+import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { uploadInlineImages } from "./import-upload.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
@@ -282,17 +283,14 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * confuse it with the `type:` field written into the pages[] array below.
    * "text" is a plain, unflagged text page (no monks-enhanced-journal
    * typing at all - same duality as campaign-record's "text" pseudo-type).
-   * "session" is the companion's own JournalEntryPage subtype: the actual
-   * native page type is SESSION_DOCUMENT_TYPE
-   * (`${MODULE_ID}.session` - module.json's module-declared-subtype
-   * registration; a bare "session" is rejected by
-   * DocumentTypeField._validateType at create time, see constants.mjs's doc
-   * comment), content into system.recap, and this module's own session
-   * flags seeded from the parsed header (sessionNumber/campaignDate) - never
-   * routed through the monks-enhanced-journal flag mechanism, since it isn't
-   * an MEJ type (see sheets/SessionSheet.mjs). Every other type goes through
-   * createMejEntry (data/mej-entry.mjs), the same helper auto-capture.mjs
-   * uses for Encounters.
+   * "session" is the companion's own JournalEntryPage subtype - the actual
+   * page payload shape (native SESSION_DOCUMENT_TYPE, session flags, AND the
+   * MEJ interop flag search/Hub/auto-link need to see it) is owned by
+   * logic/session-page-data.mjs's buildSessionPageData(), which is pure and
+   * unit-tested - see its own doc comment for the full citation trail on
+   * why both the prefixed native type and the MEJ flag are required. Every
+   * other type goes through createMejEntry (data/mej-entry.mjs), the same
+   * helper auto-capture.mjs uses for Encounters.
    */
   async #createPage(page, campaignDate) {
     if (page.type === "text") {
@@ -305,21 +303,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     if (page.type === "session") {
       const [entry] = await JournalEntry.create({
         name: page.name,
-        pages: [{
-          name: page.name,
-          type: SESSION_DOCUMENT_TYPE,
-          system: { recap: page.html, gmNotes: "" },
-          flags: {
-            [MODULE_ID]: {
-              session: {
-                sessionNumber: parseSessionNumber(page.name),
-                campaignDate,
-                attendees: [],
-                secrets: []
-              }
-            }
-          }
-        }]
+        pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });
       return entry.pages.contents[0];
     }
