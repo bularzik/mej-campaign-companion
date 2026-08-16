@@ -201,7 +201,10 @@ test.describe("02 hub + timeline", () => {
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.[0];
       return tp?.links ?? [];
     });
-    expect(links.length).toBeGreaterThanOrEqual(1);
+    // Both drops above landed on the same timepoint (the person entry, then
+    // the image) - a >= 1 assertion here would pass even if the second drop
+    // (the image) silently failed to attach, so require both links present.
+    expect(links.length).toBeGreaterThanOrEqual(2);
 
     await page.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, personId);
     assertNoConsoleErrors(errors);

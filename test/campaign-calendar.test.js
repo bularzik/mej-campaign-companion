@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-  hasCalendar, getCalendarMonths, calendarBounds, formatCampaignDate, currentWorldComponents
+  hasCalendar, getCalendarMonths, calendarBounds, formatCampaignDate, currentWorldComponents,
+  sessionMonthOptions
 } from "../scripts/logic/campaign-calendar.mjs";
 
 function stubCalendar() {
@@ -59,6 +60,25 @@ describe("campaign-calendar with no calendar", () => {
     expect(calendarBounds()).toEqual({
       monthCount: 12, monthDayCounts: [], hoursPerDay: 24, minutesPerHour: 60
     });
+  });
+});
+
+describe("sessionMonthOptions", () => {
+  it("builds 0-based options from calendar months, matching getCalendarMonths()'s own index", () => {
+    expect(sessionMonthOptions([
+      { index: 0, name: "Hammer", days: 30 },
+      { index: 1, name: "Alturiak", days: 30 }
+    ])).toEqual([
+      { value: 0, label: "Hammer" },
+      { value: 1, label: "Alturiak" }
+    ]);
+  });
+
+  it("falls back to a generic 0-based 12-month list when no calendar is active", () => {
+    const options = sessionMonthOptions([]);
+    expect(options).toHaveLength(12);
+    expect(options[0]).toEqual({ value: 0, label: "Month 1" });
+    expect(options[11]).toEqual({ value: 11, label: "Month 12" });
   });
 });
 

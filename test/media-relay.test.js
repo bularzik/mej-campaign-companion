@@ -44,7 +44,7 @@ describe("isRelayableImageType", () => {
 });
 
 const chunk = (over = {}) => ({
-  requestId: "req1", groupId: "g1", name: "map.png", type: "image/png",
+  requestId: "req1", senderId: "user1", groupId: "g1", name: "map.png", type: "image/png",
   seq: 0, total: 1, data: btoa("abc"), ...over
 });
 
@@ -54,6 +54,8 @@ describe("chunkProblem", () => {
   });
   it("names the defect for malformed chunks", () => {
     expect(chunkProblem(chunk({ requestId: "" }))).toBe("bad-request-id");
+    expect(chunkProblem(chunk({ senderId: "" }))).toBe("bad-sender");
+    expect(chunkProblem(chunk({ senderId: 7 }))).toBe("bad-sender");
     expect(chunkProblem(chunk({ groupId: 7 }))).toBe("bad-group");
     expect(chunkProblem(chunk({ name: "" }))).toBe("bad-name");
     expect(chunkProblem(chunk({ type: "video/webm" }))).toBe("bad-type");
@@ -99,7 +101,7 @@ describe("createRelayAssembler", () => {
     const out = a.accept(chunk(), 1000);
     expect(out.status).toBe("complete");
     expect(out.request).toEqual({
-      requestId: "req1", groupId: "g1", name: "map.png", type: "image/png", base64: btoa("abc")
+      requestId: "req1", senderId: "user1", groupId: "g1", name: "map.png", type: "image/png", base64: btoa("abc")
     });
     expect(a.size()).toBe(0);
   });

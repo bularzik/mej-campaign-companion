@@ -20,26 +20,18 @@ async function openHubSearch(page) {
   await settle(page, 500);
   await shell.locator('nav.sheet-tabs a[data-tab="search"]').click();
   await settle(page, 200);
-  // Live-confirmed MEJ-side bug (KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG,
-  // helpers/foundry.mjs): typing into the search box debounces a Hub
+  // Two distinct MEJ-side non-GM render bugs used to live on this path (see
+  // KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG's doc comment in helpers/foundry.mjs
+  // for the full history) - typing into the search box debounces a Hub
   // re-render, and for a non-GM client EnhancedJournal.renderSubSheet's
-  // permission re-check (enhanced-journal.js ~486) reads
-  // `testing.compendium` on the companion's shell-page document, which
-  // never implements that getter, throwing "A subclass of Document must
-  // implement this getter" and ABORTING the render entirely - not merely
-  // cosmetic: the search results never paint (0 rows) and on a second
-  // attempt the shell's own inputs become unreachable. This is real and
-  // MEJ-side, not a companion bug, and out of scope to patch here - but
-  // renderSubSheet only takes that branch when `options.force ||
-  // this.tempOwnership` is falsy (line 479), so setting `tempOwnership`
-  // true on the shared EnhancedJournal instance steers every subsequent
-  // render around it, the same way MEJ's own code already does for a
-  // *real* document once it resolves the temp-ownership branch (line
-  // 504) - this just does it up front for GM and non-GM callers alike
-  // (a no-op for the GM path, which never reads `force` at all).
-  await page.evaluate(() => {
-    game.MonksEnhancedJournal.journal.tempOwnership = true;
-  });
+  // permission re-check (enhanced-journal.js ~494) used to either throw (the
+  // missing `.compendium` getter, fixed at MEJ commit ec97385) or, once that
+  // stopped throwing, silently fail the permission check anyway (BlankJournal
+  // inheriting Document#testUserPermission's always-NONE default, fixed by
+  // BlankJournal's own testUserPermission override). Both are fixed now, so
+  // this no longer needs the `tempOwnership` steer-around it used to apply
+  // here - a real non-GM client reaches the search tab and gets real results
+  // without it (verified live).
   return shell;
 }
 

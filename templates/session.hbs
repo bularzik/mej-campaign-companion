@@ -60,7 +60,9 @@
                                 <label>{{localize 'MEJCampaignCompanion.session.date.year'}}</label>
                                 <input type="number" name="flags.mej-campaign-companion.session.campaignDate.year" value="{{session.campaignDate.year}}" />
                                 <label>{{localize 'MEJCampaignCompanion.session.date.month'}}</label>
-                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.month" value="{{session.campaignDate.month}}" min="1" max="12" />
+                                <select name="flags.mej-campaign-companion.session.campaignDate.month" data-dtype="Number">
+                                    {{selectOptions monthOptions selected=session.campaignDate.month blank="" valueAttr="value" labelAttr="label"}}
+                                </select>
                                 <label>{{localize 'MEJCampaignCompanion.session.date.day'}}</label>
                                 <input type="number" name="flags.mej-campaign-companion.session.campaignDate.day" value="{{session.campaignDate.day}}" min="1" max="31" />
                                 <label>{{localize 'MEJCampaignCompanion.session.date.hour'}}</label>

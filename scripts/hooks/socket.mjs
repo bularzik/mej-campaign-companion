@@ -27,15 +27,30 @@ const HANDLERS = {
   [SAVE_RECAP_ACTION]: handleSaveRecapRequest
 };
 
-const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION, SAVE_RECAP_ACTION]);
+// Exported (not just module-local) so the "is this client authorized to run this action"
+// decision is independently unit-testable without registering a real socket listener - see
+// isAuthorizedForAction below and test/socket-dispatcher.test.js.
+export const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION, SAVE_RECAP_ACTION]);
+
+/**
+ * Pure routing seam: does this client get to run `action`? Every action must be a known
+ * handler; GM_ACTIONS additionally require this client to BE the elected active GM (not
+ * merely `isGM` - see this file's header comment). No Foundry globals - unit-tested directly.
+ * @param {string} action
+ * @param {boolean} isActiveGM whether the current client === game.users.activeGM
+ */
+export function isAuthorizedForAction(action, isActiveGM) {
+  if (!(action in HANDLERS)) return false;
+  if (GM_ACTIONS.has(action) && !isActiveGM) return false;
+  return true;
+}
 
 /** Register the module's one socket listener. Call once, from the ready hook. */
 export function registerSocketDispatcher() {
   game.socket.on(SOCKET, (payload) => {
     const action = payload?.action;
+    if (!isAuthorizedForAction(action, game.user === game.users.activeGM)) return;
     const handler = HANDLERS[action];
-    if (!handler) return;
-    if (GM_ACTIONS.has(action) && game.user !== game.users.activeGM) return;
     (async () => {
       try {
         await handler(payload);

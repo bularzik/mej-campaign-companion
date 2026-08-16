@@ -33,6 +33,28 @@ export function calendarBounds() {
   };
 }
 
+/**
+ * Build the Session sheet campaign-date field's month <select> options. The module's
+ * storage contract is a 0-based month (see this file's own getCalendarMonths() and
+ * currentWorldComponents() doc comments) - templates/session.hbs used to bind a raw
+ * `min="1" max="12"` number input directly to the flag, so a value typed as "6" (June,
+ * human-facing) was stored as literal 6 (July, per the 0-based contract), a silent
+ * off-by-one that also disagreed with the Hub's own #promptTimepoint dialog
+ * (CampaignHubPage.mjs), which has always built its month <select> from this same
+ * 0-based getCalendarMonths() index. Every option's `value` here is 0-based, whether or
+ * not a calendar is active, so there is no conversion step left for the caller - the
+ * select's submitted value IS the stored value.
+ * Pure/testable: takes getCalendarMonths()'s own output rather than calling it directly.
+ * @param {{index:number, name:string}[]} months getCalendarMonths() output ([] when no calendar)
+ * @returns {{value:number, label:string}[]}
+ */
+export function sessionMonthOptions(months) {
+  if (months.length) return months.map((m) => ({ value: m.index, label: m.name }));
+  // No active calendar: fall back to a generic 12-month list, still 0-based, matching
+  // formatCampaignDate's own "Month N" (N = month + 1) fallback display convention below.
+  return Array.from({ length: 12 }, (_, i) => ({ value: i, label: `Month ${i + 1}` }));
+}
+
 /** Localized in-world date label for stored components; "" when unset. */
 export function formatCampaignDate(components) {
   if (!components) return "";

@@ -147,7 +147,7 @@ export function searchAll(query) {
   return hits.filter((hit) => {
     const entry = fromUuidSync(hit.uuid);
     if (!entry) return false;
-    return game.user.isGM || entry.testUserPermission(game.user, "LIMITED") === true;
+    return game.user.isGM || entry.testUserPermission(game.user, "OBSERVER") === true;
   });
 }
 

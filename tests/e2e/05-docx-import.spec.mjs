@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login,
+  login, cleanupAsGm,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -23,21 +23,53 @@ async function openImportWizard(page) {
   return { shell, wizard: page.locator(".mej-cc-import-wizard-app") };
 }
 
-async function cleanupImported(page) {
-  await page.evaluate(async () => {
+// Imported entries aren't TT_PREFIX-ed (the wizard names each entry after its
+// docx section heading verbatim, not after anything this suite controls), so
+// cleanup can't rely on that convention the way every other spec's cleanup
+// does. `exactNames` is the real list of section titles the test itself saw
+// the wizard about to create (captured from the review table before
+// `createImport` runs) - deleting by that exact set, rather than only a
+// best-guess prefix regex, means cleanup actually removes what this run
+// created even if a title doesn't happen to match the regex below. The regex
+// is kept as a secondary safety net for any pre-existing leaked docs from an
+// earlier failed run (e.g. before this exact-name list existed).
+async function cleanupImported(page, exactNames = []) {
+  await page.evaluate(async (names) => {
+    const byName = new Set(names);
     const ids = game.journal.filter((j) =>
-      /^(Introduction|Session Zero|Arc \d|Epilogue|Appendix)/.test(j.name ?? "")
+      byName.has(j.name) || /^(Introduction|Session Zero|Arc \d|Epilogue|Appendix)/.test(j.name ?? "")
     ).map((j) => j.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-    const j = game.journal.find((e) => e.name === "Campaign Timeline");
-    if (j) await JournalEntry.implementation.deleteDocuments([j.id]);
+    const timeline = game.journal.find((e) => e.name === "Campaign Timeline");
+    if (timeline) await JournalEntry.implementation.deleteDocuments([timeline.id]);
     await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
-  });
+  }, exactNames);
 }
 
 test.describe("05 docx import", () => {
-  test.afterEach(async ({ page }) => {
-    await cleanupImported(page).catch(() => {});
+  // The real titles created by the test that just ran, populated before
+  // createImport() and read back here - see cleanupImported's doc comment.
+  let createdTitles = [];
+
+  test.afterEach(async ({ page, browser }) => {
+    // No .catch(() => {}) here: a cleanup failure must be visible (logged),
+    // not silently swallowed - a swallowed failure here previously meant
+    // state leaked between runs with no signal anything had gone wrong (the
+    // same failure mode cleanupAsGm's own doc comment describes for other
+    // specs). cleanupAsGm also makes sure cleanup actually runs against a
+    // live, logged-in GM session rather than Playwright's default
+    // never-navigated `page` fixture, which this spec's own test already
+    // leaves as a live GM session (the common case cleanupAsGm optimizes
+    // for), but routing through it keeps this spec consistent with 02/06's
+    // cleanup pattern and safe if that ever changes.
+    try {
+      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, createdTitles));
+    } catch (error) {
+      console.error("05-docx-import cleanup failed:", error);
+      throw error;
+    } finally {
+      createdTitles = [];
+    }
   });
 
   test("sections detected, types suggested, entries created and openable; dated session rows create timepoints", async ({ page }) => {
@@ -62,6 +94,11 @@ test.describe("05 docx import", () => {
         timepoint: tr.querySelector("input[name^='timepoint-']")?.checked
       }))
     );
+    // Record the exact section titles the wizard is about to create from, for
+    // afterEach's cleanup to delete by exact name (see cleanupImported's doc
+    // comment) - captured regardless of each row's chosen type, since a
+    // "skip" row creates nothing and simply won't match anything at cleanup.
+    createdTitles = rows.map((r) => r.title).filter(Boolean);
     const sessionZeroIndex = rows.findIndex((r) => r.title?.startsWith("Session Zero"));
     expect(sessionZeroIndex).toBeGreaterThanOrEqual(0);
     // Types suggested: every dated "session" row's type <select> at least

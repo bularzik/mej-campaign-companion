@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { JSDOM } from "jsdom";
 import {
   eligibleEntries, orderEligibleEntries, relationshipsHtml, sessionBodyHtml,
@@ -7,6 +7,7 @@ import {
 import { snapshotToDocModel } from "../scripts/logic/doc-export.mjs";
 import { RECORD_TYPE_MARKER_RE, suggestType } from "../scripts/logic/doc-import.mjs";
 import { COMPANION_IMPORT_TYPES, SESSION_DOCUMENT_TYPE } from "../scripts/constants.mjs";
+import { formatCampaignDate } from "../scripts/logic/campaign-calendar.mjs";
 
 const labels = { relationships: "Relationships", sessionNumber: "Session Number", campaignDate: "Campaign Date" };
 
@@ -151,6 +152,41 @@ describe("sessionBodyHtml", () => {
   it("omits lines for unset session number/campaign date", () => {
     const page = { system: { recap: "<p>recap</p>" }, getFlag: () => ({}) };
     expect(sessionBodyHtml(page, { sessionNumberLabel: "SN", campaignDateLabel: "CD" })).toBe("<p>recap</p>");
+  });
+
+  // I5 regression: a stored campaignDate.month is 0-based (the module's storage contract
+  // - see campaign-calendar.mjs's sessionMonthOptions doc comment). Exercise the REAL
+  // formatCampaignDate (not a stub) against a specific 0-based month index and confirm the
+  // exported doc line shows the correct calendar month name, not an off-by-one neighbor.
+  describe("with the real formatCampaignDate against a stored 0-based month", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("shows the calendar's own month name for month index 1 (Alturiak, not Hammer or Ches)", () => {
+      vi.stubGlobal("game", {
+        i18n: { localize: (k) => k.replace("MONTH.", "") },
+        time: {
+          calendar: {
+            timeToComponents: () => ({}),
+            months: { values: [
+              { name: "MONTH.Hammer", days: 30 },
+              { name: "MONTH.Alturiak", days: 30 },
+              { name: "MONTH.Ches", days: 30 }
+            ] },
+            days: { hoursPerDay: 24, minutesPerHour: 60 }
+          }
+        }
+      });
+      const page = {
+        system: { recap: "<p>recap</p>" },
+        getFlag: () => ({ campaignDate: { year: 1492, month: 1, day: 15, hour: null, minute: null } })
+      };
+      const html = sessionBodyHtml(page, {
+        sessionNumberLabel: "Session Number", campaignDateLabel: "Campaign Date", formatCampaignDate
+      });
+      expect(html).toContain("Alturiak 15, 1492");
+      expect(html).not.toContain("Hammer");
+      expect(html).not.toContain("Ches");
+    });
   });
 });
 

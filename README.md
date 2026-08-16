@@ -1,6 +1,6 @@
 # Campaign Companion for Monk's Enhanced Journal
 
-Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced Journal](https://github.com/ironmonk108/monks-enhanced-journal) (MEJ) for Foundry VTT: a Session journal type, a campaign timeline with in-world dates, a searchable Campaign Hub, automatic capture of encounters and shared images, automatic entry linking, Word document import/export, and lightweight player collaboration. It adds zero data to MEJ's own flag namespace — everything the companion writes lives under its own `flags["mej-campaign-companion"]` — so the two modules stay independently upgradeable.
+Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced Journal](https://github.com/ironmonk108/monks-enhanced-journal) (MEJ) for Foundry VTT: a Session journal type, a campaign timeline with in-world dates, a searchable Campaign Hub, automatic capture of encounters and shared images, automatic entry linking, Word document import/export, and lightweight player collaboration. Everything the companion writes for its own purposes lives under its own `flags["mej-campaign-companion"]` namespace, never inside MEJ's — but on entries it creates (via MEJ's own document-creation paths, so MEJ recognizes and renders them correctly), it does set MEJ's own `type`/type-seed flags, exactly as any other MEJ-typed entry would. The two modules stay independently upgradeable; "zero data in MEJ's namespace" was never literally true and is not the claim made here.
 
 ## Features
 
@@ -72,6 +72,13 @@ What this **doesn't** eliminate: the "impersonate another user's recap" risk fro
 - If MEJ's API is present but this module's own registration throws (a bug in this module), a second, more specific error notification is shown instead, and the error is logged to the console.
 - Auto-link and auto-capture are pure observers: a failure in either logs to the console and is skipped, and never blocks the underlying page-save or combat-end operation it hooked.
 - Docx import is transactional per wizard run — documents are only created on final confirmation, and a failure reports per-section errors with no partial writes.
+
+## Known issues
+
+See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the full detail, including the manual verification steps for each item below — this section is a pointer, not a substitute for it.
+
+- Non-`dnd5e` systems, second-display/popout behavior, and Word/Google Docs docx visual fidelity are exercised manually rather than by the automated suites; see the checklist's respective sections.
+- A `libWrapper`-vs-Monk's Common Display interaction on the shared-media capture path has a documented manual conflict scan, not an automated one.
 
 ## Development
 

@@ -41,7 +41,7 @@
 // which is the same bound MEJ's own saveUserData accepts for its own
 // per-user notes; the content-injection risk, unlike the identity risk,
 // IS closed by the sanitization step.
-import { MODULE_ID, SOCKET, SAVE_RECAP_ACTION, I18N } from "../constants.mjs";
+import { MODULE_ID, SOCKET, SAVE_RECAP_ACTION, SESSION_DOCUMENT_TYPE, I18N } from "../constants.mjs";
 import { recapPayloadProblem, recapWriteRoute } from "../logic/player-recap.mjs";
 
 /**
@@ -54,7 +54,7 @@ import { recapPayloadProblem, recapWriteRoute } from "../logic/player-recap.mjs"
  * applied here to a relayed payload before it's trusted at all. Returns
  * null (caller drops the message) if the input can't be parsed at all.
  */
-function sanitizeRecapHtml(html) {
+export function sanitizeRecapHtml(html) {
   try {
     return foundry.prosemirror.dom.serializeString(foundry.prosemirror.dom.parseString(html));
   } catch (error) {
@@ -106,6 +106,18 @@ export async function handleSaveRecapRequest(payload) {
   const document = await fromUuid(payload.documentUuid).catch(() => null);
   if (!document) {
     console.warn(`${MODULE_ID} | dropped player-recap relay for missing document`, payload.documentUuid);
+    return;
+  }
+  if (!(document instanceof JournalEntryPage)) {
+    console.warn(`${MODULE_ID} | dropped player-recap relay for non-page document`, payload.documentUuid);
+    return;
+  }
+  if (document.type !== SESSION_DOCUMENT_TYPE) {
+    console.warn(`${MODULE_ID} | dropped player-recap relay for non-session document`, payload.documentUuid);
+    return;
+  }
+  if (!document.parent?.testUserPermission(user, "OBSERVER")) {
+    console.warn(`${MODULE_ID} | dropped player-recap relay - sender lacks OBSERVER on the session`, payload.senderId);
     return;
   }
   const sanitized = sanitizeRecapHtml(payload.html);

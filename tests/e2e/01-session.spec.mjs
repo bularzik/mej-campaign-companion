@@ -108,11 +108,16 @@ test.describe("01 session entries", () => {
     // number inputs relying on AppV2's dot-path FormDataExtended expansion
     // on submit — never exercised in-world before this suite (Task 5's own
     // report, concern #1).
-    const dateFields = { year: "1497", month: "9", day: "14", hour: "19", minute: "30" };
+    // month (I5) is a <select> now, not a number input - see sessionMonthOptions'
+    // doc comment (scripts/logic/campaign-calendar.mjs) for why. Its option values
+    // are 0-based regardless of whether a calendar is active, so selecting "9" here
+    // still stores the literal value 9 the assertion below expects.
+    const dateFields = { year: "1497", day: "14", hour: "19", minute: "30" };
     for (const [field, value] of Object.entries(dateFields)) {
       const input = shell.locator(`input[name="flags.mej-campaign-companion.session.campaignDate.${field}"]`);
       await input.fill(value);
     }
+    await shell.locator('select[name="flags.mej-campaign-companion.session.campaignDate.month"]').selectOption("9");
     await shell.locator('input[name="flags.mej-campaign-companion.session.campaignDate.minute"]').blur();
     await page.waitForFunction(
       (id) => game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "session")?.campaignDate?.minute === 30,

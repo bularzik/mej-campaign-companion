@@ -17,6 +17,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { MODULE_ID, HUB_PAGE_ID, I18N } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
+import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
 import { getCalendarMonths, calendarBounds, hasCalendar, formatCampaignDate, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date.mjs";
@@ -337,7 +338,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       { titleKey: `${I18N}.hub.addTimepoint` }
     );
     if (!result) return;
-    await Timepoints.addTimepoint(journal, result.label, position, result.campaignDate ?? null);
+    await queueFiling(() => Timepoints.addTimepoint(journal, result.label, position, result.campaignDate ?? null));
     this.render({ parts: ["main"] });
   }
 
@@ -353,7 +354,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       { titleKey: `${I18N}.hub.editTimepoint`, okKey: `${I18N}.hub.save` }
     );
     if (!result) return;
-    await Timepoints.editTimepoint(journal, id, { label: result.label, campaignDate: result.campaignDate });
+    await queueFiling(() => Timepoints.editTimepoint(journal, id, { label: result.label, campaignDate: result.campaignDate }));
     this.render({ parts: ["main"] });
   }
 
@@ -368,7 +369,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       content: `<p>${game.i18n.format(`${I18N}.hub.deleteTimepointConfirm`, { label: foundry.utils.escapeHTML(label) })}</p>`
     });
     if (!confirmed) return;
-    await Timepoints.deleteTimepoint(journal, id);
+    await queueFiling(() => Timepoints.deleteTimepoint(journal, id));
     this.render({ parts: ["main"] });
   }
 
@@ -392,7 +393,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
-    await Timepoints.removeLink(journal, timepointId, linkId);
+    await queueFiling(() => Timepoints.removeLink(journal, timepointId, linkId));
     this.render({ parts: ["main"] });
   }
 
@@ -402,7 +403,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
-    await Timepoints.toggleLinkShowPlayers(journal, timepointId, linkId);
+    await queueFiling(() => Timepoints.toggleLinkShowPlayers(journal, timepointId, linkId));
     this.render({ parts: ["main"] });
   }
 
@@ -448,7 +449,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
 
     if (data.kind === REORDER_KIND) {
-      return Timepoints.moveTimepoint(journal, data.id, Number(target.dataset.position)).then(() => this.render({ parts: ["main"] }));
+      return queueFiling(() => Timepoints.moveTimepoint(journal, data.id, Number(target.dataset.position)))
+        .then(() => this.render({ parts: ["main"] }));
     }
 
     const timepointId = target.dataset.timepointId;
@@ -471,7 +473,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         ui.notifications.warn(game.i18n.localize(`${I18N}.hub.cannotAttach`));
         return;
       }
-      await Timepoints.addLink(journal, timepointId, { uuid: drop.uuid, name: doc.name, type: drop.type });
+      await queueFiling(() => Timepoints.addLink(journal, timepointId, { uuid: drop.uuid, name: doc.name, type: drop.type }));
       return this.render({ parts: ["main"] });
     }
     // drop.kind === "image"
@@ -481,7 +483,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       rejectClose: false
     });
     if (showPlayers === null) return; // dialog dismissed
-    await Timepoints.addLink(journal, timepointId, { src: drop.src, name: filenameFromSrc(drop.src), showPlayers: showPlayers === true });
+    await queueFiling(() => Timepoints.addLink(journal, timepointId, { src: drop.src, name: filenameFromSrc(drop.src), showPlayers: showPlayers === true }));
     this.render({ parts: ["main"] });
   }
 

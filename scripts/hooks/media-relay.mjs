@@ -22,7 +22,9 @@
 //  - Reply/upload destination: RELAY_UPLOAD_DIR() via
 //    apps/import-upload.mjs's uploadCompanionFile(), not campaign-record's
 //    per-group uploadHubMedia().
-import { MODULE_ID, SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION, RELAY_UPLOAD_DIR } from "../constants.mjs";
+import {
+  MODULE_ID, SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION, RELAY_UPLOAD_DIR, SESSION_DOCUMENT_TYPE
+} from "../constants.mjs";
 import {
   chunkBase64, createRelayAssembler, base64ByteLength, isRelayableImageType, enforcedImageName,
   MAX_RELAY_FILE_BYTES
@@ -85,7 +87,7 @@ export async function relayUploadMedia(contextUuid, file) {
   chunkBase64(base64).forEach((data, seq, chunks) => {
     game.socket.emit(SOCKET, {
       action: UPLOAD_MEDIA_ACTION,
-      requestId, groupId: contextUuid, name: file.name, type: file.type,
+      requestId, senderId: game.user.id, groupId: contextUuid, name: file.name, type: file.type,
       seq, total: chunks.length, data
     });
   });
@@ -112,6 +114,23 @@ export async function handleUploadRequest(payload) {
     }
   };
   if (outcome.status === "invalid") return reply({ error: outcome.reason });
+  const sender = game.users.get(outcome.request.senderId);
+  if (!sender) {
+    console.debug(`${MODULE_ID} | dropped relayed media upload from unknown user id`, outcome.request.senderId);
+    return reply({ error: "bad-sender" });
+  }
+  const session = await fromUuid(outcome.request.groupId).catch(() => null);
+  if (
+    !(session instanceof JournalEntryPage) ||
+    session.type !== SESSION_DOCUMENT_TYPE ||
+    !session.parent?.testUserPermission(sender, "OBSERVER")
+  ) {
+    console.debug(
+      `${MODULE_ID} | dropped relayed media upload - sender can't observe the session context`,
+      sender.id, outcome.request.groupId
+    );
+    return reply({ error: "bad-context" });
+  }
   // Never trust the caller's extension: force it to match the validated
   // MIME so a mismatched pair (evil.html, image/png) can't land as .html.
   const name = enforcedImageName(outcome.request.name, outcome.request.type);
@@ -137,6 +156,15 @@ export function handleUploadResult(payload) {
   if (!entry) return;
   pending.delete(payload.requestId);
   clearTimeout(entry.timer);
-  if (typeof payload.path === "string" && payload.path) entry.resolve(payload.path);
-  else entry.reject(new RelayUploadError(`mej-campaign-companion | relay upload refused: ${payload.error ?? "unknown"}`));
+  // The GM-side reply claims a stored path; never trust it blindly - a compromised or
+  // forged GM-side reply could otherwise point a requester at an arbitrary path outside
+  // the relay's own upload directory. Only accept paths actually rooted under RELAY_UPLOAD_DIR().
+  if (typeof payload.path === "string" && payload.path && payload.path.startsWith(RELAY_UPLOAD_DIR())) {
+    entry.resolve(payload.path);
+  } else if (typeof payload.path === "string" && payload.path) {
+    console.warn(`${MODULE_ID} | dropped relay upload result with path outside RELAY_UPLOAD_DIR()`, payload.path);
+    entry.reject(new RelayUploadError("mej-campaign-companion | relay upload refused: bad-path"));
+  } else {
+    entry.reject(new RelayUploadError(`mej-campaign-companion | relay upload refused: ${payload.error ?? "unknown"}`));
+  }
 }

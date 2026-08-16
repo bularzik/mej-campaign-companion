@@ -14,10 +14,11 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
 import { buildRecapEntries } from "../logic/player-recap.mjs";
-import { isRelayableImageType, MAX_RELAY_FILE_BYTES } from "../logic/media-relay.mjs";
+import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { savePlayerRecap } from "../hooks/player-recap.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
+import { getCalendarMonths, sessionMonthOptions } from "../logic/campaign-calendar.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
 
@@ -101,6 +102,11 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     const isGM = game.user.isGM;
     const session = sessionData(this.document);
+
+    // Month <select> options for the campaign-date field (I5): always 0-based, matching
+    // both the module's storage contract and the Hub's own #promptTimepoint dialog - see
+    // sessionMonthOptions' doc comment for why a plain 1-12 number input was wrong here.
+    context.monthOptions = sessionMonthOptions(getCalendarMonths());
 
     context.relationships = await this.getRelationships();
     context.has = { relationships: Object.keys(context.relationships || {})?.length > 0 };
@@ -266,12 +272,19 @@ export class SessionSheet extends EnhancedJournalSheet {
       return;
     }
     try {
+      // Never trust the caller's extension on the direct-upload path either: force it to
+      // match the validated MIME, same as the relay path's GM-side enforcedImageName call
+      // (hooks/media-relay.mjs handleUploadRequest) - a mismatched pair (evil.html, image/png)
+      // must not land on disk as .html regardless of which upload path is taken.
+      const name = enforcedImageName(file.name, file.type) ?? file.name;
       const path = game.user.can("FILES_UPLOAD")
-        ? await uploadCompanionFile(new File([file], relayFilename(file.name), { type: file.type }), RELAY_UPLOAD_DIR())
+        ? await uploadCompanionFile(new File([file], relayFilename(name), { type: file.type }), RELAY_UPLOAD_DIR())
         : await relayUploadMedia(this.document.uuid, file);
       const recaps = this.document.getFlag(MODULE_ID, "playerRecaps") ?? {};
       const current = recaps[game.user.id] ?? "";
-      await savePlayerRecap(this.document, `${current}<p><img src="${path}"></p>`);
+      const img = document.createElement("img");
+      img.src = path;
+      await savePlayerRecap(this.document, `${current}<p>${img.outerHTML}</p>`);
       this.render();
     } catch (error) {
       console.error(`${MODULE_ID} | image drop/paste into player recap failed`, error);

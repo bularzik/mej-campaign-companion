@@ -327,28 +327,42 @@ export const KNOWN_LOW_RESOLUTION_WARNING = /requires a screen resolution of/;
 // the module is off (see {invalid: true} reads in that spec).
 export const EXPECTED_INVALID_TYPE_WHILE_DISABLED = /is not a valid type for the JournalEntryPage Document class/;
 
-// Real, live-discovered MEJ-side bug (not a companion bug, not fixed here —
-// see task-14-report.md): a module's registered shell-page document (the
-// Hub included) never implements the `.compendium` getter that
-// EnhancedJournal.renderSubSheet's non-GM permission re-check
-// (enhanced-journal.js ~486: `!game.user.isGM && testing && (!testing
-// .compendium && ...)`) reads on every re-render where `options.force` /
-// `this.tempOwnership` aren't set. A fresh open passes (something upstream
-// sets one of those first), but a later re-render — confirmed live: the
-// debounced Hub search input, which re-renders on every keystroke — throws
-// "A subclass of Document must implement this getter" and ABORTS that
-// render. Corrected characterization (task-14-report.md's original
-// "cosmetic, underlying update still lands" was wrong for this path,
-// verified live via 03-search.spec.mjs's finding-#5 positive control): the
-// aborted render means search results genuinely never paint for a non-GM
-// client (0 rows), and a second attempt can leave the shell's own inputs
-// unreachable. Real, and can hit any module with an open shell page on any
-// non-GM client's re-render, not just campaign-companion's Hub. Worked
-// around test-side in 03-search.spec.mjs's openHubSearch() by setting
-// `game.MonksEnhancedJournal.journal.tempOwnership = true` right after
-// opening (steers every later render around the buggy branch, same
-// mechanism MEJ's own code uses once it resolves the temp-ownership path)
-// — not a fix, since it touches only this test session's client instance.
+// Historical MEJ-side bug, now FIXED upstream — kept only so an old MEJ build
+// (pre-ec97385) still gets a recognizable ignore pattern instead of a
+// confusing spec failure, and as a landmark for what to look for if this class
+// of render-abort ever resurfaces. There were actually TWO distinct causes
+// behind non-GM Hub search renders failing, not one — both now fixed, both on
+// the MEJ side, neither a companion bug:
+//   (a) `BlankJournal.compendium` render-abort. The base
+//       `foundry.abstract.Document#compendium` getter is `@abstract` and
+//       unconditionally throws "A subclass of Document must implement this
+//       getter" (the regex below). `BlankJournal` — the synthetic
+//       placeholder document behind any `registerShellPage` tab, the Hub
+//       included — extended `Document` directly and never overrode it, so
+//       `EnhancedJournal.renderSubSheet`'s non-GM permission re-check (which
+//       reads `testing.compendium`) crashed outright on any re-render where
+//       `options.force`/`this.tempOwnership` weren't set (e.g. the debounced
+//       Hub search input, which re-renders on every keystroke). Fixed by
+//       MEJ commit `ec97385` (`get compendium() { return null; }`).
+//   (b) `BlankJournal.testUserPermission` always-NONE. Once (a) stopped
+//       throwing, that same permission re-check fell through to actually
+//       *evaluating* `testing.testUserPermission(game.user, "OBSERVER")` —
+//       and `BlankJournal` had no override for it either, so it inherited
+//       `Document#testUserPermission`'s default, which resolves via
+//       `this.ownership` (a field `BlankJournal`'s schema never defines) and
+//       therefore always returns NONE. Result: every non-GM client failed
+//       that check on every non-forced render (not a throw this time — a
+//       clean, silent "no permission" outcome), and `EnhancedJournal`
+//       replaced the shell page with its permission-denied placeholder —
+//       search results never painted for a player, root cause distinct from
+//       (a) and NOT identified at the time (a) was fixed. Fixed by adding a
+//       `testUserPermission` override to `BlankJournal` that returns `true`
+//       for any registered shell-page type (see enhanced-journal.js, beside
+//       the `isOwner`/`_getSheetClass` overrides).
+// With both fixed, 03-search.spec.mjs's openHubSearch() no longer needs the
+// `game.MonksEnhancedJournal.journal.tempOwnership = true` workaround it used
+// to set after opening the Hub - removed, and the spec passes as a real
+// non-GM client without it (verified live).
 export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document must implement this getter/;
 
 /** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */

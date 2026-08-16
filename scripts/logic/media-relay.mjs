@@ -44,6 +44,7 @@ export function isRelayableImageType(mime) {
 /** Shape-check one relayed chunk. Null when valid, else a reason slug. */
 export function chunkProblem(p) {
   if (typeof p?.requestId !== "string" || !p.requestId) return "bad-request-id";
+  if (typeof p.senderId !== "string" || !p.senderId) return "bad-sender";
   if (typeof p.groupId !== "string" || !p.groupId) return "bad-group";
   if (typeof p.name !== "string" || !p.name) return "bad-name";
   if (!isRelayableImageType(p.type)) return "bad-type";
@@ -86,7 +87,7 @@ export function createRelayAssembler({
       if (!buf) {
         if (buffers.size >= maxBuffers) return { status: "invalid", reason: "too-many" };
         buf = {
-          groupId: payload.groupId, name: payload.name, type: payload.type,
+          senderId: payload.senderId, groupId: payload.groupId, name: payload.name, type: payload.type,
           total: payload.total, parts: new Array(payload.total).fill(null),
           received: 0, bytes: 0, touched: now
         };
@@ -111,7 +112,7 @@ export function createRelayAssembler({
       return {
         status: "complete",
         request: {
-          requestId: payload.requestId, groupId: buf.groupId,
+          requestId: payload.requestId, senderId: buf.senderId, groupId: buf.groupId,
           name: buf.name, type: buf.type, base64: buf.parts.join("")
         }
       };
