@@ -54,7 +54,7 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
   #mode;
   #includeBacklinks = false;
   #sim = null;
-  #lastTruncated = false;
+  #graph = null;
   #dragged = false;
 
   constructor({ centerUuid = null } = {}) {
@@ -63,12 +63,23 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
     this.#mode = centerUuid ? "ego" : "all";
   }
 
+  // Computes the graph (and thus the truncation verdict) here rather than in
+  // #draw(), and caches it on #graph for #draw() to reuse. _prepareContext
+  // always runs before _onRender/#draw within the same render() pass, so
+  // this keeps the truncated-notice in the template context and the actual
+  // drawn graph perfectly in sync for that pass - computing it only in
+  // #draw() (the original shape) meant the template read #lastTruncated from
+  // the *previous* draw, one render stale.
   async _prepareContext() {
+    this.#graph = buildGraph(graphRows(), this.#includeBacklinks ? backlinkPairs() : [], {
+      mode: this.#mode, centerUuid: this.#centerUuid,
+      includeBacklinks: this.#includeBacklinks, isGM: game.user.isGM, maxNodes: MAX_NODES
+    });
     return {
       isEgo: this.#mode === "ego",
       centerUuid: this.#centerUuid,
       includeBacklinks: this.#includeBacklinks,
-      truncated: this.#lastTruncated === true
+      truncated: this.#graph.truncated === true
     };
   }
 
@@ -103,15 +114,13 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
     const height = svg.clientHeight || 540;
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-    const graph = buildGraph(graphRows(), this.#includeBacklinks ? backlinkPairs() : [], {
-      mode: this.#mode, centerUuid: this.#centerUuid,
-      includeBacklinks: this.#includeBacklinks, isGM: game.user.isGM, maxNodes: MAX_NODES
-    });
-    this.#lastTruncated = graph.truncated;
+    // Reuse the graph computed in _prepareContext for this same render pass
+    // (see its comment) rather than recomputing it here - keeps the drawn
+    // graph and the truncated-notice in the template context in sync.
+    const graph = this.#graph;
 
     const NS = "http://www.w3.org/2000/svg";
     const nodes = graph.nodes.map((n) => ({ ...n }));
-    const byUuid = new Map(nodes.map((n) => [n.uuid, n]));
     const links = graph.edges.map((e) => ({ ...e, source: e.source, target: e.target }));
 
     const edgeEls = links.map((link) => {
