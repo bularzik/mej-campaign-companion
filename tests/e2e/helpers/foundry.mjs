@@ -256,6 +256,22 @@ export const KNOWN_LOW_RESOLUTION_WARNING = /requires a screen resolution of/;
 // the module is off (see {invalid: true} reads in that spec).
 export const EXPECTED_INVALID_TYPE_WHILE_DISABLED = /is not a valid type for the JournalEntryPage Document class/;
 
+// Real, live-discovered MEJ-side bug (not a companion bug, not fixed here —
+// see task-14-report.md): BlankJournal (apps/enhanced-journal.js's
+// placeholder document for shell pages) extends foundry.abstract.Document
+// directly and never implements the required `.compendium` getter.
+// EnhancedJournal._onRender's non-GM permission re-check
+// (`!game.user.isGM && testing && (!testing.compendium && ...)`) reads that
+// getter on every re-render of an open shell page (the Hub included) for a
+// non-GM client where `options.force`/`this.tempOwnership` aren't set (a
+// fresh open passes, a later re-render like the debounced Hub search input
+// often doesn't) — throwing "A subclass of Document must implement this
+// getter" and aborting that render. Cosmetic in every case observed (the
+// underlying data/UI update still lands; only this stray internal check
+// throws), but real: any module with an open shell page can hit it on any
+// non-GM client's re-render, not just campaign-companion's Hub.
+export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document must implement this getter/;
+
 /** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */
 export function trackConsoleErrors(page, { ignore = [] } = {}) {
   const allIgnore = [KNOWN_LOW_RESOLUTION_WARNING, ...ignore];
