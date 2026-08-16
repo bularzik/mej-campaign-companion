@@ -72,7 +72,8 @@
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
-        "search": "Search"
+        "search": "Search",
+        "dashboards": "Dashboards"
       },
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
@@ -133,6 +134,20 @@
           "secrets": "Secrets",
           "gmNotes": "GM Notes"
         }
+      },
+      "mentions": "Mentions",
+      "dashboards": {
+        "add": "Add dashboard",
+        "edit": "Edit dashboard",
+        "delete": "Delete dashboard",
+        "name": "Name",
+        "query": "Query",
+        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>; anything else is full-text search.",
+        "showPlayers": "Visible to players",
+        "visibleToPlayers": "Visible to players",
+        "badQuery": "That query can't be parsed.",
+        "noResults": "No matches.",
+        "empty": "No dashboards yet."
       }
     },
     "knowledge": {

@@ -538,3 +538,77 @@
   font-size: var(--font-size-11, 11px);
   opacity: 0.7;
 }
+
+/* Index row mention badge (Task 9) - small pill next to the entry name
+   showing how many other entries visibly mention it (mentionBadgeCounts()). */
+.mej-cc-mention-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.75;
+  padding: 0.05em 0.4em;
+  border-radius: 999px;
+  background: var(--color-bg-option, rgba(0, 0, 0, 0.06));
+  flex: 0 0 auto;
+}
+
+/* Dashboards pane (Task 9) - saved queries (world setting), each re-run live
+   through runQueryAll() and rendered as its own mini result list, styled
+   after the Index pane's own row/list rules above. */
+.mej-cc-dashboards {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-dashboards-controls {
+  flex: 0 0 auto;
+}
+
+.mej-cc-dashboards-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+}
+
+.mej-cc-dashboard {
+  border: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+  padding: 0.4em;
+}
+
+.mej-cc-dashboard-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.mej-cc-dashboard-name {
+  font-weight: bold;
+}
+
+.mej-cc-dashboard-query {
+  flex: 1;
+  opacity: 0.75;
+  font-size: var(--font-size-11, 11px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mej-cc-dashboard-error {
+  color: var(--color-level-error, #b91c1c);
+  font-style: italic;
+  margin: 0.3em 0 0;
+}
+
+.mej-cc-dashboard-results {
+  list-style: none;
+  margin: 0.3em 0 0;
+  padding: 0;
+}
