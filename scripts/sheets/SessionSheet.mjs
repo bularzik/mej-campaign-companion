@@ -87,8 +87,6 @@ export class SessionSheet extends EnhancedJournalSheet {
     context.has = { relationships: Object.keys(context.relationships || {})?.length > 0 };
     context.placeholder = `${I18N}.placeholder.session`;
 
-    context.session = session;
-
     // Secrets are only meaningful once revealed to players - a non-GM
     // context must never carry an unrevealed secret's text (same
     // data-minimization requirement as gmNotes below: excluded from the
@@ -96,6 +94,12 @@ export class SessionSheet extends EnhancedJournalSheet {
     context.secrets = isGM
       ? session.secrets
       : session.secrets.filter((s) => s.revealed).map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
+
+    // context.session must carry the same sanitized secrets as context.secrets
+    // for non-GM users - the template only reads context.secrets today, but
+    // the exclusion principle has to hold on the context object as a whole,
+    // not depend on which property happens to be read.
+    context.session = isGM ? session : { ...session, secrets: context.secrets };
 
     context.attendeeDetails = (
       await Promise.all(
@@ -119,6 +123,15 @@ export class SessionSheet extends EnhancedJournalSheet {
         this.document.system?.gmNotes ?? "",
         enrichmentOptions
       );
+    } else if (context.data?.system) {
+      // context.data comes from the base class's this.document.toObject(false)
+      // (a plain deep-cloned object, safe to mutate) and carries system.gmNotes
+      // unconditionally - strip it for the same reason enrichedGmNotes is
+      // never computed above. Foundry still syncs the whole document
+      // client-side regardless, so this is defense-in-depth at the render
+      // layer, not real access control - but the context must stay
+      // consistent with the stated exclusion principle.
+      delete context.data.system.gmNotes;
     }
 
     return context;
@@ -129,7 +142,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       { label: '<i class="fas fa-search"></i>', type: "text" },
       { id: "search", type: "input", label: game.i18n.localize("MonksEnhancedJournal.SearchDescription"), visible: !!this.enhancedjournal, callback: this.searchText },
       { id: "show", label: game.i18n.localize("MonksEnhancedJournal.ShowToPlayers"), icon: "fas fa-eye", visible: game.user.isGM, action: "showPlayers" },
-      { id: "edit", label: game.i18n.localize("MonksEnhancedJournal.EditDescription"), icon: "fas fa-pencil-alt", visible: this.isEditable, action: "editDescription" }
+      { id: "edit", label: game.i18n.localize("MonksEnhancedJournal.EditDescription"), icon: "fas fa-pencil-alt", visible: this.isEditable, action: "editRecap" }
     ];
     return ctrls.concat(super._documentControls());
   }
@@ -172,9 +185,22 @@ export class SessionSheet extends EnhancedJournalSheet {
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
   }
 
+  // Mirrors EnhancedJournalSheet.onEditDescription (sheets/EnhancedJournalSheet.js)
+  // exactly, targeting the "recap" editor id instead of "description" - this
+  // is both the inline editor-edit pencil's action (data-action="editRecap"
+  // in the description tab) AND, via _documentControls()'s "edit" control,
+  // the shell header's toolbar pencil button. Sharing one handler for both
+  // paths keeps the header button's tab-switch and its pencil/save icon
+  // state in sync with the inline button rather than letting the two drift.
   static onEditRecap(event, target) {
-    const editing = $(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing");
+    if (!this.isEditable) return null;
+
+    let navElement = $(".sheet-tabs.tabs", this.trueElement).get(0);
+    if (this.tabGroups["primary"])
+      this.changeTab.call(this.enhancedjournal || this, "description", "primary", { event, navElement });
+    let editing = $(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing");
     $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", !editing);
+    $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", editing).toggleClass("fa-save", !editing);
   }
 
   static onEditGmNotes(event, target) {
