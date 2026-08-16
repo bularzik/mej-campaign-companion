@@ -3,6 +3,12 @@
     "errors": {
       "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled."
     },
+    "settings": {
+      "autoLink": {
+        "name": "Auto-Link Entry Names",
+        "hint": "When enabled, newly-typed mentions of other Monk's Enhanced Journal entry names in a page's text are automatically turned into links as the page is saved. Existing links, code blocks, and pages flagged to opt out are left untouched."
+      }
+    },
     "sheettype": { "session": "Session" },
     "placeholder": { "session": "New Session" },
     "tabs": {

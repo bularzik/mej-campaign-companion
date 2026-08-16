@@ -6,5 +6,8 @@ export const SOCKET = `module.${MODULE_ID}`;
 /** World setting: JournalEntry id holding the campaign timeline flag. */
 export const TIMELINE_JOURNAL_SETTING = "timelineJournalId";
 
+/** World setting: auto-link newly-typed MEJ entry names in page text. */
+export const AUTO_LINK_SETTING = "autoLink";
+
 /** i18n prefix for all companion strings. */
 export const I18N = "MEJCampaignCompanion";

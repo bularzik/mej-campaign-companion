@@ -1,7 +1,8 @@
-import { MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, I18N } from "./constants.mjs";
+import { MODULE_ID, SESSION_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING, I18N } from "./constants.mjs";
 import { SessionSheet } from "./sheets/SessionSheet.mjs";
 import { CampaignHubPage } from "./apps/CampaignHubPage.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
+import { registerAutoLink } from "./hooks/auto-link.mjs";
 
 let apiReceived = false;
 
@@ -11,6 +12,15 @@ Hooks.once("init", () => {
     config: false,
     type: String,
     default: ""
+  });
+
+  game.settings.register(MODULE_ID, AUTO_LINK_SETTING, {
+    name: `${I18N}.settings.autoLink.name`,
+    hint: `${I18N}.settings.autoLink.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
   });
 });
 
@@ -38,6 +48,11 @@ Hooks.on("setupMonksEnhancedJournal", (api) => {
   // (ensureIndex(), first called from the Hub's search pane) - this only
   // wires the hooks that keep it current afterward.
   initSearchHooks();
+
+  // Wires the preUpdateJournalEntryPage listener that auto-links newly-typed
+  // MEJ entry names in a page's text.content (gated on the "autoLink"
+  // world setting, checked per-update inside the hook itself).
+  registerAutoLink();
 });
 
 // Toolbar entry: a button alongside MEJ's own header controls on every tab,
