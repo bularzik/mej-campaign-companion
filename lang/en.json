@@ -158,6 +158,22 @@
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
       "nothingToImport": "Every section is set to skip — nothing to import.",
       "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date."
+    },
+    "export": {
+      "title": "Export to Word",
+      "button": "Export",
+      "download": "Download",
+      "includeGM": "Include GM Content",
+      "includeGMHint": "When checked, session GM notes and relationships hidden from players are included in the export.",
+      "nothingToExport": "There are no journal entries to export yet.",
+      "defaultTitle": "Campaign Export",
+      "relationships": "Relationships",
+      "sessionNumber": "Session Number",
+      "campaignDate": "Campaign Date",
+      "timelineHeading": "Timeline",
+      "gmNotesHeading": "GM Notes",
+      "done": "Exported {count} entries to a Word document.",
+      "failed": "Could not generate the Word document. See the console for details."
     }
   }
 }

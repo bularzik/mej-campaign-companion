@@ -26,6 +26,7 @@ import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchAll } from "../search/live-index.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
+import { openExportDialog } from "./export-dialog.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -69,7 +70,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
       toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
-      openImportWizard: CampaignHubPage.onOpenImportWizard
+      openImportWizard: CampaignHubPage.onOpenImportWizard,
+      openExportDialog: CampaignHubPage.onOpenExportDialog
     }
   };
 
@@ -232,6 +234,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // re-checks game.user.isGM itself as a second guard.
   static onOpenImportWizard() {
     ImportWizard.open();
+  }
+
+  // GM-only "Export" entry point (Task 12), same guarding convention as
+  // onOpenImportWizard above: the action is wired regardless of GM status
+  // (Foundry always wires data-action handlers), the button is only
+  // rendered for a GM (context.isGM), and openExportDialog() itself
+  // re-checks game.user.isGM as a second guard.
+  static onOpenExportDialog() {
+    openExportDialog();
   }
 
   static onOpenIndexRow(event, target) {

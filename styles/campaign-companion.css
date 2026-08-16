@@ -37,9 +37,32 @@
   flex: 1;
 }
 
-.mej-cc-import-open {
+.mej-cc-import-open,
+.mej-cc-export-open {
   flex: 0 0 auto;
   width: auto;
+}
+
+.mej-cc-export-list {
+  max-height: 16em;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-light-tertiary, #999);
+  border-radius: 4px;
+  padding: 0.4em;
+  margin-bottom: 0.5em;
+}
+
+.mej-cc-export-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15em 0;
+}
+
+.mej-cc-export-type {
+  margin-left: auto;
+  opacity: 0.7;
+  font-size: 0.9em;
 }
 
 .mej-cc-doctype-filter,
