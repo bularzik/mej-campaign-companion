@@ -293,15 +293,25 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * helper auto-capture.mjs uses for Encounters.
    */
   async #createPage(page, campaignDate) {
+    // JournalEntry.create() returns the created document directly (not an
+    // array) for a single plain-object `data` argument - an array result
+    // only happens when `data` itself is an array. Both branches below
+    // destructured it as `const [entry] = await JournalEntry.create({...})`,
+    // which tried to iterate the returned Document; confirmed live via
+    // Task 14's e2e suite this threw "TypeError: (intermediate value) is
+    // not iterable" on every real call (caught by #onCreate's per-row
+    // try/catch, so it silently landed every "text"/"session" section in
+    // results.failed instead of actually creating anything) - the same bug
+    // class already found and fixed in data/mej-entry.mjs's createMejEntry.
     if (page.type === "text") {
-      const [entry] = await JournalEntry.create({
+      const entry = await JournalEntry.create({
         name: page.name,
         pages: [{ name: page.name, type: "text", text: { content: page.html } }]
       });
       return entry.pages.contents[0];
     }
     if (page.type === "session") {
-      const [entry] = await JournalEntry.create({
+      const entry = await JournalEntry.create({
         name: page.name,
         pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });

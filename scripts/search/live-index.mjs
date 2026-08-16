@@ -161,6 +161,25 @@ export function initSearchHooks() {
     indexPage(page);
   });
 
+  // Foundry does NOT fire "createJournalEntryPage" for pages embedded in a
+  // parent JournalEntry's own create() call (`JournalEntry.create({pages:
+  // [...]})`) - only for pages added afterward via a separate
+  // `entry.createEmbeddedDocuments("JournalEntryPage", [...])` call.
+  // Confirmed live via Task 14's e2e suite (Hooks.on("createJournalEntryPage")
+  // genuinely never fires for this creation shape). Every real creation path
+  // in this module uses the single-call-with-embedded-pages shape: MEJ's own
+  // "New Entry" dialog, auto-capture's Encounter creation (data/mej-entry.mjs),
+  // and the docx import wizard all do - so without this, any entry created
+  // after the index's first build (which happens on the Hub's very first
+  // render each session, before the user necessarily visits the search tab -
+  // see CampaignHubPage.mjs's _prepareBodyContext, which preps all three
+  // tabs' contexts including search on every render) would silently never
+  // become searchable until a rebuildIndex()/page reload.
+  Hooks.on("createJournalEntry", (entry) => {
+    if (!index) return;
+    reindexEntry(entry);
+  });
+
   Hooks.on("updateJournalEntryPage", (page) => {
     if (!index) return;
     // Re-extract unconditionally: cheap, and correct even if the page's MEJ
