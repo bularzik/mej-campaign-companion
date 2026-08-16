@@ -135,35 +135,40 @@ test.describe("00 MEJ extension API — stage-1 regression", () => {
 
     // A GM reload is exactly the scenario fixType()'s foreign-subtype guard
     // protects: the flag must not be stripped just because the owning
-    // module is temporarily offline. fixType() only runs when MEJ actually
-    // touches the document (e.g. opening it) — not passively on every
-    // loaded page — so exercise the real code path via openJournalEntry()
-    // (which calls fixType(doc) unconditionally at its top) rather than
-    // just reading the flag back untouched.
+    // module is temporarily offline.
     await page.goto("http://localhost:30000/game");
     await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
     await settle(page, 500);
 
-    await page.evaluate(async (entryId) => {
-      const entry = game.journal.get(entryId);
-      await game.MonksEnhancedJournal.openJournalEntry(entry);
-    }, entryId);
-    await settle(page, 300);
-
     // With the companion inactive, Foundry's own core schema validation (not
     // MEJ) no longer recognizes "mej-campaign-companion.session" as a valid
     // type at all (documentTypes merging is live-recomputed per client
-    // connection from the currently-active module list) — so the entry
-    // becomes an "invalid document" on this client and normal .get() no
-    // longer returns it. That's expected and orthogonal to fixType()'s
-    // guarantee: what matters is that the underlying *stored* data (and its
-    // flag) was never mutated, which {invalid: true} lets us read back.
-    const after = await page.evaluate(({ entryId, pageId }) => {
+    // connection from the currently-active module list) — so the *page*
+    // becomes an "invalid document" on this client; game.journal.get(entryId)
+    // still returns a normal, valid JournalEntry (only its one embedded page
+    // is invalid), and entry.pages.contents excludes invalid documents.
+    // openJournalEntry(entry) calls fixType(doc) with `doc` = the *entry*,
+    // not the page — and MEJ's own single-page-entry lookup for the page it
+    // should also fix reads entry.pages.contents[0], which is empty here
+    // (the page never made it into .contents, only invalidDocumentIds). So
+    // openJournalEntry() never actually reaches this page's fixType branch
+    // at all while it's invalid: a passing test built that way would pass
+    // even with MEJ's whole guard deleted. Call MonksEnhancedJournal.
+    // fixType() directly on the raw invalid page object instead — the exact
+    // call MEJ itself makes once it *can* reach the page (e.g. once the
+    // module is back and a normal open runs) — to actually exercise the
+    // JournalEntryPage branch of the guard.
+    const after = await page.evaluate(async ({ entryId, pageId }) => {
       const entry = game.journal.get(entryId);
+      const before = entry.pages.get(pageId, { invalid: true });
+      const beforeSnapshot = { type: before._source.type, flag: before.getFlag("monks-enhanced-journal", "type") };
+      game.MonksEnhancedJournal.fixType(before);
       const p = entry.pages.get(pageId, { invalid: true });
-      return { type: p._source.type, flag: p.getFlag("monks-enhanced-journal", "type") };
+      return { beforeSnapshot, type: p._source.type, flag: p.getFlag("monks-enhanced-journal", "type") };
     }, { entryId, pageId });
-    expect(after).toEqual({ type: "mej-campaign-companion.session", flag: "session" });
+    // Sanity: the guard is being exercised on the page we think it is.
+    expect(after.beforeSnapshot).toEqual({ type: "mej-campaign-companion.session", flag: "session" });
+    expect({ type: after.type, flag: after.flag }).toEqual({ type: "mej-campaign-companion.session", flag: "session" });
 
     // Re-enable and confirm the page is recognized again.
     await ensureModuleEnabled(page, MODULE_ID);
