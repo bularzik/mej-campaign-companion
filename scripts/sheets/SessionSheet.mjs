@@ -11,7 +11,7 @@
 // come from an _onRender() override, or it will silently never bind while
 // the sheet is hosted inside MEJ's shell.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, I18N, RELAY_UPLOAD_DIR } from "../constants.mjs";
+import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
 import { buildRecapEntries } from "../logic/player-recap.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
@@ -19,6 +19,9 @@ import { savePlayerRecap } from "../hooks/player-recap.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions } from "../logic/campaign-calendar.mjs";
+import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
+import { normalizeGroups } from "../logic/player-groups.mjs";
+import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
 
@@ -39,6 +42,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       deleteSecret: SessionSheet.onDeleteSecret,
       toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
+      secretAudience: SessionSheet.onSecretAudience,
       removeAttendee: SessionSheet.onRemoveAttendee
     },
     // Overrides EnhancedJournalSheet's own `form.handler` (a literal static
@@ -116,9 +120,16 @@ export class SessionSheet extends EnhancedJournalSheet {
     // context must never carry an unrevealed secret's text (same
     // data-minimization requirement as gmNotes below: excluded from the
     // context object entirely, not just hidden by the template/CSS).
+    //
+    // Phase C (spec §4): a player sees a checklist item when it's revealed
+    // to all (revealed: true, which wins) OR their audience matches. The
+    // sanitized non-GM shape still drops `revealed`/`audience` internals.
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     context.secrets = isGM
-      ? session.secrets
-      : session.secrets.filter((s) => s.revealed).map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
+      ? session.secrets.map((s) => ({ ...s, audienceCount: (normalizeAudience(s.audience).users.length + normalizeAudience(s.audience).groups.length) }))
+      : session.secrets
+          .filter((s) => s.revealed || canSee(s.audience, game.user.id, groups))
+          .map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
 
     // context.session must carry the same sanitized secrets as context.secrets
     // for non-GM users - the template only reads context.secrets today, but
@@ -378,6 +389,32 @@ export class SessionSheet extends EnhancedJournalSheet {
       return { ...s, revealed, revealedAt: revealed ? Date.now() : null };
     });
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    this.render();
+  }
+
+  // Per-player/group reveal for one checklist item (spec §4/§8). "Everyone"
+  // remains onToggleSecret's revealed flag; this dialog manages the
+  // audience field. Reveal whispers the item text to new recipients.
+  static async onSecretAudience(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-id]")?.dataset.id;
+    const session = sessionData(this.document);
+    const item = session.secrets.find((s) => s.id === id);
+    if (!item) return;
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
+    const audience = await promptAudience({
+      title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`),
+      audience: item.audience, groups
+    });
+    if (!audience) return;
+    const secrets = session.secrets.map((s) => (s.id === id ? { ...s, audience } : s));
+    await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    await sendRevealWhisper({
+      audience, previousAudience: item.audience, groups,
+      html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
+      entryUuid: this.document.parent?.uuid ?? this.document.uuid,
+      entryName: this.document.parent?.name ?? this.document.name
+    });
     this.render();
   }
 

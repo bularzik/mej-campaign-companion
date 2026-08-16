@@ -102,6 +102,7 @@
                                     {{#if @root.isGM}}
                                     <input type="text" class="secret-text" value="{{secret.text}}" data-id="{{secret.id}}" data-change-action="updateSecretText" placeholder="{{localize 'MEJCampaignCompanion.session.secretPlaceholder'}}" />
                                     <a class="secret-toggle" data-action="toggleSecret" data-id="{{secret.id}}" data-tooltip="{{#if secret.revealed}}{{localize 'MEJCampaignCompanion.session.hideSecret'}}{{else}}{{localize 'MEJCampaignCompanion.session.revealSecret'}}{{/if}}"><i class="fas {{#if secret.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                                    <a class="secret-audience" data-action="secretAudience" data-id="{{secret.id}}" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}"><i class="fa-solid fa-user-secret"></i>{{#if secret.audienceCount}}<span class="mej-cc-audience-count">{{secret.audienceCount}}</span>{{/if}}</a>
                                     <a class="item-delete" data-action="deleteSecret" data-id="{{secret.id}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.deleteSecret'}}"><i class="fas fa-trash"></i></a>
                                     {{else}}
                                     <div class="secret-text">{{secret.text}}</div>

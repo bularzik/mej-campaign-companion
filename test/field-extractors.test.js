@@ -178,6 +178,19 @@ describe("extractRecord: session", () => {
     expect(record.fields.secrets).toBe("");
     expect(record.gmFields.gmNotes).toBe("");
   });
+
+  it("audience-only session secrets stay out of the public field (Phase C)", () => {
+    const page = {
+      uuid: "U.s", name: "S", system: { recap: "" },
+      flags: { "mej-campaign-companion": { session: { secrets: [
+        { id: "1", text: "for-everyone", revealed: true },
+        { id: "2", text: "audience-only", revealed: false, audience: { users: ["u1"], groups: [], all: false } }
+      ] } } }
+    };
+    const record = extractRecord(page, "session");
+    expect(record.fields.secrets).toBe("for-everyone");
+    expect(record.gmFields.secrets).toContain("audience-only");
+  });
 });
 
 describe("extractRecord: generic types (place/encounter/event/organization/poi/list/journalentry/picture/slideshow)", () => {

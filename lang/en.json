@@ -180,6 +180,7 @@
       "revealedToYou": "Revealed to you",
       "noId": "This secret block has no id — re-create it with the editor's Secret button to make it revealable.",
       "audienceButton": "Reveal to…",
+      "checklistRevealTitle": "Reveal secret to…",
       "chipsNone": "Hidden from players",
       "relRevealTitle": "Reveal relationship",
       "relSecretRevealTitle": "Reveal secret relationship",
