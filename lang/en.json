@@ -1,0 +1,8 @@
+{
+  "MEJCampaignCompanion": {
+    "errors": {
+      "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled."
+    },
+    "sheettype": { "session": "Session" }
+  }
+}
