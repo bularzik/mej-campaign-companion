@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+**Added:**
+- **Block-level secrets** — mark arbitrary text blocks as secrets on native secret sections, with per-player and per-player-group reveal toggles.
+- **Player groups** — name groups of players and manage membership dynamically within the Hub, used as reveal targets.
+- **Relationship reveals** — per-edge visibility and labels, showing players only their accessible graph edges and metadata.
+- **Hub Secrets tab** — filter unrevealed secrets by player, group, or session; "what does player X know" cross-campaign view; player group management.
+- **Session prep board** — GM-only reveal tracker on Session entries to log which secrets have been revealed to whom.
+- **Reveal whispers** — optional private notifications to players when their first secret in a region is revealed.
+- **Player-safe docx export** — unrevealed secret blocks are now excluded from exported `.docx` files when the "Include GM Content" toggle is off.
+
+**Fixed / Internal:**
+- Hardened secret-block attribute parsing against malformed or unexpected document structures.
+- Sheet-header buttons (graph/prep board) are currently unreachable due to an upstream MEJ v14 header-injection bug; these apps remain accessible via the Hub toolbar and module API.
+
 ## 0.2.0
 
 **Added:**
