@@ -33,6 +33,18 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 
 **Limitation:** choosing "Everyone" in a secret's reveal dialog reveals it via the companion's own per-user re-enrichment, not Foundry's native per-block Reveal control (the `revealed` class Foundry itself toggles). Core-sheet viewers that don't run this module, and player-safe docx exports, only honor the native `revealed` class — use Foundry's own Reveal control (not this module's "Everyone") for a secret that needs to survive those paths.
 
+### Auto-link scoping (0.4.0)
+
+Auto-linking is now bounded by audience containment on every path: a mention links to an entity only when everyone who can view the page can also view the entity (evaluated at the JournalEntry level via ownership, threshold LIMITED); GMs are excepted.
+
+**Auto-link paths:**
+- **Docx import** — auto-links imported text at creation (gated on the Auto-Link setting). The import wizard's Audience select ("GM only" default / "All players (Observer)") sets created-entry ownership and bounds link targets; ambiguous names are skipped and listed in the summary.
+- **Retroactive Auto-Link** — a new world setting (off/confirm/silent, default confirm) links existing plain-text mentions of a newly-created MEJ entity's name from the active GM's client. Confirm mode shows a review dialog with per-page checkboxes; silent mode writes immediately and sends a whispered GM summary. Entities created while no GM is online are processed when a GM next connects.
+
+**Ambiguity:** names shared by multiple in-audience entities are never auto-linked; they are reported in the dialog, summary, or import warnings instead.
+
+**Caveat:** links are validated when written; changing permissions afterward does not add or remove existing links. The per-page `noAutoLink` flag opts a page out of every auto-link path.
+
 ## Requirements
 
 - Foundry VTT **v14**.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 (2026-08-16)
+
+- Auto-linking is now bounded by audience containment on every path: a name only links to an entity when everyone who can view the page can also view the entity.
+- Docx import auto-links imported text at creation; new Audience choice in the import wizard sets created-entry ownership and bounds link targets.
+- New Retroactive Auto-Link world setting (off/confirm/silent): creating an MEJ entity links existing plain-text mentions of its name, with a GM review dialog or whispered summary; entities created while no GM is online are processed at next GM login.
+- Ambiguous names (shared by multiple in-audience entities) are never auto-linked; they are reported instead.
+
 ## 0.3.0
 
 **Added:**
