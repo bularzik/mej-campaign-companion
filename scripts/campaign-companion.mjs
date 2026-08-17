@@ -259,6 +259,23 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
       openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
     }
   });
+
+  // Phase C: prep board on Session sheets (GM-only, spec §8).
+  if (game.user.isGM && game.MonksEnhancedJournal.getMEJType(doc) === SESSION_TYPE) {
+    buttons.unshift({
+      label: `${I18N}.prep.open`,
+      class: "mej-cc-open-prep",
+      icon: "fas fa-clipboard-list",
+      onclick: async () => {
+        try {
+          const { openPrepBoard } = await import("./apps/prep-board-app.mjs");
+          await openPrepBoard({ pageUuid: doc.uuid });
+        } catch (err) {
+          console.error(`${MODULE_ID} | prep board open failed`, err);
+        }
+      }
+    });
+  }
 });
 
 // GM-side scene-controls entry point, mirroring how MEJ itself adds a toggle

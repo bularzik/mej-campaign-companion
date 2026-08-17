@@ -254,6 +254,19 @@
       "all": "Whole campaign",
       "backlinks": "Show mention links",
       "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
+    },
+    "prep": {
+      "title": "Session prep board",
+      "open": "Prep board",
+      "attendees": "Attendees",
+      "noAttendees": "No attendees yet.",
+      "secrets": "Secrets & clues",
+      "noSecrets": "No secrets on this session.",
+      "toggleAll": "Reveal/hide for everyone",
+      "linked": "Linked entries",
+      "noLinked": "No linked entries.",
+      "notes": "Scratch notes",
+      "notesPlaceholder": "GM-only notes for running this session…"
     }
   }
 }

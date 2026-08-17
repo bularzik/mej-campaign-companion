@@ -881,3 +881,24 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   gap: 0.4em;
   padding: 0.2em 0;
 }
+
+/* Session prep board (spec §8, Task 11). */
+.mej-cc-prep section {
+  margin-bottom: 8px;
+}
+
+.mej-cc-prep-attendees img {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+}
+
+.mej-cc-prep-secrets li.revealed .mej-cc-prep-secret-text {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.mej-cc-prep-notes textarea {
+  min-height: 90px;
+  width: 100%;
+}
