@@ -51,30 +51,55 @@ function forceNative() {
 }
 
 /**
+ * Observer posture: run one wiring step in isolation so a throw in it can't
+ * prevent any other step (in registerCore or either mode-wiring function)
+ * from running. Flags wiringThrew and logs; never rethrows.
+ * @param {string} label short description for the console.error prefix
+ * @param {() => (void|Promise<void>)} fn the step to run
+ */
+async function step(label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    wiringThrew = true;
+    console.error(`${MODULE_ID} | ${label} failed to register`, err);
+  }
+}
+
+/**
  * Everything that needs only Foundry hooks and MEJ's presence - i.e. all of
  * the module except the Session sheet and the Hub. Idempotent: whichever
- * mode path wins calls it exactly once.
+ * mode path wins calls it exactly once. Each step is isolated via step() so
+ * one broken feature can't take the others down with it.
  */
 export async function registerCore() {
   if (coreRegistered) return;
   coreRegistered = true;
 
-  initSearchHooks();
-  registerAutoLink();
-  registerRetroLink();
-  registerAutoCapture();
+  await step("search hooks", () => initSearchHooks());
+  await step("auto-link", () => registerAutoLink());
+  await step("retro-link", () => registerRetroLink());
+  await step("auto-capture", () => registerAutoCapture());
 
-  const { registerKnowledgePanel } = await import("../hooks/knowledge-ui.mjs");
-  registerKnowledgePanel();
+  await step("knowledge panel", async () => {
+    const { registerKnowledgePanel } = await import("../hooks/knowledge-ui.mjs");
+    registerKnowledgePanel();
+  });
 
-  const { registerQueryEnricher } = await import("../hooks/query-enricher.mjs");
-  registerQueryEnricher();
+  await step("query enricher", async () => {
+    const { registerQueryEnricher } = await import("../hooks/query-enricher.mjs");
+    registerQueryEnricher();
+  });
 
-  const { registerSecretsUi } = await import("../hooks/secrets-ui.mjs");
-  registerSecretsUi();
+  await step("secrets ui", async () => {
+    const { registerSecretsUi } = await import("../hooks/secrets-ui.mjs");
+    registerSecretsUi();
+  });
 
-  const { registerRelationshipsUi } = await import("../hooks/relationships-ui.mjs");
-  registerRelationshipsUi();
+  await step("relationships ui", async () => {
+    const { registerRelationshipsUi } = await import("../hooks/relationships-ui.mjs");
+    registerRelationshipsUi();
+  });
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */
@@ -141,14 +166,9 @@ export async function onHandshake(api) {
   if (forceNative()) return;
 
   mode = MODE_API;
-  try {
-    await registerCore();
-    await wireApiMode(api);
-    console.log(`${MODULE_ID} | mode: ${mode}`);
-  } catch (err) {
-    wiringThrew = true;
-    console.error(`${MODULE_ID} | api-mode wiring failed`, err);
-  }
+  await registerCore();
+  await step("api-mode wiring", () => wireApiMode(api));
+  console.log(`${MODULE_ID} | mode: ${mode}`);
 }
 
 /**
@@ -164,13 +184,8 @@ export async function onReady() {
   console.log(`${MODULE_ID} | mode: ${mode}`);
   if (mode === MODE_ABSENT) return mode;
 
-  try {
-    await registerCore();
-    await wireNativeMode();
-  } catch (err) {
-    wiringThrew = true;
-    console.error(`${MODULE_ID} | native-mode wiring failed`, err);
-  }
+  await registerCore();
+  await step("native-mode wiring", () => wireNativeMode());
   return mode;
 }
 
