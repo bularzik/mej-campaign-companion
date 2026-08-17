@@ -12,7 +12,9 @@
 // campaign-record's own ImportWizard already extended
 // HandlebarsApplicationMixin(ApplicationV2) - no AppV1-\>AppV2 migration was
 // needed here; this class is a straight structural port of that one.
-import { MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING } from "../constants.mjs";
+import {
+  MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING
+} from "../constants.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -414,18 +416,45 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // Import-time auto-link (spec Part 2): same engine as the typing path,
     // empty baseline = whole document eligible. Gated on the same autoLink
     // world setting; failure never blocks the import (observer posture).
+    //
+    // Per-row effective audience: campaign-companion.mjs's own
+    // preCreateJournalEntry hook (via shouldOwnSessionEntry,
+    // logic/session-ownership.mjs) grants "session" rows default-OWNER
+    // (player-visible) ownership whenever the playersWriteSessions world
+    // setting is ON, regardless of the audience chosen here - silently
+    // overriding a "GM only" import for those rows. Link "session" rows
+    // against "players"-audience candidates in that case so a GM-only
+    // import with playersWriteSessions ON can't produce a player-visible
+    // page linking to GM-only entities; every other row keeps the chosen
+    // audience's candidates.
     let linkedCount = 0;
     if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
       try {
         const candidates = this.#linkCandidates(audience, plan.warnings);
-        if (candidates.length) {
-          for (const page of plan.pages) {
-            const linked = autoLinkAdded("", page.html, candidates);
-            if (linked !== page.html) {
-              linkedCount += candidates.reduce(
-                (n, c) => n + countEntityLinks(linked, c.uuid) - countEntityLinks(page.html, c.uuid), 0);
-              page.html = linked;
+        const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
+        const seenWarnings = new Set(plan.warnings);
+        let sessionCandidates = null;
+        const candidatesForPage = (page) => {
+          if (!playersWriteSessions || page.type !== "session") return candidates;
+          if (sessionCandidates === null) {
+            const scratch = [];
+            sessionCandidates = this.#linkCandidates("players", scratch);
+            for (const w of scratch) {
+              if (seenWarnings.has(w)) continue;
+              seenWarnings.add(w);
+              plan.warnings.push(w);
             }
+          }
+          return sessionCandidates;
+        };
+        for (const page of plan.pages) {
+          const rowCandidates = candidatesForPage(page);
+          if (!rowCandidates.length) continue;
+          const linked = autoLinkAdded("", page.html, rowCandidates);
+          if (linked !== page.html) {
+            linkedCount += rowCandidates.reduce(
+              (n, c) => n + countEntityLinks(linked, c.uuid) - countEntityLinks(page.html, c.uuid), 0);
+            page.html = linked;
           }
         }
       } catch (error) {
