@@ -171,15 +171,17 @@ Consequences:
 
 ### Native-mode surfaces
 
-**Session sheet.** `SessionSheet` stays single-source — no fork, no
-mode-conditional rendering logic inside it. It gains one bridge: an
-`_onRender()` override calling `activateListeners()`/`subRender()`. Inside
-MEJ's shell `_onRender` is never invoked (the shell calls `_replaceHTML` and
-then those two methods manually — the contract documented at the top of
-`SessionSheet.mjs`), so the bridge is inert in `api` mode; standalone, core
-Foundry *does* call `_onRender`, and the bridge reproduces the shell's
-contract exactly. `wireNativeMode` registers the sheet through plain core
-Foundry:
+**Session sheet.** `SessionSheet` stays single-source and needs **no code
+change at all**. Verified against MEJ source: `EnhancedJournalSheet._onRender`
+(`sheets/EnhancedJournalSheet.js:702-703`) already ends with
+`await this.activateListeners(this.trueElement)` and
+`await this.subRender(context, options)`, and `trueElement`
+(`EnhancedJournalSheet.js:158-162`) returns `this.enhancedjournal
+? this.enhancedjournal.subsheetElement : this.element` — so with no shell
+present it resolves to the window's own element. The base class is already
+built for both hosts; MEJ's own alt-open path (`document.sheet.render(true)`,
+`apps/enhanced-journal.js:1045-1051`) exercises exactly this. `wireNativeMode`
+therefore only registers the sheet through plain core Foundry:
 
 ```
 foundry.applications.apps.DocumentSheetConfig.registerSheet(
@@ -191,13 +193,37 @@ foundry.applications.apps.DocumentSheetConfig.registerSheet(
 No MEJ involvement — the subtype is declared in `module.json`. Opening a
 Session from the journal directory then works normally.
 
-**Campaign Hub.** New `scripts/apps/hub-window.mjs`: a plain ApplicationV2
-host that instantiates `CampaignHubPage` and drives the same rendering
-contract MEJ's shell drives (`_replaceHTML`, then
-`activateListeners()`/`subRender()`). The Hub needs no real document — even in
-`api` mode its `document` is MEJ's ephemeral `BlankJournal` placeholder and
-all Hub state lives on the module-level `HUB_STATE` object
-(`CampaignHubPage.mjs:1-15`), so the host supplies an equivalent minimal stub.
+**Campaign Hub.** New `scripts/apps/hub-window.mjs`, which supplies a stub
+document and renders `CampaignHubPage` as its own window with a plain
+`render(true)` — no manual driving of the render pipeline. The Hub needs no
+real document: even in `api` mode its `document` is MEJ's ephemeral
+`BlankJournal` placeholder and all Hub state lives on the module-level
+`HUB_STATE` object (`CampaignHubPage.mjs:1-15`). `BlankJournal` is not
+exported, so the companion defines an equivalent: a `foundry.abstract.Document`
+subclass with the same `defineSchema()` fields (`name`, `type`, `content`,
+`options{hidebuttons,position,window}`, `flags`) and the same overrides
+(`id`, `uuid`, `documentName`, `isOwner`, `compendium`, `testUserPermission`),
+plus `apps = {}` for `_onFirstRender`.
+
+**Verified live** (World A, 2026-08-17, GM client): this exact construction
+renders the full Hub standalone — all five tabs present, 15 index rows, 49
+`data-action` controls, and clicking the Timeline tab switched the active tab,
+proving `activateListeners` bound through the inherited `_onRender`. Two
+observations from that probe: `trueElement` correctly resolved to the window
+element, and the template's outer `<div class="mej-cc-hub">` is stripped by
+Foundry's `root: true` part handling **in both modes** (the shell's subsheet
+first child is `.flexcol.journal-subsheet` too) — so the standalone window is
+already at style parity with the shell, and no styling work is in scope. Those
+`.mej-cc-hub` CSS rules are pre-existing dead selectors in both modes; leave
+them alone.
+
+The native Hub also needs the same
+`DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID,
+CampaignHubPage, { types: [HUB_PAGE_ID], ... })` call `api` mode already
+makes — it is what keeps `getSheetThemeForDocument`'s
+`CONFIG.JournalEntryPage.sheetClasses[type]` lookup from throwing, and that
+requirement is mode-independent (see the long comment at
+`campaign-companion.mjs:164-190`).
 
 **Entry points (both modes).** The existing `activateControls` toolbar button
 (stock MEJ fires that hook) plus a journal-directory header button, so the Hub
@@ -223,6 +249,12 @@ Documented in README, not engineered around:
 - No MEJ per-type theming or icon for Session pages; no shell subsheet
   part-state preservation — the same limitations API.md already documents for
   shell pages.
+- The "open graph" and "prep board" **header buttons** are absent: they are
+  injected via `getDocumentSheetHeaderButtons`, which only MEJ's shell fires
+  (`campaign-companion.mjs:269`). Both features stay reachable — the graph
+  from the Hub's own toolbar (`CampaignHubPage.onOpenGraph`) and the prep
+  board from the Session sheet's own `openPrepBoard` action
+  (`SessionSheet.mjs:47`) — so no replacement UI is in scope.
 
 ## Data flow
 
