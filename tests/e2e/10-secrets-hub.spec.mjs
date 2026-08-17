@@ -6,6 +6,23 @@ import {
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 
+// Load-bearing render guard (same rationale as 09-secrets.spec.mjs's
+// openEntry()): this file's flow eventually asserts things are ABSENT (a
+// filtered-out tracker row, a not-yet-revealed session flag) — confirm the
+// shell actually mounted this entry's real content first, via a positive
+// anchor unique to what was just created, so a later negative check can't
+// pass vacuously against a shell that silently failed to render.
+async function openEntry(page, entryId, anchorText) {
+  await page.evaluate(async (id) => {
+    await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+  }, entryId);
+  await settle(page, 500);
+  const shell = page.locator("#MonksEnhancedJournal");
+  await expect(shell).toBeVisible();
+  await expect(shell).toContainText(anchorText);
+  return shell;
+}
+
 test.describe("10 secrets hub + prep board", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
@@ -13,6 +30,8 @@ test.describe("10 secrets hub + prep board", () => {
         const ids = game.journal.filter((e) => e.name?.startsWith("TT-")).map((e) => e.id);
         if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
         await game.settings.set("mej-campaign-companion", "playerGroups", []);
+        const chatIds = game.messages.filter((m) => m.content?.includes("TT-")).map((m) => m.id);
+        if (chatIds.length) await ChatMessage.implementation.deleteDocuments(chatIds);
       });
     });
   });
@@ -42,12 +61,9 @@ test.describe("10 secrets hub + prep board", () => {
       return { placeId: place.id, sessionId: session.id };
     }, { prefix: TT_PREFIX });
 
-    // Open Hub -> Secrets tab.
-    await page.evaluate(async (id) => {
-      await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
-    }, placeId);
-    await settle(page, 500);
-    const shell = page.locator("#MonksEnhancedJournal");
+    // Open Hub -> Secrets tab. (GM always sees the block secret's own text,
+    // so it doubles as this entry's render anchor.)
+    const shell = await openEntry(page, placeId, "tracker-block-secret");
     await shell.locator(".nav-button.campaign-hub").click();
     await settle(page, 500);
     await shell.locator('nav.sheet-tabs a[data-tab="secrets"]').click();
@@ -80,10 +96,14 @@ test.describe("10 secrets hub + prep board", () => {
     // still exercises the real PrepBoardApp code path end-to-end (same
     // openPrepBoard() call the button's onclick would make) — only the
     // broken header-button wiring itself is bypassed.
-    await page.evaluate(async (id) => {
-      await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
-    }, sessionId);
-    await settle(page, 500);
+    // Unlike the block secret above, a GM's own checklist-item text renders
+    // inside an `<input class="secret-text" value="...">` (session.hbs),
+    // not as text content — `.toContainText()` reads `textContent`, which
+    // never sees an <input>'s `value` (same gotcha 07-knowledge.spec.mjs's
+    // attribute-table comment calls out). Anchor on the entry's own unique
+    // name instead (rendered in the shell's page-navigation/ToC sidebar),
+    // which still proves *this* entry — not just some shell — mounted.
+    await openEntry(page, sessionId, `${TT_PREFIX}Tracker-Session`);
     await page.evaluate(async (id) => {
       const { openPrepBoard } = await import("/modules/mej-campaign-companion/scripts/apps/prep-board-app.mjs");
       const pageDoc = game.journal.get(id).pages.contents[0];

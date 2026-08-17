@@ -6,7 +6,16 @@ import {
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const VIEW = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } };
-const SECRET_HTML = '<p>Public intro.</p><section class="secret" id="secret-e2e1"><p>TT-secret-vampire</p></section>';
+// Per-run-unique secret text (not just a fixed literal): chat messages are
+// never deleted by Foundry on their own, and this suite's own cleanup can
+// only delete what it knows to look for. Without a per-run-unique needle, a
+// whisper left behind by a *previous* run of this file would still satisfy
+// the "a whisper was sent" assertion below even if a future regression broke
+// whisper-sending entirely — the check would pass vacuously against stale
+// data forever. Computed once at module load, so both tests in this file
+// (which share one createPlaceWithSecret template) see the same value.
+const SECRET_TEXT = `TT-secret-${Date.now()}`;
+const SECRET_HTML = `<p>Public intro.</p><section class="secret" id="secret-e2e1"><p>${SECRET_TEXT}</p></section>`;
 
 async function createPlaceWithSecret(page, name) {
   return page.evaluate(async ({ n, html }) => {
@@ -17,14 +26,6 @@ async function createPlaceWithSecret(page, name) {
     });
     return { id: entry.id, uuid: entry.uuid };
   }, { n: name, html: SECRET_HTML });
-}
-
-async function openEntry(page, entryId) {
-  await page.evaluate(async (id) => {
-    await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
-  }, entryId);
-  await settle(page, 500);
-  return page.locator("#MonksEnhancedJournal");
 }
 
 // Scope to the enriched, read-only preview container. The MEJ/Foundry
@@ -44,6 +45,23 @@ function contentPreview(shell) {
   return shell.locator('.editor-display[data-key="text.content"]');
 }
 
+async function openEntry(page, entryId) {
+  await page.evaluate(async (id) => {
+    await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+  }, entryId);
+  await settle(page, 500);
+  const shell = page.locator("#MonksEnhancedJournal");
+  // Load-bearing render guard: several callers go on to assert something is
+  // ABSENT from this shell (no secret visible, no whisper received). A
+  // purely negative assertion like that passes vacuously if the shell never
+  // actually rendered for this user in the first place (permission error,
+  // crash, stale page) — so assert real, positive content actually mounted
+  // (the page's own public text, always present regardless of reveal state)
+  // before any caller relies on something else being absent from it.
+  await expect(contentPreview(shell)).toContainText("Public intro.");
+  return shell;
+}
+
 test.describe("09 secrets", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
@@ -51,6 +69,13 @@ test.describe("09 secrets", () => {
         const ids = game.journal.filter((e) => e.name?.startsWith("TT-")).map((e) => e.id);
         if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
         await game.settings.set("mej-campaign-companion", "playerGroups", []);
+        // Reveal whispers aren't deleted by anything else — a stale one left
+        // in game.messages from a prior run could otherwise satisfy a future
+        // run's "a whisper was sent" check even if whisper-sending had
+        // regressed (see SECRET_TEXT's per-run-unique comment above; this
+        // cleanup is the other half of closing that gap).
+        const chatIds = game.messages.filter((m) => m.content?.includes("TT-")).map((m) => m.id);
+        if (chatIds.length) await ChatMessage.implementation.deleteDocuments(chatIds);
       });
     });
   });
@@ -71,7 +96,11 @@ test.describe("09 secrets", () => {
     await login(p1, "User 1");
     const p1Shell = await openEntry(p1, id);
     await expect(contentPreview(p1Shell).locator("section.secret")).toHaveCount(0);
-    await expect(contentPreview(p1Shell)).not.toContainText("TT-secret-vampire");
+    // This baseline (no section, no text) is Foundry-core secret stripping
+    // at enrichHTML() time, not this module's code — the module's own
+    // contribution is the .mej-cc-revealed-to-you re-render after a reveal,
+    // asserted below. Kept as a sanity baseline for the "before" state.
+    await expect(contentPreview(p1Shell)).not.toContainText(SECRET_TEXT);
 
     // GM reveals to User 1.
     await btn.click();
@@ -85,20 +114,25 @@ test.describe("09 secrets", () => {
 
     // Player 1 now sees the block (live update) and got a whisper.
     await expect(contentPreview(p1Shell).locator("section.secret.mej-cc-revealed-to-you")).toHaveCount(1);
-    await expect(contentPreview(p1Shell)).toContainText("TT-secret-vampire");
-    const whispered = await p1.evaluate(() =>
-      game.messages.contents.some((m) => m.content?.includes("TT-secret-vampire") && m.whisper?.length)
+    await expect(contentPreview(p1Shell)).toContainText(SECRET_TEXT);
+    const whispered = await p1.evaluate(
+      (text) => game.messages.contents.some((m) => m.content?.includes(text) && m.whisper?.length),
+      SECRET_TEXT
     );
     expect(whispered).toBe(true);
 
-    // Player 2 sees neither.
+    // Player 2 sees neither the block nor its own whisper (a whisper
+    // targeted at User 1 has no User 2 recipient at all — its `whisper`
+    // array simply won't include User 2's id — so this also confirms the
+    // reveal didn't fan out beyond the intended audience).
     const p2Ctx = await browser.newContext(VIEW);
     const p2 = await p2Ctx.newPage();
     await login(p2, "User 2");
     const p2Shell = await openEntry(p2, id);
     await expect(contentPreview(p2Shell).locator("section.secret")).toHaveCount(0);
-    const p2Whisper = await p2.evaluate(() =>
-      game.messages.contents.some((m) => m.content?.includes("TT-secret-vampire") && m.whisper?.includes(game.user.id))
+    const p2Whisper = await p2.evaluate(
+      (text) => game.messages.contents.some((m) => m.content?.includes(text) && m.whisper?.includes(game.user.id)),
+      SECRET_TEXT
     );
     expect(p2Whisper).toBe(false);
 
@@ -133,7 +167,7 @@ test.describe("09 secrets", () => {
     });
     await settle(p2, 600);
     p2Shell = await openEntry(p2, id); // reopen to re-render with new membership
-    await expect(contentPreview(p2Shell)).toContainText("TT-secret-vampire");
+    await expect(contentPreview(p2Shell)).toContainText(SECRET_TEXT);
 
     await p2Ctx.close();
     assertNoConsoleErrors(errors);
