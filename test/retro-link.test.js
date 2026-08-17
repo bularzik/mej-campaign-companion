@@ -56,7 +56,7 @@ describe("buildRetroPlan", () => {
 
   it("marks a page ambiguous (newHtml null) when a same-named entity also passes containment there", () => {
     const { rows } = buildRetroPlan({
-      entity: ENTITY,
+      entity: { ...ENTITY, viewerIds: ["a"] },
       pages: [page("p1", "<p>Gandalf</p>", { viewerIds: ["a"] })],
       otherSameNamed: [{ viewerIds: ["a", "b"] }]
     });
@@ -89,6 +89,15 @@ describe("buildRetroPlan", () => {
     const { rows } = buildRetroPlan({
       entity: ENTITY,
       pages: [page("p1", "<p>@UUID[JournalEntry.old]{Gandalf}</p>")],
+      otherSameNamed: []
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it("never links a GM-only entity (empty viewer set) into a page players can view", () => {
+    const { rows } = buildRetroPlan({
+      entity: { ...ENTITY, viewerIds: [] },
+      pages: [page("p1", "<p>Gandalf</p>", { viewerIds: ["a"] })],
       otherSameNamed: []
     });
     expect(rows).toEqual([]);

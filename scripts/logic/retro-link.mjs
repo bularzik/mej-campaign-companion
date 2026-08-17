@@ -38,9 +38,7 @@ export function buildRetroPlan({ entity, pages, otherSameNamed, minLength = 3 })
   for (const page of pages ?? []) {
     if (page.isOwn || page.noAutoLink) continue;
     if (typeof page.content !== "string" || !page.content) continue;
-    // Only enforce containment if entity is restricted (has viewer limitations).
-    // If entity is public (empty viewerIds), any page can link to it.
-    if (entity.viewerIds.length > 0 && !audienceContains(page.viewerIds, entity.viewerIds)) continue;
+    if (!audienceContains(page.viewerIds, entity.viewerIds)) continue;
     const linked = autoLinkAdded("", page.content, candidate);
     if (linked === page.content) continue;
     const matchCount =
