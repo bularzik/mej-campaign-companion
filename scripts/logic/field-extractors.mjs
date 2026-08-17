@@ -37,15 +37,45 @@
  *     everything (so a GM's own search still finds unrevealed secrets).
  *   - all other types (place/encounter/event/organization/poi/list/
  *     journalentry/picture/slideshow): body text only, no gmFields.
+ *
+ * Phase C final-review fix (finding C1): raw body text (bodyText() below)
+ * can itself contain native Foundry `<section class="secret">` blocks -
+ * unrelated to session's own flag-based checklist secrets above, these are
+ * inline prose secrets any MEJ page type can carry. Indexing the raw text
+ * under the PUBLIC `fields.text` made unrevealed secret prose (and any
+ * @UUID refs inside it) searchable and backlink-visible to players. Every
+ * extractor now indexes `stripSecretSections(bodyText(page))` publicly and
+ * only adds `gmFields.text` (the unstripped body) when stripping actually
+ * changed something - see textFields() below.
  */
+
+import { stripSecretSections } from "./secret-blocks.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const COMPANION_FLAGS = "mej-campaign-companion";
 
 /** Main body text: session pages carry it under system.recap; every other
- * MEJ page type carries it under text.content. */
-function bodyText(page) {
+ * MEJ page type carries it under text.content. Exported so live-index.mjs's
+ * recordFor() can reuse it for meta.secrets extraction instead of
+ * duplicating the same fallback chain (T4 review note). */
+export function bodyText(page) {
   return page?.system?.recap ?? page?.text?.content ?? "";
+}
+
+/**
+ * Public/GM split of a page's body text (finding C1): strips unrevealed
+ * native secret sections out of the public `text` field and, only when that
+ * actually removed something, stashes the full unstripped body under
+ * `gmFields.text` (so a GM's own search still finds secret prose, without
+ * double-indexing every page's full text under `gm:` when there's nothing
+ * secret in it).
+ */
+function textFields(page) {
+  const raw = bodyText(page);
+  const stripped = stripSecretSections(raw);
+  const gmFields = {};
+  if (stripped !== raw) gmFields.text = raw;
+  return { fields: { text: stripped }, gmFields };
 }
 
 function mejFlags(page) {
@@ -60,13 +90,14 @@ function joinValues(obj) {
 
 function personExtractor(page) {
   const flags = mejFlags(page);
+  const { fields, gmFields } = textFields(page);
   return {
     fields: {
-      text: bodyText(page),
+      ...fields,
       role: flags.role ?? "",
       attributes: joinValues(flags.attributes)
     },
-    gmFields: {}
+    gmFields
   };
 }
 
@@ -102,11 +133,11 @@ function questExtractor(page) {
   const objectives = Object.values(flags.objectives ?? {});
   const available = objectives.filter((o) => o?.available);
   const hidden = objectives.filter((o) => !o?.available);
-  const gmFields = {};
+  const { fields, gmFields } = textFields(page);
   if (hidden.length) gmFields.objectives = hidden.map((o) => o?.content ?? "").join(" ");
   return {
     fields: {
-      text: bodyText(page),
+      ...fields,
       status: flags.status ?? "",
       objectives: available.map((o) => o?.content ?? "").join(" ")
     },
@@ -117,12 +148,13 @@ function questExtractor(page) {
 function itemsExtractor(page) {
   const flags = mejFlags(page);
   const items = Object.values(flags.items ?? {});
+  const { fields, gmFields } = textFields(page);
   return {
     fields: {
-      text: bodyText(page),
+      ...fields,
       items: items.map((i) => i?.name ?? "").join(" ")
     },
-    gmFields: {}
+    gmFields
   };
 }
 
@@ -130,11 +162,12 @@ function sessionExtractor(page) {
   const session = page?.flags?.[COMPANION_FLAGS]?.session ?? {};
   const secrets = session.secrets ?? [];
   const revealed = secrets.filter((s) => s?.revealed);
-  const gmFields = { gmNotes: page?.system?.gmNotes ?? "" };
+  const { fields, gmFields } = textFields(page);
+  gmFields.gmNotes = page?.system?.gmNotes ?? "";
   if (secrets.length) gmFields.secrets = secrets.map((s) => s?.text ?? "").join(" ");
   return {
     fields: {
-      text: bodyText(page),
+      ...fields,
       secrets: revealed.map((s) => s?.text ?? "").join(" ")
     },
     gmFields
@@ -142,10 +175,8 @@ function sessionExtractor(page) {
 }
 
 function genericExtractor(page) {
-  return {
-    fields: { text: bodyText(page) },
-    gmFields: {}
-  };
+  const { fields, gmFields } = textFields(page);
+  return { fields, gmFields };
 }
 
 export const EXTRACTORS = {

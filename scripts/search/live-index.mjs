@@ -17,7 +17,7 @@
 // entry's before handing it to indexRecord/removeRecord.
 import { createIndex, indexRecord, removeRecord, search } from "../logic/search-index.mjs";
 import { runQuery } from "../logic/query-grammar.mjs";
-import { extractRecord, splitHiddenAttributes } from "../logic/field-extractors.mjs";
+import { extractRecord, splitHiddenAttributes, bodyText } from "../logic/field-extractors.mjs";
 import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
@@ -107,7 +107,7 @@ function recordFor(page, type) {
   // Secrets tracker and prep board. GM-gated at the accessors below —
   // meta.secrets never reaches non-GM consumers (search()/runQuery() read
   // fields/gmFields/meta.tags/meta.attrs, never meta.secrets).
-  record.meta.secrets = extractSecretBlocks(page?.system?.recap ?? page?.text?.content ?? "");
+  record.meta.secrets = extractSecretBlocks(bodyText(page));
 
   return record;
 }

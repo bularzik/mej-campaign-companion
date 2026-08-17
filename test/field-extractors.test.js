@@ -201,6 +201,56 @@ describe("extractRecord: generic types (place/encounter/event/organization/poi/l
   });
 });
 
+describe("extractRecord: native secret sections in body text (Phase C final-review finding C1)", () => {
+  // Any MEJ page type's body text can carry native Foundry
+  // `<section class="secret">` blocks inline in the prose - distinct from
+  // session's own flag-based checklist secrets tested above. Before this
+  // fix, the raw body (including unrevealed secret text) was indexed
+  // straight into the PUBLIC fields.text, making it player-searchable and
+  // leaking any @UUID refs inside it as public backlinks.
+  const bodyWithSecrets =
+    '<p>The tavern is run by a friendly dwarf.</p>' +
+    '<section class="secret" id="secret-unrevealed"><p>He is secretly a doppelganger. See @UUID[JournalEntry.doppelganger-file]{The File}.</p></section>' +
+    '<section class="secret revealed" id="secret-revealed"><p>The cellar hides a smuggling tunnel.</p></section>';
+
+  const pageWithSecrets = {
+    name: "Blood on the Vine",
+    text: { content: bodyWithSecrets },
+    flags: {}
+  };
+
+  it("strips unrevealed secret text out of the public fields.text but keeps it in gmFields.text", () => {
+    const record = extractRecord(pageWithSecrets, "place");
+    expect(record.fields.text).toContain("friendly dwarf");
+    expect(record.fields.text).not.toContain("doppelganger");
+    expect(record.gmFields.text).toContain("doppelganger");
+  });
+
+  it("keeps revealed secret sections in the public fields.text", () => {
+    const record = extractRecord(pageWithSecrets, "place");
+    expect(record.fields.text).toContain("smuggling tunnel");
+    expect(record.gmFields.text).toContain("smuggling tunnel");
+  });
+
+  it("does not add gmFields.text when the body has no secret sections at all (avoid double-indexing)", () => {
+    const record = extractRecord(placePage, "place");
+    expect(record.gmFields.text).toBeUndefined();
+    expect(record.gmFields).toEqual({});
+  });
+
+  it("applies the same split for extractors with their own gmFields (quest)", () => {
+    const page = {
+      ...questPage,
+      text: { content: '<p>Public quest text.</p><section class="secret" id="s1"><p>The true villain is the mayor.</p></section>' }
+    };
+    const record = extractRecord(page, "quest");
+    expect(record.fields.text).not.toContain("true villain");
+    expect(record.gmFields.text).toContain("true villain");
+    // The pre-existing objectives gmFields split still works alongside it.
+    expect(record.gmFields.objectives).toContain("true plan");
+  });
+});
+
 describe("registerExtractor", () => {
   it("allows Phase B to plug in a new type extractor at runtime", () => {
     registerExtractor("custom-type", (page) => ({

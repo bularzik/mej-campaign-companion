@@ -360,7 +360,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       return a.all ? game.i18n.localize(`${I18N}.secrets.everyone`) : names.join(", ");
     };
     return {
-      rows: filtered.map((row) => ({ ...row, icon: this.#typeIcon(row.entryType), audienceLabel: audienceLabel(row), canAudience: row.kind !== "block" || !!row.secretId })),
+      rows: filtered.map((row) => ({
+        ...row,
+        icon: this.#typeIcon(row.entryType),
+        audienceLabel: audienceLabel(row),
+        // Block rows on a session-type page are recap-sourced (session
+        // pages carry body text in system.recap, not text.content) - the
+        // player re-enrichment path (injectPlayerSecrets in
+        // hooks/secrets-ui.mjs) only re-enriches
+        // .editor-display[data-key="text.content"], so a reveal on one of
+        // these never actually displays to the player it was granted to
+        // (I1b, recap re-enrichment unsupported this release). Don't offer
+        // a reveal control the tracker can't make good on.
+        canAudience: row.kind !== "block" || (!!row.secretId && row.entryType !== "session")
+      })),
       types: [...new Set(rows.map((r) => r.entryType))].sort().map((t) => ({ value: t, label: this.#typeLabel(t), selected: t === this.state.secretsType })),
       state: this.state.secretsState,
       players: game.users.filter((u) => !u.isGM).map((u) => ({ id: u.id, name: u.name, selected: u.id === this.state.secretsPlayer })),
@@ -452,6 +465,25 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * rather than replacing a whole collection, so they carry no equivalent
    * clobber risk and need no re-read.
    */
+  /**
+   * Raw inner HTML of a native secret block by section id (M5), read from
+   * the entry's MEJ page body - system.recap for session pages, text.content
+   * otherwise (same fallback field-extractors.mjs's bodyText() uses; MEJ
+   * entries are single-page journals per this file's other single-page
+   * lookups). Returns null if the entry has no MEJ page, the body is empty,
+   * or the section id can no longer be found (deleted between render and
+   * click) - callers fall back to the tracker row's stored preview text.
+   */
+  static #secretSectionHtml(entry, secretId) {
+    if (!secretId) return null;
+    const page = entry.pages?.contents?.find((p) => game.MonksEnhancedJournal.getMEJType(p));
+    const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
+    if (!body) return null;
+    const fragment = document.createRange().createContextualFragment(`<div>${body}</div>`);
+    const section = fragment.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
+    return section ? section.innerHTML : null;
+  }
+
   static async onTrackerAudience(event, target) {
     if (!game.user.isGM) return;
     const row = target.closest("[data-secret-kind]");
@@ -464,7 +496,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
       if (!audience) return;
       await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: audience });
-      await sendRevealWhisper({ audience, previousAudience: previous, groups, html: `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`, entryUuid, entryName: entry.name });
+      // Whisper the secret's actual content, not the 140-char index preview
+      // (M5) - chat enrichment happens at render time, so the raw inner
+      // HTML pulled straight off the page's body is fine unenriched. Falls
+      // back to the preview if the page or the section itself can no
+      // longer be located (e.g. deleted between render and click).
+      const html = CampaignHubPage.#secretSectionHtml(entry, secretId)
+        ?? `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`;
+      await sendRevealWhisper({ audience, previousAudience: previous, groups, html, entryUuid, entryName: entry.name });
     } else if (secretKind === "session") {
       const page = entry.pages.contents.find((p) => game.MonksEnhancedJournal.getMEJType(p) === "session");
       if (!page) return;

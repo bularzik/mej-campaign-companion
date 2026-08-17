@@ -179,6 +179,13 @@ async function injectPlayer(sheet, element) {
   // (MEJ filtered them out of its list entirely) - these always need a
   // brand-new row.
   const newRows = rows.filter((r) => r.rowRevealedToUser);
+
+  // Guard against duplicate rows accumulating if this element is ever
+  // re-injected without a full DOM replacement (MINOR M4) - clear anything
+  // we previously appended (both mejList-appended rows and the "Known
+  // connections" fallback host's rows) before deciding what to add back.
+  element.querySelectorAll(".mej-cc-rel-revealed").forEach((el) => el.remove());
+
   if (!newRows.length && !fallbackExtras.length) return;
 
   element.querySelector(":scope .mej-cc-known-connections")?.remove();

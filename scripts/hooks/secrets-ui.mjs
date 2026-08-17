@@ -7,6 +7,7 @@ import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, canSee, pruneReveals } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
+import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 
 const REVEALS_FLAG = "secretReveals";
 
@@ -94,12 +95,22 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
   if (!shellHosted) sheet.render?.({ parts: ["main"] });
 }
 
-/** Drop reveal records whose section no longer exists in the content (spec §5). GM-side only. */
+/**
+ * Drop reveal records whose section no longer exists in the content (spec
+ * §5). GM-side only. Reads the SAME body source the live index uses
+ * (system.recap for session pages, text.content for everything else -
+ * field-extractors.mjs's bodyText()) rather than only text.content: that
+ * fallback is empty on session pages, so before this fix opening a Session
+ * sheet deleted every secretReveals record for its recap secrets (I1a). Ids
+ * are parsed via extractSecretBlocks (the same parser the index/prune paths
+ * share) instead of a local double-quote-only regex, which also fixes I2 -
+ * creation paths accept single-quoted id attributes too.
+ */
 async function pruneOrphans(entry, page) {
   const reveals = revealsOf(entry);
   const keys = Object.keys(reveals);
   if (!keys.length) return;
-  const liveIds = [...String(page.text?.content ?? "").matchAll(/<section\b[^>]*id="([^"]+)"[^>]*>/gi)].map((m) => m[1]);
+  const liveIds = extractSecretBlocks(page?.system?.recap ?? page?.text?.content ?? "").map((s) => s.id);
   const { map, changed } = pruneReveals(reveals, liveIds);
   // recursive:false replaces the whole secretReveals object outright -
   // Document#update otherwise merges nested objects key-by-key by default
@@ -163,6 +174,25 @@ export function registerSecretsUi() {
     if (flags?.[REVEALS_FLAG] === undefined && flags?.relReveals === undefined) return;
     const shell = game.MonksEnhancedJournal?.journal;
     if (!shell?.rendered) return;
+    const shown = shell.document?.parent ?? shell.document;
+    if (shown?.uuid !== entry.uuid && shell.document?.uuid !== entry.uuid) return;
+    shell.render({ tempOwnership: shell.tempOwnership, reload: true });
+  });
+
+  // Checklist audience reveals (spec §5/§7) are written as a page-level flag
+  // (flags.mej-campaign-companion.session.secrets on the Session page
+  // itself), not an entry-level flag like the reveal above - MEJ's own
+  // updateJournalEntryPage handling ignores foreign flag namespaces in its
+  // re-render allowlist (same gap as knowledge-ui.mjs's entry-level comment
+  // above), so a checklist reveal never live-updates another client's
+  // shell-hosted Session sheet without this (I3). Reload the shell the same
+  // way, only when it's currently showing this page's parent entry.
+  Hooks.on("updateJournalEntryPage", (page, changes) => {
+    if (changes?.flags?.[MODULE_ID]?.session?.secrets === undefined) return;
+    const shell = game.MonksEnhancedJournal?.journal;
+    if (!shell?.rendered) return;
+    const entry = page.parent;
+    if (!entry) return;
     const shown = shell.document?.parent ?? shell.document;
     if (shown?.uuid !== entry.uuid && shell.document?.uuid !== entry.uuid) return;
     shell.render({ tempOwnership: shell.tempOwnership, reload: true });

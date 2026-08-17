@@ -190,6 +190,25 @@ describe("sessionBodyHtml", () => {
   });
 });
 
+describe("sessionBodyHtml: includeGM threading with a secret section in system.recap (M6, ledger T12)", () => {
+  const page = {
+    system: { recap: '<p>The party arrived at dusk.</p><section class="secret" id="s1"><p>The innkeeper is a spy.</p></section>' },
+    getFlag: () => ({})
+  };
+
+  it("strips the unrevealed secret section when includeGM is false (default)", () => {
+    const html = sessionBodyHtml(page, { sessionNumberLabel: "SN", campaignDateLabel: "CD", includeGM: false });
+    expect(html).toContain("arrived at dusk");
+    expect(html).not.toContain("innkeeper is a spy");
+  });
+
+  it("keeps the secret section when includeGM is true", () => {
+    const html = sessionBodyHtml(page, { sessionNumberLabel: "SN", campaignDateLabel: "CD", includeGM: true });
+    expect(html).toContain("arrived at dusk");
+    expect(html).toContain("innkeeper is a spy");
+  });
+});
+
 describe("recordSnapshot", () => {
   it("builds a session record with system.gmNotes and a sessionBodyHtml body", () => {
     const row = { uuid: "u1", name: "Session One", kind: SESSION_KIND, page: {
