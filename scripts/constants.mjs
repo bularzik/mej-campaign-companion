@@ -32,6 +32,12 @@ export const AUTO_LINK_SETTING = "autoLink";
 /** Page flag: opt this page out of every auto-link path (typing, import, retroactive). */
 export const NO_AUTO_LINK_FLAG = "noAutoLink";
 
+/** World setting: retroactive auto-link mode for newly-created MEJ entities ("off" | "confirm" | "silent"). */
+export const RETRO_LINK_MODE_SETTING = "retroLinkMode";
+
+/** JournalEntry flag: stamped at creation, processed (and cleared) by the active GM's retro-link pass. */
+export const RETRO_LINK_PENDING_FLAG = "retroLinkPending";
+
 /** World setting: auto-capture ended combats as Encounter entries. */
 export const AUTO_CAPTURE_SETTING = "autoCaptureEncounters";
 

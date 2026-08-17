@@ -20,6 +20,13 @@
       "playersWriteSessions": {
         "name": "Players Write Sessions",
         "hint": "When enabled, new Session entries created through the docx import wizard or Monk's Enhanced Journal's own New Entry dialog are owned by all players by default, so any player can add their own recap without a GM relaying the write."
+      },
+      "retroLinkMode": {
+        "name": "Retroactive Auto-Link",
+        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name across the journal (audience-scoped). Confirm shows a review dialog to the GM; Silent writes immediately and whispers a summary.",
+        "off": "Off",
+        "confirm": "Confirm (review dialog)",
+        "silent": "Silent (whisper summary)"
       }
     },
     "sheettype": { "session": "Session" },
@@ -267,6 +274,14 @@
       "noLinked": "No linked entries.",
       "notes": "Scratch notes",
       "notesPlaceholder": "GM-only notes for running this session…"
+    },
+    "retroLink": {
+      "title": "Auto-Link New Entry",
+      "intro": "\"{name}\" is mentioned in the pages below. Link the checked pages?",
+      "apply": "Link Checked",
+      "skip": "Skip",
+      "ambiguous": "Skipped as ambiguous (another entity shares this name):",
+      "summary": "Auto-linked \"{name}\" in {count} page(s)."
     }
   }
 }
