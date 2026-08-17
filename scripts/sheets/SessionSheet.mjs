@@ -43,7 +43,8 @@ export class SessionSheet extends EnhancedJournalSheet {
       toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
       secretAudience: SessionSheet.onSecretAudience,
-      removeAttendee: SessionSheet.onRemoveAttendee
+      removeAttendee: SessionSheet.onRemoveAttendee,
+      openPrepBoard: SessionSheet.onOpenPrepBoard
     },
     // Overrides EnhancedJournalSheet's own `form.handler` (a literal static
     // reference set at that base class's own DEFAULT_OPTIONS evaluation
@@ -452,6 +453,16 @@ export class SessionSheet extends EnhancedJournalSheet {
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
     this.render();
+  }
+
+  static async onOpenPrepBoard() {
+    if (!game.user.isGM) return;
+    try {
+      const { openPrepBoard } = await import("../apps/prep-board-app.mjs");
+      await openPrepBoard({ pageUuid: this.document.uuid });
+    } catch (error) {
+      console.error(`${MODULE_ID} | prep board open failed`, error);
+    }
   }
 
   // EnhancedJournalSheet's own onSubmit (sheets/EnhancedJournalSheet.js)

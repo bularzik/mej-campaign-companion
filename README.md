@@ -27,9 +27,9 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 - **Relationship reveals** — designate which players or groups can see each edge of the relationship graph with per-edge labels, showing players only their accessible relationships and edge metadata.
 - **Hub Secrets tab** — view and filter unrevealed secrets by player, group, or session; see "what does player X know" across the campaign; manage player group membership.
 - **Session prep board** — GM-only board on Session entries to mark which secrets have been revealed to whom, used for tracking GM reveal decisions across multiple sessions.
-- **Reveal whispers** — optionally send a private notification to each player when their first secret in a region is revealed, with brief context.
+- **Reveal whispers** — send a private notification to each player when they are added to a secret's reveal audience, with the secret text and session context.
 
-**Trust model:** like Foundry's own secret blocks and MEJ's GM notes, secret text is hidden by client-side filtering — the data still replicates to any client that can see the journal entry. A technically savvy player could read it from the raw document data. Do not use this module to protect genuinely sensitive information.
+**Trust model:** like Foundry's own secret blocks and MEJ's GM notes, secret text is hidden by client-side filtering — the data still replicates to any client that can see the journal entry. A technically savvy player could read it from the raw document data. Do not use this module to protect genuinely sensitive information. A player granted OWNER permission on a journal entry sees all its native secret blocks via Foundry's own rendering, outside the companion's audience gate — inherent to the soft-hidden model.
 
 ## Requirements
 

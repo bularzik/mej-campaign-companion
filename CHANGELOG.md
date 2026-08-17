@@ -8,12 +8,12 @@
 - **Relationship reveals** — per-edge visibility and labels, showing players only their accessible graph edges and metadata.
 - **Hub Secrets tab** — filter unrevealed secrets by player, group, or session; "what does player X know" cross-campaign view; player group management.
 - **Session prep board** — GM-only reveal tracker on Session entries to log which secrets have been revealed to whom.
-- **Reveal whispers** — optional private notifications to players when their first secret in a region is revealed.
+- **Reveal whispers** — private notifications to players when they are added to a secret's reveal audience, with the secret text and session context.
 - **Player-safe docx export** — unrevealed secret blocks are now excluded from exported `.docx` files when the "Include GM Content" toggle is off.
 
 **Fixed / Internal:**
 - Hardened secret-block attribute parsing against malformed or unexpected document structures.
-- Sheet-header buttons (graph/prep board) are currently unreachable due to an upstream MEJ v14 header-injection bug; these apps remain accessible via the Hub toolbar and module API.
+- Sheet-header buttons are currently unreachable due to an upstream MEJ v14 header-injection bug; the relationship graph remains accessible via the Hub toolbar, and the prep board opens via the button on the Session sheet.
 
 ## 0.2.0
 
