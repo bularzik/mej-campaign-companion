@@ -14,7 +14,7 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, I18N } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -25,8 +25,14 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchAll, mentionBadgeCounts, runQueryAll } from "../search/live-index.mjs";
+import { searchAll, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
+import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
+import { normalizeAudience } from "../logic/reveal-state.mjs";
+import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-groups.mjs";
+import { visibleRelRows } from "../logic/rel-reveals.mjs";
+import { sessionData } from "../sheets/session-data.mjs";
+import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 
@@ -52,7 +58,10 @@ const HUB_STATE = {
   timelineOrder: "manual",
   restoreIndexFilterFocus: false,
   searchQuery: "",
-  restoreSearchFocus: false
+  restoreSearchFocus: false,
+  secretsType: "",
+  secretsState: "all",
+  secretsPlayer: ""
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -77,7 +86,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openGraph: CampaignHubPage.onOpenGraph,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
-      deleteDashboard: CampaignHubPage.onDeleteDashboard
+      deleteDashboard: CampaignHubPage.onDeleteDashboard,
+      secretsSetFilter: CampaignHubPage.onSecretsSetFilter,
+      trackerAudience: CampaignHubPage.onTrackerAudience,
+      addGroup: CampaignHubPage.onAddGroup,
+      editGroup: CampaignHubPage.onEditGroup,
+      deleteGroup: CampaignHubPage.onDeleteGroup
     }
   };
 
@@ -86,7 +100,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       root: true,
       template: `modules/${MODULE_ID}/templates/hub.hbs`,
       templates: ["templates/generic/tab-navigation.hbs"],
-      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list", ".mej-cc-dashboards-list"]
+      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list", ".mej-cc-dashboards-list", ".mej-cc-secrets-list"]
     }
   };
 
@@ -96,7 +110,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         { id: "index", icon: "fa-solid fa-list" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
         { id: "search", icon: "fa-solid fa-magnifying-glass" },
-        { id: "dashboards", icon: "fa-solid fa-table-columns" }
+        { id: "dashboards", icon: "fa-solid fa-table-columns" },
+        { id: "secrets", icon: "fa-solid fa-user-secret" }
       ],
       initial: "index",
       labelPrefix: `${I18N}.hub.tabs`
@@ -136,6 +151,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return HUB_STATE;
   }
 
+  // GM-only "secrets" tab (spec §7): players must not even see the tab
+  // header. EnhancedJournalSheet._preparePartContext sets `context.subtabs`
+  // AFTER calling _prepareBodyContext (it reads `this._prepareTabs("primary")`
+  // itself, right after), so deleting the key from context inside
+  // _prepareBodyContext would be a no-op - context.subtabs doesn't exist yet
+  // at that point. Overriding _prepareTabs instead (same pattern the base
+  // class already uses to drop its own "relationships" tab for non-GMs)
+  // removes the tab entry before the tab-navigation partial ever sees it.
+  _prepareTabs(group) {
+    const tabs = super._prepareTabs(group);
+    if (group === "primary" && !game.user.isGM) delete tabs.secrets;
+    return tabs;
+  }
+
   async _prepareBodyContext(context, options) {
     context = await super._prepareBodyContext(context, options);
     const isGM = game.user.isGM;
@@ -151,6 +180,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     context.timeline = this.#timelineContext(journal, isGM);
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
+    // Secrets tracker (spec §7): GM-only pane. The tab header itself is
+    // hidden from players by _prepareTabs above; context.secrets stays
+    // undefined for non-GM so the template's `{{#if secrets}}` guard never
+    // renders the pane body either, even if a player somehow lands on the tab.
+    if (isGM) context.secrets = await this.#secretsContext();
 
     return context;
   }
@@ -262,6 +296,69 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return { rows, isGM };
   }
 
+  /**
+   * Secrets tracker (spec §7, GM-only): every secret in the campaign in one
+   * flat list - block-level secret sections (via the live index, spec §9),
+   * Session page checklist items, and hidden/secret relationships - each
+   * normalized to a common row shape so filterTrackerRows() (a pure,
+   * Foundry-free module) can apply the type/state/"what does player X
+   * know" filters uniformly across all three kinds.
+   */
+  async #secretsContext() {
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
+    const rows = [];
+    // 1. Block secrets, via the index (spec §9).
+    for (const rec of gmSecretRecords()) {
+      const entry = fromUuidSync(rec.uuid);
+      const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
+      for (const s of rec.secrets) {
+        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: s.revealedAll });
+      }
+    }
+    // 2. Session checklist items + 3. hidden/secret relationships - walk
+    // MEJ pages once (single-page convention, same as graph-app's graphRows()).
+    for (const entry of game.journal?.contents ?? []) {
+      for (const page of entry.pages?.contents ?? []) {
+        const type = game.MonksEnhancedJournal.getMEJType(page);
+        if (!type) continue;
+        if (type === "session") {
+          for (const s of page.flags?.[MODULE_ID]?.session?.secrets ?? []) {
+            rows.push({ kind: "session", entryUuid: entry.uuid, entryName: entry.name, entryType: type, secretId: s.id, preview: s.text ?? "", audience: normalizeAudience(s.audience), revealedAll: s.revealed === true });
+          }
+        }
+        const relReveals = entry.getFlag(MODULE_ID, "relReveals") ?? {};
+        const relRows = visibleRelRows(page.flags?.["monks-enhanced-journal"]?.relationships, relReveals, { userId: game.user.id, groups, isGM: true });
+        for (const r of relRows.filter((r) => r.hidden || r.secretText)) {
+          // A relationship can carry two independently-revealable overlays -
+          // the hidden ROW itself, and its separate secret label - so the
+          // row's relKind records which one this tracker entry represents
+          // (mirrors onTrackerAudience's relationship branch, which needs it
+          // to write back to the matching overlay key).
+          const relKind = r.hidden ? "row" : "secret";
+          rows.push({ kind: "relationship", relKind, entryUuid: entry.uuid, entryName: entry.name, entryType: type, secretId: r.id, preview: r.secretText || r.label, audience: normalizeAudience(relReveals[r.id]?.[relKind]), revealedAll: false });
+        }
+        break;
+      }
+    }
+    const filtered = filterTrackerRows(rows, { type: this.state.secretsType, state: this.state.secretsState, playerId: this.state.secretsPlayer, groups });
+    const audienceLabel = (row) => {
+      if (row.revealedAll) return game.i18n.localize(`${I18N}.secrets.everyone`);
+      const a = row.audience;
+      const names = [
+        ...game.users.filter((u) => a.users.includes(u.id)).map((u) => u.name),
+        ...groups.filter((g) => a.groups.includes(g.id)).map((g) => g.name)
+      ];
+      return a.all ? game.i18n.localize(`${I18N}.secrets.everyone`) : names.join(", ");
+    };
+    return {
+      rows: filtered.map((row) => ({ ...row, icon: this.#typeIcon(row.entryType), audienceLabel: audienceLabel(row), canAudience: row.kind !== "block" || !!row.secretId })),
+      types: [...new Set(rows.map((r) => r.entryType))].sort().map((t) => ({ value: t, label: this.#typeLabel(t), selected: t === this.state.secretsType })),
+      state: this.state.secretsState,
+      players: game.users.filter((u) => !u.isGM).map((u) => ({ id: u.id, name: u.name, selected: u.id === this.state.secretsPlayer })),
+      groups: groups.map((g) => ({ ...g, memberNames: g.members.map((m) => game.users.get(m)?.name ?? m).join(", ") }))
+    };
+  }
+
   /** Name + query + showPlayers prompt; returns {name, query, showPlayers} or null. */
   static async #promptDashboard(initial = {}, { titleKey }) {
     const esc = foundry.utils.escapeHTML;
@@ -323,6 +420,116 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const id = target.closest("[data-dashboard-id]")?.dataset.dashboardId;
     const saved = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).filter((q) => q.id !== id);
     await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
+    this.render({ parts: ["main"] });
+  }
+
+  static onSecretsSetFilter(event, target) {
+    if (!game.user.isGM) return;
+    const { filter, value } = target.dataset;
+    if (filter === "type") this.state.secretsType = this.state.secretsType === value ? "" : value;
+    else if (filter === "state") this.state.secretsState = value;
+    else if (filter === "player") this.state.secretsPlayer = this.state.secretsPlayer === value ? "" : value;
+    this.render({ parts: ["main"] });
+  }
+
+  /**
+   * Quick reveal from the tracker: route to the right storage per kind.
+   * The session branch mirrors SessionSheet.onSecretAudience's fix (Task 9
+   * report): re-read the live page's secrets AFTER the dialog closes rather
+   * than reusing the pre-dialog snapshot, so a concurrent edit made while
+   * the dialog was open (co-GM, another window) isn't silently reverted by
+   * writing back a stale array. The block/relationship branches write a
+   * single scoped flag key (`secretReveals.<id>` / `relReveals.<id>.<kind>`)
+   * rather than replacing a whole collection, so they carry no equivalent
+   * clobber risk and need no re-read.
+   */
+  static async onTrackerAudience(event, target) {
+    if (!game.user.isGM) return;
+    const row = target.closest("[data-secret-kind]");
+    const { secretKind, entryUuid, secretId } = row.dataset;
+    const entry = await fromUuid(entryUuid);
+    if (!entry) return;
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
+    if (secretKind === "block") {
+      const previous = normalizeAudience((entry.getFlag(MODULE_ID, "secretReveals") ?? {})[secretId]);
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
+      if (!audience) return;
+      await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: audience });
+      await sendRevealWhisper({ audience, previousAudience: previous, groups, html: `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`, entryUuid, entryName: entry.name });
+    } else if (secretKind === "session") {
+      const page = entry.pages.contents.find((p) => game.MonksEnhancedJournal.getMEJType(p) === "session");
+      if (!page) return;
+      const item = sessionData(page).secrets.find((s) => s.id === secretId);
+      if (!item) return;
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`), audience: item.audience, groups });
+      if (!audience) return;
+      // Re-read fresh data after the dialog closes (Task 9 pattern) rather
+      // than reusing the pre-dialog snapshot - see method doc comment.
+      const current = sessionData(page).secrets;
+      if (!current.find((s) => s.id === secretId)) return;
+      await page.update({ [`flags.${MODULE_ID}.session.secrets`]: current.map((s) => (s.id === secretId ? { ...s, audience } : s)) });
+      await sendRevealWhisper({ audience, previousAudience: item.audience, groups, html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`, entryUuid, entryName: entry.name });
+    } else if (secretKind === "relationship") {
+      const overlay = (entry.getFlag(MODULE_ID, "relReveals") ?? {})[secretId] ?? {};
+      const kind = row.dataset.relKind ?? "row";
+      const previous = normalizeAudience(overlay[kind]);
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.relRevealTitle`), audience: previous, groups });
+      if (!audience) return;
+      await entry.update({ [`flags.${MODULE_ID}.relReveals.${secretId}.${kind}`]: audience });
+      await sendRevealWhisper({ audience, previousAudience: previous, groups, html: `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? entry.name)}</p>`, entryUuid, entryName: entry.name });
+    }
+    this.render({ parts: ["main"] });
+  }
+
+  /** Name + member-checkbox dialog; returns {name, members} or null. */
+  static async #promptGroup(initial = {}, { titleKey }) {
+    const esc = foundry.utils.escapeHTML;
+    const players = game.users.filter((u) => !u.isGM);
+    const memberRows = players.map((u) =>
+      `<label class="mej-cc-audience-row"><input type="checkbox" name="member-${u.id}"${(initial.members ?? []).includes(u.id) ? " checked" : ""}> ${esc(u.name)}</label>`
+    ).join("");
+    return foundry.applications.api.DialogV2.prompt({
+      window: { title: titleKey },
+      content: `<div class="form-group"><label>${game.i18n.localize(`${I18N}.secrets.groupName`)}</label>
+          <input type="text" name="name" value="${esc(initial.name ?? "")}" required autofocus></div>
+        <fieldset><legend>${game.i18n.localize(`${I18N}.secrets.groupMembers`)}</legend>${memberRows}</fieldset>`,
+      ok: {
+        label: `${I18N}.hub.save`,
+        callback: (event, button) => {
+          const name = button.form.elements.name.value.trim();
+          if (!name) return null;
+          return { name, members: players.filter((u) => button.form.elements[`member-${u.id}`]?.checked).map((u) => u.id) };
+        }
+      },
+      rejectClose: false
+    });
+  }
+
+  static async onAddGroup() {
+    if (!game.user.isGM) return;
+    const result = await CampaignHubPage.#promptGroup({}, { titleKey: `${I18N}.secrets.addGroup` });
+    if (!result) return;
+    const groups = upsertGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), { id: foundry.utils.randomID(8), ...result });
+    await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, groups);
+    this.render({ parts: ["main"] });
+  }
+
+  static async onEditGroup(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-group-id]")?.dataset.groupId;
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
+    const existing = groups.find((g) => g.id === id);
+    if (!existing) return;
+    const result = await CampaignHubPage.#promptGroup(existing, { titleKey: `${I18N}.secrets.editGroup` });
+    if (!result) return;
+    await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, upsertGroup(groups, { id, ...result }));
+    this.render({ parts: ["main"] });
+  }
+
+  static async onDeleteGroup(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-group-id]")?.dataset.groupId;
+    await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, deleteGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), id));
     this.render({ parts: ["main"] });
   }
 

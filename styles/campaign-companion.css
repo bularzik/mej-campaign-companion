@@ -771,6 +771,109 @@
 .mej-cc-secret-chips { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
 section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-border-highlight, #ff6400); }
 .mej-cc-audience-row { display: block; margin: 2px 0; }
+
+/* Secrets tracker pane (Task 10): GM-only Hub tab listing every secret in
+   the campaign (block secrets, session checklist items, hidden/secret
+   relationships) in one flat, filterable list, plus player-group
+   management below it. Controls row follows the timeline order-menu's
+   own active-button styling (see .mej-cc-order-menu button.active above). */
+.mej-cc-secrets {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-secrets-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+  flex: 0 0 auto;
+}
+
+.mej-cc-secrets-controls button.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.mej-cc-secrets-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 0.2em;
+  background: var(--color-border-light-tertiary, rgba(0, 0, 0, 0.15));
+}
+
+.mej-cc-secrets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mej-cc-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.4em;
+  border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+}
+
+.mej-cc-secret-source {
+  flex: 0 0 auto;
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mej-cc-secret-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.mej-cc-secret-audience-label {
+  flex: 0 0 auto;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.7;
+}
+
+.mej-cc-groups {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.15));
+  padding-top: 0.4em;
+}
+
+.mej-cc-groups header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: bold;
+}
+
+.mej-cc-groups header button {
+  width: auto;
+}
+
+.mej-cc-groups ul {
+  list-style: none;
+  margin: 0.3em 0 0;
+  padding: 0;
+}
+
+.mej-cc-groups li {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0;
+}
 .mej-cc-rel-revealed .fa-eye { color: var(--color-text-hyperlink, #4a90d9); margin-right: 4px; }
 .mej-cc-rel-secret { opacity: 0.85; }
 .mej-cc-rel-audience-secret { position: relative; }

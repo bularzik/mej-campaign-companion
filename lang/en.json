@@ -73,7 +73,8 @@
         "index": "Index",
         "timeline": "Timeline",
         "search": "Search",
-        "dashboards": "Dashboards"
+        "dashboards": "Dashboards",
+        "secrets": "Secrets"
       },
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
@@ -184,7 +185,16 @@
       "chipsNone": "Hidden from players",
       "relRevealTitle": "Reveal relationship",
       "relSecretRevealTitle": "Reveal secret relationship",
-      "knownConnections": "Known connections"
+      "knownConnections": "Known connections",
+      "stateAll": "All",
+      "stateRevealed": "Revealed",
+      "stateUnrevealed": "Unrevealed",
+      "empty": "No secrets tracked yet.",
+      "groupsHeader": "Player groups",
+      "addGroup": "Add group",
+      "editGroup": "Edit group",
+      "groupName": "Group name",
+      "groupMembers": "Members"
     },
     "import": {
       "title": "Import Document",
