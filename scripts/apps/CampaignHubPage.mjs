@@ -35,6 +35,7 @@ import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -199,7 +200,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #indexContext() {
-    const source = buildIndexSource(game.journal.contents, game.user, game.MonksEnhancedJournal.getMEJType, this.#typeIcon.bind(this));
+    const source = buildIndexSource(game.journal.contents, game.user, mejType, this.#typeIcon.bind(this));
     const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
     const mentionCounts = mentionBadgeCounts();
     for (const row of rows) row.mentions = mentionCounts.get(row.uuid) ?? 0;
@@ -319,7 +320,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // MEJ pages once (single-page convention, same as graph-app's graphRows()).
     for (const entry of game.journal?.contents ?? []) {
       for (const page of entry.pages?.contents ?? []) {
-        const type = game.MonksEnhancedJournal.getMEJType(page);
+        const type = mejType(page);
         if (!type) continue;
         if (type === "session") {
           for (const s of page.flags?.[MODULE_ID]?.session?.secrets ?? []) {
@@ -476,7 +477,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    */
   static #secretSectionHtml(entry, secretId) {
     if (!secretId) return null;
-    const page = entry.pages?.contents?.find((p) => game.MonksEnhancedJournal.getMEJType(p));
+    const page = entry.pages?.contents?.find((p) => mejType(p));
     const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
     if (!body) return null;
     const fragment = document.createRange().createContextualFragment(`<div>${body}</div>`);
@@ -505,7 +506,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         ?? `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`;
       await sendRevealWhisper({ audience, previousAudience: previous, groups, html, entryUuid, entryName: entry.name });
     } else if (secretKind === "session") {
-      const page = entry.pages.contents.find((p) => game.MonksEnhancedJournal.getMEJType(p) === "session");
+      const page = entry.pages.contents.find((p) => mejType(p) === "session");
       if (!page) return;
       const item = sessionData(page).secrets.find((s) => s.id === secretId);
       if (!item) return;

@@ -11,6 +11,7 @@
 import { MODULE_ID, I18N } from "../constants.mjs";
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 function asElement(html) {
   if (!html) return null;
@@ -22,7 +23,7 @@ function asElement(html) {
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
-  return game.MonksEnhancedJournal?.getMEJType?.(doc) ? doc : null;
+  return mejType(doc) ? doc : null;
 }
 
 async function injectPanel(sheet, element, { shellHosted = false } = {}) {

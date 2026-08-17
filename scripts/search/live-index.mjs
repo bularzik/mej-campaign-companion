@@ -21,17 +21,13 @@ import { extractRecord, splitHiddenAttributes, bodyText } from "../logic/field-e
 import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
 let index = null;
 let backlinks = null;
 let hooksRegistered = false;
-
-/** True for any JournalEntryPage MEJ recognizes, including this module's own "session" type. */
-function mejType(page) {
-  return game.MonksEnhancedJournal.getMEJType(page);
-}
 
 /**
  * Person attribute keys MEJ's per-attribute "playerHidden" sheet-settings

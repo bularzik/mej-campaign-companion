@@ -5,7 +5,7 @@ import {
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
-import { onHandshake, onReady, currentMode, wiringFailed, openHub } from "./integrations/mej-adapter.mjs";
+import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 
 Hooks.once("init", () => {
@@ -128,7 +128,7 @@ Hooks.on("activateControls", (ej, ctrls) => {
 Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
   const doc = subsheet?.document;
   if (!(doc instanceof JournalEntryPage)) return;
-  if (!game.MonksEnhancedJournal?.getMEJType?.(doc)) return;
+  if (!mejType(doc)) return;
   buttons.unshift({
     label: `${I18N}.graph.open`,
     class: "mej-cc-open-graph",
@@ -140,7 +140,7 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
   });
 
   // Phase C: prep board on Session sheets (GM-only, spec §8).
-  if (game.user.isGM && game.MonksEnhancedJournal.getMEJType(doc) === SESSION_TYPE) {
+  if (game.user.isGM && mejType(doc) === SESSION_TYPE) {
     buttons.unshift({
       label: `${I18N}.prep.open`,
       class: "mej-cc-open-prep",

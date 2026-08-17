@@ -51,3 +51,24 @@ describe("mejTypeWith", () => {
     expect(mejTypeWith(textPage, () => undefined)).toBe(false);
   });
 });
+
+describe("stock-MEJ regression: a Session must not read as untyped", () => {
+  // Stock MEJ's getMEJType validates the monks-enhanced-journal.type flag
+  // against its own registry, which has no "session" key, so it returns
+  // false even when the flag is present. Every consumer that gates on the
+  // type would drop the page. mejTypeWith must not.
+  const stockGetMEJType = () => false;
+  const sessionPageWithFlag = {
+    type: "mej-campaign-companion.session",
+    flags: { "monks-enhanced-journal": { type: "session" } }
+  };
+  const scrubbedSessionPage = { type: "mej-campaign-companion.session", flags: {} };
+
+  it("survives stock MEJ returning false", () => {
+    expect(mejTypeWith(sessionPageWithFlag, stockGetMEJType)).toBe("session");
+  });
+
+  it("survives stock MEJ having scrubbed the flag entirely", () => {
+    expect(mejTypeWith(scrubbedSessionPage, stockGetMEJType)).toBe("session");
+  });
+});

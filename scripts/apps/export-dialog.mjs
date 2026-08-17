@@ -24,6 +24,7 @@ import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { formatCampaignDate } from "../logic/campaign-calendar.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 /**
  * doc-export.mjs is ported byte-for-byte from campaign-record, including
@@ -98,7 +99,7 @@ async function promptExport(rows) {
 /** GM-only entry point (see CampaignHubPage.mjs / templates/hub.hbs). */
 export async function openExportDialog() {
   if (!game.user.isGM) return;
-  const rows = eligibleEntries(game.journal.contents, (entry) => game.MonksEnhancedJournal.getMEJType(entry));
+  const rows = eligibleEntries(game.journal.contents, (entry) => mejType(entry));
   if (!rows.length) {
     return void ui.notifications.warn(game.i18n.localize(`${I18N}.export.nothingToExport`));
   }

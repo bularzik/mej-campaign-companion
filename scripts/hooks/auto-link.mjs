@@ -12,6 +12,7 @@ import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candida
 import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { MODULE_ID, AUTO_LINK_SETTING, NO_AUTO_LINK_FLAG } from "../constants.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 /**
  * Linkable candidates for a page: every other MEJ-typed JournalEntry whose
@@ -23,7 +24,7 @@ function buildCandidates(page) {
   const users = game.users.contents;
   const pageViewers = viewerIds(page.parent, users, isVisibleToUser);
   const pages = game.journal
-    .filter((entry) => game.MonksEnhancedJournal.getMEJType(entry))
+    .filter((entry) => mejType(entry))
     .map((entry) => ({
       id: entry.id,
       uuid: entry.uuid,
