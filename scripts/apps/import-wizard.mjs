@@ -12,7 +12,7 @@
 // campaign-record's own ImportWizard already extended
 // HandlebarsApplicationMixin(ApplicationV2) - no AppV1-\>AppV2 migration was
 // needed here; this class is a straight structural port of that one.
-import { COMPANION_IMPORT_TYPES, I18N, MODULE_ID } from "../constants.mjs";
+import { MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING } from "../constants.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -23,6 +23,11 @@ import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { validateCampaignComponents } from "../logic/campaign-date.mjs";
 import { calendarBounds } from "../logic/campaign-calendar.mjs";
+import { autoLinkAdded } from "../logic/auto-link.mjs";
+import { countEntityLinks } from "../logic/retro-link.mjs";
+import { dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
+import { viewerIds, audienceViewerIdsForImport, filterCandidatesForAudience } from "../logic/link-audience.mjs";
+import { isVisibleToUser } from "../logic/hub-index.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -201,6 +206,35 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
   }
 
+  /** The whole-import audience choice from the review form ("gm" default). */
+  #formAudience() {
+    const form = this.element.querySelector("form.mej-cc-import-review");
+    return form?.elements.audience?.value === "players" ? "players" : "gm";
+  }
+
+  /**
+   * Import-time link candidates, bounded by containment against the chosen
+   * audience (spec: links are validated against the audience the created
+   * entries will actually have). Ambiguous names are dropped and reported
+   * into the wizard's warnings list (shown in the result dialog).
+   */
+  #linkCandidates(audience, warnings) {
+    const users = game.users.contents;
+    const audienceViewers = audienceViewerIdsForImport(audience, users);
+    const all = game.journal
+      .filter((e) => game.MonksEnhancedJournal.getMEJType(e))
+      .map((e) => ({ name: e.name, uuid: e.uuid, viewerIds: viewerIds(e, users, isVisibleToUser) }));
+    const contained = filterCandidatesForAudience(all, audienceViewers)
+      .filter((c) => (c.name?.trim().length ?? 0) >= 3)
+      .map((c) => ({ name: c.name, uuid: c.uuid }))
+      .sort((a, b) => b.name.length - a.name.length);
+    const { kept, ambiguousNames } = dropAmbiguousNames(contained);
+    for (const n of ambiguousNames) {
+      warnings.push(game.i18n.format(`${I18N}.import.ambiguousSkipped`, { name: n }));
+    }
+    return kept;
+  }
+
   static #onCancel() {
     this.close();
   }
@@ -292,7 +326,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * other type goes through createMejEntry (data/mej-entry.mjs), the same
    * helper auto-capture.mjs uses for Encounters.
    */
-  async #createPage(page, campaignDate) {
+  async #createPage(page, campaignDate, ownership) {
     // JournalEntry.create() returns the created document directly (not an
     // array) for a single plain-object `data` argument - an array result
     // only happens when `data` itself is an array. Both branches below
@@ -306,6 +340,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     if (page.type === "text") {
       const entry = await JournalEntry.create({
         name: page.name,
+        ...(ownership ? { ownership } : {}),
         pages: [{ name: page.name, type: "text", text: { content: page.html } }]
       });
       return entry.pages.contents[0];
@@ -313,11 +348,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     if (page.type === "session") {
       const entry = await JournalEntry.create({
         name: page.name,
+        ...(ownership ? { ownership } : {}),
         pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });
       return entry.pages.contents[0];
     }
-    return createMejEntry(page.type, page.name, page.html);
+    return createMejEntry(page.type, page.name, page.html, {}, ownership);
   }
 
   /**
@@ -371,6 +407,32 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       return ui.notifications.warn(game.i18n.localize(`${I18N}.import.nothingToImport`));
     }
 
+    const audience = this.#formAudience();
+    const ownership = audience === "players"
+      ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
+      : null;
+    // Import-time auto-link (spec Part 2): same engine as the typing path,
+    // empty baseline = whole document eligible. Gated on the same autoLink
+    // world setting; failure never blocks the import (observer posture).
+    let linkedCount = 0;
+    if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
+      try {
+        const candidates = this.#linkCandidates(audience, plan.warnings);
+        if (candidates.length) {
+          for (const page of plan.pages) {
+            const linked = autoLinkAdded("", page.html, candidates);
+            if (linked !== page.html) {
+              linkedCount += candidates.reduce(
+                (n, c) => n + countEntityLinks(linked, c.uuid) - countEntityLinks(page.html, c.uuid), 0);
+              page.html = linked;
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`${MODULE_ID} | import auto-link failed`, error);
+      }
+    }
+
     target.disabled = true;
     const dates = this.#datesForPlanPages(rows);
     const results = { created: 0, timepoints: 0, failed: [] };
@@ -387,7 +449,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         const page = plan.pages[i];
         const campaignDate = safeCampaignDate(dates[i], page.name, plan.warnings);
         try {
-          const created = await this.#createPage(page, campaignDate);
+          const created = await this.#createPage(page, campaignDate, ownership);
           results.created++;
           if (page.timepoint) {
             timeline ??= await ensureTimelineJournal();
@@ -415,14 +477,17 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     this.close();
-    await ImportWizard.#showResult(results, plan.warnings);
+    await ImportWizard.#showResult(results, plan.warnings, linkedCount);
   }
 
-  static async #showResult(results, warnings) {
+  static async #showResult(results, warnings, linkedCount = 0) {
     const esc = foundry.utils.escapeHTML;
     const parts = [`<p>${game.i18n.format(`${I18N}.import.created`, {
       pages: results.created, timepoints: results.timepoints
     })}</p>`];
+    if (linkedCount) {
+      parts.push(`<p>${game.i18n.format(`${I18N}.import.linked`, { count: linkedCount })}</p>`);
+    }
     if (results.failed.length) {
       parts.push(`<p>${game.i18n.localize(`${I18N}.import.someFailed`)}</p>`
         + `<ul>${results.failed.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`);

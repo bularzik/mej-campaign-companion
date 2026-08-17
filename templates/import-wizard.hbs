@@ -15,6 +15,14 @@
 
   {{#if isReview}}
   <form class="mej-cc-import-review">
+    <div class="form-group mej-cc-import-audience">
+      <label>{{localize "MEJCampaignCompanion.import.audience"}}</label>
+      <select name="audience">
+        <option value="gm">{{localize "MEJCampaignCompanion.import.audienceGm"}}</option>
+        <option value="players">{{localize "MEJCampaignCompanion.import.audiencePlayers"}}</option>
+      </select>
+      <p class="hint">{{localize "MEJCampaignCompanion.import.audienceHint"}}</p>
+    </div>
     {{#if docTitle}}<h3 class="mej-cc-import-doctitle">{{docTitle}}</h3>{{/if}}
     <div class="mej-cc-import-sections-scroll">
     <table class="mej-cc-import-sections">

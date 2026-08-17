@@ -236,7 +236,13 @@
       "imagesDropped": "Some images could not be uploaded and were left out.",
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
       "nothingToImport": "Every section is set to skip — nothing to import.",
-      "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date."
+      "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date.",
+      "audience": "Audience",
+      "audienceGm": "GM only",
+      "audiencePlayers": "All players (Observer)",
+      "audienceHint": "Sets ownership of the created entries and bounds which entities the imported text may auto-link to.",
+      "ambiguousSkipped": "Ambiguous name not auto-linked (multiple entities share it): {name}",
+      "linked": "{count} name mention(s) auto-linked."
     },
     "export": {
       "title": "Export to Word",
