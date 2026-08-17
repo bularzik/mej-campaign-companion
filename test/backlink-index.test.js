@@ -3,6 +3,7 @@ import {
   normalizeTargetUuid, extractRefs, createBacklinkIndex,
   setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts
 } from "../scripts/logic/backlink-index.mjs";
+import { extractRecord } from "../scripts/logic/field-extractors.mjs";
 
 describe("normalizeTargetUuid", () => {
   it("collapses page uuids to the parent entry", () => {
@@ -32,6 +33,48 @@ describe("extractRefs", () => {
     expect(gmRefs.get("JournalEntry.secret1")).toBe(1);
     expect(gmRefs.has("JournalEntry.npc1")).toBe(false); // already public
     expect(refs.has("JournalEntry.secret1")).toBe(false);
+  });
+});
+
+describe("extractRefs on a real extractRecord() output (Phase C final-review finding C1)", () => {
+  // Integration check for the fix threaded through live-index.mjs's
+  // recordFor(): a page whose body has an unrevealed native secret section
+  // containing an @UUID ref. field-extractors.mjs now routes that ref's
+  // raw text into gmFields.text (not fields.text) - confirm extractRefs
+  // reads that split correctly and lands the ref in gmRefs, never refs, so
+  // it never shows up as a public backlink/mention-count/graph edge.
+  it("a ref inside an unrevealed secret section is a gmRef, not a public ref", () => {
+    const page = {
+      uuid: "JournalEntry.self",
+      name: "Blood on the Vine",
+      text: {
+        content:
+          '<p>Run by @UUID[JournalEntry.dwarf-owner]{Bruno}.</p>' +
+          '<section class="secret" id="secret-1"><p>Secretly a @UUID[JournalEntry.doppelganger-file]{doppelganger}.</p></section>'
+      },
+      flags: {}
+    };
+    const record = extractRecord(page, "place");
+    record.uuid = page.uuid; // extractRecord echoes page.uuid, but be explicit for clarity
+    const { refs, gmRefs } = extractRefs(record);
+    expect(refs.has("JournalEntry.dwarf-owner")).toBe(true);
+    expect(refs.has("JournalEntry.doppelganger-file")).toBe(false);
+    expect(gmRefs.get("JournalEntry.doppelganger-file")).toBe(1);
+  });
+
+  it("a revealed secret section's ref counts as public (matches fields.text staying public)", () => {
+    const page = {
+      uuid: "JournalEntry.self2",
+      name: "Town Square",
+      text: {
+        content: '<section class="secret revealed" id="secret-2"><p>Points to @UUID[JournalEntry.hidden-shrine]{the shrine}.</p></section>'
+      },
+      flags: {}
+    };
+    const record = extractRecord(page, "place");
+    const { refs, gmRefs } = extractRefs(record);
+    expect(refs.get("JournalEntry.hidden-shrine")).toBe(1);
+    expect(gmRefs.has("JournalEntry.hidden-shrine")).toBe(false);
   });
 });
 

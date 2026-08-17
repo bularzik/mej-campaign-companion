@@ -11,7 +11,7 @@
 // come from an _onRender() override, or it will silently never bind while
 // the sheet is hosted inside MEJ's shell.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, I18N, RELAY_UPLOAD_DIR } from "../constants.mjs";
+import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
 import { buildRecapEntries } from "../logic/player-recap.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
@@ -19,6 +19,9 @@ import { savePlayerRecap } from "../hooks/player-recap.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions } from "../logic/campaign-calendar.mjs";
+import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
+import { normalizeGroups } from "../logic/player-groups.mjs";
+import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
 
@@ -39,7 +42,9 @@ export class SessionSheet extends EnhancedJournalSheet {
       deleteSecret: SessionSheet.onDeleteSecret,
       toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
-      removeAttendee: SessionSheet.onRemoveAttendee
+      secretAudience: SessionSheet.onSecretAudience,
+      removeAttendee: SessionSheet.onRemoveAttendee,
+      openPrepBoard: SessionSheet.onOpenPrepBoard
     },
     // Overrides EnhancedJournalSheet's own `form.handler` (a literal static
     // reference set at that base class's own DEFAULT_OPTIONS evaluation
@@ -116,9 +121,23 @@ export class SessionSheet extends EnhancedJournalSheet {
     // context must never carry an unrevealed secret's text (same
     // data-minimization requirement as gmNotes below: excluded from the
     // context object entirely, not just hidden by the template/CSS).
+    //
+    // Phase C (spec §4): a player sees a checklist item when it's revealed
+    // to all (revealed: true, which wins) OR their audience matches. The
+    // sanitized non-GM shape still drops `revealed`/`audience` internals.
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     context.secrets = isGM
-      ? session.secrets
-      : session.secrets.filter((s) => s.revealed).map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
+      ? session.secrets.map((s) => {
+          // audienceCount alone can't represent "revealed to everyone via
+          // the audience dialog" (all: true carries no users/groups) - the
+          // GM badge needs its own audienceAll flag so that case still
+          // renders a marker instead of silently showing no badge.
+          const a = normalizeAudience(s.audience);
+          return { ...s, audienceAll: a.all, audienceCount: a.users.length + a.groups.length };
+        })
+      : session.secrets
+          .filter((s) => s.revealed || canSee(s.audience, game.user.id, groups))
+          .map(({ id, text, revealedAt }) => ({ id, text, revealedAt }));
 
     // context.session must carry the same sanitized secrets as context.secrets
     // for non-GM users - the template only reads context.secrets today, but
@@ -381,6 +400,42 @@ export class SessionSheet extends EnhancedJournalSheet {
     this.render();
   }
 
+  // Per-player/group reveal for one checklist item (spec §4/§8). "Everyone"
+  // remains onToggleSecret's revealed flag; this dialog manages the
+  // audience field. Reveal whispers the item text to new recipients.
+  static async onSecretAudience(event, target) {
+    if (!game.user.isGM) return;
+    const id = target.closest("[data-id]")?.dataset.id;
+    const session = sessionData(this.document);
+    const item = session.secrets.find((s) => s.id === id);
+    if (!item) return;
+    const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
+    const audience = await promptAudience({
+      title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`),
+      audience: item.audience, groups
+    });
+    if (!audience) return;
+    // Re-read fresh data after the dialog closes rather than reusing the
+    // pre-dialog `session` snapshot: a co-GM or another window may have
+    // mutated secrets while this dialog was open, and writing back the
+    // stale array would silently revert that concurrent edit. The item may
+    // even have been deleted in the meantime - bail with no write if so.
+    // The whisper still uses the pre-dialog item.audience as
+    // previousAudience: that's the audience the GM actually saw and
+    // compared against in the dialog.
+    const current = sessionData(this.document).secrets;
+    if (!current.find((s) => s.id === id)) return;
+    const secrets = current.map((s) => (s.id === id ? { ...s, audience } : s));
+    await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    await sendRevealWhisper({
+      audience, previousAudience: item.audience, groups,
+      html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
+      entryUuid: this.document.parent?.uuid ?? this.document.uuid,
+      entryName: this.document.parent?.name ?? this.document.name
+    });
+    this.render();
+  }
+
   static async onUpdateSecretText(event, target) {
     if (!game.user.isGM) return;
     const id = target.dataset.id;
@@ -398,6 +453,16 @@ export class SessionSheet extends EnhancedJournalSheet {
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
     this.render();
+  }
+
+  static async onOpenPrepBoard() {
+    if (!game.user.isGM) return;
+    try {
+      const { openPrepBoard } = await import("../apps/prep-board-app.mjs");
+      await openPrepBoard({ pageUuid: this.document.uuid });
+    } catch (error) {
+      console.error(`${MODULE_ID} | prep board open failed`, error);
+    }
   }
 
   // EnhancedJournalSheet's own onSubmit (sheets/EnhancedJournalSheet.js)

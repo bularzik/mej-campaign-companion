@@ -1,0 +1,40 @@
+{{!-- templates/prep-board.hbs --}}
+<div class="mej-cc-prep flexcol">
+    <h3>{{name}}</h3>
+    <section class="mej-cc-prep-attendees">
+        <header>{{localize 'MEJCampaignCompanion.prep.attendees'}}</header>
+        <ul class="flexrow">
+            {{#each attendees}}<li data-tooltip="{{this.name}}"><img src="{{this.img}}" alt="{{this.name}}"></li>
+            {{else}}<li class="instruction">{{localize 'MEJCampaignCompanion.prep.noAttendees'}}</li>{{/each}}
+        </ul>
+    </section>
+    <section class="mej-cc-prep-secrets">
+        <header>{{localize 'MEJCampaignCompanion.prep.secrets'}}</header>
+        <ol>
+            {{#each secrets}}
+            <li data-id="{{this.id}}" class="{{#if this.revealedAny}}revealed{{/if}}">
+                <a data-action="toggleSecret" data-tooltip="{{localize 'MEJCampaignCompanion.prep.toggleAll'}}"><i class="fa-solid {{#if this.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                <span class="mej-cc-prep-secret-text">{{this.text}}</span>
+                <a data-action="revealSecret" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}">
+                    <i class="fa-solid fa-user-secret"></i>{{#if this.audienceCount}}<span class="mej-cc-audience-count">{{this.audienceCount}}</span>{{/if}}
+                </a>
+            </li>
+            {{else}}<li class="instruction">{{localize 'MEJCampaignCompanion.prep.noSecrets'}}</li>{{/each}}
+        </ol>
+    </section>
+    <section class="mej-cc-prep-linked">
+        <header>{{localize 'MEJCampaignCompanion.prep.linked'}}</header>
+        <ol>
+            {{#each linked}}
+            <li data-uuid="{{this.uuid}}" data-action="openLinked">
+                <i class="{{this.icon}}"></i> {{this.name}}
+                {{#if this.mentions}}<span class="mej-cc-mention-badge"><i class="fa-solid fa-link"></i>{{this.mentions}}</span>{{/if}}
+            </li>
+            {{else}}<li class="instruction">{{localize 'MEJCampaignCompanion.prep.noLinked'}}</li>{{/each}}
+        </ol>
+    </section>
+    <section class="mej-cc-prep-notes flexcol">
+        <header>{{localize 'MEJCampaignCompanion.prep.notes'}}</header>
+        <textarea name="notes" placeholder="{{localize 'MEJCampaignCompanion.prep.notesPlaceholder'}}">{{notes}}</textarea>
+    </section>
+</div>

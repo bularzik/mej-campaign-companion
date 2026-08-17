@@ -20,6 +20,19 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 - **Relationship graph** — a visual graph of entries connected via MEJ's `relationships` flags, with vendored d3-force rendering, ego-mode and whole-campaign view toggle, an optional dashed backlink overlay for `@UUID` mentions between entries, and a 200-node connection cap for performance.
 - **Hub Dashboards** — a "Dashboards" tab on the Campaign Hub with saved queries using a simple grammar (`type:`, `tag:`, `attr:`, free-text search); search results appear directly inline with an `@CampaignQuery[...]` page enricher for inline results on any MEJ sheet.
 
+### Secrets layer (0.3.0)
+
+- **Block-level secrets** — mark arbitrary text blocks as secrets on native secret sections, with per-player and per-player-group reveal toggles; revealable individually by GM on the Hub Secrets tab or en masse via secret checklists on Session entries.
+- **Player groups** — name groups of players and manage membership dynamically within the Hub, used as reveal targets alongside individual players.
+- **Relationship reveals** — designate which players or groups can see each edge of the relationship graph with per-edge labels, showing players only their accessible relationships and edge metadata.
+- **Hub Secrets tab** — view and filter every secret in the campaign by type, revealed state, or player; see "what does player X know" across the campaign; manage player group membership.
+- **Session prep board** — GM-only board on Session entries to mark which secrets have been revealed to whom, used for tracking GM reveal decisions across multiple sessions.
+- **Reveal whispers** — send a private notification to each player when they are added to a secret's reveal audience, with the secret text and session context.
+
+**Trust model:** like Foundry's own secret blocks and MEJ's GM notes, secret text is hidden by client-side filtering — the data still replicates to any client that can see the journal entry. A technically savvy player could read it from the raw document data. Do not use this module to protect genuinely sensitive information. A player granted OWNER permission on a journal entry sees all its native secret blocks via Foundry's own rendering, outside the companion's audience gate — inherent to the soft-hidden model.
+
+**Limitation:** choosing "Everyone" in a secret's reveal dialog reveals it via the companion's own per-user re-enrichment, not Foundry's native per-block Reveal control (the `revealed` class Foundry itself toggles). Core-sheet viewers that don't run this module, and player-safe docx exports, only honor the native `revealed` class — use Foundry's own Reveal control (not this module's "Everyone") for a secret that needs to survive those paths.
+
 ## Requirements
 
 - Foundry VTT **v14**.

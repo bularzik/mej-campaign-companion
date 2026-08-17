@@ -41,6 +41,9 @@ export const PLAYERS_WRITE_SESSIONS_SETTING = "playersWriteSessions";
 /** World setting: saved dashboard queries [{id, name, query, showPlayers}] (GM-managed; world settings replicate to all clients). */
 export const SAVED_QUERIES_SETTING = "savedQueries";
 
+/** World setting: named player groups [{id, name, members: [userId]}] for per-group secret reveal (GM-managed from the Hub Secrets tab). */
+export const PLAYER_GROUPS_SETTING = "playerGroups";
+
 /** Combat flag: combatants that left mid-fight, for the end-of-combat summary. */
 export const DEPARTED_FLAG = "departed";
 

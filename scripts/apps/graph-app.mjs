@@ -1,10 +1,18 @@
 // Relationship graph (spec §5): standalone ApplicationV2, vendored d3-force
 // layout, self-rendered SVG. Read-only visualization - relationships stay
 // edited on MEJ sheets. All rows are pre-filtered to what the current user
-// can observe (spec §2's gate); hidden relationships are excluded for
-// non-GMs inside buildGraph.
-import { MODULE_ID, I18N } from "../constants.mjs";
-import { buildGraph, normalizeRelationships } from "../logic/graph-data.mjs";
+// can observe (spec §2's gate); relationships are additionally pre-filtered
+// per-viewer via visibleRelRows (Phase C, spec §6) so hidden/secret rows
+// never reach buildGraph unless this viewer can see them. A hidden row that
+// was individually row-revealed to this viewer (visibleRelRows's
+// rowRevealedToUser) survives that filter and is passed through as
+// revealedToViewer: true, so buildGraph's `rel.hidden && !isGM` gate lets it
+// through for its beneficiary - `hidden: true` is kept regardless, so the
+// beneficiary still sees the dashed edge style.
+import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
+import { buildGraph } from "../logic/graph-data.mjs";
+import { visibleRelRows } from "../logic/rel-reveals.mjs";
+import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
 
@@ -12,18 +20,33 @@ const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
+/**
+ * Edge label text: the free-text relationship label plus the secret label
+ * when one is visible to the current viewer. `secretText` is `null` when
+ * visibleRelRows withheld it (unrevealed, non-GM viewer) - `combineLabel`
+ * naturally drops it in that case, so this same call covers both the GM
+ * ("label and secretText joined when both exist") and player ("label, plus
+ * secretText only when returned non-null") visibility rules.
+ */
+function combineLabel(label, secretText) {
+  return [label, secretText].filter((s) => typeof s === "string" && s.length).join(" / ");
+}
+
 /** One row per visible MEJ-typed entry (single-page convention: first MEJ-typed page). */
 function graphRows() {
   const rows = [];
+  const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
   for (const entry of game.journal?.contents ?? []) {
     if (!game.user.isGM && entry.testUserPermission(game.user, "OBSERVER") !== true) continue;
     for (const page of entry.pages?.contents ?? []) {
       const type = game.MonksEnhancedJournal.getMEJType(page);
       if (!type) continue;
-      rows.push({
-        uuid: entry.uuid, name: entry.name, type,
-        relationships: normalizeRelationships(page.flags?.[MEJ_FLAGS]?.relationships)
-      });
+      const relationships = visibleRelRows(
+        page.flags?.[MEJ_FLAGS]?.relationships,
+        entry.getFlag(MODULE_ID, "relReveals") ?? {},
+        { userId: game.user.id, groups, isGM: game.user.isGM }
+      ).map((r) => ({ id: r.id, uuid: r.uuid, hidden: r.hidden, revealedToViewer: r.rowRevealedToUser, label: combineLabel(r.label, r.secretText) }));
+      rows.push({ uuid: entry.uuid, name: entry.name, type, relationships });
       break;
     }
   }
@@ -126,8 +149,17 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
     const edgeEls = links.map((link) => {
       const line = document.createElementNS(NS, "line");
       line.classList.add("mej-cc-graph-edge", link.kind);
+      if (link.hidden) line.classList.add("hidden-rel");
       svg.append(line);
       return line;
+    });
+    const edgeLabelEls = links.map((link) => {
+      if (!link.label) return null;
+      const text = document.createElementNS(NS, "text");
+      text.classList.add("mej-cc-graph-edge-label");
+      text.textContent = link.label;
+      svg.append(text);
+      return text;
     });
     const nodeEls = nodes.map((node) => {
       const g = document.createElementNS(NS, "g");
@@ -162,6 +194,11 @@ export class RelationshipGraphApp extends HandlebarsApplicationMixin(Application
           edgeEls[i].setAttribute("y1", link.source.y);
           edgeEls[i].setAttribute("x2", link.target.x);
           edgeEls[i].setAttribute("y2", link.target.y);
+          const labelEl = edgeLabelEls[i];
+          if (labelEl) {
+            labelEl.setAttribute("x", (link.source.x + link.target.x) / 2);
+            labelEl.setAttribute("y", (link.source.y + link.target.y) / 2 - 4);
+          }
         });
         nodes.forEach((node, i) => {
           nodeEls[i].setAttribute("transform", `translate(${node.x},${node.y})`);

@@ -73,7 +73,8 @@
         "index": "Index",
         "timeline": "Timeline",
         "search": "Search",
-        "dashboards": "Dashboards"
+        "dashboards": "Dashboards",
+        "secrets": "Secrets"
       },
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
@@ -168,6 +169,33 @@
       "noMentions": "No mentions yet",
       "gmOnlyMention": "Mentioned only in GM-only content"
     },
+    "secrets": {
+      "everyone": "Everyone",
+      "players": "Players",
+      "groups": "Groups",
+      "noPlayers": "No player users in this world.",
+      "noGroups": "No groups defined yet — manage them on the Hub's Secrets tab.",
+      "apply": "Apply",
+      "revealTitle": "Reveal secret",
+      "whisperHeader": "A secret from {name} has been revealed to you:",
+      "revealedToYou": "Revealed to you",
+      "noId": "This secret block has no id — re-create it with the editor's Secret button to make it revealable.",
+      "audienceButton": "Reveal to…",
+      "checklistRevealTitle": "Reveal secret to…",
+      "chipsNone": "Hidden from players",
+      "relRevealTitle": "Reveal relationship",
+      "relSecretRevealTitle": "Reveal secret relationship",
+      "knownConnections": "Known connections",
+      "stateAll": "All",
+      "stateRevealed": "Revealed",
+      "stateUnrevealed": "Unrevealed",
+      "empty": "No secrets tracked yet.",
+      "groupsHeader": "Player groups",
+      "addGroup": "Add group",
+      "editGroup": "Edit group",
+      "groupName": "Group name",
+      "groupMembers": "Members"
+    },
     "import": {
       "title": "Import Document",
       "button": "Import Document",
@@ -226,6 +254,19 @@
       "all": "Whole campaign",
       "backlinks": "Show mention links",
       "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
+    },
+    "prep": {
+      "title": "Session prep board",
+      "open": "Prep board",
+      "attendees": "Attendees",
+      "noAttendees": "No attendees yet.",
+      "secrets": "Secrets & clues",
+      "noSecrets": "No secrets on this session.",
+      "toggleAll": "Reveal/hide for everyone",
+      "linked": "Linked entries",
+      "noLinked": "No linked entries.",
+      "notes": "Scratch notes",
+      "notesPlaceholder": "GM-only notes for running this session…"
     }
   }
 }

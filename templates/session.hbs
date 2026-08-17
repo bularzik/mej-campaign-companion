@@ -94,6 +94,7 @@
                                 {{localize 'MEJCampaignCompanion.session.secrets'}}
                                 {{#if @root.isGM}}
                                 <button type="button" class="unbutton" data-action="addSecret" data-tooltip="{{localize 'MEJCampaignCompanion.session.addSecret'}}"><i class="fas fa-plus"></i></button>
+                                <button type="button" class="unbutton" data-action="openPrepBoard" data-tooltip="{{localize 'MEJCampaignCompanion.prep.open'}}"><i class="fa-solid fa-clipboard-list"></i></button>
                                 {{/if}}
                             </h3>
                             <ol class="secrets-list item-list scrollable">
@@ -102,6 +103,7 @@
                                     {{#if @root.isGM}}
                                     <input type="text" class="secret-text" value="{{secret.text}}" data-id="{{secret.id}}" data-change-action="updateSecretText" placeholder="{{localize 'MEJCampaignCompanion.session.secretPlaceholder'}}" />
                                     <a class="secret-toggle" data-action="toggleSecret" data-id="{{secret.id}}" data-tooltip="{{#if secret.revealed}}{{localize 'MEJCampaignCompanion.session.hideSecret'}}{{else}}{{localize 'MEJCampaignCompanion.session.revealSecret'}}{{/if}}"><i class="fas {{#if secret.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                                    <a class="secret-audience" data-action="secretAudience" data-id="{{secret.id}}" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}"><i class="fa-solid fa-user-secret"></i>{{#if secret.audienceAll}}<span class="mej-cc-audience-count">✱</span>{{else}}{{#if secret.audienceCount}}<span class="mej-cc-audience-count">{{secret.audienceCount}}</span>{{/if}}{{/if}}</a>
                                     <a class="item-delete" data-action="deleteSecret" data-id="{{secret.id}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.deleteSecret'}}"><i class="fas fa-trash"></i></a>
                                     {{else}}
                                     <div class="secret-text">{{secret.text}}</div>

@@ -1,6 +1,6 @@
 import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
-  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, I18N
+  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N
 } from "./constants.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
@@ -60,6 +60,13 @@ Hooks.once("init", () => {
   });
 
   game.settings.register(MODULE_ID, SAVED_QUERIES_SETTING, {
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
+  });
+
+  game.settings.register(MODULE_ID, PLAYER_GROUPS_SETTING, {
     scope: "world",
     config: false,
     type: Array,
@@ -199,6 +206,18 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     const { registerQueryEnricher } = await import("./hooks/query-enricher.mjs");
     registerQueryEnricher();
 
+    // Phase C: block-level secret reveal UI (GM overlay + player
+    // re-enrichment). Dynamic import — it reaches live Foundry globals and
+    // the audience dialog; nothing MEJ-static, but keep the pattern.
+    const { registerSecretsUi } = await import("./hooks/secrets-ui.mjs");
+    registerSecretsUi();
+
+    // Phase C: per-player/group relationship reveal overlay (row visibility
+    // for hidden relationship rows, secret-label audience for the free-text
+    // secret field). Same dynamic-import pattern as registerSecretsUi above.
+    const { registerRelationshipsUi } = await import("./hooks/relationships-ui.mjs");
+    registerRelationshipsUi();
+
     // Only now, with every registration step above having actually
     // succeeded, do we consider the API "received" for the ready hook's
     // purposes below.
@@ -240,6 +259,23 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
       openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
     }
   });
+
+  // Phase C: prep board on Session sheets (GM-only, spec §8).
+  if (game.user.isGM && game.MonksEnhancedJournal.getMEJType(doc) === SESSION_TYPE) {
+    buttons.unshift({
+      label: `${I18N}.prep.open`,
+      class: "mej-cc-open-prep",
+      icon: "fas fa-clipboard-list",
+      onclick: async () => {
+        try {
+          const { openPrepBoard } = await import("./apps/prep-board-app.mjs");
+          await openPrepBoard({ pageUuid: doc.uuid });
+        } catch (err) {
+          console.error(`${MODULE_ID} | prep board open failed`, err);
+        }
+      }
+    });
+  }
 });
 
 // GM-side scene-controls entry point, mirroring how MEJ itself adds a toggle

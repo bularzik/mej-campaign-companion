@@ -554,6 +554,16 @@
   flex: 0 0 auto;
 }
 
+/* Session secrets checklist - GM audience button badge (Phase C task 9):
+   count of players/groups targeted, or the audienceAll marker, next to the
+   fa-user-secret icon. Same size/subdued-color convention as
+   .mej-cc-backlink-count above; slight margin so it doesn't crowd the icon. */
+.mej-cc-audience-count {
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.7;
+  margin-inline-start: 0.25em;
+}
+
 /* Dashboards pane (Task 9) - saved queries (world setting), each re-run live
    through runQueryAll() and rendered as its own mini result list, styled
    after the Index pane's own row/list rules above. */
@@ -721,6 +731,17 @@
   opacity: 0.45;
 }
 
+.mej-cc-graph-edge.hidden-rel {
+  stroke-dasharray: 4 3;
+}
+
+.mej-cc-graph-edge-label {
+  font-size: 10px;
+  fill: var(--color-text-dark-secondary, #666);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
 .mej-cc-graph-node {
   cursor: pointer;
 }
@@ -743,4 +764,141 @@
   paint-order: stroke;
   stroke: var(--color-cool-5, #fff);
   stroke-width: 3px;
+}
+
+/* Phase C: secret reveal */
+.mej-cc-secret-audience { float: right; margin: 2px; font-size: var(--font-size-11); padding: 1px 6px; line-height: 1.4; width: auto; }
+.mej-cc-secret-chips { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-border-highlight, #ff6400); }
+.mej-cc-audience-row { display: block; margin: 2px 0; }
+.mej-cc-rel-revealed .fa-eye { color: var(--color-text-hyperlink, #4a90d9); margin-right: 4px; }
+.mej-cc-rel-secret { opacity: 0.85; }
+.mej-cc-rel-audience-secret { position: relative; }
+.mej-cc-rel-audience-secret::after {
+  content: "S"; position: absolute; bottom: -3px; right: -3px; font-size: 8px; font-weight: bold;
+  line-height: 1; padding: 0 2px; border-radius: 50%; background: var(--color-bg, #fff); color: var(--color-text-primary, #191813);
+}
+
+/* Secrets tracker pane (Task 10): GM-only Hub tab listing every secret in
+   the campaign (block secrets, session checklist items, hidden/secret
+   relationships) in one flat, filterable list, plus player-group
+   management below it. Controls row follows the timeline order-menu's
+   own active-button styling (see .mej-cc-order-menu button.active above). */
+.mej-cc-secrets {
+  gap: 0.5em;
+  padding: 0.5em;
+}
+
+.mej-cc-secrets-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+  flex: 0 0 auto;
+}
+
+.mej-cc-secrets-controls button.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.mej-cc-secrets-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 0.2em;
+  background: var(--color-border-light-tertiary, rgba(0, 0, 0, 0.15));
+}
+
+.mej-cc-secrets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mej-cc-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.4em;
+  border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+}
+
+.mej-cc-secret-source {
+  flex: 0 0 auto;
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mej-cc-secret-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.mej-cc-secret-audience-label {
+  flex: 0 0 auto;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.7;
+}
+
+.mej-cc-groups {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.15));
+  padding-top: 0.4em;
+}
+
+.mej-cc-groups header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: bold;
+}
+
+.mej-cc-groups header button {
+  width: auto;
+}
+
+.mej-cc-groups ul {
+  list-style: none;
+  margin: 0.3em 0 0;
+  padding: 0;
+}
+
+.mej-cc-groups li {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0;
+}
+
+/* Session prep board (spec §8, Task 11). */
+.mej-cc-prep section {
+  margin-bottom: 8px;
+}
+
+.mej-cc-prep-attendees img {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+}
+
+.mej-cc-prep-secrets li.revealed .mej-cc-prep-secret-text {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.mej-cc-prep-notes textarea {
+  min-height: 90px;
+  width: 100%;
 }

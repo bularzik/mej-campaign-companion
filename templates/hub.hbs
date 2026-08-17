@@ -196,6 +196,49 @@
                         </ol>
                     </div>
                 </div>
+                <div class="tab{{#if subtabs.secrets.active}} active{{/if}}" data-group="primary" data-tab="secrets">
+                    <div class="tab-inner flexcol mej-cc-secrets">
+                        {{#if secrets}}
+                        <div class="mej-cc-secrets-controls">
+                            {{#each secrets.types}}<button type="button" data-action="secretsSetFilter" data-filter="type" data-value="{{this.value}}" class="{{#if this.selected}}active{{/if}}">{{this.label}}</button>{{/each}}
+                            <span class="mej-cc-secrets-sep"></span>
+                            <button type="button" data-action="secretsSetFilter" data-filter="state" data-value="all" class="{{#if (eq secrets.state 'all')}}active{{/if}}">{{localize 'MEJCampaignCompanion.secrets.stateAll'}}</button>
+                            <button type="button" data-action="secretsSetFilter" data-filter="state" data-value="revealed" class="{{#if (eq secrets.state 'revealed')}}active{{/if}}">{{localize 'MEJCampaignCompanion.secrets.stateRevealed'}}</button>
+                            <button type="button" data-action="secretsSetFilter" data-filter="state" data-value="unrevealed" class="{{#if (eq secrets.state 'unrevealed')}}active{{/if}}">{{localize 'MEJCampaignCompanion.secrets.stateUnrevealed'}}</button>
+                            <span class="mej-cc-secrets-sep"></span>
+                            {{#each secrets.players}}<button type="button" data-action="secretsSetFilter" data-filter="player" data-value="{{this.id}}" class="{{#if this.selected}}active{{/if}}"><i class="fa-solid fa-user"></i> {{this.name}}</button>{{/each}}
+                        </div>
+                        <ol class="mej-cc-secrets-list item-list scrollable">
+                            {{#each secrets.rows}}
+                            <li class="mej-cc-secret-row item" data-secret-kind="{{this.kind}}" data-entry-uuid="{{this.entryUuid}}" data-secret-id="{{this.secretId}}" data-preview="{{this.preview}}" data-rel-kind="{{this.relKind}}">
+                                <i class="{{this.icon}}"></i>
+                                <a class="mej-cc-secret-source" data-action="openIndexRow" data-uuid="{{this.entryUuid}}">{{this.entryName}}</a>
+                                <span class="mej-cc-secret-preview">{{this.preview}}</span>
+                                <span class="mej-cc-secret-audience-label">{{#if this.audienceLabel}}{{this.audienceLabel}}{{else}}{{localize 'MEJCampaignCompanion.secrets.chipsNone'}}{{/if}}</span>
+                                {{#if this.canAudience}}<a data-action="trackerAudience" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}"><i class="fa-solid fa-user-secret"></i></a>{{/if}}
+                            </li>
+                            {{else}}
+                            <li class="instruction">{{localize 'MEJCampaignCompanion.secrets.empty'}}</li>
+                            {{/each}}
+                        </ol>
+                        <div class="mej-cc-groups">
+                            <header>{{localize 'MEJCampaignCompanion.secrets.groupsHeader'}}
+                                <button type="button" data-action="addGroup"><i class="fa-solid fa-plus"></i> {{localize 'MEJCampaignCompanion.secrets.addGroup'}}</button>
+                            </header>
+                            <ul>
+                                {{#each secrets.groups}}
+                                <li data-group-id="{{this.id}}"><strong>{{this.name}}</strong> — {{this.memberNames}}
+                                    <a data-action="editGroup"><i class="fa-solid fa-pen"></i></a>
+                                    <a data-action="deleteGroup"><i class="fa-solid fa-trash"></i></a>
+                                </li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.secrets.noGroups'}}</li>
+                                {{/each}}
+                            </ul>
+                        </div>
+                        {{/if}}
+                    </div>
+                </div>
             </section>
         </div>
     </div>
