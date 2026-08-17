@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0
+## 0.5.0 (2026-08-17)
 
 - Works on a stock Monk's Enhanced Journal install: the module no longer needs
   the `setupMonksEnhancedJournal` extension API. A new adapter resolves

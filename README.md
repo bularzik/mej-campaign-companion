@@ -76,10 +76,18 @@ type flag from Session pages; if the world later runs an API-carrying build
 again, the GM's client silently re-stamps it, so worlds can move between
 builds with no migration.
 
+**Caveat:** enabling the hidden `forceNativeMode` client setting on a build
+that *does* have the extension API puts that one client into native mode too
+— which means that client's MEJ no longer knows the Session type, so MEJ's
+own `fixType` can strip the `monks-enhanced-journal` type flag from Session
+pages as seen by that client. Turning the setting back off lets the GM's
+startup sweep re-stamp them automatically, the same as returning from a
+stock MEJ install.
+
 ## Requirements
 
 - Foundry VTT **v14**.
-- **Monk's Enhanced Journal**, a build that includes the extension API this module depends on — targeting **the MEJ release after 14.01** (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing). If MEJ is present but doesn't expose the API, Campaign Companion detects this at startup and disables itself with a single clear notification rather than half-loading; see [Error handling](#error-handling-and-troubleshooting) below.
+- **Monk's Enhanced Journal**, any active build. A build that includes the extension API (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
 - A `dnd5e`-first companion whose core (search, timeline, docx, auto-link/capture, Session sheet itself) makes no `dnd5e`-specific assumptions — see [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for what to manually verify on other game systems.
 
 ## Installation
@@ -106,7 +114,7 @@ All settings are **world-scoped** (GM-only, apply to everyone in the world) exce
 | `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
-| `forceNativeMode` | client | hidden | Ignore the MEJ extension API and use native mode (testing / escape hatch) |
+| `forceNativeMode` | No (internal) | Off | Ignore the MEJ extension API and use native mode (testing / escape hatch) |
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
@@ -135,8 +143,9 @@ What this **doesn't** eliminate: the "impersonate another user's recap" risk fro
 
 ## Error handling and troubleshooting
 
-- If Monk's Enhanced Journal isn't present, or is present but doesn't fire the `setupMonksEnhancedJournal` extension-API hook (a pre-API MEJ build), Campaign Companion disables itself at `ready` and shows one permanent error notification rather than half-loading with silent failures.
-- If MEJ's API is present but this module's own registration throws (a bug in this module), a second, more specific error notification is shown instead, and the error is logged to the console.
+- If Monk's Enhanced Journal isn't installed or isn't active, Campaign Companion disables itself at `ready` (`absent` mode) and shows one permanent error notification rather than half-loading with silent failures.
+- If MEJ is active but this module's own registration throws in any mode (a bug in this module), a second, more specific `init-failed` error notification is shown instead, and the error is logged to the console.
+- A stock MEJ build without the extension API is not an error condition: Campaign Companion runs in `native` mode with no warning — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above.
 - Auto-link and auto-capture are pure observers: a failure in either logs to the console and is skipped, and never blocks the underlying page-save or combat-end operation it hooked.
 - Docx import is transactional per wizard run — documents are only created on final confirmation, and a failure reports per-section errors with no partial writes.
 
