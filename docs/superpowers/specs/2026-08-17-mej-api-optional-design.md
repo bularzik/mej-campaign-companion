@@ -225,11 +225,13 @@ makes — it is what keeps `getSheetThemeForDocument`'s
 requirement is mode-independent (see the long comment at
 `campaign-companion.mjs:164-190`).
 
-**Entry points (both modes).** The existing `activateControls` toolbar button
-(stock MEJ fires that hook) plus a journal-directory header button, so the Hub
-is reachable even when MEJ's shell is closed. Both call the adapter's
-`openHub()`, which routes to `MonksEnhancedJournal.openShellPage(HUB_PAGE_ID)`
-in `api` mode or renders the host window in `native` mode.
+**Entry points (both modes).** No new UI is needed: the companion already has
+two, and both are re-routed through the adapter's `openHub()` — the
+`activateControls` toolbar button (`campaign-companion.mjs:255`, and stock MEJ
+fires that hook) and the GM scene-controls entry in the notes group
+(`campaign-companion.mjs:305`), which works with MEJ's shell closed.
+`openHub()` calls `MonksEnhancedJournal.openShellPage(HUB_PAGE_ID)` in `api`
+mode and renders the window in `native` mode.
 
 **Session creation.** A "New Session" button in the Hub header, present in
 both modes for UI uniformity. It uses the companion's existing creation path,
