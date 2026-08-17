@@ -93,6 +93,7 @@
       "filterName": "Filter by name...",
       "filteredCount": "{shown} of {total}",
       "noEntries": "No journal entries yet.",
+      "newSession": "New Session",
       "orderBy": "Order By",
       "order": {
         "manual": "Manual",

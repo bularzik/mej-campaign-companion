@@ -22,6 +22,7 @@ import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
 import { getCalendarMonths, calendarBounds, hasCalendar, formatCampaignDate, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date.mjs";
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
+import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
@@ -82,6 +83,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
       toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
+      newSession: CampaignHubPage.onNewSession,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       openGraph: CampaignHubPage.onOpenGraph,
@@ -580,6 +582,30 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const id = target.closest("[data-group-id]")?.dataset.groupId;
     await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, deleteGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), id));
     this.render({ parts: ["main"] });
+  }
+
+  /**
+   * Create an empty Session entry and open it. This is the creation path in
+   * native mode, where MEJ's own New Entry dialog cannot offer the Session
+   * type (its registry only knows about it when the extension API is
+   * present). Routed through JournalEntry.create like every other companion
+   * creation path, so the preCreateJournalEntry ownership hook still applies
+   * the playersWriteSessions setting.
+   */
+  static async onNewSession() {
+    try {
+      const name = game.i18n.localize(`${I18N}.hub.newSession`);
+      const entry = await JournalEntry.create({
+        name,
+        pages: [buildSessionPageData(name, "", null, null)]
+      });
+      const page = entry?.pages?.contents?.[0];
+      if (page) await page.sheet.render(true);
+      this.render();
+    } catch (err) {
+      console.error(`${MODULE_ID} | creating a session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.errors.init-failed`));
+    }
   }
 
   // GM-only "Import Document" entry point (Task 11) - lives on the Index
