@@ -593,6 +593,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * the playersWriteSessions setting.
    */
   static async onNewSession() {
+    if (!game.user.isGM) return;
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
       const entry = await JournalEntry.create({
@@ -604,7 +605,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.render();
     } catch (err) {
       console.error(`${MODULE_ID} | creating a session failed`, err);
-      ui.notifications.error(game.i18n.localize(`${I18N}.errors.init-failed`));
+      ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
     }
   }
 

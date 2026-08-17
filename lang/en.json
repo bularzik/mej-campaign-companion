@@ -94,6 +94,7 @@
       "filteredCount": "{shown} of {total}",
       "noEntries": "No journal entries yet.",
       "newSession": "New Session",
+      "newSessionFailed": "Could not create the session. Check the console for details.",
       "orderBy": "Order By",
       "order": {
         "manual": "Manual",
