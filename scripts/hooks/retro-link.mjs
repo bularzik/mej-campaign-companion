@@ -109,6 +109,26 @@ async function whisperSummary(entry, applied, ambiguous) {
   });
 }
 
+// Hooks.callAll never awaits async handlers, so N rapid entity creations
+// (e.g. a multi-section docx import, each stamped with the pending flag by
+// preCreateJournalEntry above) fire N concurrent createJournalEntry handlers
+// below. Each processPendingEntity pass plans against a snapshot of page
+// text and later writes a whole new page.text.content - two overlapping
+// passes that both match the same page would have the second write clobber
+// the first's links, and confirm-mode dialogs would stack. Serialize every
+// pass (hook-triggered and sweep-triggered alike) through this module-level
+// promise chain instead. NOT logic/filing-queue.mjs's shared queue: a modal
+// confirm dialog here must not block that queue's own (unrelated) timeline
+// filings. Because planning happens inside the queued task itself, each
+// pass re-reads current page content after any previous pass's writes have
+// already landed.
+let retroChain = Promise.resolve();
+function enqueueRetro(entry) {
+  retroChain = retroChain.then(() => processPendingEntity(entry)).catch((err) =>
+    console.error(`${MODULE_ID} | retro-link queue failed`, err));
+  return retroChain;
+}
+
 async function processPendingEntity(entry) {
   try {
     // Clear first: a reload mid-dialog must not replay the pass forever.
@@ -152,20 +172,25 @@ export function registerRetroLink() {
     }
   });
 
-  Hooks.on("createJournalEntry", async (entry) => {
+  Hooks.on("createJournalEntry", (entry) => {
     if (game.users.activeGM !== game.user) return;
     if (!entry.getFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG)) return;
-    await processPendingEntity(entry);
+    // Fire-and-forget: enqueueRetro serializes this against every other
+    // queued pass (see its own comment above) so overlapping hook- and
+    // sweep-triggered passes can never interleave.
+    enqueueRetro(entry);
   });
 
   // Catch-up sweep: entities created while no GM was connected still carry
   // the pending flag; process them (sequentially — one dialog at a time in
-  // confirm mode) once a GM logs in.
+  // confirm mode) once a GM logs in. Routed through the same enqueueRetro
+  // chain as the createJournalEntry handler above, so a sweep pass and a
+  // concurrently hook-triggered pass still can't interleave.
   Hooks.once("ready", async () => {
     if (game.users.activeGM !== game.user) return;
     for (const entry of game.journal.contents) {
       try {
-        if (entry.getFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG)) await processPendingEntity(entry);
+        if (entry.getFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG)) await enqueueRetro(entry);
       } catch (err) {
         console.error(`${MODULE_ID} | retro-link sweep failed for "${entry?.name}"`, err);
       }
