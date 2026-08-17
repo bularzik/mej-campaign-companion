@@ -41,9 +41,11 @@ const MEJ_DEFAULT_OBJECTS = {
  * @param {string} name entry + page name
  * @param {string} htmlContent page text.content HTML
  * @param {object} [extraFlags] merged over the type's defaultObject seed
+ * @param {object|null} [ownership] entry-level ownership record (e.g.
+ *   { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }); null → Foundry default
  * @returns {Promise<JournalEntryPage>}
  */
-export async function createMejEntry(type, name, htmlContent, extraFlags = {}) {
+export async function createMejEntry(type, name, htmlContent, extraFlags = {}, ownership = null) {
   // JournalEntry.create() returns the created document directly (not an
   // array) when called with a single plain-object `data` argument - an
   // array result only happens when `data` itself is an array. Destructuring
@@ -55,6 +57,7 @@ export async function createMejEntry(type, name, htmlContent, extraFlags = {}) {
   // created a page.
   const entry = await JournalEntry.create({
     name,
+    ...(ownership ? { ownership } : {}),
     pages: [{
       name,
       type: "text",

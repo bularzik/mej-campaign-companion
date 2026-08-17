@@ -33,6 +33,18 @@ Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced 
 
 **Limitation:** choosing "Everyone" in a secret's reveal dialog reveals it via the companion's own per-user re-enrichment, not Foundry's native per-block Reveal control (the `revealed` class Foundry itself toggles). Core-sheet viewers that don't run this module, and player-safe docx exports, only honor the native `revealed` class — use Foundry's own Reveal control (not this module's "Everyone") for a secret that needs to survive those paths.
 
+### Auto-link scoping (0.4.0)
+
+Auto-linking is now bounded by audience containment on every path: a mention links to an entity only when everyone who can view the page can also view the entity (evaluated at the JournalEntry level via ownership, threshold LIMITED); GMs are excepted.
+
+**Auto-link paths:**
+- **Docx import** — auto-links imported text at creation (gated on the Auto-Link setting). The import wizard's Audience select ("GM only" default / "All players (Observer)") sets created-entry ownership and bounds link targets; ambiguous names are skipped and listed in the summary.
+- **Retroactive Auto-Link** — a new world setting (off/confirm/silent, default confirm) links existing plain-text mentions of a newly-created MEJ entity's name from the active GM's client. Confirm mode shows a review dialog with per-page checkboxes; silent mode writes immediately and sends a whispered GM summary. Entities created while no GM is online are processed when a GM next connects.
+
+**Ambiguity:** names shared by multiple in-audience entities are never auto-linked; they are reported in the dialog, summary, or import warnings instead.
+
+**Caveat:** links are validated when written; changing permissions afterward does not add or remove existing links. The per-page `noAutoLink` flag opts a page out of every auto-link path.
+
 ## Requirements
 
 - Foundry VTT **v14**.
@@ -51,15 +63,18 @@ This module has no published Foundry package listing yet — install it manually
 
 ## Settings
 
-All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Five settings are registered in total — four visible in the module settings menu, plus one internal setting with no UI:
+All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Eight settings are registered in total — five visible in the module settings menu, plus three internal settings with no UI:
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
 | `autoLink` | Yes | Off | Turn on auto-linking of newly-typed MEJ entry names in page text on save. |
+| `retroLinkMode` | Yes | Confirm | Retroactive Auto-Link world setting: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off (disabled), Confirm (review dialog with per-page checkboxes), Silent (write immediately + whispered GM summary). |
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so they can write their own recaps directly. |
 | `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
+| `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
+| `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 

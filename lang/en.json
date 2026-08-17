@@ -20,6 +20,13 @@
       "playersWriteSessions": {
         "name": "Players Write Sessions",
         "hint": "When enabled, new Session entries created through the docx import wizard or Monk's Enhanced Journal's own New Entry dialog are owned by all players by default, so any player can add their own recap without a GM relaying the write."
+      },
+      "retroLinkMode": {
+        "name": "Retroactive Auto-Link",
+        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name across the journal (audience-scoped). Confirm shows a review dialog to the GM; Silent writes immediately and whispers a summary.",
+        "off": "Off",
+        "confirm": "Confirm (review dialog)",
+        "silent": "Silent (whisper summary)"
       }
     },
     "sheettype": { "session": "Session" },
@@ -229,7 +236,13 @@
       "imagesDropped": "Some images could not be uploaded and were left out.",
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
       "nothingToImport": "Every section is set to skip — nothing to import.",
-      "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date."
+      "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date.",
+      "audience": "Audience",
+      "audienceGm": "GM only",
+      "audiencePlayers": "All players (Observer)",
+      "audienceHint": "Sets ownership of the created entries and bounds which entities the imported text may auto-link to.",
+      "ambiguousSkipped": "Ambiguous name not auto-linked (multiple entities share it): {name}",
+      "linked": "{count} name mention(s) auto-linked."
     },
     "export": {
       "title": "Export to Word",
@@ -267,6 +280,14 @@
       "noLinked": "No linked entries.",
       "notes": "Scratch notes",
       "notesPlaceholder": "GM-only notes for running this session…"
+    },
+    "retroLink": {
+      "title": "Auto-Link New Entry",
+      "intro": "\"{name}\" is mentioned in the pages below. Link the checked pages?",
+      "apply": "Link Checked",
+      "skip": "Skip",
+      "ambiguous": "Skipped as ambiguous (another entity shares this name):",
+      "summary": "Auto-linked \"{name}\" in {count} page(s)."
     }
   }
 }

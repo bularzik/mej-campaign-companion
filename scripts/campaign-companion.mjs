@@ -1,9 +1,11 @@
 import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
-  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N
+  AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
+  RETRO_LINK_MODE_SETTING, I18N
 } from "./constants.mjs";
 import { initSearchHooks } from "./search/live-index.mjs";
 import { registerAutoLink } from "./hooks/auto-link.mjs";
+import { registerRetroLink } from "./hooks/retro-link.mjs";
 import { registerAutoCapture } from "./hooks/auto-capture.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
@@ -30,6 +32,20 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: false
+  });
+
+  game.settings.register(MODULE_ID, RETRO_LINK_MODE_SETTING, {
+    name: `${I18N}.settings.retroLinkMode.name`,
+    hint: `${I18N}.settings.retroLinkMode.hint`,
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      off: `${I18N}.settings.retroLinkMode.off`,
+      confirm: `${I18N}.settings.retroLinkMode.confirm`,
+      silent: `${I18N}.settings.retroLinkMode.silent`
+    },
+    default: "confirm"
   });
 
   game.settings.register(MODULE_ID, AUTO_CAPTURE_SETTING, {
@@ -190,6 +206,10 @@ Hooks.on("setupMonksEnhancedJournal", async (api) => {
     // MEJ entry names in a page's text.content (gated on the "autoLink"
     // world setting, checked per-update inside the hook itself).
     registerAutoLink();
+
+    // Retroactive auto-link pass for newly-created MEJ entities (gated on
+    // the "retroLinkMode" world setting, checked inside the hooks).
+    registerRetroLink();
 
     // Wires the combat-end Encounter capture and shareImage capture wraps
     // (each gated on its own world setting, checked inside the hook itself).
