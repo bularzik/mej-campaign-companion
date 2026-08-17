@@ -771,6 +771,13 @@
 .mej-cc-secret-chips { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
 section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-border-highlight, #ff6400); }
 .mej-cc-audience-row { display: block; margin: 2px 0; }
+.mej-cc-rel-revealed .fa-eye { color: var(--color-text-hyperlink, #4a90d9); margin-right: 4px; }
+.mej-cc-rel-secret { opacity: 0.85; }
+.mej-cc-rel-audience-secret { position: relative; }
+.mej-cc-rel-audience-secret::after {
+  content: "S"; position: absolute; bottom: -3px; right: -3px; font-size: 8px; font-weight: bold;
+  line-height: 1; padding: 0 2px; border-radius: 50%; background: var(--color-bg, #fff); color: var(--color-text-primary, #191813);
+}
 
 /* Secrets tracker pane (Task 10): GM-only Hub tab listing every secret in
    the campaign (block secrets, session checklist items, hidden/secret
@@ -873,11 +880,4 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   align-items: center;
   gap: 0.4em;
   padding: 0.2em 0;
-}
-.mej-cc-rel-revealed .fa-eye { color: var(--color-text-hyperlink, #4a90d9); margin-right: 4px; }
-.mej-cc-rel-secret { opacity: 0.85; }
-.mej-cc-rel-audience-secret { position: relative; }
-.mej-cc-rel-audience-secret::after {
-  content: "S"; position: absolute; bottom: -3px; right: -3px; font-size: 8px; font-weight: bold;
-  line-height: 1; padding: 0 2px; border-radius: 50%; background: var(--color-bg, #fff); color: var(--color-text-primary, #191813);
 }

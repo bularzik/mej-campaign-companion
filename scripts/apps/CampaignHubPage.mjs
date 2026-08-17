@@ -330,12 +330,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         const relRows = visibleRelRows(page.flags?.["monks-enhanced-journal"]?.relationships, relReveals, { userId: game.user.id, groups, isGM: true });
         for (const r of relRows.filter((r) => r.hidden || r.secretText)) {
           // A relationship can carry two independently-revealable overlays -
-          // the hidden ROW itself, and its separate secret label - so the
-          // row's relKind records which one this tracker entry represents
-          // (mirrors onTrackerAudience's relationship branch, which needs it
-          // to write back to the matching overlay key).
-          const relKind = r.hidden ? "row" : "secret";
-          rows.push({ kind: "relationship", relKind, entryUuid: entry.uuid, entryName: entry.name, entryType: type, secretId: r.id, preview: r.secretText || r.label, audience: normalizeAudience(relReveals[r.id]?.[relKind]), revealedAll: false });
+          // the hidden ROW itself, and its separate secret label - which the
+          // sheet UI exposes as two separate reveal buttons when both apply.
+          // Emit one tracker row per overlay actually present here, each
+          // tagged with the relKind onTrackerAudience needs to write back to
+          // the matching overlay key. Only the secret-label overlay can be
+          // "revealed to everyone" via MEJ's native rel.revealed flag (a
+          // hidden row has no such all-or-nothing native toggle - it's only
+          // ever revealed via the relReveals.row per-player/group overlay).
+          const relKinds = [];
+          if (r.hidden) relKinds.push("row");
+          if (r.secretText) relKinds.push("secret");
+          for (const relKind of relKinds) {
+            const preview = relKind === "secret" ? r.secretText : (r.label || entry.name);
+            rows.push({ kind: "relationship", relKind, entryUuid: entry.uuid, entryName: entry.name, entryType: type, secretId: r.id, preview, audience: normalizeAudience(relReveals[r.id]?.[relKind]), revealedAll: relKind === "secret" && r.revealed === true });
+          }
         }
         break;
       }

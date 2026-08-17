@@ -4,7 +4,10 @@
  * (rel.revealed), and a binary hidden row flag; the companion overlay
  * (flags["mej-campaign-companion"].relReveals = {[relId]: {row?, secret?}})
  * adds per-player/group granularity on top without touching MEJ data.
- * Pure and Foundry-free.
+ * Pure and Foundry-free. Each row surfaces the raw `revealed` flag (MEJ's
+ * own "secret shown to everyone" toggle) too, for consumers - e.g. the Hub
+ * Secrets tracker (Task 10) - that need to distinguish it from the
+ * per-player/group relReveals overlay.
  */
 import { canSee } from "./reveal-state.mjs";
 
@@ -27,7 +30,7 @@ export function visibleRelRows(relationships, relReveals, { userId, groups, isGM
     let secretText = null;
     if (isGM) secretText = secret;
     else if (secret && (rel.revealed === true || canSee(overlay.secret, userId, groups))) secretText = secret;
-    rows.push({ id, uuid: rel.uuid, label: typeof rel.relationship === "string" ? rel.relationship : "", hidden, rowRevealedToUser, secretText });
+    rows.push({ id, uuid: rel.uuid, label: typeof rel.relationship === "string" ? rel.relationship : "", hidden, rowRevealedToUser, secretText, revealed: rel.revealed === true });
   }
   return rows;
 }
