@@ -187,7 +187,17 @@ export function registerRetroLink() {
   // confirm mode) once a GM logs in. Routed through the same enqueueRetro
   // chain as the createJournalEntry handler above, so a sweep pass and a
   // concurrently hook-triggered pass still can't interleave.
-  Hooks.once("ready", async () => {
+  //
+  // registerRetroLink() is called from registerCore(), which in api mode
+  // runs long before "ready" fires but in native mode runs from inside the
+  // ready hook dispatch itself (after an await, i.e. after Hooks.callAll
+  // has already iterated its listener snapshot). Hooks.once("ready", ...)
+  // registered at that point would never fire - "ready" only fires once per
+  // boot. Run the sweep immediately if ready has already happened instead.
+  if (game.ready) sweep();
+  else Hooks.once("ready", sweep);
+
+  async function sweep() {
     if (game.users.activeGM !== game.user) return;
     for (const entry of game.journal.contents) {
       try {
@@ -196,5 +206,5 @@ export function registerRetroLink() {
         console.error(`${MODULE_ID} | retro-link sweep failed for "${entry?.name}"`, err);
       }
     }
-  });
+  }
 }

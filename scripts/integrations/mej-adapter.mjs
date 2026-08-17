@@ -265,6 +265,7 @@ export async function onReady() {
 /** Open the Campaign Hub: a shell tab in api mode, a window in native mode. */
 export async function openHub() {
   try {
+    if (mode === MODE_ABSENT) return;
     if (mode === MODE_API) {
       await game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID);
       return;

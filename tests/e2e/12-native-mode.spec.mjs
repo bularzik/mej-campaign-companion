@@ -25,7 +25,7 @@ test.describe("native mode (no extension API)", () => {
     await login(page, "Gamemaster");
     await page.evaluate(async (run) => {
       await game.settings.set("mej-campaign-companion", "forceNativeMode", false);
-      const doomed = game.journal.filter((j) => j.name.includes(`TT${run}`));
+      const doomed = game.journal.filter((j) => j.name.includes(`TT-${run}`));
       for (const entry of doomed) await entry.delete();
     }, RUN);
     await page.close();
@@ -37,32 +37,88 @@ test.describe("native mode (no extension API)", () => {
 
     const state = await page.evaluate(async (run) => {
       const adapter = await import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs");
+      const search = await import("/modules/mej-campaign-companion/scripts/search/live-index.mjs");
 
       // Behavioral check that the Session sheet is registered through core
       // Foundry: CONFIG.JournalEntryPage.sheetClasses stays an empty object
       // for our subtype in this Foundry build even after a successful
       // DocumentSheetConfig.registerSheet call (confirmed live) — sheet
       // resolution for a real, persisted page is the reliable signal.
-      const name = `TT${run} sheet-registration probe`;
+      const name = `TT-${run} sheet-registration probe`;
       const entry = await JournalEntry.create({
         name, pages: [{ name, type: "mej-campaign-companion.session" }]
       });
       const sessionSheetRegistered = entry.pages.contents[0].sheet?.constructor?.name === "SessionSheet";
       await entry.delete();
 
+      // Behavioral check that registerCore() actually wired the search
+      // index's incremental-update hooks in native mode — NOT just a
+      // Hooks.events presence count, which MEJ's own listeners could
+      // satisfy on their own. Build the index first, then create a fresh
+      // MEJ-typed entry and confirm it's found without a manual rebuild:
+      // that only happens if initSearchHooks()'s createJournalEntry
+      // listener (registered by registerCore() -> initSearchHooks()) is
+      // live in this mode.
+      search.ensureIndex();
+      const searchName = `TT-${run} search hook probe`;
+      const searchEntry = await JournalEntry.create({
+        name: searchName, pages: [{ name: searchName, type: "mej-campaign-companion.session" }]
+      });
+      const coreSearchHookRan = search.searchAll(searchName).some((hit) => hit.uuid === searchEntry.uuid);
+      await searchEntry.delete();
+
       return {
         mode: adapter.currentMode(),
         wiringFailed: adapter.wiringFailed(),
         sessionSheetRegistered,
-        // Core features are wired by hooks, not by the API.
-        hasSearchHook: Hooks.events.createJournalEntryPage?.length > 0
+        coreSearchHookRan
       };
     }, RUN);
 
     expect(state.mode).toBe("native");
     expect(state.wiringFailed).toBe(false);
     expect(state.sessionSheetRegistered).toBe(true);
-    expect(state.hasSearchHook).toBe(true);
+    expect(state.coreSearchHookRan).toBe(true);
+  });
+
+  test("native-mode ready dispatch still runs the retro-link catch-up sweep (FIX 1 regression)", async ({ page }) => {
+    await login(page, "Gamemaster");
+    await setForceNative(page, true);
+
+    // Stamp the pending flag directly (rather than relying on the
+    // preCreateJournalEntry auto-stamp) so this test is a pure check of the
+    // sweep itself, independent of the retroLinkMode world setting or MEJ
+    // typing on the fixture.
+    const name = `TT-${RUN} retro sweep probe`;
+    const entryId = await page.evaluate(async (n) => {
+      const entry = await JournalEntry.create({ name: n, pages: [{ name: n, type: "text" }] });
+      await entry.setFlag("mej-campaign-companion", "retroLinkPending", true);
+      return entry.id;
+    }, name);
+
+    // Reload as the GM: this re-enters the exact boot path FIX 1 covers.
+    // In native mode registerCore() (and therefore registerRetroLink())
+    // runs from inside the ready hook's own dispatch, after an await — so
+    // a naive Hooks.once("ready", sweep) registered at that point lands
+    // after Hooks.callAll("ready") already snapshotted its listeners, and
+    // "ready" only fires once per boot. Without the FIX 1 guard the sweep
+    // would never run and the flag below would stay stamped forever.
+    await page.reload();
+    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60000 });
+    await settle(page, 2500);
+
+    const result = await page.evaluate(async ({ id, n }) => {
+      const adapter = await import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs");
+      // Give the sweep's own queued async pass a moment to finish.
+      await new Promise((r) => setTimeout(r, 500));
+      const entry = game.journal.get(id);
+      const pending = !!entry?.getFlag("mej-campaign-companion", "retroLinkPending");
+      await entry?.delete();
+      return { mode: adapter.currentMode(), pending };
+    }, { id: entryId, n: name });
+
+    expect(result.mode).toBe("native");
+    expect(result.pending).toBe(false);
   });
 
   test("opens the Hub as a standalone window with working tabs", async ({ page }) => {
@@ -105,7 +161,7 @@ test.describe("native mode (no extension API)", () => {
       const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
       const adapter = await import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs");
 
-      const name = `TT${run} native session`;
+      const name = `TT-${run} native session`;
       const entry = await JournalEntry.create({ name, pages: [buildSessionPageData(name, "", null, null)] });
       const pageDoc = entry.pages.contents[0];
 
@@ -144,7 +200,7 @@ test.describe("native mode (no extension API)", () => {
       const sheetClasses = CONFIG.JournalEntryPage.sheetClasses["mej-campaign-companion.session"];
       const sheetClassesRegistered = Object.keys(sheetClasses ?? {}).length > 0;
 
-      const name = `TT${run} api sheet-registration probe`;
+      const name = `TT-${run} api sheet-registration probe`;
       const entry = await JournalEntry.create({
         name, pages: [{ name, type: "mej-campaign-companion.session" }]
       });
@@ -169,7 +225,7 @@ test.describe("native mode (no extension API)", () => {
       const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
       const adapter = await import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs");
 
-      const name = `TT${run} heal session`;
+      const name = `TT-${run} heal session`;
       const entry = await JournalEntry.create({ name, pages: [buildSessionPageData(name, "", null, null)] });
       const pageDoc = entry.pages.contents[0];
 
