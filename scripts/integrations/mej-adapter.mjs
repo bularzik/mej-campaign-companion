@@ -10,6 +10,7 @@ import {
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
 import { planFlagHeal } from "../logic/session-flag-heal.mjs";
+import { missingSheetRegistrations } from "../logic/sheet-registration.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -154,6 +155,36 @@ export function registerHubSheetClass(CampaignHubPage) {
   });
 }
 
+/**
+ * Repair sheet registrations Foundry's pre-ready registerSheet queue may
+ * have silently dropped (see onHandshake's comment for the mechanism). Safe
+ * to call any time after game.ready is true, in either mode: registerSheet
+ * applies immediately once ready, so a repair here always sticks. Cheap and
+ * idempotent when nothing was dropped - the CONFIG lookup is synchronous and
+ * the dynamic imports only happen when something actually needs fixing.
+ */
+async function ensureSheetRegistrations() {
+  const missing = missingSheetRegistrations(
+    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID
+  );
+  if (!missing.session && !missing.hub) return;
+
+  console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, missing);
+  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+    import("../sheets/SessionSheet.mjs"),
+    import("../apps/CampaignHubPage.mjs")
+  ]);
+
+  if (missing.session) {
+    foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, SessionSheet, {
+      types: [SESSION_DOCUMENT_TYPE],
+      makeDefault: true,
+      label: `${I18N}.sheettype.session`
+    });
+  }
+  if (missing.hub) registerHubSheetClass(CampaignHubPage);
+}
+
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */
 async function wireNativeMode() {
   // Same deferred-import discipline as api mode: these files statically
@@ -187,8 +218,18 @@ export async function onHandshake(api) {
   if (forceNative()) return;
 
   mode = MODE_API;
-  await registerCore();
+  // wireApiMode first, registerCore second: Foundry's DocumentSheetConfig
+  // drains its pre-ready registerSheet queue exactly once, at some point
+  // during setupGame() before game.ready flips - see initializeSheets() in
+  // Foundry's document-sheet-config.mjs. registerCore() pulls in several
+  // more dynamic imports than wireApiMode does; running it first risked
+  // pushing wireApiMode's registerSheet calls past that one-time drain into
+  // a window nothing will ever empty again (confirmed live: sheetClasses
+  // stayed permanently empty for our types when registerCore ran first).
+  // onReady()'s ensureSheetRegistrations() is the safety net if this order
+  // ever loses the race again.
   await step("api-mode wiring", () => wireApiMode(api));
+  await registerCore();
   console.log(`${MODULE_ID} | mode: ${mode}`);
 }
 
@@ -198,7 +239,17 @@ export async function onHandshake(api) {
  * @returns {Promise<"api"|"native"|"absent">}
  */
 export async function onReady() {
-  if (mode === MODE_API) return mode;
+  if (mode === MODE_API) {
+    // game.ready is definitely true here, so registerSheet applies
+    // immediately - this repairs anything onHandshake's registerSheet calls
+    // lost to Foundry's pre-ready drain (see onHandshake's comment). Not
+    // hoisted above mode resolution: an absent-mode world must stay
+    // completely inert, and this dynamically imports SessionSheet/
+    // CampaignHubPage, both of which extend MEJ's own EnhancedJournalSheet -
+    // safe once we know MEJ actually wired us up, not before.
+    await step("sheet registration check", () => ensureSheetRegistrations());
+    return mode;
+  }
 
   const mejActive = !!game.modules.get("monks-enhanced-journal")?.active;
   mode = resolveMode({ handshakeFired, mejActive, forceNative: forceNative() });
@@ -207,6 +258,7 @@ export async function onReady() {
 
   await registerCore();
   await step("native-mode wiring", () => wireNativeMode());
+  await step("sheet registration check", () => ensureSheetRegistrations());
   return mode;
 }
 

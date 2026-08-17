@@ -45,6 +45,37 @@ Auto-linking is now bounded by audience containment on every path: a mention lin
 
 **Caveat:** links are validated when written; changing permissions afterward does not add or remove existing links. The per-page `noAutoLink` flag opts a page out of every auto-link path.
 
+## Running without the MEJ extension API (0.5.0)
+
+The companion works against a stock Monk's Enhanced Journal install as well as
+a build carrying the extension API. It resolves one of three modes at startup:
+
+| Mode | When | What you get |
+|------|------|--------------|
+| `api` | MEJ fires `setupMonksEnhancedJournal` | Everything, with the Session sheet and Campaign Hub inside MEJ's tabbed shell |
+| `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub as standalone windows |
+| `absent` | MEJ is not active | The module stays inert — MEJ is a hard dependency |
+
+Native mode is a supported configuration, not a degraded fallback, and it is
+not announced with a warning. What differs:
+
+- Session does not appear in MEJ's own "New Entry" dialog — create sessions
+  with the **New Session** button in the Campaign Hub.
+- Session pages cannot be MEJ *relationship* targets (MEJ's picker only
+  enumerates its own registry). Companion relationships are unaffected.
+- The Hub opens as its own window rather than a shell tab.
+- The "open graph" and "prep board" header buttons are absent; both remain
+  reachable — the graph from the Hub toolbar, the prep board from the button
+  on the Session sheet itself.
+
+Sessions are identified by their native Foundry page type
+(`mej-campaign-companion.session`), never by MEJ's type flag, so they stay
+first-class in search, auto-linking, the Hub index, export and the graph in
+both modes. A stock MEJ install strips the module's `monks-enhanced-journal`
+type flag from Session pages; if the world later runs an API-carrying build
+again, the GM's client silently re-stamps it, so worlds can move between
+builds with no migration.
+
 ## Requirements
 
 - Foundry VTT **v14**.
@@ -63,7 +94,7 @@ This module has no published Foundry package listing yet — install it manually
 
 ## Settings
 
-All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Eight settings are registered in total — five visible in the module settings menu, plus three internal settings with no UI:
+All settings are **world-scoped** (GM-only, apply to everyone in the world) except `forceNativeMode`, which is client-scoped. Nine settings are registered in total — five visible in the module settings menu, plus four internal settings with no UI:
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
@@ -75,6 +106,7 @@ All settings are **world-scoped** (GM-only, apply to everyone in the world); the
 | `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
+| `forceNativeMode` | client | hidden | Ignore the MEJ extension API and use native mode (testing / escape hatch) |
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
