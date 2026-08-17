@@ -29,6 +29,9 @@ export const TIMELINE_JOURNAL_SETTING = "timelineJournalId";
 /** World setting: auto-link newly-typed MEJ entry names in page text. */
 export const AUTO_LINK_SETTING = "autoLink";
 
+/** Page flag: opt this page out of every auto-link path (typing, import, retroactive). */
+export const NO_AUTO_LINK_FLAG = "noAutoLink";
+
 /** World setting: auto-capture ended combats as Encounter entries. */
 export const AUTO_CAPTURE_SETTING = "autoCaptureEncounters";
 

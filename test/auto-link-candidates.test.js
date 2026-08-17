@@ -27,3 +27,26 @@ describe("selectCandidates", () => {
     expect(out).toHaveLength(2);
   });
 });
+
+import { dropAmbiguousNames } from "../scripts/logic/auto-link-candidates.mjs";
+
+describe("dropAmbiguousNames", () => {
+  it("drops every candidate whose normalized name collides; reports each name once", () => {
+    const { kept, ambiguousNames } = dropAmbiguousNames([
+      { name: "Waterdeep Harbor", uuid: "u1" },
+      { name: "Inn", uuid: "u2" },
+      { name: "inn ", uuid: "u3" },
+      { name: "Sam", uuid: "u4" }
+    ]);
+    expect(kept).toEqual([
+      { name: "Waterdeep Harbor", uuid: "u1" },
+      { name: "Sam", uuid: "u4" }
+    ]);
+    expect(ambiguousNames).toEqual(["Inn"]);
+  });
+
+  it("passes a collision-free list through untouched", () => {
+    const list = [{ name: "A1b", uuid: "x" }];
+    expect(dropAmbiguousNames(list)).toEqual({ kept: list, ambiguousNames: [] });
+  });
+});
