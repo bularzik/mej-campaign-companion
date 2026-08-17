@@ -5,7 +5,7 @@ import {
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
-import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType } from "./integrations/mej-adapter.mjs";
+import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 
 Hooks.once("init", () => {
@@ -190,4 +190,9 @@ Hooks.once("ready", async () => {
   // Single shared socket listener for the whole module (media relay +
   // player recap relay) - see hooks/socket.mjs's header comment.
   registerSocketDispatcher();
+
+  // A world that spent time on a stock MEJ install comes back with the MEJ
+  // type flag scrubbed off its Session pages; put it back so MEJ's shell
+  // routes them again. No-op in native mode and for non-active-GM clients.
+  await healSessionFlags();
 });

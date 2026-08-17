@@ -8,7 +8,8 @@ import {
   FORCE_NATIVE_MODE_SETTING, I18N
 } from "../constants.mjs";
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
-import { mejTypeWith } from "../logic/mej-type.mjs";
+import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
+import { planFlagHeal } from "../logic/session-flag-heal.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -220,5 +221,42 @@ export async function openHub() {
     await openHubWindow();
   } catch (err) {
     console.error(`${MODULE_ID} | opening the campaign hub failed`, err);
+  }
+}
+
+/**
+ * Re-stamp the MEJ type flag on Session pages that lost it to a stock MEJ
+ * install (its fixType unsets flags for types its registry does not know).
+ * API mode only, active GM only, silent. Returns how many pages were fixed.
+ * @returns {Promise<number>}
+ */
+export async function healSessionFlags() {
+  if (mode !== MODE_API) return 0;
+  if (game.users.activeGM !== game.user) return 0;
+
+  try {
+    const sessionPages = [];
+    for (const entry of game.journal.contents) {
+      for (const page of entry.pages.contents) {
+        if (!isSessionDoc(page)) continue;
+        sessionPages.push({
+          uuid: page.uuid,
+          flagType: page.getFlag("monks-enhanced-journal", "type")
+        });
+      }
+    }
+
+    const uuids = planFlagHeal(sessionPages);
+    for (const uuid of uuids) {
+      const page = await fromUuid(uuid);
+      await page?.setFlag("monks-enhanced-journal", "type", SESSION_TYPE);
+    }
+    if (uuids.length) {
+      console.log(`${MODULE_ID} | re-stamped the MEJ type flag on ${uuids.length} session page(s)`);
+    }
+    return uuids.length;
+  } catch (err) {
+    console.error(`${MODULE_ID} | session flag heal failed`, err);
+    return 0;
   }
 }
