@@ -155,7 +155,27 @@ export function registerHubSheetClass(CampaignHubPage) {
 
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */
 async function wireNativeMode() {
-  console.log(`${MODULE_ID} | native mode wiring (Session sheet and Hub window)`);
+  // Same deferred-import discipline as api mode: these files statically
+  // import MEJ's EnhancedJournalSheet.js.
+  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+    import("../sheets/SessionSheet.mjs"),
+    import("../apps/CampaignHubPage.mjs")
+  ]);
+
+  // Pure core Foundry - no MEJ involvement. The subtype itself comes from
+  // module.json's documentTypes declaration, so this only says "when Foundry
+  // opens a page of that type, use our sheet". SessionSheet needs no changes
+  // to work outside MEJ's shell: EnhancedJournalSheet._onRender already calls
+  // activateListeners/subRender, and trueElement falls back to this.element.
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, SessionSheet, {
+    types: [SESSION_DOCUMENT_TYPE],
+    makeDefault: true,
+    label: `${I18N}.sheettype.session`
+  });
+
+  // The Hub's synthetic type needs its sheetClasses entry in this mode too -
+  // getSheetThemeForDocument does the same lookup however the sheet is hosted.
+  registerHubSheetClass(CampaignHubPage);
 }
 
 /** Called from MEJ's setupMonksEnhancedJournal hook. */
