@@ -214,6 +214,16 @@ describe("recordSnapshot", () => {
     });
     expect(record.html).toContain("Duke Aracusa");
   });
+
+  it("recordSnapshot strips unrevealed secret sections unless includeGM (Phase C)", () => {
+    const page = { text: { content: '<p>public</p><section class="secret" id="secret-z"><p>hidden-truth</p></section>' }, flags: {} };
+    const row = { uuid: "u", name: "Place", kind: "place", page };
+    const opts = { includeGM: false, relationships: [], labels: { relationships: "Rel" }, formatCampaignDate: () => "" };
+    const safe = recordSnapshot(row, opts);
+    expect(JSON.stringify(safe)).not.toContain("hidden-truth");
+    const gm = recordSnapshot(row, { ...opts, includeGM: true });
+    expect(JSON.stringify(gm)).toContain("hidden-truth");
+  });
 });
 
 describe("buildGroupSnapshot", () => {

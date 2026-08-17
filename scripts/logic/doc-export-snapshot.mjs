@@ -21,6 +21,7 @@
 
 import { sessionData } from "../sheets/session-data.mjs";
 import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+import { stripSecretSections } from "./secret-blocks.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const COMPANION_FLAGS = "mej-campaign-companion";
@@ -122,9 +123,9 @@ export function relationshipsHtml(resolved, includeGM, heading) {
  * (see its "if (opts.includeGM && record.system?.gmNotes)" branch), so this
  * module doesn't need to duplicate that gate.
  * @param {object} page  a JournalEntryPage-like object with .getFlag() and .system
- * @param {{sessionNumberLabel:string, campaignDateLabel:string, formatCampaignDate?: (cd:object) => string}} opts
+ * @param {{sessionNumberLabel:string, campaignDateLabel:string, formatCampaignDate?: (cd:object) => string, includeGM?: boolean}} opts
  */
-export function sessionBodyHtml(page, { sessionNumberLabel, campaignDateLabel, formatCampaignDate }) {
+export function sessionBodyHtml(page, { sessionNumberLabel, campaignDateLabel, formatCampaignDate, includeGM = false }) {
   const session = sessionData(page);
   const lines = [];
   if (session.sessionNumber != null) {
@@ -134,7 +135,7 @@ export function sessionBodyHtml(page, { sessionNumberLabel, campaignDateLabel, f
     const label = formatCampaignDate(session.campaignDate);
     if (label) lines.push(`<p><strong>${escapeHtml(campaignDateLabel)}:</strong> ${escapeHtml(label)}</p>`);
   }
-  return lines.join("") + (page.system?.recap ?? "");
+  return lines.join("") + stripSecretSections(page.system?.recap ?? "", { includeAll: includeGM });
 }
 
 /**
@@ -174,11 +175,12 @@ export function recordSnapshot(row, opts) {
       html: sessionBodyHtml(row.page, {
         sessionNumberLabel: labels.sessionNumber,
         campaignDateLabel: labels.campaignDate,
-        formatCampaignDate
+        formatCampaignDate,
+        includeGM
       })
     };
   }
-  const html = bodyText(row.page) + relationshipsHtml(relationships, includeGM, labels.relationships);
+  const html = stripSecretSections(bodyText(row.page), { includeAll: includeGM }) + relationshipsHtml(relationships, includeGM, labels.relationships);
   return { name: row.name, kind: row.kind, hidden: false, system: {}, html };
 }
 
