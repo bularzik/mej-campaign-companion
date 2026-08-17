@@ -56,19 +56,20 @@ describe("stock-MEJ regression: a Session must not read as untyped", () => {
   // Stock MEJ's getMEJType validates the monks-enhanced-journal.type flag
   // against its own registry, which has no "session" key, so it returns
   // false even when the flag is present. Every consumer that gates on the
-  // type would drop the page. mejTypeWith must not.
-  const stockGetMEJType = () => false;
-  const sessionPageWithFlag = {
-    type: "mej-campaign-companion.session",
-    flags: { "monks-enhanced-journal": { type: "session" } }
-  };
-  const scrubbedSessionPage = { type: "mej-campaign-companion.session", flags: {} };
+  // type would drop the page. mejTypeWith must not - and identity must come
+  // from the native subtype, never from the (scrubbable) MEJ flag, since a
+  // stock install can carry the flag without ever recognizing it.
 
-  it("survives stock MEJ returning false", () => {
-    expect(mejTypeWith(sessionPageWithFlag, stockGetMEJType)).toBe("session");
+  it("resolves a single-page session ENTRY even when stock MEJ says false", () => {
+    const entry = { pages: { contents: [{ type: "mej-campaign-companion.session" }] } };
+    expect(mejTypeWith(entry, () => false)).toBe("session");
   });
 
-  it("survives stock MEJ having scrubbed the flag entirely", () => {
-    expect(mejTypeWith(scrubbedSessionPage, stockGetMEJType)).toBe("session");
+  it("does not treat the MEJ type flag as session identity — only the native subtype counts", () => {
+    const flagOnlyPage = {
+      type: "text",
+      flags: { "monks-enhanced-journal": { type: "session" } }
+    };
+    expect(mejTypeWith(flagOnlyPage, () => false)).toBe(false);
   });
 });
