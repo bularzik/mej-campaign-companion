@@ -63,15 +63,18 @@ This module has no published Foundry package listing yet — install it manually
 
 ## Settings
 
-All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Five settings are registered in total — four visible in the module settings menu, plus one internal setting with no UI:
+All settings are **world-scoped** (GM-only, apply to everyone in the world); there are no client-scoped settings. Eight settings are registered in total — five visible in the module settings menu, plus three internal settings with no UI:
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
 | `autoLink` | Yes | Off | Turn on auto-linking of newly-typed MEJ entry names in page text on save. |
+| `retroLinkMode` | Yes | Confirm | Retroactive Auto-Link world setting: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off (disabled), Confirm (review dialog with per-page checkboxes), Silent (write immediately + whispered GM summary). |
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so they can write their own recaps directly. |
 | `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
+| `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
+| `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
