@@ -29,15 +29,14 @@ All commands are documented in a header comment of the spec file so future runs 
 4. Repoint the module symlink:
    `rm ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal && ln -s /tmp/mej-stock-smoke ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`
    (`rm` + `ln -s`, never `ln -sfn` onto an existing dir symlink, which can create the link *inside* the target.)
-5. Relaunch: `~/FoundryVTT-14/start-foundry.command`, wait for World A.
-6. Run phase 1: `STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
+5. Run phase 1: `STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs` — no manual relaunch needed: the harness's global setup (`ensureTestWorld()`) boots World A itself when the server is down. The file argument matters: it keeps the rest of the suite (written for the API build) from running against stock.
 
 **Restore:**
 
-7. Stop the server; repoint the symlink back at `~/Claude/Projects/monks-enhanced-journal` (same `rm` + `ln -s` shape); relaunch.
-8. Run phase 2: `STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
-9. Remove the stock worktree: `git worktree remove --force /tmp/mej-stock-smoke` (`--force` because Foundry's LevelDB rewrites tracked pack bookkeeping files at every world launch, dirtying the worktree; this churn is discardable runtime noise, and the temp worktree has no skip-worktree flags shielding it).
-10. The World A backup is kept until the run is judged clean, then deleted manually.
+6. Stop the server again; repoint the symlink back at `~/Claude/Projects/monks-enhanced-journal` (same `rm` + `ln -s` shape).
+7. Run phase 2: `STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs` (global setup boots the world again).
+8. Remove the stock worktree: `git worktree remove --force /tmp/mej-stock-smoke` (`--force` because Foundry's LevelDB rewrites tracked pack bookkeeping files at every world launch, dirtying the worktree; this churn is discardable runtime noise, and the temp worktree has no skip-worktree flags shielding it).
+9. The World A backup is kept until the run is judged clean, then deleted manually.
 
 lib-wrapper (already installed alongside) satisfies the stock build's dependency; the symlink's *name* keeps the module id `monks-enhanced-journal` regardless of the target directory.
 
@@ -52,7 +51,7 @@ Uses the existing harness (`login`, `settle` helpers; adapter state read via dyn
 1. **MEJ itself booted.** Assert MEJ is `active` and its journal-directory UI is present — a broken stock MEJ must not masquerade as a companion result in either direction.
 2. **Mode + clean boot.** `currentMode() === "native"`, `wiringFailed() === false`, no companion error notification (the `mej-missing` / `init-failed` strings must not appear), and no page errors or console errors attributable to the companion during boot. Note: `forceNativeMode` may be left `true` by a previous suite run — harmless here (mode is native either way), but the spec sets it `false` first so the run reflects a real user's configuration.
 3. **Hub standalone.** The scene-controls Hub button opens the Hub as its own window; tab switching works.
-4. **Session first-class.** Create `TT-STOCKSMOKE Session` via the Hub's **New Session** button; open it from the journal directory; assert the rendered sheet is `SessionSheet` (standalone, not BlankSheet) with its controls responsive.
+4. **Session first-class.** Create `TT-STOCKSMOKE Session` via the Hub's **New Session** button and assert the flow auto-opens the standalone `SessionSheet` (the creation handler calls `page.sheet.render(true)`), the page's native type is `mej-campaign-companion.session`, `pageDoc.sheet` resolves to `SessionSheet`, and the sheet's controls are responsive (a tab switch works). **Recorded, not asserted:** what stock MEJ does when *it* opens the entry (`game.MonksEnhancedJournal.openJournalEntry`, the path behind both a sidebar directory click and the Hub index row) — stock MEJ owns that behavior for a type it doesn't know, so the test annotates the outcome (shell rendered? subsheet class? flag stripped? errors?) for the run report instead of failing on it. This amends the original wording "open it from the journal directory," which would have asserted stock-MEJ-owned behavior.
 5. **Search roundtrip.** Hub search finds the new session by name.
 6. **No cleanup of the fixture** — it is phase 2's input. (Observation, not assertion: stock MEJ's `fixType` may strip the session's MEJ type flag during the run; the spec records the flag's state in the report annotation for phase 2 context but does not assert on it, because *when* fixType fires is stock MEJ's business.)
 
