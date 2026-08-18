@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 (2026-08-17)
+
+- Fixed: in native mode (stock MEJ, or `forceNativeMode`), the standalone
+  Campaign Hub window rendered with every control disabled — New Session,
+  search, even the window close button. The Hub's host document stub was
+  missing the `permission` getter MEJ's sheet editability check reads, so
+  MEJ treated the window as read-only and disabled its whole form. Found by
+  the new stock-MEJ smoke test on its first live run.
+- New: a manually-gated stock-MEJ smoke test (`STOCK_PHASE`), run against a
+  genuinely stock Monk's Enhanced Journal 14.01 before this release: native
+  mode resolves cleanly, the Hub and New Session flow work, Hub search finds
+  stock-created sessions, and a world that visited stock MEJ returns to an
+  API-carrying build with its type flags automatically healed.
+
 ## 0.5.0 (2026-08-17)
 
 - Works on a stock Monk's Enhanced Journal install: the module no longer needs
