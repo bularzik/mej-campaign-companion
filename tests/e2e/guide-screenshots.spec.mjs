@@ -104,12 +104,32 @@ async function appendPageContent(page, entryId, html) {
 
 /** Move/resize the MEJ shell window clear of Foundry's own right-hand
  * sidebar (which defaults to opening at x=1092 in this 1440-wide viewport —
- * the shell's own default position/size overlaps it, and the sidebar's
- * higher stacking order then bleeds its own journal list into that
- * overlapping region of any element.screenshot() taken of the shell). */
+ * the shell's own default position/size overlaps it), and collapse MEJ's
+ * OWN embedded "quick browse" directory pane.
+ *
+ * Live investigation (review finding: 7 of 18 full-shell shots showed ~30%
+ * of the frame filled with a native-looking journal-entries list) found the
+ * sidebar-overlap theory in the original comment here was WRONG: after
+ * setPosition() below, getBoundingClientRect() confirms the shell's right
+ * edge (1070) and Foundry's real #sidebar's left edge (1092) never actually
+ * overlap. The list bleeding into every shot is a *different*, always-
+ * present element: apps/enhanced-journal.js's own `.journal-directory` pane
+ * (a docked "quick browse" journal list MEJ embeds inside its own shell,
+ * toggled by the `.sidebar-toggle` arrow button, confirmed live via
+ * elementFromPoint() on the exact pixels the debris list appeared at — its
+ * ancestor chain roots at `#MonksEnhancedJournal form`, not `#sidebar`).
+ * It defaults to expanded and eats ~300px of the shell's own content width.
+ * `collapseSidebar()` is a real MEJ API method (same one `.sidebar-toggle`'s
+ * click handler calls) — idempotent to call every time (checked via
+ * `_collapsed` first to avoid a redundant `game.settings.set` on MEJ's own
+ * "start-collapsed" world setting, snapshotted/restored in before/afterAll
+ * below since this is the one call in this file that mutates
+ * monks-enhanced-journal's own settings, not this module's). */
 async function positionShell(page) {
   await page.evaluate(() => {
-    game.MonksEnhancedJournal.journal?.setPosition({ left: 60, top: 40, width: 1010, height: 820 });
+    const app = game.MonksEnhancedJournal.journal;
+    app?.setPosition({ left: 60, top: 40, width: 1010, height: 820 });
+    if (app && !app._collapsed) app.collapseSidebar();
   });
   // A lingering hover tooltip (e.g. "Campaign Hub" over the nav icon,
   // triggered by Playwright's own click() synthetically moving the pointer
@@ -119,6 +139,26 @@ async function positionShell(page) {
   // doesn't reliably clear it. Foundry's own TooltipManager does.
   await page.evaluate(() => game.tooltip?.deactivate());
   await page.mouse.move(400, 885);
+}
+
+/** Scroll the Hub index list just enough to bring the row named `name`
+ * fully into view — no further, so as many other rows as possible (e.g. the
+ * demo entries above it) stay in frame too. The index list's fixed content
+ * height (~822px, clamped by MEJ's own CSS regardless of the shell window's
+ * requested height — confirmed live: setPosition({height: 900}) still only
+ * ever produces an ~822px-tall form) means a long alphabetical list with
+ * this world's other test-spec debris interleaved can push a demo entry's
+ * mention badge below the visible fold even at the shell's max height. */
+async function scrollIndexRowIntoFrame(page, name) {
+  await page.evaluate((rowName) => {
+    const list = document.querySelector(".mej-cc-index-list");
+    if (!list) return;
+    const listBottom = list.getBoundingClientRect().bottom;
+    const row = [...list.querySelectorAll(".mej-cc-index-row")].find((r) => r.textContent.includes(rowName));
+    if (!row) return;
+    const overflow = row.getBoundingClientRect().bottom - listBottom;
+    if (overflow > 0) list.scrollTop += overflow + 4;
+  }, name);
 }
 
 /** Open a specific entry (not the Hub) in the MEJ shell. */
@@ -174,6 +214,30 @@ async function dropDocumentOnto(page, selector, { type, uuid }) {
     el.dispatchEvent(new DragEvent("dragover", opts));
     el.dispatchEvent(new DragEvent("drop", opts));
   }, { selector, type, uuid });
+}
+
+/** Stronger-than-toBeVisible() check for a relationship-graph node: a d3
+ * -force node <g> can carry a real, non-empty bounding box (satisfying
+ * toBeVisible()) while its actual position sits outside the SVG's own
+ * clipped viewBox — never painted, but not "hidden" by any check
+ * toBeVisible() runs — confirmed live as the root cause behind an earlier
+ * graph-gm.png shipping an almost-empty canvas despite passing exactly that
+ * assertion. Checks the node's geometry is fully within the graph app's own
+ * frame and that it's drawn at non-zero opacity. */
+async function assertNodeOnscreen(graphApp, nodeLocator) {
+  await expect(nodeLocator).toBeVisible();
+  const appBox = await graphApp.boundingBox();
+  const nodeBox = await nodeLocator.boundingBox();
+  expect(appBox, "graph app has no bounding box").toBeTruthy();
+  expect(nodeBox, "node has no bounding box").toBeTruthy();
+  const within =
+    nodeBox.x >= appBox.x &&
+    nodeBox.y >= appBox.y &&
+    nodeBox.x + nodeBox.width <= appBox.x + appBox.width &&
+    nodeBox.y + nodeBox.height <= appBox.y + appBox.height;
+  expect(within, `node outside graph frame: node=${JSON.stringify(nodeBox)} app=${JSON.stringify(appBox)}`).toBe(true);
+  const opacity = await nodeLocator.locator("circle").evaluate((el) => Number(getComputedStyle(el).opacity));
+  expect(opacity, "node circle has zero opacity").toBeGreaterThan(0);
 }
 
 /** The attributes <details> renders collapsed by default (07-knowledge.spec.mjs). */
@@ -232,6 +296,17 @@ const SETTINGS_TO_RESTORE = [
   "autoLink"
 ];
 let settingsSnapshot = {};
+// Cross-module world state, snapshotted/restored alongside settingsSnapshot
+// but NOT part of SETTINGS_TO_RESTORE (that loop only reads/writes this
+// module's own settings namespace):
+//   - "monks-enhanced-journal" "start-collapsed" — positionShell()'s
+//     collapseSidebar() call (a real GM-only side effect of that MEJ API
+//     method) flips this MEJ-owned world setting.
+//   - game.paused — plain broadcast session state, not a game.settings key
+//     at all, but still world state this run changes (unpaused below) and
+//     must leave as it found it.
+let mejStartCollapsedSnapshot = false;
+let pausedSnapshot = false;
 
 // Ids of the seeded demo documents, populated by the seed test and read by
 // the capture tests that follow it (plain Node-side values — these persist
@@ -254,6 +329,27 @@ guideDescribe("guide screenshots", () => {
     await page.evaluate(async () => {
       await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
     });
+
+    // Snapshot MEJ's own "start-collapsed" world setting (positionShell()'s
+    // collapseSidebar() call below flips it) and the current pause state,
+    // then unpause — a leftover `game.paused === true` from some other
+    // manual/test session bled Foundry's "GAME PAUSED" overlay into
+    // prep-board.png (clearly) and settings.png (faintly, through that
+    // window's own translucent background) in a prior run. Unpausing here,
+    // at the very start of the seed+capture flow, keeps every shot this
+    // file takes clean of it.
+    mejStartCollapsedSnapshot = await page.evaluate(() =>
+      game.settings.get("monks-enhanced-journal", "start-collapsed")
+    );
+    pausedSnapshot = await page.evaluate(() => game.paused === true);
+    // `broadcast: true` is load-bearing, not decoration: togglePause()'s
+    // default (`broadcast: false`) only patches the CALLING client's own
+    // in-memory game.data.paused - confirmed live, the exact bug behind
+    // this fix's first attempt still shipping the overlay: a *fresh*
+    // client connecting seconds later (this file's every subsequent test
+    // logs in fresh) still read paused:true, because the unpause was never
+    // actually sent to the server for it to hand to new connections.
+    if (pausedSnapshot) await page.evaluate(() => game.togglePause(false, { broadcast: true }));
     await context.close();
   });
 
@@ -269,6 +365,13 @@ guideDescribe("guide screenshots", () => {
       for (const [k, v] of Object.entries(snapshot))
         await game.settings.set("mej-campaign-companion", k, v);
     }, settingsSnapshot);
+    await page.evaluate(
+      async ({ collapsed, paused }) => {
+        await game.settings.set("monks-enhanced-journal", "start-collapsed", collapsed);
+        if (game.paused !== paused) game.togglePause(paused, { broadcast: true });
+      },
+      { collapsed: mejStartCollapsedSnapshot, paused: pausedSnapshot }
+    );
     await context.close();
   });
 
@@ -527,6 +630,12 @@ guideDescribe("guide screenshots", () => {
 
     const indexShell = await openHub(page);
     await settle(page, 300);
+    // Bring the mention-count badge on the LATER-sorted of the two badge-
+    // bearing demo entries ("The Missing Caravan" sorts after "The Gilded
+    // Flagon") into frame — this world's other test-spec debris (T-prefixed
+    // fixtures) interleave alphabetically above both, pushing them near the
+    // bottom of the index list's fixed-height, scrollable content area.
+    await scrollIndexRowIntoFrame(page, "The Missing Caravan");
     await shot(indexShell, "hub-index");
 
     const timelineShell = await openHubTab(page, "timeline");
@@ -545,34 +654,41 @@ guideDescribe("guide screenshots", () => {
     await settle(page, 300);
     await shot(secretsShell, "hub-secrets-tab");
 
-    // .mej-cc-graph-open lives in the "index" tab's controls — openHub()
-    // alone just switches back to the Hub subsheet without necessarily
-    // reselecting that tab (the last-active tab, "secrets" above, sticks),
-    // and the button is present-but-hidden (CSS-inactive tab) rather than
-    // absent, which is why a plain click() here hangs on "not visible"
-    // instead of failing fast with a locator-not-found.
-    const graphShell = await openHubTab(page, "index");
-    await graphShell.locator("button.mej-cc-graph-open").click();
+    // Ego/Focus mode centered on Aldric, opened the same way MEJ's own
+    // "open graph" header button does (openGraph({centerUuid}), imported
+    // directly — that real header button is absent from the DOM on v14 for
+    // an unrelated, already-documented MEJ-side bug; see the prep-board
+    // shot below), rather than the Hub's plain "Whole campaign" button.
+    //
+    // Review finding: a whole-campaign-mode shot's toBeVisible() checks on
+    // the two named nodes passed, yet the committed PNG showed an
+    // almost-empty canvas — toBeVisible() only checks a non-empty bounding
+    // box + non-hidden computed style, not whether the node's <g> actually
+    // landed inside the SVG's own clipped viewBox. With this world's full
+    // node cluster (every visible entry, not just this run's demo cast),
+    // d3-force's forceCenter() can drift a node's *geometry* outside the
+    // viewBox while its DOM element still reports a "visible" bounding box.
+    // Ego mode structurally avoids this: buildGraph() filters to just the
+    // center node + its direct neighbors (graph-data.mjs's `mode === "ego"`
+    // branch) — Aldric's only relationship is to the Caravan, so this is a
+    // 2-node, 1-edge graph that settles near forceCenter()'s target
+    // regardless of how large the rest of the world's fixture set grows.
+    const aldricUuid = await uuidOf(page, demo.aldricId);
+    await page.evaluate(async (centerUuid) => {
+      const { openGraph } = await import("/modules/mej-campaign-companion/scripts/apps/graph-app.mjs");
+      openGraph({ centerUuid });
+    }, aldricUuid);
     const graphApp = page.locator(".mej-cc-graph-app");
     await expect(graphApp).toHaveCount(1);
-    // Node/edge count first (08-query-graph.spec.mjs's pattern): the
-    // d3-force simulation can leave nodes off-screen or mid-flight for a
-    // beat after the app itself mounts, so waiting on the app element alone
-    // — as an earlier version of this shot did — occasionally captured an
-    // empty canvas. Then a flat settle to let alpha decay toward rest so
-    // the two named nodes aren't caught mid-drift.
     await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
-    await settle(page, 2500);
-    // The forceCenter() layout pulls the whole node cluster toward the
-    // app's own center, but with enough background nodes (this world
-    // carries plenty of pre-existing fixtures beyond this run's own demo
-    // cast) the cluster can still be wider than the app window, drifting
-    // our two named nodes outside its visible bounds on an unlucky run
-    // (confirmed live: a node-count check alone isn't enough) — confirm
-    // the two we actually seeded a relationship for are on-screen before
-    // trusting the shot.
-    await expect(graphApp.locator(".mej-cc-graph-node", { hasText: "Captain Aldric Vane" })).toBeVisible();
-    await expect(graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" })).toBeVisible();
+    await settle(page, 2500); // let the (now tiny) simulation's alpha decay toward rest
+    // Belt-and-suspenders on top of the ego-mode structural fix: assert
+    // each named node's actual painted geometry sits inside the graph app's
+    // own frame (not just "has a bounding box" per toBeVisible()) and is
+    // drawn at non-zero opacity, exactly the two properties the flaky
+    // whole-campaign shot's toBeVisible()-only check missed.
+    await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "Captain Aldric Vane" }));
+    await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" }));
     await shot(graphApp, "graph-gm");
     await page.keyboard.press("Escape");
     await settle(page, 300);
