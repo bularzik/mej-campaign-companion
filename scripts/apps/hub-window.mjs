@@ -55,6 +55,16 @@ class HubShellDocument extends foundry.abstract.Document {
     return true;
   }
 
+  // MEJ's EnhancedJournalSheet.isEditable reads `document.permission ==
+  // OWNER` — a ClientDocument getter this bare-Document stub doesn't
+  // inherit. Without it the comparison sees undefined, isEditable goes
+  // false, and MEJ's _toggleDisabled disables every control in the
+  // standalone Hub window (found live against stock MEJ 14.01; applies in
+  // native mode on any MEJ build).
+  get permission() {
+    return CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+  }
+
   get compendium() {
     return null;
   }
