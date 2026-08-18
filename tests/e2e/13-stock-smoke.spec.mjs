@@ -40,6 +40,10 @@ import {
 const PHASE = process.env.STOCK_PHASE ?? "";
 // Fixed literal, not a per-run suffix: the two phases are separate Playwright
 // invocations, so the return phase could never reconstruct a random name.
+// The TT- prefix keeps it reclaimable by the harness's normal-run sweep, but
+// note global-setup.mjs deliberately SKIPS its journal sweep when
+// STOCK_PHASE=return — the fixture must survive from the stock invocation
+// into the return one (the first live run lost it to that sweep).
 const FIXTURE = "TT-STOCKSMOKE Session";
 const ADAPTER = `/modules/${MODULE_ID}/scripts/integrations/mej-adapter.mjs`;
 
@@ -126,22 +130,25 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
   test("Hub opens from the scene-controls button with working tabs", async ({ page }) => {
     await bootAsRealUser(page);
 
-    // Real-UI path when the canvas (and thus scene controls) is up;
-    // canvas-off worlds have no scene-controls DOM at all, so fall back to
-    // the same openHub() the tool's onChange invokes, and record which path
-    // ran. Registration itself is asserted in both paths.
+    // Real-UI path only when a scene is actually viewed: with no active
+    // scene the group buttons still render but activating any group crashes
+    // inside Foundry itself (PlaceablesLayer#_activate touches the undrawn
+    // layer's null `objects` — confirmed live), so the tool button never
+    // appears regardless of the companion. Gate on canvas.ready and fall
+    // back to the same openHub() the tool's onChange invokes, recording
+    // which path ran. Registration itself is asserted in both paths.
     const toolRegistered = await page.evaluate(() =>
       !!ui.controls?.controls?.notes?.tools?.["campaign-hub"]);
-    const notesButton = page.locator('[data-control="notes"]');
+    expect(toolRegistered).toBe(true);
+    const canvasReady = await page.evaluate(() => canvas?.ready === true);
     let path;
-    if (await notesButton.count()) {
+    if (canvasReady) {
       path = "scene-controls click";
-      expect(toolRegistered).toBe(true);
-      await notesButton.first().click();
+      await page.locator('[data-control="notes"]').first().click();
       await settle(page, 500);
       await page.locator('[data-tool="campaign-hub"]').first().click();
     } else {
-      path = "canvas disabled — adapter.openHub() (same call the tool's onChange makes)";
+      path = "no active scene (canvas not ready) — adapter.openHub() (same call the tool's onChange makes)";
       await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);
     }
     test.info().annotations.push({ type: "hub-open-path", description: path });

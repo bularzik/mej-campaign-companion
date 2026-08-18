@@ -30,7 +30,12 @@ export default async function globalSetup() {
       await login(page, "Gamemaster");
       await ensureModuleEnabled(page, MEJ_MODULE_ID);
       await ensureModuleEnabled(page, MODULE_ID);
-      await deleteJournalsByPrefix(page);
+      // The stock-smoke return phase (13-stock-smoke.spec.mjs) depends on a
+      // TT- fixture created by the PREVIOUS invocation (its stock phase) —
+      // sweeping journals here would delete the very document whose heal the
+      // phase exists to verify (this happened; see the spec's header). Any
+      // later normal run still reclaims stock-smoke leftovers.
+      if (process.env.STOCK_PHASE !== "return") await deleteJournalsByPrefix(page);
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);

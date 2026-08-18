@@ -44,7 +44,7 @@ lib-wrapper (already installed alongside) satisfies the stock build's dependency
 
 Uses the existing harness (`login`, `settle` helpers; adapter state read via dynamic `import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs")` inside `page.evaluate`, as `12-native-mode.spec.mjs` does). When `STOCK_PHASE` is unset — every normal suite run — the whole file is skipped.
 
-**Cross-phase fixture naming:** the two phases are separate Playwright invocations, so the fixture cannot carry a per-run random suffix. The stock-created session is named with the fixed literal **`TT-STOCKSMOKE Session`** (the `TT-` prefix keeps it inside the harness's established cleanup convention). Phase 1 deletes any leftover fixture of that name at start, making the whole procedure idempotent.
+**Cross-phase fixture naming:** the two phases are separate Playwright invocations, so the fixture cannot carry a per-run random suffix. The stock-created session is named with the fixed literal **`TT-STOCKSMOKE Session`**. The `TT-` prefix keeps it reclaimable by the harness's normal-run sweep — but that same sweep runs in `global-setup.mjs` at the start of *every* invocation, which would delete the fixture before the return phase's tests run (this happened on the first live run). `global-setup.mjs` therefore skips its journal sweep when `STOCK_PHASE=return`; any later normal run still reclaims stock-smoke leftovers. Phase 1 deletes any leftover fixture of that name at start, making the whole procedure idempotent.
 
 ### Phase 1 — `STOCK_PHASE=stock` (symlink → stock build)
 
