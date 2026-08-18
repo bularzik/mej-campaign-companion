@@ -22,6 +22,7 @@ import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
 import { getCalendarMonths, calendarBounds, hasCalendar, formatCampaignDate, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date.mjs";
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
+import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
@@ -35,6 +36,7 @@ import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -81,6 +83,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
       toggleLinkShowPlayers: CampaignHubPage.onToggleLinkShowPlayers,
+      newSession: CampaignHubPage.onNewSession,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       openGraph: CampaignHubPage.onOpenGraph,
@@ -199,7 +202,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #indexContext() {
-    const source = buildIndexSource(game.journal.contents, game.user, game.MonksEnhancedJournal.getMEJType, this.#typeIcon.bind(this));
+    const source = buildIndexSource(game.journal.contents, game.user, mejType, this.#typeIcon.bind(this));
     const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
     const mentionCounts = mentionBadgeCounts();
     for (const row of rows) row.mentions = mentionCounts.get(row.uuid) ?? 0;
@@ -319,7 +322,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // MEJ pages once (single-page convention, same as graph-app's graphRows()).
     for (const entry of game.journal?.contents ?? []) {
       for (const page of entry.pages?.contents ?? []) {
-        const type = game.MonksEnhancedJournal.getMEJType(page);
+        const type = mejType(page);
         if (!type) continue;
         if (type === "session") {
           for (const s of page.flags?.[MODULE_ID]?.session?.secrets ?? []) {
@@ -476,7 +479,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    */
   static #secretSectionHtml(entry, secretId) {
     if (!secretId) return null;
-    const page = entry.pages?.contents?.find((p) => game.MonksEnhancedJournal.getMEJType(p));
+    const page = entry.pages?.contents?.find((p) => mejType(p));
     const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
     if (!body) return null;
     const fragment = document.createRange().createContextualFragment(`<div>${body}</div>`);
@@ -505,7 +508,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         ?? `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`;
       await sendRevealWhisper({ audience, previousAudience: previous, groups, html, entryUuid, entryName: entry.name });
     } else if (secretKind === "session") {
-      const page = entry.pages.contents.find((p) => game.MonksEnhancedJournal.getMEJType(p) === "session");
+      const page = entry.pages.contents.find((p) => mejType(p) === "session");
       if (!page) return;
       const item = sessionData(page).secrets.find((s) => s.id === secretId);
       if (!item) return;
@@ -579,6 +582,31 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const id = target.closest("[data-group-id]")?.dataset.groupId;
     await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, deleteGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), id));
     this.render({ parts: ["main"] });
+  }
+
+  /**
+   * Create an empty Session entry and open it. This is the creation path in
+   * native mode, where MEJ's own New Entry dialog cannot offer the Session
+   * type (its registry only knows about it when the extension API is
+   * present). Routed through JournalEntry.create like every other companion
+   * creation path, so the preCreateJournalEntry ownership hook still applies
+   * the playersWriteSessions setting.
+   */
+  static async onNewSession() {
+    if (!game.user.isGM) return;
+    try {
+      const name = game.i18n.localize(`${I18N}.hub.newSession`);
+      const entry = await JournalEntry.create({
+        name,
+        pages: [buildSessionPageData(name, "", null, null)]
+      });
+      const page = entry?.pages?.contents?.[0];
+      if (page) await page.sheet.render(true);
+      this.render();
+    } catch (err) {
+      console.error(`${MODULE_ID} | creating a session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
+    }
   }
 
   // GM-only "Import Document" entry point (Task 11) - lives on the Index

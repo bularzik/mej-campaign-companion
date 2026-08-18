@@ -12,6 +12,7 @@ import { isVisibleToUser } from "../logic/hub-index.mjs";
 import {
   MODULE_ID, I18N, RETRO_LINK_MODE_SETTING, RETRO_LINK_PENDING_FLAG, NO_AUTO_LINK_FLAG
 } from "../constants.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 /**
  * MEJ's own New Entry dialog creates the entry FIRST (with
@@ -21,7 +22,7 @@ import {
  * the raw entry-level MEJ flags.
  */
 function isMejCandidate(entry) {
-  if (game.MonksEnhancedJournal?.getMEJType?.(entry)) return true;
+  if (mejType(entry)) return true;
   const mejFlags = entry.flags?.["monks-enhanced-journal"];
   return !!(mejFlags?.pagetype || mejFlags?.type);
 }
@@ -33,7 +34,7 @@ function planForEntity(entry) {
   const otherSameNamed = game.journal
     .filter((e) =>
       e.id !== entry.id &&
-      game.MonksEnhancedJournal.getMEJType(e) &&
+      mejType(e) &&
       e.name.trim().toLowerCase() === norm)
     .map((e) => ({ viewerIds: viewerIds(e, users, isVisibleToUser) }));
   const pages = [];
@@ -186,7 +187,17 @@ export function registerRetroLink() {
   // confirm mode) once a GM logs in. Routed through the same enqueueRetro
   // chain as the createJournalEntry handler above, so a sweep pass and a
   // concurrently hook-triggered pass still can't interleave.
-  Hooks.once("ready", async () => {
+  //
+  // registerRetroLink() is called from registerCore(), which in api mode
+  // runs long before "ready" fires but in native mode runs from inside the
+  // ready hook dispatch itself (after an await, i.e. after Hooks.callAll
+  // has already iterated its listener snapshot). Hooks.once("ready", ...)
+  // registered at that point would never fire - "ready" only fires once per
+  // boot. Run the sweep immediately if ready has already happened instead.
+  if (game.ready) sweep();
+  else Hooks.once("ready", sweep);
+
+  async function sweep() {
     if (game.users.activeGM !== game.user) return;
     for (const entry of game.journal.contents) {
       try {
@@ -195,5 +206,5 @@ export function registerRetroLink() {
         console.error(`${MODULE_ID} | retro-link sweep failed for "${entry?.name}"`, err);
       }
     }
-  });
+  }
 }

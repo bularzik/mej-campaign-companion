@@ -38,6 +38,9 @@ export const RETRO_LINK_MODE_SETTING = "retroLinkMode";
 /** JournalEntry flag: stamped at creation, processed (and cleared) by the active GM's retro-link pass. */
 export const RETRO_LINK_PENDING_FLAG = "retroLinkPending";
 
+/** Client setting (hidden): pretend the MEJ extension API is absent, for testing native mode. */
+export const FORCE_NATIVE_MODE_SETTING = "forceNativeMode";
+
 /** World setting: auto-capture ended combats as Encounter entries. */
 export const AUTO_CAPTURE_SETTING = "autoCaptureEncounters";
 

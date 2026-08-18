@@ -15,6 +15,7 @@ import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
@@ -39,7 +40,7 @@ function graphRows() {
   for (const entry of game.journal?.contents ?? []) {
     if (!game.user.isGM && entry.testUserPermission(game.user, "OBSERVER") !== true) continue;
     for (const page of entry.pages?.contents ?? []) {
-      const type = game.MonksEnhancedJournal.getMEJType(page);
+      const type = mejType(page);
       if (!type) continue;
       const relationships = visibleRelRows(
         page.flags?.[MEJ_FLAGS]?.relationships,

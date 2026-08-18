@@ -14,6 +14,7 @@ import { normalizeAudience } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const REL_FLAG = "relReveals";
@@ -27,7 +28,7 @@ function asElement(html) {
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
-  return game.MonksEnhancedJournal?.getMEJType?.(doc) ? doc : null;
+  return mejType(doc) ? doc : null;
 }
 
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));

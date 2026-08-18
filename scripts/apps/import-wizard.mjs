@@ -30,6 +30,7 @@ import { countEntityLinks } from "../logic/retro-link.mjs";
 import { dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceViewerIdsForImport, filterCandidatesForAudience } from "../logic/link-audience.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -224,7 +225,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     const users = game.users.contents;
     const audienceViewers = audienceViewerIdsForImport(audience, users);
     const all = game.journal
-      .filter((e) => game.MonksEnhancedJournal.getMEJType(e))
+      .filter((e) => mejType(e))
       .map((e) => ({ name: e.name, uuid: e.uuid, viewerIds: viewerIds(e, users, isVisibleToUser) }));
     const contained = filterCandidatesForAudience(all, audienceViewers)
       .filter((c) => (c.name?.trim().length ?? 0) >= 3)

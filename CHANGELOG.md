@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0 (2026-08-17)
+
+- Works on a stock Monk's Enhanced Journal install: the module no longer needs
+  the `setupMonksEnhancedJournal` extension API. A new adapter resolves
+  `api` / `native` / `absent` mode, and everything that never needed the API
+  (search, auto-linking, retroactive linking, encounter and media capture, the
+  knowledge panel, the query enricher, secrets and relationship reveals) now
+  registers in every mode.
+- Session pages are identified by their native Foundry subtype rather than
+  MEJ's type flag. On a stock install that flag is scrubbed and MEJ reports
+  Sessions as untyped, which previously would have dropped them from search,
+  auto-linking, the Hub index, export and the graph.
+- Native mode: the Session sheet registers through core Foundry and the
+  Campaign Hub opens as its own window. New **New Session** button in the Hub.
+- Worlds can move between a stock and an API-carrying MEJ build with no
+  migration: the GM's client re-stamps type flags a stock install scrubbed.
+- New hidden client setting `forceNativeMode` to exercise native mode on a
+  build that does have the API.
+
 ## 0.4.0 (2026-08-16)
 
 - Auto-linking is now bounded by audience containment on every path: a name only links to an entity when everyone who can view the page can also view the entity.

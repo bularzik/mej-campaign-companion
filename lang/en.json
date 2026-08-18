@@ -1,7 +1,7 @@
 {
   "MEJCampaignCompanion": {
     "errors": {
-      "mej-api-missing": "Campaign Companion requires a Monk's Enhanced Journal version with the extension API. The module is disabled.",
+      "mej-missing": "Campaign Companion requires Monk's Enhanced Journal. The module is disabled.",
       "init-failed": "Campaign Companion failed to initialize. Check the console for details; the module may not work correctly."
     },
     "settings": {
@@ -93,6 +93,8 @@
       "filterName": "Filter by name...",
       "filteredCount": "{shown} of {total}",
       "noEntries": "No journal entries yet.",
+      "newSession": "New Session",
+      "newSessionFailed": "Could not create the session. Check the console for details.",
       "orderBy": "Order By",
       "order": {
         "manual": "Manual",

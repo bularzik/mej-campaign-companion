@@ -8,6 +8,7 @@ import { normalizeAudience, canSee, pruneReveals } from "../logic/reveal-state.m
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REVEALS_FLAG = "secretReveals";
 
@@ -20,7 +21,7 @@ function asElement(html) {
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
-  return game.MonksEnhancedJournal?.getMEJType?.(doc) ? doc : null;
+  return mejType(doc) ? doc : null;
 }
 
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
