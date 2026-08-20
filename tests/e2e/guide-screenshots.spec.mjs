@@ -832,4 +832,253 @@ guideDescribe("guide screenshots", () => {
       await game.settings.set("mej-campaign-companion", "retroLinkMode", "off");
     });
   });
+
+  // Task 3: player-perspective captures. The two prerequisites the brief's
+  // Step 1 preamble calls for are already satisfied by the tests above, not
+  // repeated here: (1) the Quest entry ("The Missing Caravan") — where the
+  // block secret actually lives, per this file's own CONTROLLER RULING
+  // comment above (the Session sheet never renders a text.content region at
+  // all) — was seeded with `ownership: OBSERVER_OWNERSHIP` (the same
+  // `{ default: 2 }` shape as 07-knowledge.spec.mjs:159's `ownership: 2`
+  // pattern) at creation time, same as the Session's own explicit
+  // `ownership: { default: 2 }` update; (2) the block secret was already
+  // revealed for real to the "Inner Circle" group (which contains User 1)
+  // by the "capture standalone dialogs and windows" test's
+  // secret-audience-dialog.png flow — that flow doesn't just open the
+  // dialog for the screenshot, it checks the Inner Circle group and clicks
+  // "ok", applying the reveal. Both grants die with their flagged entries
+  // at afterAll's sweepGuideDemo() cleanup, same as every other demo
+  // document — no separate settings were touched for either.
+  test("capture player-perspective guide screenshots", async ({ page, browser }) => {
+    // 180s, not the file's usual 120s: the graph-player enlarge-and-redraw
+    // step plus its belt-and-suspenders retry loop below needs the extra
+    // headroom on a bad run.
+    test.setTimeout(180_000);
+
+    // SessionSheet.mjs's _disableFields/subRender only re-enable the
+    // player-recap pencil/editor when `game.users.some(u => u.isGM &&
+    // u.active)` is true (mirroring EnhancedJournalSheet's own "notes" tab
+    // precedent — verified live: with no GM connected the button renders
+    // `disabled` and stays that way, which is exactly what a clean run of
+    // this test hit as a real TimeoutError, not an ENOSPC artifact). This
+    // spec's `login()` reuses one `page` across users sequentially, so
+    // without a second, still-connected session nobody is ever "active" as
+    // GM while User 1's page is up. 06-player-collab.spec.mjs's own
+    // multi-context pattern is the fix: hold a second browser context
+    // logged in as Gamemaster (idle — it never interacts) for the
+    // lifetime of this test so `hasGM` is genuinely true, matching how a
+    // real player would actually experience this feature (live, with a GM
+    // online), not a test-harness artifact.
+    const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+    const gmPage = await gmContext.newPage();
+    await login(gmPage, "Gamemaster");
+    try {
+      await capturePlayerShots(page);
+    } finally {
+      await gmContext.close();
+    }
+  });
 });
+
+// Factored out of the test body above so the idle-GM-context setup/teardown
+// (a try/finally around the whole capture sequence, so the GM socket is
+// always released — even on assertion failure — and never leaks into the
+// next test as "already connected", per the report's own record of that
+// exact failure mode) reads clearly without indenting every capture line.
+async function capturePlayerShots(page) {
+  await login(page, "User 1");
+  await page.evaluate(() => ui.notifications.clear());
+
+  // Session sheet, description tab, as User 1 sees it. No extra filtering
+  // needed to keep GM notes out of frame: templates/session.hbs gates its
+  // entire gm-notes block behind `{{#if @root.isGM}}` on the SESSION tab
+  // (a different tab from "description"), so this shot is structurally
+  // GM-content-free for any non-GM viewer regardless of what's captured.
+  // The recap section's pencil icon (editor-edit) is visible because
+  // SessionSheet.mjs's onEditPlayerRecap has no isEditable/isOwner gate —
+  // every user can edit their OWN recap, matching the brief's "recap
+  // field editable" subject (the separate hasGM-active gate discussed
+  // above is satisfied by the idle GM context opened at the top of this
+  // test).
+  const sessionShell = await openEntry(page, demo.sessionId);
+  await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
+  await settle(page, 300);
+  await shot(sessionShell, "session-sheet-player");
+
+  // User 1's own recap field, mid-edit. Toggle the editPlayerRecap pencil
+  // (same mechanism the GM recap's own editor-edit button uses, MEJ's
+  // shared `.editor-parent.editing` show/hide CSS — confirmed live in
+  // monks-journal-sheet.css:605-618), then click into the now-visible
+  // <prose-mirror> and type an addition so the shot shows a real,
+  // in-progress editing state (not just the toggle) — the seed test
+  // already gave User 1's own recap flag real starting content via
+  // playerRecaps, so this is genuinely editing existing text, not an
+  // empty field.
+  const recapSection = sessionShell.locator(".player-recap-self");
+  await recapSection.locator('button[data-action="editPlayerRecap"]').click();
+  await settle(page, 300);
+  await expect(recapSection).toHaveClass(/editing/);
+  const recapEditor = recapSection.locator("prose-mirror .editor-content, prose-mirror");
+  await recapEditor.first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Someone should ask the harbor guard directly.");
+  await settle(page, 300);
+  await shot(sessionShell, "recap-editing");
+  // Toggle back off before moving on — tidy state, not load-bearing.
+  await recapSection.locator('button[data-action="editPlayerRecap"]').click();
+  await settle(page, 300);
+
+  // The revealed block secret, on the Quest entry (per this file's
+  // CONTROLLER RULING). Selector matches 09-secrets.spec.mjs:116's
+  // contentPreview()-scoped pattern (`.editor-display[data-key="text.content"]`)
+  // — the same page also mounts a permanently-hidden, never-rendered raw
+  // `<prose-mirror>` carrying the un-enriched text.content, present for
+  // any user who can open the sheet independent of this module's secrets
+  // layer; scoping to the enriched display container is what a real
+  // user's screen shows and avoids double-counting that hidden element.
+  // Shooting the whole shell (not just the secret box) shows the reveal
+  // in context, matching campaign-query-inline.png's own pattern in the
+  // GM capture test above.
+  //
+  // Live investigation (a real, reproducible failure on a clean run, not
+  // the prior attempt's ENOSPC noise): the prose-mirror recap editor
+  // above, once typed into, is PERMANENTLY dirty for the lifetime of that
+  // element — core Foundry's ProseMirrorDirtyPlugin (common/prosemirror/
+  // dirty-plugin.mjs) is a one-way latch (`apply() { return true; }`,
+  // never reset), and HTMLProseMirrorElement.save() (client/applications/
+  // elements/prosemirror-editor.mjs) only clears it by destroying/
+  // recreating the editor when the element's OWN internal toggle mode is
+  // active — which this section's pencil button doesn't drive (it just
+  // toggles an external CSS class). So EnhancedJournalSheet.close()'s
+  // checkForChanges()/DialogV2.confirm("You have unsaved changes...")
+  // gate (sheets/EnhancedJournalSheet.js) fires the next time the shared
+  // MEJ shell tries to switch documents — confirmed live via the
+  // resulting dialog's own text — and nothing here was answering it, so
+  // openEntry()'s fire-and-forget `openJournalEntry` call (MEJ core never
+  // awaits its own internal `.open()` chain) returned immediately while
+  // the actual document switch stayed silently blocked on that dialog.
+  // Handling it (discard, matching a real user choosing not to lose an
+  // in-progress edit vs. viewing another entry) is the correct fix, not
+  // avoiding dirtiness — the recap-editing shot above is deliberately
+  // left as a genuine in-progress edit, matching the brief.
+  await openEntry(page, demo.caravanId);
+  const unsavedDialog = page.locator('dialog.application:has-text("unsaved changes")');
+  if (await unsavedDialog.count()) {
+    await unsavedDialog.locator('button[data-action="yes"]').click();
+    await settle(page, 500);
+  }
+  // A single-page entry like this Quest displays its one PAGE, not the
+  // parent JournalEntry, once the switch lands — compare against
+  // parent.id (falling back to the document's own id, in case a future
+  // entry shape here ever gets opened at the entry level instead) rather
+  // than assuming which shape .document is.
+  await expect.poll(() => page.evaluate((id) => {
+    const shown = game.MonksEnhancedJournal?.journal?.document;
+    return (shown?.parent?.id ?? shown?.id) === id;
+  }, demo.caravanId)).toBe(true);
+  await positionShell(page);
+  const caravanShell = page.locator("#MonksEnhancedJournal");
+  const revealed = caravanShell.locator('.editor-display[data-key="text.content"] section.secret.mej-cc-revealed-to-you');
+  await expect(revealed).toHaveCount(1);
+  await shot(caravanShell, "revealed-secret-player");
+
+  // The chat log whisper User 1 received on reveal. Scoped to
+  // `.chat-message` elements carrying audience-dialog.mjs's own
+  // `.mej-cc-reveal-whisper` wrapper (not the whole chat log); `.last()`
+  // rather than an exact toHaveCount(1) — chat messages, unlike this
+  // file's journal/actor demo content, are NOT guideDemo-flagged and so
+  // are never swept by afterAll, and this whisper's exact secret text
+  // (fixed by the seed above) is identical run over run, so repeated
+  // runs of this file against this persistent, never-wiped world
+  // (including any prior crashed attempt that got as far as the GM's own
+  // reveal, per this task's own history) genuinely accumulate more than
+  // one matching message over time — confirmed live (27 matches on this
+  // environment's accumulated history). The most recent one is always
+  // the one from THIS run's reveal.
+  await page.locator('#sidebar button[data-action="tab"][data-tab="chat"]').click();
+  await settle(page, 400);
+  const whisperMsgs = page.locator(".chat-message:has(.mej-cc-reveal-whisper)");
+  await expect.poll(() => whisperMsgs.count()).toBeGreaterThanOrEqual(1);
+  await shot(whisperMsgs.last(), "reveal-whisper");
+
+  // Relationship graph, whole-campaign mode ("all", the Hub's own
+  // mej-cc-graph-open button — the same one 08-query-graph.spec.mjs's own
+  // GM-vs-player comparison test uses), as User 1. Sparser than
+  // graph-gm.png (which shows MEJ's ego/Focus mode centered on Aldric,
+  // switched to for reliability against a much larger node cluster — see
+  // that shot's own comment above): graph-data.mjs's buildGraph() only
+  // ever receives rows the caller has already permission-filtered for the
+  // viewer (file header comment), so this world's other test-spec debris
+  // that lacks player-level ownership is invisible here even though a GM
+  // viewing the same "all" mode would see it — genuinely fewer nodes for
+  // this viewer, not just a different mode. assertNodeOnscreen() (defined
+  // above, shared with the GM capture) is still used as a
+  // belt-and-suspenders check on the two named nodes.
+  //
+  // Live investigation: even with that permission filtering, this
+  // environment's accumulated fixture set (this persistent world is
+  // shared and never wiped across spec files or sessions) still puts
+  // ~10 nodes in this viewer's whole-campaign graph — confirmed live via
+  // a debug capture of every node's actual bounding box, spread from
+  // roughly x=-105..1310, y=-249..1222, far larger than the app's
+  // DEFAULT 820×620 frame. Root cause (graph-app.mjs's own #draw()):
+  // `d3.forceManyBody().strength(-220)`/`forceLink().distance(90)` are
+  // fixed, frame-size-independent repulsion/link forces — the simulated
+  // spread stays roughly the same physical size regardless of window
+  // size — while the viewBox AND forceCenter() target are both derived
+  // from the live SVG's `clientWidth`/`clientHeight` at draw time. A
+  // small default frame just can't contain that spread around its
+  // center, so d3-force's unseeded initial layout randomly decides which
+  // nodes land inside vs. outside it (reproduced live at many different
+  // positions/nodes, including one run where 15 consecutive default-size
+  // attempts all failed — genuinely unreliable at the default size, not
+  // just an occasional fluke).
+  //
+  // Fix: enlarge the graph app's own window BEFORE letting it draw
+  // (`app.setPosition()` then `app.render()` to re-trigger `_onRender`'s
+  // `#draw()` against the new, larger `clientWidth`/`clientHeight` — the
+  // app has no resize-observer of its own, confirmed live via
+  // grep — so a bare `setPosition()` alone leaves the old, small-frame
+  // simulation as-is). A frame close to the full 1440×900 viewport
+  // covers most of the observed spread, which is what actually fixes
+  // this (verified live: reliable across repeated runs afterward) rather
+  // than papering over it with more retries of the same undersized
+  // frame. The retry loop below is now just a belt-and-suspenders
+  // fallback for whatever spread this world's fixture set grows to next.
+  const graphShell = await openHub(page);
+  await graphShell.locator("button.mej-cc-graph-open").click();
+  await settle(page, 300);
+  let graphApp = page.locator(".mej-cc-graph-app");
+  await expect(graphApp).toHaveCount(1);
+  await page.evaluate(() => {
+    const app = foundry.applications.instances.get("mej-cc-graph");
+    app.setPosition({ left: 20, top: 20, width: 1400, height: 840 });
+    app.render();
+  });
+  await settle(page, 300);
+
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    graphApp = page.locator(".mej-cc-graph-app");
+    await expect(graphApp).toHaveCount(1);
+    await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
+    await settle(page, 2500); // let the simulation's alpha decay toward rest
+    try {
+      await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "Captain Aldric Vane" }));
+      await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" }));
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      // A plain re-render (not a full close/reopen — the enlarged
+      // position already stuck via setPosition above) is enough to get
+      // a fresh, independently-randomized simulation for the next try.
+      await page.evaluate(() => foundry.applications.instances.get("mej-cc-graph")?.render());
+      await settle(page, 300);
+    }
+  }
+  if (lastError) throw lastError;
+  await shot(graphApp, "graph-player");
+  await graphApp.locator('button.header-control[data-action="close"]').click({ force: true });
+  await expect(graphApp).toHaveCount(0);
+}
