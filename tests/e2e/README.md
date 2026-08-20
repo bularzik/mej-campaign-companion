@@ -9,6 +9,12 @@ prefixed `TT-`. Monk's Enhanced Journal is expected at
 `~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`, a symlink to a
 checkout of the MEJ repo.
 
+A `GUIDE_SHOTS=1` run of `guide-screenshots.spec.mjs` assumes a swept World A
+— no stray player-visible journals left behind by other manual or crashed
+runs — since shot cleanliness (e.g. a clean Hub index, an uncluttered
+relationship graph) depends on that world hygiene, which the spec itself
+doesn't own or verify.
+
 ## Stock-MEJ smoke test (manual pre-release gate)
 
 `13-stock-smoke.spec.mjs` is the only suite that runs the companion against a
