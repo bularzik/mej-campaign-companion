@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 (2026-08-20)
 
 - New: two user guides — [`docs/gm-guide.md`](docs/gm-guide.md) and
   [`docs/player-guide.md`](docs/player-guide.md) — walking the GM and player
