@@ -6,6 +6,9 @@
   [`docs/player-guide.md`](docs/player-guide.md) — walking the GM and player
   experience end to end, illustrated with 23 screenshots captured from a
   seeded demo campaign; linked from the README.
+- New: a Help button on the Campaign Hub's Index toolbar that opens the
+  published user guide in a new browser tab — the GM guide for GMs, the
+  player guide for everyone else.
 - New: a gated screenshot-capture spec
   (`tests/e2e/guide-screenshots.spec.mjs`, run via
   `GUIDE_SHOTS=1 npx playwright test tests/e2e/guide-screenshots.spec.mjs`)

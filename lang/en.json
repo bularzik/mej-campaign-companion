@@ -262,6 +262,9 @@
       "done": "Exported {count} entries to a Word document.",
       "failed": "Could not generate the Word document. See the console for details."
     },
+    "help": {
+      "open": "Open the user guide"
+    },
     "graph": {
       "title": "Relationship Graph",
       "open": "Graph",
