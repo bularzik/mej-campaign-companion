@@ -2,6 +2,13 @@
 
 Campaign Companion adds a session-and-campaign layer on top of [Monk's Enhanced Journal](https://github.com/ironmonk108/monks-enhanced-journal) (MEJ) for Foundry VTT: a Session journal type, a campaign timeline with in-world dates, a searchable Campaign Hub, automatic capture of encounters and shared images, automatic entry linking, Word document import/export, and lightweight player collaboration. Everything the companion writes for its own purposes lives under its own `flags["mej-campaign-companion"]` namespace, never inside MEJ's — but on entries it creates (via MEJ's own document-creation paths, so MEJ recognizes and renders them correctly), it does set MEJ's own `type`/type-seed flags, exactly as any other MEJ-typed entry would. The two modules stay independently upgradeable; "zero data in MEJ's namespace" was never literally true and is not the claim made here.
 
+## Documentation
+
+- **[GM Guide](docs/gm-guide.md)** — installation, running sessions, the Campaign Hub, secrets, import/export: everything the GM drives, with screenshots.
+- **[Player Guide](docs/player-guide.md)** — what players see and do: recaps, search, the relationship graph, revealed secrets.
+
+The rest of this README is the technical reference: exact feature semantics, trust models, and caveats.
+
 ## Features
 
 - **Session journal type** — a new MEJ page type (`mej-campaign-companion.session`) with session number, an in-world campaign date, a GM recap, per-player recaps, attendee tracking, a checklist of secrets with reveal/hide, and GM-only notes. Renders inside MEJ's own tabbed journal shell like any built-in MEJ type.
@@ -92,13 +99,17 @@ stock MEJ install.
 
 ## Installation
 
-This module has no published Foundry package listing yet — install it manually:
+Preferred: in Foundry's **Install Module** dialog, paste this manifest URL:
+
+```
+https://github.com/bularzik/mej-campaign-companion/releases/latest/download/module.json
+```
+
+Or install manually:
 
 1. Download or clone this repository into your Foundry `Data/modules/mej-campaign-companion` directory (the folder name must match the module id).
 2. Restart Foundry (or reload the setup page) so it picks up the new module directory.
 3. Enable **both** "Monk's Enhanced Journal" and "Campaign Companion for Monk's Enhanced Journal" in your world's Manage Modules dialog. Load order doesn't matter for this — the companion listens for MEJ's setup hook at import time regardless of which module's script tag runs first.
-
-`module.json`'s `url`, `manifest`, and `download` fields point at `https://github.com/bularzik/mej-campaign-companion`, which doesn't exist yet — they're placeholders for when this module gets a real repo and release, not a working install-by-manifest-URL path today.
 
 ## Settings
 
