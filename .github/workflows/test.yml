@@ -16,3 +16,4 @@ jobs:
       # Playwright e2e (npm run test:e2e) is intentionally NOT run here:
       # it needs a live, unlocked local Foundry v14 world (see README).
       - run: npm test
+      - run: npm run check:links
