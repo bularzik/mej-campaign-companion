@@ -14,7 +14,7 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N, guideUrl } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -87,6 +87,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       openGraph: CampaignHubPage.onOpenGraph,
+      openHelp: CampaignHubPage.onOpenHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
       deleteDashboard: CampaignHubPage.onDeleteDashboard,
@@ -635,6 +636,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onOpenGraph() {
     const { openGraph } = await import("./graph-app.mjs");
     openGraph();
+  }
+
+  // Help button (Index toolbar, outside the isGM guard): opens the published
+  // user guide matching this seat in a new browser tab.
+  static onOpenHelp() {
+    window.open(guideUrl(game.user.isGM), "_blank", "noopener");
   }
 
   static onOpenIndexRow(event, target) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- New: a Help button on the Campaign Hub's Index toolbar that opens the
+  published user guide in a new browser tab — the GM guide for GMs, the
+  player guide for everyone else.
+
 ## 0.5.1 (2026-08-17)
 
 - Fixed: in native mode (stock MEJ, or `forceNativeMode`), the standalone

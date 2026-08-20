@@ -227,6 +227,9 @@ test.describe("02 hub + timeline", () => {
 
     const gmShell = await openHubViaToolbar(gmPage);
     await settle(gmPage, 300);
+    // Help button renders on the Index toolbar for the GM seat (no
+    // click-through — we don't want the test opening GitHub).
+    await expect(gmShell.locator("button.mej-cc-help-open")).toHaveCount(1);
     const row = gmShell.locator(`li.mej-cc-index-row[data-uuid="${personUuid}"]`);
     await expect(row).toHaveCount(1);
     await row.click();
@@ -266,6 +269,8 @@ test.describe("02 hub + timeline", () => {
     await login(playerPage, "User 1");
     const playerShell = await openHubViaToolbar(playerPage);
     await settle(playerPage, 300);
+    // Help button sits outside the isGM guard, so the player seat gets it too.
+    await expect(playerShell.locator("button.mej-cc-help-open")).toHaveCount(1);
     await playerShell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
     await settle(playerPage, 200);
     // Positive control first.

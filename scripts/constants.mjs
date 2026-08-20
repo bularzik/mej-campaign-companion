@@ -66,6 +66,14 @@ export const MEJ_ENCOUNTER_TYPE = "encounter";
 export const I18N = "MEJCampaignCompanion";
 
 /**
+ * The published user guide for a given seat. Targets main, so the links
+ * resolve only once docs/gm-guide.md and docs/player-guide.md have merged
+ * (PR #6); the Hub's Help button opens this in a new browser tab.
+ */
+export const guideUrl = (isGM) =>
+  `https://github.com/bularzik/mej-campaign-companion/blob/main/docs/${isGM ? "gm" : "player"}-guide.md`;
+
+/**
  * Docx import wizard: the wizard's per-section type dropdown, seeded by
  * suggestType() (logic/doc-import.mjs) and consumed by buildImportPlan().
  * This replaces campaign-record's RECORD_TYPES: it is every MEJ type the
