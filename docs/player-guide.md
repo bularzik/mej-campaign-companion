@@ -62,6 +62,8 @@ The Hub's **Timeline** pane lays out your campaign's key moments in order — a 
 
 ![The Hub's Timeline pane, listing four timepoints: "The Caravan Departs" (with The Missing Caravan attached), "Mira's Warning", "The Ambush (staged)", and "Session 12 Convenes"](images/hub-timeline.png)
 
+(This shot is also from the GM's own seat — the pencil and trash icons on each row and the "+ Add Timepoint" button along the bottom are editing controls only your GM can use. What you'll see is the same timeline, read-only: the labels, the order, and anything attached to each point.)
+
 Three buttons at the top change how the list is ordered: by the order your GM arranged them in, by when each one was added, or — for the ones your GM gave an in-world date — by that campaign date. A timepoint can also carry a document or image attached to it, like "The Caravan Departs" above, which links straight through to The Missing Caravan.
 
 ## Quick answers
