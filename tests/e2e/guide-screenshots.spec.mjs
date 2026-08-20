@@ -17,14 +17,28 @@
 // guideDescribe block and depends on this seeded world state still being
 // there when it runs.
 import { test, expect } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { login, settle, MODULE_ID } from "./helpers/foundry.mjs";
+
+// Gitignored (world state, not source) — see .gitignore. Written in
+// beforeAll BEFORE any mutation, so a crashed run leaves the file behind
+// holding the TRUE pre-run baseline; the next run's beforeAll restores from
+// it instead of re-snapshotting the world's current (possibly already
+// half-mutated, if it's re-run right after a crash) live settings. Deleted
+// in afterAll only once that run's restore has actually completed cleanly —
+// its mere presence is itself the crash signal for the run after next.
+const SNAPSHOT_PATH = "tests/e2e/.guide-shots-snapshot.json";
 
 const GATED = process.env.GUIDE_SHOTS === "1";
 const guideDescribe = GATED ? test.describe : test.describe.skip;
 
 const IMG_DIR = "docs/images";
-const DOCX_PATH = "/Users/danbularzik/Claude/Projects/campaign-record/examples/Radiant Citadel.docx";
+// A small synthetic fantasy-themed fixture committed in this repo (generated
+// via a one-off script against the vendored docx library — see its own
+// header) — not the private, machine-absolute real-campaign document this
+// pointed at before, which would have published a screenshot of someone's
+// actual private campaign notes.
+const DOCX_PATH = "tests/e2e/fixtures/guide-demo-import.docx";
 // Every seeded demo document gets this ownership so a player client (Task 3)
 // can see it; ownership levels are passed as plain numbers — CONST only
 // exists inside the browser context, not in Node test scope (matches
@@ -139,26 +153,6 @@ async function positionShell(page) {
   // doesn't reliably clear it. Foundry's own TooltipManager does.
   await page.evaluate(() => game.tooltip?.deactivate());
   await page.mouse.move(400, 885);
-}
-
-/** Scroll the Hub index list just enough to bring the row named `name`
- * fully into view — no further, so as many other rows as possible (e.g. the
- * demo entries above it) stay in frame too. The index list's fixed content
- * height (~822px, clamped by MEJ's own CSS regardless of the shell window's
- * requested height — confirmed live: setPosition({height: 900}) still only
- * ever produces an ~822px-tall form) means a long alphabetical list with
- * this world's other test-spec debris interleaved can push a demo entry's
- * mention badge below the visible fold even at the shell's max height. */
-async function scrollIndexRowIntoFrame(page, name) {
-  await page.evaluate((rowName) => {
-    const list = document.querySelector(".mej-cc-index-list");
-    if (!list) return;
-    const listBottom = list.getBoundingClientRect().bottom;
-    const row = [...list.querySelectorAll(".mej-cc-index-row")].find((r) => r.textContent.includes(rowName));
-    if (!row) return;
-    const overflow = row.getBoundingClientRect().bottom - listBottom;
-    if (overflow > 0) list.scrollTop += overflow + 4;
-  }, name);
 }
 
 /** Open a specific entry (not the Hub) in the MEJ shell. */
@@ -320,28 +314,47 @@ guideDescribe("guide screenshots", () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await login(page, "Gamemaster");
-    settingsSnapshot = await page.evaluate((keys) => {
-      const out = {};
-      for (const k of keys) out[k] = game.settings.get("mej-campaign-companion", k);
-      return out;
-    }, SETTINGS_TO_RESTORE);
+
+    // Crash-safety: a snapshot file left over from an earlier, crashed run
+    // holds the TRUE pre-run baseline (written below before any mutation on
+    // that run) — restore from it rather than re-snapshotting the world's
+    // current live settings, which may already be this file's own
+    // mutations if the crash happened mid-run. Only once that's read do we
+    // move on to this run's own sweep/reset, exactly as a clean run would.
+    if (existsSync(SNAPSHOT_PATH)) {
+      const snap = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8"));
+      settingsSnapshot = snap.settingsSnapshot;
+      mejStartCollapsedSnapshot = snap.mejStartCollapsedSnapshot;
+      pausedSnapshot = snap.pausedSnapshot;
+    } else {
+      settingsSnapshot = await page.evaluate((keys) => {
+        const out = {};
+        for (const k of keys) out[k] = game.settings.get("mej-campaign-companion", k);
+        return out;
+      }, SETTINGS_TO_RESTORE);
+      // Snapshot MEJ's own "start-collapsed" world setting (positionShell()'s
+      // collapseSidebar() call below flips it) and the current pause state —
+      // read before any mutation below touches either.
+      mejStartCollapsedSnapshot = await page.evaluate(() =>
+        game.settings.get("monks-enhanced-journal", "start-collapsed")
+      );
+      pausedSnapshot = await page.evaluate(() => game.paused === true);
+      // Written BEFORE the sweep/reset/unpause below runs, so a crash any
+      // time after this point still leaves the real pre-run baseline on
+      // disk for the next run's beforeAll to recover from.
+      writeFileSync(SNAPSHOT_PATH, JSON.stringify({ settingsSnapshot, mejStartCollapsedSnapshot, pausedSnapshot }));
+    }
+
     await sweepGuideDemo(page);
     await page.evaluate(async () => {
       await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
     });
 
-    // Snapshot MEJ's own "start-collapsed" world setting (positionShell()'s
-    // collapseSidebar() call below flips it) and the current pause state,
-    // then unpause — a leftover `game.paused === true` from some other
-    // manual/test session bled Foundry's "GAME PAUSED" overlay into
-    // prep-board.png (clearly) and settings.png (faintly, through that
-    // window's own translucent background) in a prior run. Unpausing here,
-    // at the very start of the seed+capture flow, keeps every shot this
-    // file takes clean of it.
-    mejStartCollapsedSnapshot = await page.evaluate(() =>
-      game.settings.get("monks-enhanced-journal", "start-collapsed")
-    );
-    pausedSnapshot = await page.evaluate(() => game.paused === true);
+    // A leftover `game.paused === true` from some other manual/test session
+    // bled Foundry's "GAME PAUSED" overlay into prep-board.png (clearly) and
+    // settings.png (faintly, through that window's own translucent
+    // background) in a prior run. Unpausing here, at the very start of the
+    // seed+capture flow, keeps every shot this file takes clean of it.
     // `broadcast: true` is load-bearing, not decoration: togglePause()'s
     // default (`broadcast: false`) only patches the CALLING client's own
     // in-memory game.data.paused - confirmed live, the exact bug behind
@@ -373,6 +386,12 @@ guideDescribe("guide screenshots", () => {
       { collapsed: mejStartCollapsedSnapshot, paused: pausedSnapshot }
     );
     await context.close();
+    // Only delete the snapshot file once the restore above has actually run
+    // to completion — its presence is exactly what lets a crash between
+    // this point and the next run's beforeAll still recover the right
+    // baseline (which, by now, is a no-op restore of values already back in
+    // place, but still correct to leave discoverable until we know we're done).
+    if (existsSync(SNAPSHOT_PATH)) unlinkSync(SNAPSHOT_PATH);
   });
 
   test("seed the demo campaign", async ({ page }) => {
@@ -578,6 +597,18 @@ guideDescribe("guide screenshots", () => {
     // --- Hub: timeline, dashboards (saved query), secrets (player group) --
     const timelineShell = await openHubTab(page, "timeline");
     await addTimepoint(timelineShell, page, "The Caravan Departs");
+    // Stamp guideDemo on the FRESH "Campaign Timeline" journal the Hub just
+    // filed (beforeAll reset timelineJournalId to "" so this run gets a new
+    // one) right after it's created, not just at afterAll's explicit
+    // delete-by-setting-comparison. If this run crashes before afterAll
+    // runs, a future run's start-of-run sweepGuideDemo() sweep — which only
+    // ever finds guideDemo-FLAGGED entries — needs this flag already in
+    // place to reclaim the orphaned journal; without it, the crashed run's
+    // timeline journal survives every subsequent sweep forever.
+    await page.evaluate(async (id) => {
+      const timelineId = game.settings.get("mej-campaign-companion", "timelineJournalId");
+      if (timelineId) await game.journal.get(timelineId)?.setFlag(id, "guideDemo", true);
+    }, MODULE_ID);
     await addTimepoint(timelineShell, page, "Mira's Warning");
     await addTimepoint(timelineShell, page, "The Ambush (staged)");
     await addTimepoint(timelineShell, page, "Session 12 Convenes", { year: "1497", month: "5", day: "14", time: "19:00" });
@@ -630,13 +661,26 @@ guideDescribe("guide screenshots", () => {
 
     const indexShell = await openHub(page);
     await settle(page, 300);
-    // Bring the mention-count badge on the LATER-sorted of the two badge-
-    // bearing demo entries ("The Missing Caravan" sorts after "The Gilded
-    // Flagon") into frame — this world's other test-spec debris (T-prefixed
-    // fixtures) interleave alphabetically above both, pushing them near the
-    // bottom of the index list's fixed-height, scrollable content area.
-    await scrollIndexRowIntoFrame(page, "The Missing Caravan");
+    // This is the GUIDE'S LEAD IMAGE (reused again further down for the
+    // mention-badge callout on "The Gilded Flagon"/"The Missing Caravan"),
+    // so it needs demo rows leading the frame, not this world's other
+    // test-spec debris (this world accumulates ~14 T-/TT-prefixed fixture
+    // rows from other spec files that a plain scroll can't get out of the
+    // way, since they interleave alphabetically all through the list —
+    // confirmed live via a bare scroll-to-row attempt, review finding).
+    // The Hub's own name-filter box (index-filter — the same control
+    // gm-guide.md's own Index section teaches readers to use) is the
+    // reliable fix: "the" matches both required demo rows ("The Gilded
+    // Flagon", "The Missing Caravan" — both need to stay visible with
+    // their mention-count badges for the second caption this same image
+    // serves) and, empirically, nothing in this world's debris set.
+    await indexShell.locator('input[name="index-filter"]').fill("the");
+    await settle(page, 400);
+    await expect(indexShell.locator(".mej-cc-index-row", { hasText: "The Gilded Flagon" })).toBeVisible();
+    await expect(indexShell.locator(".mej-cc-index-row", { hasText: "The Missing Caravan" })).toBeVisible();
     await shot(indexShell, "hub-index");
+    await indexShell.locator('input[name="index-filter"]').fill("");
+    await settle(page, 300);
 
     const timelineShell = await openHubTab(page, "timeline");
     await shot(timelineShell, "hub-timeline");
@@ -721,8 +765,18 @@ guideDescribe("guide screenshots", () => {
     await login(page, "Gamemaster");
     await page.evaluate(() => ui.notifications.clear());
 
-    // Settings window's module section — captured before this test mutates
-    // any settings, so it shows real, non-transient default values.
+    // Settings window's module section — must show genuine defaults, not
+    // whatever the seed test last left retroLinkMode/autoLink at (the seed
+    // test sets retroLinkMode "off" for its own seeding hygiene, per its own
+    // comment — "off" is not the documented default). Restore both to their
+    // documented defaults (README's Settings table / gm-guide.md's Settings
+    // reference: autoLink off, retroLinkMode "confirm") immediately before
+    // this capture, not just at afterAll, so settings.png actually shows
+    // what a fresh install looks like.
+    await page.evaluate(async () => {
+      await game.settings.set("mej-campaign-companion", "autoLink", false);
+      await game.settings.set("mej-campaign-companion", "retroLinkMode", "confirm");
+    });
     await page.evaluate(() => game.settings.sheet.render(true));
     await settle(page, 500);
     const settingsApp = page.locator("#settings-config");
