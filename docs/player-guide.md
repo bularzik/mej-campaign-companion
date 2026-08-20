@@ -20,7 +20,7 @@ Your own recap is the block under **Player Recaps**. Click the pencil icon next 
 
 ![The recap editor open mid-edit, showing typed text with formatting controls above it](images/recap-editing.png)
 
-Click the pencil again to close the editor once you're done, or just navigate away — either way it saves. It works the same way no matter how your particular table happens to be set up behind the scenes, so you never have to think about it: just type and save.
+Click the pencil again to close the editor once you're done — that's the reliable way to close out. If you navigate away instead, Foundry may still pop up a "You have unsaved changes" dialog; don't let that worry you. Your recap saves as soon as the field loses focus (clicking elsewhere or navigating away both count), so by the time that dialog can appear, your text is already saved — it's just Foundry's editor being unable to tell that a saved field isn't dirty anymore. It's safe to answer "discard" if you see it.
 
 ## Finding things
 
@@ -28,7 +28,7 @@ Once your campaign has more than a few sessions, you won't always remember which
 
 Type a query into the Hub's Search pane and results appear as you type, matching across names, descriptions, and other campaign text:
 
-![The Hub's Search pane, showing results for the query "caravan" across a Person, a Session, and a Quest](images/hub-search.png)
+![The Hub's Search pane, showing results for the query "caravan" across two Persons, a Session, and a Quest](images/hub-search.png)
 
 (The screenshot above happens to have been taken from the GM's own seat, so it includes a line of GM-only detail under "Session 12" that a player would never see. Your own search results only ever turn up what your permissions allow — the same rule that governs everything else in this guide.)
 

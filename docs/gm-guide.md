@@ -44,7 +44,7 @@ The Session sheet has four tabs — **Recap**, **Session**, **Relationships**, a
 
 ![The Session sheet's Recap tab, showing the GM recap text and the Player Recaps section below it](images/session-sheet-gm.png)
 
-- **Recap** is where you write your own GM recap of what happened, and where each player's own recap appears underneath (players write these themselves once `playersWriteSessions` is on — see [Player collaboration](#player-collaboration) — or, without that, over the GM-relay path).
+- **Recap** is where you write your own GM recap of what happened. Below it, under **Player Recaps**, each player's own recap lists in turn once they've written one (players write these themselves once `playersWriteSessions` is on — see [Player collaboration](#player-collaboration) — or, without that, over the GM-relay path); the shot above catches this session before any player has written theirs, so that section is still empty.
 - **Session** holds the session number, the in-world campaign date (year, month, day, hour, minute), the attendee list (drag player-character or NPC Actors onto it), and the secret checklist described below.
 - **Relationships** is MEJ's standard relationships panel — link the session to other campaign entries from here.
 - **Notes** is GM-only free text; the template hides this tab's content entirely from non-GM viewers.
@@ -69,7 +69,7 @@ The Index toolbar is also where you'll find **New Session**, **Import Document**
 
 Once you know roughly what you're looking for, the **Search** pane is faster than scrolling the index. Type a query and results appear as you type, matching across entry names, descriptions, attributes, and Session fields (secrets and GM notes match too — but only for a GM; a player's search never surfaces GM-only content):
 
-![The Hub's Search pane, showing results for the query "caravan" across a Person, a Session, and a Quest](images/hub-search.png)
+![The Hub's Search pane, showing results for the query "caravan" across two Persons, a Session, and a Quest](images/hub-search.png)
 
 ## The timeline & campaign dates
 
@@ -79,7 +79,7 @@ The Hub's **Timeline** pane holds a single world timeline of timepoints — labe
 
 Three buttons at the top switch how the list orders itself: **Manual** (drag entries into whatever order you want — a fractional-key drag-insert under the hood, so you can drop a new point between any two existing ones), **Date Added** (creation order), and **Campaign Date** (chronological by the in-world date you gave each timepoint, for the ones that have one).
 
-Click **Add Timepoint** at the bottom to create one — give it a label, and optionally fill in a campaign date (the same Year/Month/Day/Time dialog shown in [Running your first session](#running-your-first-session) above). To attach a document or image to a timepoint, drag it from the sidebar (or from a Hub search result) onto the timepoint's row — that's how "The Caravan Departs" above ended up with "The Missing Caravan" attached to it.
+Click **Add Timepoint** at the bottom to create one — give it a label, and optionally fill in a campaign date (the same Year/Month/Day/Time dialog shown in [Running your first session](#running-your-first-session) above). To attach a document or image to a timepoint, drag it from the sidebar (or from a Hub search result) onto the timepoint's row — that's how "The Caravan Departs" above ended up with "The Missing Caravan" attached to it. A dragged-in document's own permissions decide whether players can see it, but an attached image is different: it's hidden from players by default, and stays that way until you toggle its own eye icon on the timepoint row to make it visible to them.
 
 ## Building your campaign record
 
@@ -93,11 +93,11 @@ This section covers the knowledge-layer tools: tags and attributes, backlinks, t
 
 ![The Mentioned In backlinks panel, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
-**The relationship graph.** Open it from the graph icon in the Hub's toolbar, or from a specific entry, to visualize entries connected via MEJ's own relationships. It has two modes: **Focus** centers on one entry and shows only its direct connections, while **Whole campaign** lays out everything at once (capped at the 200 most-connected entries, for performance — additional nodes and links to them are left out of the view). There's also an optional dashed overlay ("Show mention links") that layers `@UUID` backlinks on top of the relationship edges. The shot below is Focus mode centered on Captain Aldric Vane, showing his one relationship to "The Missing Caravan":
+**The relationship graph.** Open it from the graph icon in the Hub's toolbar — always available, regardless of your MEJ build — to visualize entries connected via MEJ's own relationships. MEJ can also add a header button to a specific entry's sheet for this, but that route needs an MEJ build carrying the v14 header-button fix; most MEJ builds published as of this writing don't have it yet, so the button simply won't appear on your Session sheet or entry windows until it does. It has two modes: **Focus** centers on one entry and shows only its direct connections, while **Whole campaign** lays out everything at once (capped at the 200 most-connected entries, for performance — additional nodes and links to them are left out of the view). There's also an optional dashed overlay ("Show mention links") that layers `@UUID` backlinks on top of the relationship edges. The shot below is Focus mode centered on Captain Aldric Vane, showing his one relationship to "The Missing Caravan":
 
 ![The relationship graph in Focus mode, centered on Captain Aldric Vane with one connected node](images/graph-gm.png)
 
-**Hub Dashboards.** The Dashboards tab holds saved searches using a simple grammar — `type:`, `tag:`, `attr:`, and plain free-text terms combined together (for example, `type:person tag:ally`). Click **Add dashboard**, give the query a name, and its results render inline right there in the tab whenever you open it:
+**Hub Dashboards.** The Dashboards tab holds saved searches using a simple grammar — `type:`, `tag:`, `attr:`, and plain free-text terms combined together (for example, `type:person tag:ally`). Click **Add dashboard**, give the query a name, and its results render inline right there in the tab whenever you open it. Each saved dashboard also has its own **Visible to players** checkbox in that same dialog — leave it unchecked (the default) to keep a dashboard GM-only, or check it to let players see that saved query and its live results too:
 
 ![The Dashboards tab, showing a saved "Allies" query and its live results](images/hub-dashboards.png)
 
@@ -138,13 +138,13 @@ Click a block secret's audience control to open the reveal dialog. Check **Every
 
 ![The Reveal secret dialog, with Everyone, individual player, and player-group checkboxes](images/secret-audience-dialog.png)
 
-You can reveal secrets from two places: the audience dialog on the secret itself (as above), or in bulk from the **Hub Secrets tab**, which lists every secret across your campaign — both block secrets and checklist secrets — filterable by entry type, revealed state, and which specific player you're checking. That last filter answers "what does player X know" at a glance: pick a player and the list narrows to what's been revealed to them.
+You can reveal secrets from two places: the audience dialog on the secret itself (as above), or from one place — the **Hub Secrets tab**, which lists every secret across your campaign — both block secrets and checklist secrets — filterable by entry type, revealed state, and which specific player you're checking. Each row still opens its own reveal dialog, one secret at a time — the Secrets tab's advantage over hunting down secrets one entry at a time is that everything is already in one list, not that it reveals in bulk. That last filter answers "what does player X know" at a glance: pick a player and the list narrows to what's been revealed to them.
 
 ![The Hub Secrets tab, filtered to show secrets and their reveal state across the campaign, with player groups listed below](images/hub-secrets-tab.png)
 
 Player groups — named collections of players you manage from this same tab — are reveal targets alongside individual players, so you can reveal one secret to "Inner Circle" instead of checking three players individually every time.
 
-The **session prep board**, opened from a button on the Session sheet, is a GM-only board for tracking reveal decisions across a session: which secrets and clues are relevant, which are already revealed, who attended, and any linked entries — plus a scratch-notes box for anything else you want on hand while running the table:
+The **session prep board**, opened from the clipboard-icon button in the Session tab's own toolbar (next to the secret checklist, not a header button — always available regardless of your MEJ build), is a GM-only board for tracking reveal decisions across a session: which secrets and clues are relevant, which are already revealed, who attended, and any linked entries — plus a scratch-notes box for anything else you want on hand while running the table:
 
 ![The session prep board, showing attendees, the secrets/clues checklist, linked entries, and a scratch-notes box](images/prep-board.png)
 
@@ -194,7 +194,7 @@ Campaign Companion works against a stock Monk's Enhanced Journal install, not ju
 - Session doesn't appear in MEJ's own "New Entry" dialog — create sessions with the **New Session** button in the Campaign Hub instead (see [Running your first session](#running-your-first-session) above).
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub opens as its own standalone window rather than as a tab inside MEJ's shell.
-- The "open graph" and "prep board" header buttons aren't present on the Session sheet or Hub. Both remain reachable elsewhere — the graph from the Hub's own toolbar, the prep board from its button on the Session sheet.
+- The "open graph" and "prep board" header buttons aren't present on the Session sheet or Hub. This isn't unique to native mode, either: as of this writing, most MEJ v14 builds don't render either header button in *any* mode, due to an upstream MEJ header-injection bug — it's fixed only in MEJ builds that carry the v14 header-button fix. Both remain reachable regardless — the graph from the Hub's own toolbar, the prep board from its button on the Session sheet.
 
 If your world moves between a build with the extension API and a stock build (in either direction), no migration step is needed — a stock MEJ install strips the module's own MEJ type flag from Session pages, and an API-carrying build's GM client silently re-stamps it the next time it loads.
 
