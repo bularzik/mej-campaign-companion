@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- New: two user guides — [`docs/gm-guide.md`](docs/gm-guide.md) and
+  [`docs/player-guide.md`](docs/player-guide.md) — walking the GM and player
+  experience end to end, illustrated with 23 screenshots captured from a
+  seeded demo campaign; linked from the README.
+- New: a gated screenshot-capture spec
+  (`tests/e2e/guide-screenshots.spec.mjs`, run via
+  `GUIDE_SHOTS=1 npx playwright test tests/e2e/guide-screenshots.spec.mjs`)
+  that seeds the demo campaign and regenerates every guide screenshot
+  against a live world, and a guide link/anchor checker
+  (`tests/docs/check-guide-links.mjs`, `npm run check:links`), now also run
+  as a CI step.
+
 ## 0.5.1 (2026-08-17)
 
 - Fixed: in native mode (stock MEJ, or `forceNativeMode`), the standalone
