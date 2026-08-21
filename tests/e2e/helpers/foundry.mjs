@@ -132,19 +132,27 @@ export async function login(page, userName) {
   if (await loginFromSavedState(page, userName)) return;
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE_URL}/join`);
-    const select = page.locator('select[name="userid"]');
-    await select.waitFor({ timeout: 15_000 });
-    const disabled = await select
-      .locator("option", { hasText: userName })
-      .first()
-      .isDisabled()
-      .catch(() => false);
-    if (disabled) {
-      throw new Error(
-        `User "${userName}" is already connected to the test world — close other sessions (browsers, stray test runners) and retry.`
-      );
+    // Foundry ≤14.365 renders a user <select>; 14.367+ renders a free-text
+    // username <input> instead (matched against user names server-side).
+    const userField = page.locator('select[name="userid"], input[name="username"]');
+    await userField.waitFor({ timeout: 15_000 });
+    const tagName = await userField.evaluate((el) => el.tagName);
+    if (tagName === "SELECT") {
+      const select = page.locator('select[name="userid"]');
+      const disabled = await select
+        .locator("option", { hasText: userName })
+        .first()
+        .isDisabled()
+        .catch(() => false);
+      if (disabled) {
+        throw new Error(
+          `User "${userName}" is already connected to the test world — close other sessions (browsers, stray test runners) and retry.`
+        );
+      }
+      await select.selectOption({ label: userName });
+    } else {
+      await userField.fill(userName);
     }
-    await select.selectOption({ label: userName });
     await page.locator('button[name="join"], form#join-game-form button[type="submit"]').first().click();
     try {
       await page.waitForURL("**/game", { timeout: 30_000 });
