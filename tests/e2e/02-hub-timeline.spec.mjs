@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm,
+  login, TT_PREFIX, cleanupAsGm, cleanupTimelineJournal,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -22,22 +22,16 @@ async function openHubViaToolbar(page) {
   return shell;
 }
 
-async function cleanupTimelineJournal(page) {
-  // The world's singleton timeline journal (Task 6) is tracked by a world
-  // setting storing its id (data/timeline-journal.mjs), named "Campaign
-  // Timeline" by ensureTimelineJournal() — clear it back out (and reset the
-  // setting) so specs don't leak timepoints/links between runs. Deletes
-  // *every* matching doc, not just the first: CampaignHubPage.mjs's
-  // _prepareBodyContext preps the timeline tab's context (calling
-  // ensureTimelineJournal()) on every render regardless of which tab is
-  // active, so simply opening the Hub as GM can create this journal as a
-  // side effect even in tests that never touch a timepoint.
-  await page.evaluate(async () => {
-    const ids = game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id);
-    if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-    await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
-  });
-}
+// The world's singleton timeline journal (Task 6) is tracked by a world
+// setting storing its id (data/timeline-journal.mjs), named "Campaign
+// Timeline" by ensureTimelineJournal() — CampaignHubPage.mjs's
+// _prepareBodyContext preps the timeline tab's context (calling
+// ensureTimelineJournal()) on every render regardless of which tab is
+// active, so simply opening the Hub as GM can create/touch this journal as
+// a side effect even in tests that never touch a timepoint. This used to
+// delete *every* matching doc by name unconditionally - unsafe against
+// World A's real, pre-existing legacy timeline (which shares this exact
+// fixed name); see cleanupTimelineJournal's doc comment in helpers/foundry.mjs.
 
 test.describe("02 hub + timeline", () => {
   // Tests in this spec mix the default `page` fixture with tests that open

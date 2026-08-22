@@ -277,6 +277,51 @@ export async function deleteScenesByPrefix(page, prefix = TT_PREFIX) {
   }, prefix);
 }
 
+/**
+ * Safely clean up the legacy singleton timeline journal (always named
+ * exactly "Campaign Timeline" - data/timeline-journal.mjs's
+ * ensureTimelineJournal()), WITHOUT ever destroying real content.
+ *
+ * Several specs used to do `game.journal.find(e => e.name === "Campaign
+ * Timeline")` then unconditionally delete whatever that found - safe only
+ * in a throwaway world where nothing else could ever carry that exact
+ * name. World A is not that world: it carries a real, content-bearing
+ * legacy timeline journal that happens to share this fixed name (spec
+ * §6's whole "pre-adoption world" premise), and `ensureTimelineJournal()`
+ * with no campaign returns that SAME real journal to any spec that calls
+ * it in a zero-campaign world rather than creating a fresh one - so a
+ * test adding its own TT_PREFIX-labeled timepoints (e.g. 04-auto-capture's
+ * ensureTimepoint()) was landing them directly on the real journal, and
+ * cleanup was then deleting that real journal outright by name. Confirmed
+ * live during task-12: this cost the shared World A environment its real
+ * legacy timeline content across more than one regression run before this
+ * fix (see task-12-report.md's world-state section).
+ *
+ * Safe behavior: a "Campaign Timeline" journal whose timepoints are ALL
+ * TT_PREFIX-labeled (or has none) is entirely this suite's own doing -
+ * delete it, and clear the world setting only if it was the one pointed
+ * to. A journal that ALSO carries any non-TT_PREFIX timepoint is real
+ * content - never deleted, never has the world setting touched; only its
+ * own TT_PREFIX timepoints (if any got added) are stripped back out.
+ */
+export async function cleanupTimelineJournal(page, prefix = TT_PREFIX) {
+  await page.evaluate(async (TT) => {
+    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline");
+    for (const j of candidates) {
+      const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
+      const real = tps.filter((t) => !t.label?.startsWith(TT));
+      if (real.length === 0) {
+        await JournalEntry.implementation.deleteDocuments([j.id]);
+        if (game.settings.get("mej-campaign-companion", "timelineJournalId") === j.id) {
+          await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
+        }
+      } else if (real.length !== tps.length) {
+        await j.setFlag("mej-campaign-companion", "timeline", { timepoints: real });
+      }
+    }
+  }, prefix);
+}
+
 /** Delete any leftover combats (crashed-run artifacts from auto-capture specs). */
 export async function deleteAllCombats(page) {
   await page.evaluate(async () => {

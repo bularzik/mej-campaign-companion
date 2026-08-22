@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX,
+  login, TT_PREFIX, cleanupTimelineJournal,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -47,12 +47,17 @@ async function cleanupAll(page) {
     if (sceneIds.length) await Scene.implementation.deleteDocuments(sceneIds);
     const combatIds = game.combats.map((c) => c.id);
     if (combatIds.length) await Combat.implementation.deleteDocuments(combatIds);
-    const j = game.journal.find((e) => e.name === "Campaign Timeline");
-    if (j) await JournalEntry.implementation.deleteDocuments([j.id]);
-    await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
     await game.settings.set("mej-campaign-companion", "autoCaptureEncounters", false);
     await game.settings.set("mej-campaign-companion", "autoCaptureSharedMedia", false);
   });
+  // Separate from the evaluate above: ensureTimepoint() (this spec's own
+  // helper) can land a TT_PREFIX timepoint directly on World A's real,
+  // pre-existing legacy timeline journal (ensureTimelineJournal() returns
+  // that SAME real journal in a zero-campaign world, not a fresh one) -
+  // unconditionally deleting anything named "Campaign Timeline" here used
+  // to destroy that real content outright. See cleanupTimelineJournal's
+  // doc comment in helpers/foundry.mjs.
+  await cleanupTimelineJournal(page);
 }
 
 test.describe("04 auto-capture", () => {
