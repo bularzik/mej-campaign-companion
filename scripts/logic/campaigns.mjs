@@ -69,3 +69,14 @@ export function canAttachToTimeline(entry, timelineJournal) {
   if (timelineCampaign === null) return true;
   return campaignIdOf(entry) === timelineCampaign;
 }
+
+/**
+ * Spec §5 bulk apply plan: JournalEntry.updateDocuments payloads setting
+ * every entry's ownership.default to `level`, skipping ones already there.
+ * Touches ONLY the default level - per-user overrides are separate keys.
+ */
+export function bulkOwnershipPlan(entries, level) {
+  return (entries ?? [])
+    .filter((e) => (e.ownership?.default ?? null) !== level)
+    .map((e) => ({ _id: e.id, "ownership.default": level }));
+}

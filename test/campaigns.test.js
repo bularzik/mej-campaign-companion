@@ -105,4 +105,22 @@ describe("campaigns module", async () => {
     });
   });
 
+  describe("bulkOwnershipPlan", () => {
+    it("plans updates only for entries not already at the level", async () => {
+      const { bulkOwnershipPlan } = await import("../scripts/logic/campaigns.mjs");
+      const entries = [
+        { id: "a", ownership: { default: 0 } },
+        { id: "b", ownership: { default: 2 } },
+        { id: "c", ownership: {} },
+        { id: "d" }
+      ];
+      expect(bulkOwnershipPlan(entries, 2)).toEqual([
+        { _id: "a", "ownership.default": 2 },
+        { _id: "c", "ownership.default": 2 },
+        { _id: "d", "ownership.default": 2 }
+      ]);
+      expect(bulkOwnershipPlan([], 2)).toEqual([]);
+    });
+  });
+
 });
