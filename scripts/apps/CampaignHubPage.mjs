@@ -15,9 +15,9 @@
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, I18N, guideUrl } from "../constants.mjs";
-import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -179,14 +179,32 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const isGM = game.user.isGM;
     context.isGM = isGM;
 
-    // Lazily create the world's singleton timeline journal on first GM hub
-    // open (per Task 6/7). getTimelineJournal() alone covers players, and
-    // covers a GM once it already exists - ensureTimelineJournal() only
-    // writes when it doesn't.
-    const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
-
+    const { campaign, unfiled } = this.#scope();
+    let stacks;
+    if (unfiled) {
+      stacks = [];
+    } else if (campaign) {
+      const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
+      stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+    } else {
+      const campaigns = getCampaigns();
+      if (!campaigns.length) {
+        // Pre-adoption world: legacy singleton behavior, unchanged.
+        const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
+        stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+      } else {
+        // Spec §2: All mode stacks per-campaign timelines, never interleaved.
+        // No lazy creation here - creating N journals on a render would be a
+        // side-effect storm; a campaign's timeline is created when scoped to it.
+        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(resolveTimelineJournal(c), isGM) }));
+        const legacy = getTimelineJournal();
+        if (legacy && !campaignOf(legacy)) {
+          stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(legacy, isGM) });
+        }
+      }
+    }
     context.index = this.#indexContext();
-    context.timeline = this.#timelineContext(journal, isGM);
+    context.timeline = { stacks };
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -304,7 +322,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!journal) {
       // Players before a GM has ever opened the hub: no timeline journal
       // exists yet. Render an explicit empty state rather than erroring.
-      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false };
+      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false, journalId: null };
     }
     const canEdit = isGM;
     const order = this.state.timelineOrder;
@@ -326,7 +344,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       order,
       showDateColumn: order !== "manual",
       orderOptions: buildOrderOptions(order, (m) => game.i18n.localize(`${I18N}.hub.order.${m}`)),
-      canEdit
+      canEdit,
+      journalId: journal.id
     };
   }
 
@@ -842,7 +861,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onAddTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = await ensureTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const raw = Number(target.dataset.position);
     const position = target.dataset.position != null && Number.isInteger(raw) ? raw : null;
@@ -857,7 +877,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onRenameTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const id = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const current = Timepoints.getTimepoints(journal).find((t) => t.id === id);
@@ -873,7 +894,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onDeleteTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const id = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const label = Timepoints.getTimepoints(journal).find((t) => t.id === id)?.label ?? "";
@@ -902,7 +924,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onRemoveLink(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
@@ -912,7 +935,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onToggleLinkShowPlayers(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
@@ -951,7 +975,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     const target = event.target.closest("[data-drop-timepoint]");
     if (!target) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
 
     let data;
@@ -985,6 +1010,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (!doc) {
         ui.notifications.warn(game.i18n.localize(`${I18N}.hub.cannotAttach`));
         return;
+      }
+      if (!canAttachToTimeline(doc, journal)) {
+        return ui.notifications.warn(game.i18n.localize(`${I18N}.hub.wrongCampaign`));
       }
       await queueFiling(() => Timepoints.addLink(journal, timepointId, { uuid: drop.uuid, name: doc.name, type: drop.type }));
       return this.render({ parts: ["main"] });

@@ -93,57 +93,65 @@
                 </div>
                 <div class="tab{{#if subtabs.timeline.active}} active{{/if}}" data-group="primary" data-tab="timeline">
                     <div class="tab-inner flexcol mej-cc-timeline">
-                        {{#if timeline.hasJournal}}
-                        <div class="mej-cc-order-menu" role="group" aria-label="{{localize 'MEJCampaignCompanion.hub.orderBy'}}">
-                            {{#each timeline.orderOptions}}
-                            <button type="button" data-action="setTimelineOrder" data-order="{{this.value}}"
-                                    class="{{#if this.selected}}active{{/if}}">{{this.label}}</button>
-                            {{/each}}
-                        </div>
-                        <ol class="mej-cc-timeline-list timepoints{{#unless timeline.showDateColumn}} manual{{/unless}}">
-                            {{#each timeline.rows}}
-                            <li class="mej-cc-timepoint" data-timepoint-id="{{this.id}}" data-position="{{this.position}}"
-                                data-drop-timepoint {{#if this.canEdit}}{{#unless @root.timeline.showDateColumn}}data-drag-timepoint draggable="true"{{/unless}}{{/if}}>
-                                {{#if @root.timeline.showDateColumn}}<div class="mej-cc-timepoint-date">{{this.dateLabel}}</div>{{/if}}
-                                <div class="mej-cc-timepoint-body">
-                                    <div class="mej-cc-timepoint-head">
-                                        <span class="mej-cc-timepoint-label">{{this.label}}</span>
-                                        {{#if this.canEdit}}
-                                        <button type="button" data-action="renameTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
-                                        <button type="button" data-action="deleteTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.deleteTimepoint'}}"><i class="fas fa-trash"></i></button>
-                                        {{/if}}
-                                    </div>
-                                    <div class="mej-cc-timepoint-links">
-                                        {{#each this.links}}
-                                        <span class="mej-cc-link-chip{{#if this.broken}} broken{{/if}}" data-link-id="{{this.id}}"
-                                              data-action="openLink" data-name="{{this.name}}"
-                                              {{#if this.uuid}}data-uuid="{{this.uuid}}"{{/if}}
-                                              {{#if this.src}}data-src="{{this.src}}"{{/if}}>
-                                            {{#if this.thumb}}<img class="mej-cc-link-thumb nopopout" src="{{this.thumb}}" alt="">{{else}}<i class="{{this.icon}}"></i>{{/if}}
-                                            {{this.name}}
-                                            {{#if this.canToggleVisibility}}
-                                            <a data-action="toggleLinkShowPlayers" data-tooltip="{{localize 'MEJCampaignCompanion.hub.toggleShowPlayers'}}"><i class="fas {{#if this.showPlayers}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                        {{#each timeline.stacks}}
+                        <div class="mej-cc-timeline-stack" data-journal-id="{{this.journalId}}">
+                            {{#if this.name}}<h3 class="mej-cc-timeline-campaign">{{this.name}}</h3>{{/if}}
+                            {{#if this.hasJournal}}
+                            <div class="mej-cc-order-menu" role="group" aria-label="{{localize 'MEJCampaignCompanion.hub.orderBy'}}">
+                                {{#each this.orderOptions}}
+                                <button type="button" data-action="setTimelineOrder" data-order="{{this.value}}"
+                                        class="{{#if this.selected}}active{{/if}}">{{this.label}}</button>
+                                {{/each}}
+                            </div>
+                            <ol class="mej-cc-timeline-list timepoints{{#unless this.showDateColumn}} manual{{/unless}}">
+                                {{#each this.rows}}
+                                <li class="mej-cc-timepoint" data-timepoint-id="{{this.id}}" data-position="{{this.position}}"
+                                    data-drop-timepoint {{#if this.canEdit}}{{#unless ../showDateColumn}}data-drag-timepoint draggable="true"{{/unless}}{{/if}}>
+                                    {{#if ../showDateColumn}}<div class="mej-cc-timepoint-date">{{this.dateLabel}}</div>{{/if}}
+                                    <div class="mej-cc-timepoint-body">
+                                        <div class="mej-cc-timepoint-head">
+                                            <span class="mej-cc-timepoint-label">{{this.label}}</span>
+                                            {{#if this.canEdit}}
+                                            <button type="button" data-action="renameTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
+                                            <button type="button" data-action="deleteTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.deleteTimepoint'}}"><i class="fas fa-trash"></i></button>
                                             {{/if}}
-                                            {{#if ../canEdit}}
-                                            <a data-action="removeLink" data-tooltip="{{localize 'MEJCampaignCompanion.hub.removeLink'}}"><i class="fas fa-xmark"></i></a>
-                                            {{/if}}
-                                        </span>
-                                        {{/each}}
+                                        </div>
+                                        <div class="mej-cc-timepoint-links">
+                                            {{#each this.links}}
+                                            <span class="mej-cc-link-chip{{#if this.broken}} broken{{/if}}" data-link-id="{{this.id}}"
+                                                  data-action="openLink" data-name="{{this.name}}"
+                                                  {{#if this.uuid}}data-uuid="{{this.uuid}}"{{/if}}
+                                                  {{#if this.src}}data-src="{{this.src}}"{{/if}}>
+                                                {{#if this.thumb}}<img class="mej-cc-link-thumb nopopout" src="{{this.thumb}}" alt="">{{else}}<i class="{{this.icon}}"></i>{{/if}}
+                                                {{this.name}}
+                                                {{#if this.canToggleVisibility}}
+                                                <a data-action="toggleLinkShowPlayers" data-tooltip="{{localize 'MEJCampaignCompanion.hub.toggleShowPlayers'}}"><i class="fas {{#if this.showPlayers}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
+                                                {{/if}}
+                                                {{#if ../canEdit}}
+                                                <a data-action="removeLink" data-tooltip="{{localize 'MEJCampaignCompanion.hub.removeLink'}}"><i class="fas fa-xmark"></i></a>
+                                                {{/if}}
+                                            </span>
+                                            {{/each}}
+                                        </div>
                                     </div>
-                                </div>
-                            </li>
+                                </li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noTimepoints'}}</li>
+                                {{/each}}
+                            </ol>
+                            {{#if this.canEdit}}
+                            <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                                <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                            </button>
+                            {{/if}}
                             {{else}}
-                            <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noTimepoints'}}</li>
-                            {{/each}}
-                        </ol>
-                        {{#if timeline.canEdit}}
-                        <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
-                            <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
-                        </button>
-                        {{/if}}
-                        {{else}}
-                        <p class="instruction">{{localize 'MEJCampaignCompanion.hub.timelineEmptyState'}}</p>
-                        {{/if}}
+                            <p class="instruction">{{localize 'MEJCampaignCompanion.hub.timelineEmptyState'}}</p>
+                            {{/if}}
+                        </div>
+                        {{/each}}
+                        {{#unless timeline.stacks.length}}
+                        <p class="mej-cc-timeline-empty">{{localize "MEJCampaignCompanion.hub.timelineEmptyScope"}}</p>
+                        {{/unless}}
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.search.active}} active{{/if}}" data-group="primary" data-tab="search">

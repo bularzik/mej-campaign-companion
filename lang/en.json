@@ -130,10 +130,12 @@
       "toggleShowPlayers": "Toggle Player Visibility",
       "brokenLink": "That link no longer resolves to anything.",
       "cannotAttach": "That item can't be attached to the timeline.",
+      "wrongCampaign": "Entries can only attach to timepoints in their own campaign.",
       "dropFilesUnsupported": "Dropping files directly isn't supported yet - upload them to a journal entry first.",
       "showImageToPlayers": "Show Image to Players?",
       "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
       "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
+      "timelineEmptyScope": "No timeline in this scope.",
       "search": {
         "placeholder": "Search everything...",
         "noResults": "No matches.",
