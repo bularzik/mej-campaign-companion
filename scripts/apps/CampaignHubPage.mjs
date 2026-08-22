@@ -697,8 +697,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
+      const { campaign: scoped } = this.#scope();
+      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name);
+      // Zero-campaign world: campaign stays null -> legacy loose creation, unchanged.
+      const destination = campaign
+        ? { folder: campaign.id, ownership: { default: baselineOwnership(campaign) } }
+        : {};
       const entry = await JournalEntry.create({
         name,
+        ...destination,
         pages: [buildSessionPageData(name, "", null, null)]
       });
       const page = entry?.pages?.contents?.[0];
@@ -791,6 +798,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const isHidden = (entry.ownership?.default ?? null) === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
     await setEntryHidden(entry, !isHidden);
     this.render({ parts: ["main"] });
+  }
+
+  /** GM picks a campaign (used when the scope doesn't already imply one). Returns Folder|null; null = user cancelled or zero campaigns exist. */
+  static async promptCampaignChoice(title) {
+    const campaigns = getCampaigns();
+    if (!campaigns.length) return null;
+    if (campaigns.length === 1) return campaigns[0];
+    const esc = foundry.utils.escapeHTML;
+    const options = campaigns.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title },
+      content: `<div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.scope.label`))}</label><select name="campaign">${options}</select></div>`,
+      ok: { callback: (event, button) => button.form.elements.campaign.value },
+      rejectClose: false
+    });
+    return result ? game.folders.get(result) ?? null : null;
   }
 
   // Search-tab spillover affordance (spec §2): clears the campaign scope so
