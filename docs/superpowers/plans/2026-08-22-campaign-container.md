@@ -841,7 +841,7 @@ git commit -m "feat: scope search/dashboards/secrets to the Hub campaign picker 
 
 - [ ] **Step 1: Build stacks in `_prepareBodyContext`**
 
-Replace the singleton block (lines 177-184) with:
+Replace ONLY the timeline-journal resolution (the comment block and `const journal = ...` line at :177-181) and the `context.timeline = this.#timelineContext(journal, isGM);` assignment with the block below. The other context assignments (`context.index`, `context.search`, `context.dashboards`, `context.secrets`) stay exactly as they are:
 
 ```js
     const { campaign, unfiled } = this.#scope();
