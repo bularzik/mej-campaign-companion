@@ -1,7 +1,7 @@
 // Foundry glue over logic/campaigns.mjs (spec §1): the seam every other
 // subsystem consumes for campaign scope. Imports Foundry globals, so it
 // is NOT vitest-loadable; keep anything testable in logic/campaigns.mjs.
-import { MODULE_ID, CAMPAIGN_FLAG } from "../constants.mjs";
+import { MODULE_ID, CAMPAIGN_FLAG, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
 import {
   isCampaignFolder, campaignOf, campaignFlagOf, isTimelineJournal,
   ownershipLevelFor, bulkOwnershipPlan
@@ -15,15 +15,27 @@ export function getCampaigns() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** GM-only. Creates a root-level campaign folder (campaigns never nest - spec §1). */
+/**
+ * GM-only. Creates a root-level campaign folder (campaigns never nest -
+ * spec §1). RULING: if this is the world's first campaign and no auto-
+ * capture target is set yet, seed AUTO_CAPTURE_CAMPAIGN_SETTING to it - a
+ * legacy (pre-campaign) world's auto-capture setting is unset by
+ * definition, and without this its first import/adoption would silently
+ * stop auto-capturing until a GM finds the separate capture-target picker.
+ */
 export async function createCampaign(name, { ownershipDefault = "observer" } = {}) {
   if (!game.user.isGM) return null;
-  return Folder.create({
+  const isFirst = getCampaigns().length === 0;
+  const folder = await Folder.create({
     name,
     type: "JournalEntry",
     folder: null,
     flags: { [MODULE_ID]: { [CAMPAIGN_FLAG]: { ownershipDefault } } }
   });
+  if (folder && isFirst && !game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING)) {
+    await game.settings.set(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING, folder.id);
+  }
+  return folder;
 }
 
 /** Visibility-filtered members of a campaign; the campaign's timeline journal is excluded (spec §1). */
