@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.3 (2026-08-21)
+
+- Fixed: the Campaign Hub's type and sort dropdowns rendered a white panel
+  in dark mode (unreadable against the theme's light text). The stylesheet
+  leaned on CSS variables Foundry v13/v14 no longer defines, so light
+  fallbacks rendered in both themes.
+- Fixed: the same sweep repaired every other surface with the problem —
+  row hover highlights and tag/link chips that were invisible on dark
+  backgrounds, the import wizard's always-light sticky table header, the
+  relationship "S" badge's light-on-white text, and the relationship
+  graph's near-black edges, labels, and node outlines that vanished on the
+  dark window surface.
+
 ## 0.5.2 (2026-08-20)
 
 - New: two user guides — [`docs/gm-guide.md`](docs/gm-guide.md) and
