@@ -106,6 +106,9 @@
       "noEntries": "No journal entries yet.",
       "newSession": "New Session",
       "newSessionFailed": "Could not create the session. Check the console for details.",
+      "captureNoCampaign": "No campaign set to receive captures — choose one in the Hub.",
+      "captureTarget": "Auto-capture campaign",
+      "captureTargetSet": "Captures will file into \"{name}\".",
       "orderBy": "Order By",
       "order": {
         "manual": "Manual",

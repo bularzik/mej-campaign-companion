@@ -14,7 +14,7 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf } from "../logic/campaigns.mjs";
@@ -102,7 +102,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       newCampaign: CampaignHubPage.onNewCampaign,
       searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
       editCampaign: CampaignHubPage.onEditCampaign,
-      toggleEntryHidden: CampaignHubPage.onToggleEntryHidden
+      toggleEntryHidden: CampaignHubPage.onToggleEntryHidden,
+      setCaptureCampaign: CampaignHubPage.onSetCaptureCampaign
     }
   };
 
@@ -715,6 +716,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       console.error(`${MODULE_ID} | creating a session failed`, err);
       ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
     }
+  }
+
+  /**
+   * GM-only "Auto-capture campaign" entry point (spec §4): pick which
+   * campaign receives auto-captured Encounters and shared media. Stored as
+   * a world setting (AUTO_CAPTURE_CAMPAIGN_SETTING) that hooks/auto-capture.mjs
+   * reads directly - not scoped to the Hub's own campaignId state, since
+   * capture happens independent of which scope a GM happens to have open.
+   */
+  static async onSetCaptureCampaign() {
+    if (!game.user.isGM) return;
+    const campaign = await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.captureTarget`));
+    if (!campaign) return;
+    await game.settings.set(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING, campaign.id);
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.captureTargetSet`, { name: campaign.name }));
   }
 
   /**
