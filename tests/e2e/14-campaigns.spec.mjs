@@ -13,7 +13,7 @@
 // comment for why real content is never mutated there).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage,
+  login, TT_PREFIX, withGmPage, cleanupTimelineJournal,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   BASE_URL, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
@@ -71,7 +71,14 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
 
     const prior = await page.evaluate(() => ({
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
-      prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted")
+      prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      // Document-level snapshot, not just the setting: a GM Hub render in a
+      // zero-campaign world can side-effect-create a fresh "Campaign
+      // Timeline" journal via ensureTimelineJournal() (see the close()
+      // comment below) - this suite opens the Hub as GM three times, so the
+      // true "left exactly as found" bar is this count matching at the end
+      // too, not just the setting value.
+      campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
 
     // Defensive: clear any TT- campaign folder left over from a previously
@@ -187,11 +194,48 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
 
     const after = await page.evaluate(() => ({
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
-      prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted")
+      prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
     expect(after).toEqual(prior);
+
+    // Final observation only (does the banner genuinely reappear against
+    // real world state?) - but this Hub open is itself another GM render
+    // in a zero-campaign world, which can side-effect-create a fresh
+    // "Campaign Timeline" journal via ensureTimelineJournal() (same
+    // mechanism the close()-before-mutating comment above documents), so
+    // it has to be treated as one more mutating step, not a read-only
+    // check: close the Hub again afterward, run this suite's own safe
+    // cleanup + settings restore, then re-assert the world state matches
+    // the pre-test snapshot one more time - checked AFTER every mutating
+    // step this test performs (including this one), not before the last.
     shell = await openHub(page);
     await expect(shell.locator(".mej-cc-adoption-banner")).toHaveCount(1);
+    await page.evaluate(() => game.MonksEnhancedJournal?.journal?.close?.());
+    await settle(page, 300);
+
+    // excludeId: prior.timelineId - the journal (if any) that already
+    // existed at THIS test's own start is "found" state, full stop, even
+    // if it happens to be currently empty (that emptiness is unmanaged
+    // churn from some earlier, unrelated run's own Hub-open side effect,
+    // not this test's business to judge or clean up). Without excluding
+    // it, cleanupTimelineJournal's normal "empty -> safe to delete"
+    // heuristic would delete THAT journal too, and the explicit restore
+    // right below would then point timelineJournalId at an id that no
+    // longer resolves to anything - confirmed live: this is exactly what
+    // happened on the first version of this fix.
+    await cleanupTimelineJournal(page, { excludeId: prior.timelineId || null });
+    await page.evaluate(async (prior) => {
+      await game.settings.set("mej-campaign-companion", "timelineJournalId", prior.timelineId ?? "");
+      await game.settings.set("mej-campaign-companion", "adoptionPrompted", prior.prompted ?? false);
+    }, prior);
+
+    const final = await page.evaluate(() => ({
+      timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
+      prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
+    }));
+    expect(final).toEqual(prior);
 
     assertNoConsoleErrors(errors);
   });

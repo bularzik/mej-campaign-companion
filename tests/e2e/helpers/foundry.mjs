@@ -303,10 +303,21 @@ export async function deleteScenesByPrefix(page, prefix = TT_PREFIX) {
  * to. A journal that ALSO carries any non-TT_PREFIX timepoint is real
  * content - never deleted, never has the world setting touched; only its
  * own TT_PREFIX timepoints (if any got added) are stripped back out.
+ *
+ * `excludeId` (optional): never delete/strip this specific journal id,
+ * regardless of what its timepoints look like. For a caller that snapshot
+ * a pre-test `timelineJournalId` and must restore to it exactly (e.g.
+ * 14-campaigns.spec.mjs's adoption test) - that pre-existing journal is
+ * "found" state even if it happens to currently be empty (itself just
+ * unmanaged churn from an earlier run's Hub-open side effect, not this
+ * caller's business to judge or clean up). Without this, a caller cleaning
+ * up ITS OWN side-effect journals could unwittingly delete the very
+ * journal it's about to "restore" the setting to point back at, leaving
+ * the setting dangling on a since-deleted id.
  */
-export async function cleanupTimelineJournal(page, prefix = TT_PREFIX) {
-  await page.evaluate(async (TT) => {
-    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline");
+export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, excludeId = null } = {}) {
+  await page.evaluate(async ({ TT, excludeId }) => {
+    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline" && e.id !== excludeId);
     for (const j of candidates) {
       const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
       const real = tps.filter((t) => !t.label?.startsWith(TT));
@@ -319,7 +330,7 @@ export async function cleanupTimelineJournal(page, prefix = TT_PREFIX) {
         await j.setFlag("mej-campaign-companion", "timeline", { timepoints: real });
       }
     }
-  }, prefix);
+  }, { TT: prefix, excludeId });
 }
 
 /** Delete any leftover combats (crashed-run artifacts from auto-capture specs). */
