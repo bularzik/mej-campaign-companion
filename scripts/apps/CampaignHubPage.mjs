@@ -252,14 +252,23 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return { campaign: folder ?? null, unfiled: false };
   }
 
-  /** Spec §2: the entries the current scope covers. Zero-campaign worlds see everything (pre-adoption behavior). */
+  /**
+   * Spec §2: the entries the current scope covers. Zero-campaign worlds see
+   * everything (pre-adoption behavior). RULING: All-with-campaigns means
+   * everything - every campaign's members AND unfiled entries, campaign
+   * members first - not just what's filed. #indexContext's `badge` map
+   * already resolves an unfiled row's campaign as null (campaignOf() finds
+   * no folder), so unfiled rows fall through with no campaign badge for
+   * free; every other #scopedEntries() consumer (search, dashboards,
+   * secrets tracker) inherits this the same way, automatically.
+   */
   #scopedEntries() {
     const { campaign, unfiled } = this.#scope();
     if (unfiled) return unfiledEntries({ user: game.user });
     if (campaign) return campaignEntries(campaign, { user: game.user });
     const campaigns = getCampaigns();
     if (!campaigns.length) return unfiledEntries({ user: game.user });
-    return campaigns.flatMap((c) => campaignEntries(c, { user: game.user }));
+    return [...campaigns.flatMap((c) => campaignEntries(c, { user: game.user })), ...unfiledEntries({ user: game.user })];
   }
 
   #campaignScopeContext() {
