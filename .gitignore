@@ -4,3 +4,7 @@ playwright-report/
 tests/e2e/.auth/
 tests/e2e/.guide-shots-snapshot.json
 .DS_Store
+
+# session scratch
+.superpowers/
+.claude/

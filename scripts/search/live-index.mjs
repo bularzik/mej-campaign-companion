@@ -22,6 +22,7 @@ import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-f
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { campaignIdOf } from "../logic/campaigns.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
@@ -179,6 +180,23 @@ export function searchAll(query) {
     if (!entry) return false;
     return game.user.isGM || entry.testUserPermission(game.user, "OBSERVER") === true;
   });
+}
+
+/**
+ * Spec §2: scope-filtered search with a spillover count for the
+ * "N more matches in other campaigns" affordance. scopeId: ""/null = no
+ * filter (All), "unfiled" = entries in no campaign, else a campaign
+ * Folder id. Permission filtering is searchAll's, unchanged.
+ */
+export function searchScoped(query, scopeId) {
+  const hits = searchAll(query);
+  if (!scopeId) return { hits, spillover: 0 };
+  const inScope = hits.filter((hit) => {
+    const entry = fromUuidSync(hit.uuid);
+    const cid = campaignIdOf(entry);
+    return scopeId === "unfiled" ? cid === null : cid === scopeId;
+  });
+  return { hits: inScope, spillover: hits.length - inScope.length };
 }
 
 /**

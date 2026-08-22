@@ -8,11 +8,12 @@ export function isVisibleToUser(entry, user) {
 }
 
 /**
- * Row descriptors for every MEJ-typed journal entry, permission-filtered for
- * non-GM users. `getMEJType`/`getIcon` are injected (they're
- * game.MonksEnhancedJournal statics) so this stays callable without Foundry.
+ * Row descriptors for every campaign-scoped journal entry handed in,
+ * permission-filtered for non-GM users. `getMEJType`/`getIcon` are injected
+ * (they're game.MonksEnhancedJournal statics) so this stays callable without
+ * Foundry.
  *
- * @param {object[]} entries  candidate JournalEntry documents (e.g. game.journal.contents)
+ * @param {object[]} entries  candidate JournalEntry documents (already scoped by caller)
  * @param {object} user  game.user
  * @param {(entry: object) => string|false} getMEJType
  * @param {(type: string) => string} getIcon
@@ -21,10 +22,13 @@ export function isVisibleToUser(entry, user) {
 export function buildIndexSource(entries, user, getMEJType, getIcon) {
   const rows = [];
   for (const entry of entries ?? []) {
-    const type = getMEJType(entry);
-    if (!type) continue;
     if (!isVisibleToUser(entry, user)) continue;
-    rows.push({ uuid: entry.uuid, name: entry.name, type, icon: getIcon(type) });
+    // Spec §2: membership, not typing - untyped members list as "journal".
+    const type = getMEJType(entry) || "journal";
+    rows.push({
+      uuid: entry.uuid, name: entry.name, type,
+      icon: type === "journal" ? "fas fa-book" : getIcon(type)
+    });
   }
   return rows;
 }

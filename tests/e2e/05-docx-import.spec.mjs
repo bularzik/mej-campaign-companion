@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, cleanupAsGm,
+  login, cleanupAsGm, cleanupTimelineJournal,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -33,23 +33,47 @@ async function openImportWizard(page) {
 // created even if a title doesn't happen to match the regex below. The regex
 // is kept as a secondary safety net for any pre-existing leaked docs from an
 // earlier failed run (e.g. before this exact-name list existed).
-async function cleanupImported(page, exactNames = []) {
-  await page.evaluate(async (names) => {
+//
+// `campaignFolderIds` is the id (or ids) of whatever campaign Folder(s) the
+// import wizard's "__new" destination fallback actually created THIS run -
+// captured via a before/after diff around createImport (same id-tracking
+// pattern as 14-campaigns.spec.mjs's "New Session" test), never matched by
+// name. A real GM could legitimately own a real campaign literally named
+// "Radiant Citadel" (the docx's own title, which is exactly what the "__new"
+// fallback names its campaign after) - deleting by that name match would
+// destroy that real content, the same bug class commit 9750e0d eliminated
+// for the legacy singleton timeline journal.
+async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
+  await page.evaluate(async ({ names, campaignFolderIds }) => {
     const byName = new Set(names);
+    // Delete strictly the campaign folder(s) THIS run's diff identified -
+    // cascades to every entry, the subfolder, and any per-campaign timeline
+    // journal the import auto-created inside it.
+    for (const id of campaignFolderIds) {
+      const f = game.folders.get(id);
+      if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+
+    // Fallback for anything left outside those folders (older
+    // pre-campaign-feature builds, or a doc whose title differs).
     const ids = game.journal.filter((j) =>
       byName.has(j.name) || /^(Introduction|Session Zero|Arc \d|Epilogue|Appendix)/.test(j.name ?? "")
     ).map((j) => j.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-    const timeline = game.journal.find((e) => e.name === "Campaign Timeline");
-    if (timeline) await JournalEntry.implementation.deleteDocuments([timeline.id]);
-    await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
-  }, exactNames);
+  }, { names: exactNames, campaignFolderIds });
+  // Legacy-singleton fallback (older pre-campaign-feature builds, or a
+  // world where the import somehow still fell to the legacy path): never
+  // unconditionally delete-by-name - World A's own real, pre-existing
+  // legacy timeline shares this exact fixed name. See
+  // cleanupTimelineJournal's doc comment in helpers/foundry.mjs.
+  await cleanupTimelineJournal(page);
 }
 
 test.describe("05 docx import", () => {
-  // The real titles created by the test that just ran, populated before
-  // createImport() and read back here - see cleanupImported's doc comment.
+  // The real titles/campaign-folder-ids created by the test that just ran -
+  // see cleanupImported's doc comment.
   let createdTitles = [];
+  let createdCampaignFolderIds = [];
 
   test.afterEach(async ({ page, browser }) => {
     // No .catch(() => {}) here: a cleanup failure must be visible (logged),
@@ -63,12 +87,13 @@ test.describe("05 docx import", () => {
     // for), but routing through it keeps this spec consistent with 02/06's
     // cleanup pattern and safe if that ever changes.
     try {
-      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, createdTitles));
+      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, createdTitles, createdCampaignFolderIds));
     } catch (error) {
       console.error("05-docx-import cleanup failed:", error);
       throw error;
     } finally {
       createdTitles = [];
+      createdCampaignFolderIds = [];
     }
   });
 
@@ -76,6 +101,14 @@ test.describe("05 docx import", () => {
     test.setTimeout(180_000);
     const errors = trackConsoleErrors(page, { ignore: [KNOWN_MEJ_SESSION_ICON_404] });
     await login(page, "Gamemaster");
+
+    // Before/after id diff (same pattern as 14-campaigns.spec.mjs's "New
+    // Session" test) - identifies exactly which campaign Folder(s) this
+    // run's import wizard creates via its "__new" destination fallback,
+    // for cleanup and for scoping the timeline lookup below. Never matched
+    // by name - see cleanupImported's doc comment.
+    const beforeCampaignFolderIds = await page.evaluate(() =>
+      game.folders.filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign).map((f) => f.id));
 
     const { wizard } = await openImportWizard(page);
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
@@ -121,10 +154,36 @@ test.describe("05 docx import", () => {
     if (await okBtn.count()) await okBtn.click();
     await settle(page, 500);
 
-    const summary = await page.evaluate(() => {
+    createdCampaignFolderIds = await page.evaluate((beforeIds) =>
+      game.folders
+        .filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign && !beforeIds.includes(f.id))
+        .map((f) => f.id),
+      beforeCampaignFolderIds);
+
+    const summary = await page.evaluate((campaignFolderIds) => {
       const sessionZero = game.journal.find((j) => j.name?.startsWith("Session Zero"));
       const sessionPage = sessionZero?.pages?.contents?.[0];
-      const timeline = game.journal.find((j) => j.name === "Campaign Timeline");
+      // Spec-mandated behavior change from the campaign-container feature
+      // (tasks 1-11): the import wizard always resolves a real campaign
+      // destination now - in a zero-campaign world (this spec's expected
+      // environment) that's the "__new" fallback, which creates a campaign
+      // named after the docx's title ("Radiant Citadel") with its OWN
+      // timeline journal ("Radiant Citadel — Timeline"), not the legacy
+      // singleton "Campaign Timeline". Find whichever timeline journal
+      // actually received this import's timepoints, SCOPED to the campaign
+      // folder(s) this run's own before/after diff identified (same
+      // alphaFolder.contents pattern as 14-campaigns.spec.mjs's scenario
+      // 5) - a global game.journal.find() risks a real journal elsewhere
+      // in the world that happens to carry a similarly-labeled "Session
+      // Zero..." timepoint hijacking this assertion.
+      const timeline = campaignFolderIds
+        .map((id) => game.folders.get(id))
+        .filter(Boolean)
+        .flatMap((f) => f.contents)
+        .find((j) => {
+          const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints;
+          return Array.isArray(tps) && tps.some((t) => t.label?.startsWith("Session Zero"));
+        });
       const timepoints = timeline?.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
       return {
         importedCount: game.journal.filter((j) => /^(Introduction|Session Zero|Arc \d)/.test(j.name ?? "")).length,
@@ -134,7 +193,7 @@ test.describe("05 docx import", () => {
         timepointCount: timepoints.length,
         timepointLabels: timepoints.map((t) => t.label)
       };
-    });
+    }, createdCampaignFolderIds);
     expect(summary.importedCount).toBeGreaterThan(10);
     expect(summary.sessionZeroFound).toBe(true);
     // Task 13's fix: an imported session page carries both the prefixed

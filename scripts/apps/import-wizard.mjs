@@ -21,6 +21,7 @@ import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { uploadInlineImages } from "./import-upload.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { getCampaigns, createCampaign, baselineOwnership } from "../data/campaign-store.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { validateCampaignComponents } from "../logic/campaign-date.mjs";
@@ -113,13 +114,30 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     body: { template: `modules/${MODULE_ID}/templates/import-wizard.hbs` }
   };
 
-  state = { step: "source", docTitle: null, sections: [], rows: [] };
+  // destination/subfolder/audience default to "unset" (null / true / "default")
+  // and get resolved against the live campaign list / a sensible fallback
+  // inside #destinationOptions / #audienceOptions each render - see those
+  // methods' doc comments for why. Once the GM actually touches one of
+  // those three review-form controls, the change listener wired up in
+  // _onRender writes the real value in here, so a mergeUp/splitSection
+  // re-render (or any other future re-render) reconstructs the form with
+  // whatever the GM last chose instead of silently resetting to the
+  // first-in-DOM-order default (the bug this fixes: a GM who picks a
+  // campaign then merges/splits a row was getting silently routed back to
+  // whatever campaign happened to render first).
+  state = {
+    step: "source", docTitle: null, sections: [], rows: [],
+    destination: null, subfolder: true, audience: "default"
+  };
 
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
     context.isSource = this.state.step === "source";
     context.isReview = this.state.step === "review";
     context.docTitle = this.state.docTitle;
+    context.destinationOptions = this.#destinationOptions(this.state.destination);
+    context.subfolder = this.state.subfolder;
+    context.audienceOptions = this.#audienceOptions(this.state.audience);
     context.rows = this.state.rows.map((row, index) => ({
       ...row, index,
       canMergeUp: index > 0,
@@ -144,6 +162,35 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     return options.map((o) => ({ ...o, selected: o.value === selected }));
   }
 
+  /**
+   * Campaign destination `<select>` options: every campaign folder plus a
+   * trailing "New Campaign…" (`__new`) sentinel. `selectedId` is
+   * `this.state.destination`, which starts out null (no explicit GM choice
+   * yet); when null, or when it names a campaign that's since disappeared,
+   * this falls back to the first option (the alphabetically-first campaign,
+   * or `__new` when there are none) - the same choice a plain unselected
+   * `<select>` would default to, kept explicit here so every re-render
+   * reproduces it identically instead of leaving it to DOM order.
+   */
+  #destinationOptions(selectedId) {
+    const options = [
+      ...getCampaigns().map((c) => ({ value: c.id, label: c.name })),
+      { value: "__new", label: game.i18n.localize(`${I18N}.import.destinationNew`) }
+    ];
+    const resolved = options.some((o) => o.value === selectedId) ? selectedId : options[0]?.value ?? "__new";
+    return options.map((o) => ({ ...o, selected: o.value === resolved }));
+  }
+
+  /** Audience `<select>` options ("default" | "gm" | "players"), `selected` flag per this.state.audience. */
+  #audienceOptions(selected) {
+    const options = [
+      { value: "default", label: game.i18n.localize(`${I18N}.import.audienceDefault`) },
+      { value: "gm", label: game.i18n.localize(`${I18N}.import.audienceGm`) },
+      { value: "players", label: game.i18n.localize(`${I18N}.import.audiencePlayers`) }
+    ];
+    return options.map((o) => ({ ...o, selected: o.value === selected }));
+  }
+
   _onRender(context, options) {
     super._onRender(context, options);
     const input = this.element.querySelector('.mej-cc-import-source input[type="file"]');
@@ -151,6 +198,23 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       input.addEventListener("change", (event) => {
         const file = event.target.files?.[0];
         if (file) this.#onFileChosen(file);
+      });
+    }
+    // Mirror destination/subfolder/audience into this.state as the GM picks
+    // them, so a mergeUp/splitSection re-render (see those handlers below)
+    // reconstructs the form from the GM's actual choice via #destinationOptions
+    // / #audienceOptions above, instead of silently reverting to the
+    // first-in-DOM-order default.
+    const form = this.element.querySelector("form.mej-cc-import-review");
+    if (form) {
+      form.elements.destination?.addEventListener("change", () => {
+        this.state.destination = form.elements.destination.value;
+      });
+      form.elements.subfolder?.addEventListener("change", () => {
+        this.state.subfolder = form.elements.subfolder.checked;
+      });
+      form.elements.audience?.addEventListener("change", () => {
+        this.state.audience = form.elements.audience.value;
       });
     }
   }
@@ -209,10 +273,20 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
   }
 
-  /** The whole-import audience choice from the review form ("gm" default). */
+  /** "default" (campaign baseline) | "gm" | "players". */
   #formAudience() {
     const form = this.element.querySelector("form.mej-cc-import-review");
-    return form?.elements.audience?.value === "players" ? "players" : "gm";
+    const v = form?.elements.audience?.value;
+    return v === "players" || v === "gm" ? v : "default";
+  }
+
+  /** { campaignId: string|"__new", subfolder: boolean } */
+  #formDestination() {
+    const form = this.element.querySelector("form.mej-cc-import-review");
+    return {
+      campaignId: form?.elements.destination?.value ?? "__new",
+      subfolder: form?.elements.subfolder?.checked !== false
+    };
   }
 
   /**
@@ -243,7 +317,10 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static #onBackToSource() {
-    this.state = { step: "source", docTitle: null, sections: [], rows: [] };
+    this.state = {
+      step: "source", docTitle: null, sections: [], rows: [],
+      destination: null, subfolder: true, audience: "default"
+    };
     this.render();
   }
 
@@ -328,8 +405,13 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * why both the prefixed native type and the MEJ flag are required. Every
    * other type goes through createMejEntry (data/mej-entry.mjs), the same
    * helper auto-capture.mjs uses for Encounters.
+   *
+   * `folderId` (the destination resolved in #onCreate - the chosen/created
+   * campaign, or a subfolder inside it) is threaded into whichever of the
+   * three JournalEntry.create payloads below actually runs; null/undefined
+   * leaves the entry unfiled, same as `ownership`'s null case above it.
    */
-  async #createPage(page, campaignDate, ownership) {
+  async #createPage(page, campaignDate, ownership, folderId) {
     // JournalEntry.create() returns the created document directly (not an
     // array) for a single plain-object `data` argument - an array result
     // only happens when `data` itself is an array. Both branches below
@@ -344,6 +426,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       const entry = await JournalEntry.create({
         name: page.name,
         ...(ownership ? { ownership } : {}),
+        ...(folderId ? { folder: folderId } : {}),
         pages: [{ name: page.name, type: "text", text: { content: page.html } }]
       });
       return entry.pages.contents[0];
@@ -352,11 +435,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       const entry = await JournalEntry.create({
         name: page.name,
         ...(ownership ? { ownership } : {}),
+        ...(folderId ? { folder: folderId } : {}),
         pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });
       return entry.pages.contents[0];
     }
-    return createMejEntry(page.type, page.name, page.html, {}, ownership);
+    return createMejEntry(page.type, page.name, page.html, {}, ownership, folderId);
   }
 
   /**
@@ -410,10 +494,38 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       return ui.notifications.warn(game.i18n.localize(`${I18N}.import.nothingToImport`));
     }
 
+    // Disabled up front, not just around the create loop further down: the
+    // destination resolution immediately below is itself a single-shot side
+    // effect (it can create a campaign Folder and, with "subfolder" checked,
+    // a second Folder inside it) - a second click landing mid-await here
+    // would otherwise create duplicate campaigns/subfolders rather than
+    // just duplicate pages.
+    target.disabled = true;
+
+    let campaign, targetFolderId;
+    try {
+      const dest = this.#formDestination();
+      campaign = dest.campaignId !== "__new" ? game.folders.get(dest.campaignId) ?? null : null;
+      if (!campaign) {
+        campaign = await createCampaign(this.state.docTitle || game.i18n.localize(`${I18N}.import.title`));
+      }
+      if (!campaign) throw new Error("createCampaign returned null (not GM?)");
+      targetFolderId = campaign.id;
+      if (dest.subfolder) {
+        const sub = await Folder.create({ name: this.state.docTitle || campaign.name, type: "JournalEntry", folder: campaign.id });
+        targetFolderId = sub.id;
+      }
+    } catch (error) {
+      console.error(`${MODULE_ID} | import destination setup failed`, error);
+      target.disabled = false;
+      return ui.notifications.error(game.i18n.localize(`${I18N}.import.destinationError`));
+    }
+
     const audience = this.#formAudience();
-    const ownership = audience === "players"
-      ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
-      : null;
+    const ownership =
+      audience === "players" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
+      : audience === "default" && campaign ? { default: baselineOwnership(campaign) }
+      : null;  // "gm", or "default" with no campaign -> Foundry default (GM-only)
     // Import-time auto-link (spec Part 2): same engine as the typing path,
     // empty baseline = whole document eligible. Gated on the same autoLink
     // world setting; failure never blocks the import (observer posture).
@@ -429,9 +541,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // page linking to GM-only entities; every other row keeps the chosen
     // audience's candidates.
     let linkedCount = 0;
+    const linkAudience = audience === "default"
+      ? (campaign && baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER ? "players" : "gm")
+      : audience;
     if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
       try {
-        const candidates = this.#linkCandidates(audience, plan.warnings);
+        const candidates = this.#linkCandidates(linkAudience, plan.warnings);
         const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
         const seenWarnings = new Set(plan.warnings);
         let sessionCandidates = null;
@@ -463,7 +578,6 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       }
     }
 
-    target.disabled = true;
     const dates = this.#datesForPlanPages(rows);
     const results = { created: 0, timepoints: 0, failed: [] };
     try {
@@ -479,10 +593,10 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         const page = plan.pages[i];
         const campaignDate = safeCampaignDate(dates[i], page.name, plan.warnings);
         try {
-          const created = await this.#createPage(page, campaignDate, ownership);
+          const created = await this.#createPage(page, campaignDate, ownership, targetFolderId);
           results.created++;
           if (page.timepoint) {
-            timeline ??= await ensureTimelineJournal();
+            timeline ??= await ensureTimelineJournal(campaign);
             if (timeline) {
               let filingError = null;
               await queueFiling(async () => {

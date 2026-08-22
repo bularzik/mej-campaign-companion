@@ -38,12 +38,15 @@
 //    there is nothing to match against. Documented per the task's
 //    "decide from evidence and document" instruction.
 import {
-  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, DEPARTED_FLAG, MEJ_ENCOUNTER_TYPE, I18N
+  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, DEPARTED_FLAG, MEJ_ENCOUNTER_TYPE, I18N,
+  AUTO_CAPTURE_CAMPAIGN_SETTING
 } from "../constants.mjs";
-import { getTimelineJournal } from "../data/timeline-journal.mjs";
+import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import { getTimepoints, addLink } from "../data/timepoints.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
+import { isCampaignFolder } from "../logic/campaigns.mjs";
+import { getCampaigns, baselineOwnership } from "../data/campaign-store.mjs";
 import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
   resolveSharedMediaShare, installShareImageWrap
@@ -83,9 +86,18 @@ async function recordDeparture(combat, combatant) {
 // ending or a Show-Players share firing while a GM is mid-import would
 // otherwise race that write too. See filing-queue.mjs's header comment.
 
+/** The campaign that receives captures (spec §4), or null. Null in a world WITH campaigns means "decline"; null in a zero-campaign world means "legacy loose behavior". */
+function captureCampaign() {
+  const id = game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING);
+  const folder = id ? game.folders.get(id) : null;
+  return folder && isCampaignFolder(folder) ? folder : null;
+}
+
 /** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
 async function fileOntoNewestTimepoint(link) {
-  const journal = getTimelineJournal();
+  const campaign = captureCampaign();
+  if (!campaign && getCampaigns().length) return; // campaigns exist but no target: decline silently for media
+  const journal = await ensureTimelineJournal(campaign);
   if (!journal) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);
     return;
@@ -148,10 +160,15 @@ const encounterPagesByCombatId = new Map();
  * shaped this way.
  */
 async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
+  const campaign = captureCampaign();
+  if (!campaign && getCampaigns().length) {
+    ui.notifications.warn(game.i18n.localize(`${I18N}.hub.captureNoCampaign`));
+    return null;
+  }
   const name = buildEncounterName(sceneName, new Date().toLocaleDateString());
   const page = await createMejEntry(MEJ_ENCOUNTER_TYPE, name, buildDescriptionHtml(outcome, unlinkedNames), {
     actors: buildEncounterActorRows(participants)
-  });
+  }, campaign ? { default: baselineOwnership(campaign) } : null, campaign?.id ?? null);
   encounterPagesByCombatId.set(combat.id, page.uuid);
   await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
   return page;

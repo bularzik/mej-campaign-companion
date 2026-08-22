@@ -14,8 +14,10 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N, guideUrl } from "../constants.mjs";
-import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
+import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden } from "../data/campaign-store.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -26,7 +28,7 @@ import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchAll, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
+import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
@@ -63,7 +65,8 @@ const HUB_STATE = {
   restoreSearchFocus: false,
   secretsType: "",
   secretsState: "all",
-  secretsPlayer: ""
+  secretsPlayer: "",
+  campaignId: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -95,7 +98,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       trackerAudience: CampaignHubPage.onTrackerAudience,
       addGroup: CampaignHubPage.onAddGroup,
       editGroup: CampaignHubPage.onEditGroup,
-      deleteGroup: CampaignHubPage.onDeleteGroup
+      deleteGroup: CampaignHubPage.onDeleteGroup,
+      newCampaign: CampaignHubPage.onNewCampaign,
+      searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
+      editCampaign: CampaignHubPage.onEditCampaign,
+      toggleEntryHidden: CampaignHubPage.onToggleEntryHidden,
+      setCaptureCampaign: CampaignHubPage.onSetCaptureCampaign,
+      adoptWorld: CampaignHubPage.onAdoptWorld,
+      dismissAdoption: CampaignHubPage.onDismissAdoption,
+      fileIntoCampaign: CampaignHubPage.onFileIntoCampaign,
+      fileAllShown: CampaignHubPage.onFileAllShown
     }
   };
 
@@ -174,14 +186,36 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const isGM = game.user.isGM;
     context.isGM = isGM;
 
-    // Lazily create the world's singleton timeline journal on first GM hub
-    // open (per Task 6/7). getTimelineJournal() alone covers players, and
-    // covers a GM once it already exists - ensureTimelineJournal() only
-    // writes when it doesn't.
-    const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
-
+    const { campaign, unfiled } = this.#scope();
+    let stacks;
+    if (unfiled) {
+      stacks = [];
+    } else if (campaign) {
+      const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
+      stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+    } else {
+      const campaigns = getCampaigns();
+      if (!campaigns.length) {
+        // Pre-adoption world: legacy singleton behavior, unchanged.
+        const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
+        stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+      } else {
+        // Spec §2: All mode stacks per-campaign timelines, never interleaved.
+        // No lazy creation here - creating N journals on a render would be a
+        // side-effect storm; a campaign's timeline is created when scoped to it.
+        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(resolveTimelineJournal(c), isGM) }));
+        const legacy = getTimelineJournal();
+        if (legacy && !campaignOf(legacy)) {
+          stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(legacy, isGM) });
+        }
+      }
+    }
+    if (isGM && !getCampaigns().length && !game.settings.get(MODULE_ID, ADOPTION_PROMPTED_SETTING)) {
+      const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
+      context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
+    }
     context.index = this.#indexContext();
-    context.timeline = this.#timelineContext(journal, isGM);
+    context.timeline = { stacks };
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -194,19 +228,82 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #typeLabel(type) {
+    if (type === "journal") return game.i18n.localize(`${I18N}.hub.journalType`);
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     return labels[type] ? game.i18n.localize(labels[type]) : type;
   }
 
   #typeIcon(type) {
+    // "journal" (the doctype-filter's synthetic label for an untyped page -
+    // see #typeLabel above) has no entry in MEJ's own type-icon map, so
+    // getIcon() would return undefined and render "fas undefined".
+    if (type === "journal") return "fas fa-book";
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 
+  /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
+  #scope() {
+    if (this.state.campaignId === null) {
+      this.state.campaignId = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
+    }
+    const id = this.state.campaignId;
+    if (id === "unfiled") return { campaign: null, unfiled: true };
+    const folder = id ? game.folders.get(id) : null;
+    if (id && (!folder || !isCampaignFolder(folder))) {
+      this.state.campaignId = "";
+      return { campaign: null, unfiled: false };
+    }
+    return { campaign: folder ?? null, unfiled: false };
+  }
+
+  /**
+   * Spec §2: the entries the current scope covers. Zero-campaign worlds see
+   * everything (pre-adoption behavior). RULING: All-with-campaigns means
+   * everything - every campaign's members AND unfiled entries, campaign
+   * members first - not just what's filed. #indexContext's `badge` map
+   * already resolves an unfiled row's campaign as null (campaignOf() finds
+   * no folder), so unfiled rows fall through with no campaign badge for
+   * free; every other #scopedEntries() consumer (search, dashboards,
+   * secrets tracker) inherits this the same way, automatically.
+   */
+  #scopedEntries() {
+    const { campaign, unfiled } = this.#scope();
+    if (unfiled) return unfiledEntries({ user: game.user });
+    if (campaign) return campaignEntries(campaign, { user: game.user });
+    const campaigns = getCampaigns();
+    if (!campaigns.length) return unfiledEntries({ user: game.user });
+    return [...campaigns.flatMap((c) => campaignEntries(c, { user: game.user })), ...unfiledEntries({ user: game.user })];
+  }
+
+  #campaignScopeContext() {
+    const campaigns = getCampaigns();
+    const current = this.state.campaignId ?? "";
+    const options = [
+      { value: "", label: game.i18n.localize(`${I18N}.hub.scope.all`), selected: current === "" },
+      ...campaigns.map((c) => ({ value: c.id, label: c.name, selected: current === c.id }))
+    ];
+    if (unfiledEntries({ user: game.user }).length) {
+      options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
+    }
+    return { hasCampaigns: campaigns.length > 0, options, isCampaignScope: !!current && current !== "unfiled" };
+  }
+
   #indexContext() {
-    const source = buildIndexSource(game.journal.contents, game.user, mejType, this.#typeIcon.bind(this));
+    const { campaign, unfiled } = this.#scope();
+    const entries = this.#scopedEntries();
+    const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));
     const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
     const mentionCounts = mentionBadgeCounts();
-    for (const row of rows) row.mentions = mentionCounts.get(row.uuid) ?? 0;
+    const badge = !campaign && !unfiled;
+    const campaignNames = badge ? new Map(entries.map((e) => [e.uuid, campaignOf(e)?.name ?? null])) : null;
+    for (const row of rows) {
+      row.mentions = mentionCounts.get(row.uuid) ?? 0;
+      if (badge) row.campaign = campaignNames.get(row.uuid);
+    }
+    const byUuid = new Map(entries.map((e) => [e.uuid, e]));
+    for (const row of rows) {
+      row.hidden = (byUuid.get(row.uuid)?.ownership?.default ?? null) === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    }
     const allTypes = [...new Set(source.map((r) => r.type))].sort((a, b) => this.#typeLabel(a).localeCompare(this.#typeLabel(b)));
     return {
       rows,
@@ -215,7 +312,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       typeMenuOpen: this.state.typeMenuOpen,
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
-      sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`))
+      sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`)),
+      campaignScope: this.#campaignScopeContext(),
+      isUnfiledScope: unfiled
     };
   }
 
@@ -230,7 +329,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // (testUserPermission LIMITED on the resolved entry) - this just shapes
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
-    const results = searchAll(this.state.searchQuery).map((hit) => ({
+    const scopeId = this.state.campaignId || null;
+    const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
+    const results = hits.map((hit) => ({
       uuid: hit.uuid,
       name: hit.name,
       icon: this.#typeIcon(hit.type),
@@ -240,7 +341,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return {
       query: this.state.searchQuery,
       hasQuery: this.state.searchQuery.trim().length > 0,
-      results
+      results,
+      spillover
     };
   }
 
@@ -248,7 +350,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!journal) {
       // Players before a GM has ever opened the hub: no timeline journal
       // exists yet. Render an explicit empty state rather than erroring.
-      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false };
+      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false, journalId: null };
     }
     const canEdit = isGM;
     const order = this.state.timelineOrder;
@@ -270,7 +372,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       order,
       showDateColumn: order !== "manual",
       orderOptions: buildOrderOptions(order, (m) => game.i18n.localize(`${I18N}.hub.order.${m}`)),
-      canEdit
+      canEdit,
+      journalId: journal.id
     };
   }
 
@@ -283,11 +386,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // flag. A stored query that no longer parses (e.g. after a tag rename)
   // renders as an error row via the catch below, rather than crashing the
   // whole Hub render (spec §6).
+  /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
+  #scopeFilterRows(rows) {
+    const id = this.state.campaignId;
+    if (!id) return rows;
+    return rows.filter((r) => {
+      const entry = fromUuidSync(r.uuid);
+      const cid = campaignIdOf(entry);
+      return id === "unfiled" ? cid === null : cid === id;
+    });
+  }
+
   #dashboardsContext(isGM) {
     const saved = game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [];
     const rows = saved.filter((q) => isGM || q.showPlayers === true).map((q) => {
       try {
-        const results = runQueryAll(q.query).map((hit) => ({
+        const results = this.#scopeFilterRows(runQueryAll(q.query)).map((hit) => ({
           uuid: hit.uuid, name: hit.name,
           icon: this.#typeIcon(hit.type), typeLabel: this.#typeLabel(hit.type)
         }));
@@ -311,8 +425,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   async #secretsContext() {
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     const rows = [];
+    // Campaign scoping (spec §2): every row kind the tracker emits is
+    // bounded by the Hub's campaign picker, so compute the scope once and
+    // share it between the block-secrets pass and the page walk below.
+    const scopedEntries = this.#scopedEntries();
+    const scopedUuids = new Set(scopedEntries.map((e) => e.uuid));
     // 1. Block secrets, via the index (spec §9).
     for (const rec of gmSecretRecords()) {
+      if (!scopedUuids.has(rec.uuid)) continue;
       const entry = fromUuidSync(rec.uuid);
       const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
       for (const s of rec.secrets) {
@@ -321,7 +441,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     // 2. Session checklist items + 3. hidden/secret relationships - walk
     // MEJ pages once (single-page convention, same as graph-app's graphRows()).
-    for (const entry of game.journal?.contents ?? []) {
+    // Scoped to the Hub's campaign picker (spec §2) so the tracker only
+    // shows the current scope's entries.
+    for (const entry of scopedEntries) {
       for (const page of entry.pages?.contents ?? []) {
         const type = mejType(page);
         if (!type) continue;
@@ -597,8 +719,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
+      const { campaign: scoped } = this.#scope();
+      // RULING: onNewSession must always prompt when the scope doesn't
+      // already imply a campaign (Unfiled/All) - see promptCampaignChoice's
+      // doc comment for why the sole-campaign short-circuit is wrong here.
+      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true });
+      // Zero-campaign world: campaign stays null -> legacy loose creation, unchanged.
+      const destination = campaign
+        ? { folder: campaign.id, ownership: { default: baselineOwnership(campaign) } }
+        : {};
       const entry = await JournalEntry.create({
         name,
+        ...destination,
         pages: [buildSessionPageData(name, "", null, null)]
       });
       const page = entry?.pages?.contents?.[0];
@@ -608,6 +740,218 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       console.error(`${MODULE_ID} | creating a session failed`, err);
       ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
     }
+  }
+
+  /**
+   * GM-only "Auto-capture campaign" entry point (spec §4): pick which
+   * campaign receives auto-captured Encounters and shared media. Stored as
+   * a world setting (AUTO_CAPTURE_CAMPAIGN_SETTING) that hooks/auto-capture.mjs
+   * reads directly - not scoped to the Hub's own campaignId state, since
+   * capture happens independent of which scope a GM happens to have open.
+   */
+  static async onSetCaptureCampaign() {
+    if (!game.user.isGM) return;
+    const campaign = await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.captureTarget`));
+    if (!campaign) return;
+    await game.settings.set(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING, campaign.id);
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.captureTargetSet`, { name: campaign.name }));
+  }
+
+  /**
+   * GM-only "New Campaign" entry point (spec §1/§2): creates a root-level
+   * campaign folder and switches the Hub's scope to it. `campaign-store.mjs`
+   * itself re-checks game.user.isGM before writing (createCampaign() returns
+   * null for a non-GM), so this action is safe to leave wired regardless of
+   * seat, same convention as onOpenImportWizard/onOpenExportDialog below.
+   */
+  static async onNewCampaign() {
+    const esc = foundry.utils.escapeHTML;
+    const baselineOptions = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
+        <input type="text" name="name" value="" autofocus></div>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${baselineOptions}</select></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.hub.newCampaign`) },
+      content,
+      ok: {
+        callback: (event, button) => ({
+          name: button.form.elements.name.value.trim(),
+          baseline: button.form.elements.baseline.value
+        })
+      },
+      rejectClose: false
+    });
+    if (!result?.name) return;
+    const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
+    if (campaign) {
+      this.state.campaignId = campaign.id;
+      await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
+      this.render({ parts: ["main"] });
+    }
+  }
+
+  /**
+   * GM-only "Campaign settings" entry point (spec §5): edit the campaign's
+   * ownership baseline, optionally bulk-applying it to every current member
+   * right away. Renaming a campaign is renaming the folder - Foundry's
+   * native folder UI covers it, so there's no name field here.
+   */
+  static async onEditCampaign() {
+    const { campaign } = this.#scope();
+    if (!campaign || !game.user.isGM) return;
+    const esc = foundry.utils.escapeHTML;
+    const currentKey = campaignFlagOf(campaign)?.ownershipDefault ?? "observer";
+    const options = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === currentKey ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${options}</select></div>
+      <div class="form-group"><label><input type="checkbox" name="applyNow" checked>
+        ${esc(game.i18n.localize(`${I18N}.hub.applyBaselineNow`))}</label></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: campaign.name },
+      content,
+      ok: { callback: (event, button) => ({
+        baseline: button.form.elements.baseline.value,
+        applyNow: button.form.elements.applyNow.checked
+      }) },
+      rejectClose: false
+    });
+    if (!result) return;
+    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ownershipDefault: result.baseline });
+    if (result.applyNow) {
+      const n = await applyBaselineToMembers(campaign);
+      ui.notifications.info(game.i18n.format(`${I18N}.hub.baselineApplied`, { count: n }));
+    }
+    this.render({ parts: ["main"] });
+  }
+
+  /**
+   * GM-only world adoption (spec §6): create a campaign folder from an
+   * existing pre-adoption world's content. Moves adoptionPlan()'s ids
+   * (root-level MEJ-typed entries + the legacy singleton timeline journal,
+   * see that function's doc comment for the foldered/untyped exclusions)
+   * into the new campaign, clears the legacy TIMELINE_JOURNAL_SETTING
+   * (the moved journal is found from then on via its own `timeline` flag,
+   * per campaignTimelineJournal() - no data rewrite needed), and scopes
+   * the Hub to the new campaign.
+   */
+  static async onAdoptWorld() {
+    if (!game.user.isGM) return;
+    const esc = foundry.utils.escapeHTML;
+    const baselineOptions = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <p>${esc(game.i18n.localize(`${I18N}.hub.adoptExplain`))}</p>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
+        <input type="text" name="name" value="${esc(game.world.title)}"></div>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${baselineOptions}</select></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.hub.adoptGo`) },
+      content,
+      ok: { callback: (event, button) => ({
+        name: button.form.elements.name.value.trim(),
+        baseline: button.form.elements.baseline.value
+      }) },
+      rejectClose: false
+    });
+    if (!result?.name) return;
+    const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
+    if (!campaign) return;
+    const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
+    const ids = adoptionPlan(game.journal.contents, mejType, legacyId);
+    if (ids.length) await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
+    if (legacyId) await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, "");
+    await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.state.campaignId = campaign.id;
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only dismissal of the adoption banner (spec §6), without creating a campaign. */
+  static async onDismissAdoption() {
+    if (!game.user.isGM) return;
+    await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only, Unfiled-scope-only: file a single index row into a chosen campaign (spec §6). */
+  static async onFileIntoCampaign(event, target) {
+    if (!game.user.isGM) return;
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    const entry = uuid ? await fromUuid(uuid) : null;
+    const campaign = entry ? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileInto`)) : null;
+    if (!campaign) return;
+    await entry.update({ folder: campaign.id });
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row into a chosen campaign (spec §6). */
+  static async onFileAllShown() {
+    if (!game.user.isGM) return;
+    // The currently-filtered Unfiled rows: recompute exactly what the pane shows.
+    const entries = this.#scopedEntries();
+    const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));
+    const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
+    if (!rows.length) return;
+    const campaign = await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileAllShown`));
+    if (!campaign) return;
+    const ids = rows.map((r) => foundry.utils.parseUuid(r.uuid).id);
+    await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only hide/reveal toggle (spec §5) on an index row: NONE <-> the entry's campaign baseline. */
+  static async onToggleEntryHidden(event, target) {
+    if (!game.user.isGM) return;
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    const entry = uuid ? await fromUuid(uuid) : null;
+    if (!entry) return;
+    const isHidden = (entry.ownership?.default ?? null) === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    await setEntryHidden(entry, !isHidden);
+    this.render({ parts: ["main"] });
+  }
+
+  /**
+   * GM picks a campaign (used when the scope doesn't already imply one).
+   * Returns Folder|null; null = user cancelled or zero campaigns exist.
+   * By default short-circuits to the sole campaign when exactly one exists
+   * (fileIntoCampaign/fileAllShown/capture-target: there's nothing to
+   * choose between, so no dialog is the right call). `alwaysPrompt: true`
+   * (onNewSession only) disables that short-circuit - RULING: a new
+   * session's destination is a real decision even with one campaign in the
+   * world, since the alternative is staying unfiled, and skipping the
+   * dialog would mean skipping the cancel-to-stay-unfiled path too.
+   */
+  static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
+    const campaigns = getCampaigns();
+    if (!campaigns.length) return null;
+    if (campaigns.length === 1 && !alwaysPrompt) return campaigns[0];
+    const esc = foundry.utils.escapeHTML;
+    const options = campaigns.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title },
+      content: `<div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.scope.label`))}</label><select name="campaign">${options}</select></div>`,
+      ok: { callback: (event, button) => button.form.elements.campaign.value },
+      rejectClose: false
+    });
+    return result ? game.folders.get(result) ?? null : null;
+  }
+
+  // Search-tab spillover affordance (spec §2): clears the campaign scope so
+  // a query's out-of-scope matches (searchScoped's spillover count) become
+  // visible too. Available to any seat - search scoping applies to
+  // players and GMs alike.
+  static async onSearchAllCampaigns() {
+    this.state.campaignId = "";
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, "");
+    this.render({ parts: ["main"] });
   }
 
   // GM-only "Import Document" entry point (Task 11) - lives on the Index
@@ -727,7 +1071,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onAddTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = await ensureTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const raw = Number(target.dataset.position);
     const position = target.dataset.position != null && Number.isInteger(raw) ? raw : null;
@@ -742,7 +1087,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onRenameTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const id = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const current = Timepoints.getTimepoints(journal).find((t) => t.id === id);
@@ -758,7 +1104,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onDeleteTimepoint(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const id = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const label = Timepoints.getTimepoints(journal).find((t) => t.id === id)?.label ?? "";
@@ -787,7 +1134,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onRemoveLink(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
@@ -797,7 +1145,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onToggleLinkShowPlayers(event, target) {
     if (!game.user.isGM) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
     const timepointId = target.closest("[data-timepoint-id]")?.dataset.timepointId;
     const linkId = target.closest("[data-link-id]")?.dataset.linkId;
@@ -836,7 +1185,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     const target = event.target.closest("[data-drop-timepoint]");
     if (!target) return;
-    const journal = getTimelineJournal();
+    const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
+    const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
 
     let data;
@@ -870,6 +1220,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (!doc) {
         ui.notifications.warn(game.i18n.localize(`${I18N}.hub.cannotAttach`));
         return;
+      }
+      if (!canAttachToTimeline(doc, journal)) {
+        return ui.notifications.warn(game.i18n.localize(`${I18N}.hub.wrongCampaign`));
       }
       await queueFiling(() => Timepoints.addLink(journal, timepointId, { uuid: drop.uuid, name: doc.name, type: drop.type }));
       return this.render({ parts: ["main"] });
@@ -908,6 +1261,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         if (!radio) return;
         this.state.sort = radio.value;
         this.state.sortMenuOpen = false;
+        this.render({ parts: ["main"] });
+      });
+    }
+
+    // Deviation from brief: use `html` (as every other listener in this
+    // method does), not `this.element` - this.element is never assigned for
+    // a subsheet hosted in the shell (see the restore-focus comment on
+    // search below), so querying it here would throw for that hosting mode.
+    const scopeSelect = html.querySelector('select[name="campaign-scope"]');
+    if (scopeSelect && !scopeSelect.dataset.ccBound) {
+      scopeSelect.dataset.ccBound = "1";
+      scopeSelect.addEventListener("change", async (event) => {
+        this.state.campaignId = event.target.value;
+        await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
       });
     }

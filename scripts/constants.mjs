@@ -62,6 +62,24 @@ export const DEPARTED_FLAG = "departed";
 /** MEJ JournalEntryPage short type key for an Encounter (flags["monks-enhanced-journal"].type). */
 export const MEJ_ENCOUNTER_TYPE = "encounter";
 
+/** Folder flag key: marks a journal Folder as a campaign (spec §1). Flag shape: { ownershipDefault: "none"|"observer"|"owner" }. */
+export const CAMPAIGN_FLAG = "campaign";
+
+/** World setting: schema version for future migrations (spec §6). */
+export const DATA_VERSION_SETTING = "dataVersion";
+
+/** Current schema version written by the adoption/migration runner. */
+export const CURRENT_DATA_VERSION = 1;
+
+/** World setting: Folder id of the campaign that receives auto-captured encounters/media (spec §4). "" = unset → capture declines. */
+export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";
+
+/** Client setting: the Hub's campaign picker choice ("" = All, "unfiled", or a Folder id) (spec §2). */
+export const HUB_CAMPAIGN_SCOPE_SETTING = "hubCampaignScope";
+
+/** World setting: the one-time adoption offer has been shown/dismissed (spec §6). */
+export const ADOPTION_PROMPTED_SETTING = "adoptionPrompted";
+
 /** i18n prefix for all companion strings. */
 export const I18N = "MEJCampaignCompanion";
 
