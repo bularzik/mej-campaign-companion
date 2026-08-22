@@ -79,11 +79,19 @@ export function canAttachToTimeline(entry, timelineJournal) {
 /**
  * Spec §5 bulk apply plan: JournalEntry.updateDocuments payloads setting
  * every entry's ownership.default to `level`, skipping ones already there.
- * Touches ONLY the default level - per-user overrides are separate keys.
+ * Also skips entries currently at `skipLevel` (when given) - the hide/reveal
+ * eye toggle (setEntryHidden) sets that same default key to NONE, and a bulk
+ * apply must never silently un-hide something a GM hid on purpose. Touches
+ * ONLY the default level - per-user overrides are separate keys.
  */
-export function bulkOwnershipPlan(entries, level) {
+export function bulkOwnershipPlan(entries, level, { skipLevel } = {}) {
   return (entries ?? [])
-    .filter((e) => (e.ownership?.default ?? null) !== level)
+    .filter((e) => {
+      const current = e.ownership?.default ?? null;
+      if (current === level) return false;
+      if (skipLevel !== undefined && current === skipLevel) return false;
+      return true;
+    })
     .map((e) => ({ _id: e.id, "ownership.default": level }));
 }
 

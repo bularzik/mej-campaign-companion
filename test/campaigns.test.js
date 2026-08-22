@@ -127,6 +127,22 @@ describe("campaigns module", async () => {
       ]);
       expect(bulkOwnershipPlan([], 2)).toEqual([]);
     });
+    it("with skipLevel, also skips entries hidden (at skipLevel) - a bulk apply must not un-hide them", async () => {
+      const { bulkOwnershipPlan } = await import("../scripts/logic/campaigns.mjs");
+      const entries = [
+        { id: "a", ownership: { default: 0 } }, // NONE - hidden via the eye toggle
+        { id: "b", ownership: { default: 1 } }, // some other pre-existing level
+        { id: "c", ownership: { default: 2 } }  // already at target level
+      ];
+      expect(bulkOwnershipPlan(entries, 2, { skipLevel: 0 })).toEqual([
+        { _id: "b", "ownership.default": 2 }
+      ]);
+      // Without skipLevel, the NONE entry is un-hidden like any other (old behavior preserved).
+      expect(bulkOwnershipPlan(entries, 2)).toEqual([
+        { _id: "a", "ownership.default": 2 },
+        { _id: "b", "ownership.default": 2 }
+      ]);
+    });
   });
 
 });

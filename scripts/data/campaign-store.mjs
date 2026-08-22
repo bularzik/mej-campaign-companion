@@ -44,10 +44,17 @@ export function baselineOwnership(campaign) {
   return ownershipLevelFor(key, CONST.DOCUMENT_OWNERSHIP_LEVELS);
 }
 
-/** Spec §5 bulk apply: set every member's ownership.default to the baseline. Returns the update count. */
+/**
+ * Spec §5 bulk apply: set every member's ownership.default to the baseline.
+ * Skips entries currently hidden (NONE) via the eye toggle - a bulk apply
+ * must not silently un-hide them (see bulkOwnershipPlan's doc comment).
+ * Returns the update count.
+ */
 export async function applyBaselineToMembers(campaign) {
   const level = baselineOwnership(campaign);
-  const updates = bulkOwnershipPlan(campaignEntries(campaign, { user: game.user }), level);
+  const updates = bulkOwnershipPlan(campaignEntries(campaign, { user: game.user }), level, {
+    skipLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
+  });
   if (updates.length) await JournalEntry.updateDocuments(updates);
   return updates.length;
 }
