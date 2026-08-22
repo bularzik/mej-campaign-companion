@@ -62,9 +62,15 @@ export function ownershipLevelFor(key, levels) {
 /**
  * Spec §3 attachment discipline: an entry may only attach to timepoints of
  * its own campaign. A timeline journal with no campaign (the pre-adoption
- * legacy singleton) accepts anything.
+ * legacy singleton) accepts anything. The guard only governs journal
+ * documents (JournalEntry/JournalEntryPage) - campaignIdOf() only ever
+ * resolves membership for those, so any other dropped document type (Actor,
+ * Scene, Item, ...) would always read as "no campaign" and get wrongly
+ * refused; such drops simply aren't subject to this rule at all.
  */
 export function canAttachToTimeline(entry, timelineJournal) {
+  const docName = entry?.documentName;
+  if (docName !== "JournalEntry" && docName !== "JournalEntryPage") return true;
   const timelineCampaign = campaignIdOf(timelineJournal);
   if (timelineCampaign === null) return true;
   return campaignIdOf(entry) === timelineCampaign;

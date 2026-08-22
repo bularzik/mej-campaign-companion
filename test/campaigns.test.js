@@ -104,6 +104,11 @@ describe("campaigns module", async () => {
       expect(canAttachToTimeline(entry("e"), entry("t", { timeline: true }))).toBe(true);
       expect(canAttachToTimeline(entry("e", { folder: camp }), entry("t", { timeline: true }))).toBe(true);
     });
+    it("only governs journal documents - a non-journal drop (e.g. an Actor) is never refused, even outside the timeline's campaign", () => {
+      const otherFolder = { id: "af1", folder: null, flags: {} };
+      const actor = { documentName: "Actor", folder: otherFolder };
+      expect(canAttachToTimeline(actor, entry("t", { folder: camp, timeline: true }))).toBe(true);
+    });
   });
 
   describe("bulkOwnershipPlan", () => {
