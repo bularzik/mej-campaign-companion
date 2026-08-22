@@ -234,6 +234,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #typeIcon(type) {
+    // "journal" (the doctype-filter's synthetic label for an untyped page -
+    // see #typeLabel above) has no entry in MEJ's own type-icon map, so
+    // getIcon() would return undefined and render "fas undefined".
+    if (type === "journal") return "fas fa-book";
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 
