@@ -15,9 +15,21 @@
 
   {{#if isReview}}
   <form class="mej-cc-import-review">
+    <div class="form-group mej-cc-import-destination">
+      <label>{{localize "MEJCampaignCompanion.import.destination"}}</label>
+      <select name="destination">
+        {{#each campaigns}}<option value="{{this.id}}">{{this.name}}</option>{{/each}}
+        <option value="__new">{{localize "MEJCampaignCompanion.import.destinationNew"}}</option>
+      </select>
+    </div>
+    <div class="form-group mej-cc-import-subfolder">
+      <label><input type="checkbox" name="subfolder" checked>
+        {{localize "MEJCampaignCompanion.import.subfolder"}}</label>
+    </div>
     <div class="form-group mej-cc-import-audience">
       <label>{{localize "MEJCampaignCompanion.import.audience"}}</label>
       <select name="audience">
+        <option value="default" selected>{{localize "MEJCampaignCompanion.import.audienceDefault"}}</option>
         <option value="gm">{{localize "MEJCampaignCompanion.import.audienceGm"}}</option>
         <option value="players">{{localize "MEJCampaignCompanion.import.audiencePlayers"}}</option>
       </select>

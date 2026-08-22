@@ -21,6 +21,7 @@ import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { uploadInlineImages } from "./import-upload.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { getCampaigns, createCampaign, baselineOwnership } from "../data/campaign-store.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { validateCampaignComponents } from "../logic/campaign-date.mjs";
@@ -120,6 +121,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     context.isSource = this.state.step === "source";
     context.isReview = this.state.step === "review";
     context.docTitle = this.state.docTitle;
+    context.campaigns = getCampaigns().map((c) => ({ id: c.id, name: c.name }));
     context.rows = this.state.rows.map((row, index) => ({
       ...row, index,
       canMergeUp: index > 0,
@@ -209,10 +211,20 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
   }
 
-  /** The whole-import audience choice from the review form ("gm" default). */
+  /** "default" (campaign baseline) | "gm" | "players". */
   #formAudience() {
     const form = this.element.querySelector("form.mej-cc-import-review");
-    return form?.elements.audience?.value === "players" ? "players" : "gm";
+    const v = form?.elements.audience?.value;
+    return v === "players" || v === "gm" ? v : "default";
+  }
+
+  /** { campaignId: string|"__new", subfolder: boolean } */
+  #formDestination() {
+    const form = this.element.querySelector("form.mej-cc-import-review");
+    return {
+      campaignId: form?.elements.destination?.value ?? "__new",
+      subfolder: form?.elements.subfolder?.checked !== false
+    };
   }
 
   /**
@@ -329,7 +341,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * other type goes through createMejEntry (data/mej-entry.mjs), the same
    * helper auto-capture.mjs uses for Encounters.
    */
-  async #createPage(page, campaignDate, ownership) {
+  async #createPage(page, campaignDate, ownership, folderId) {
     // JournalEntry.create() returns the created document directly (not an
     // array) for a single plain-object `data` argument - an array result
     // only happens when `data` itself is an array. Both branches below
@@ -344,6 +356,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       const entry = await JournalEntry.create({
         name: page.name,
         ...(ownership ? { ownership } : {}),
+        ...(folderId ? { folder: folderId } : {}),
         pages: [{ name: page.name, type: "text", text: { content: page.html } }]
       });
       return entry.pages.contents[0];
@@ -352,11 +365,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       const entry = await JournalEntry.create({
         name: page.name,
         ...(ownership ? { ownership } : {}),
+        ...(folderId ? { folder: folderId } : {}),
         pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });
       return entry.pages.contents[0];
     }
-    return createMejEntry(page.type, page.name, page.html, {}, ownership);
+    return createMejEntry(page.type, page.name, page.html, {}, ownership, folderId);
   }
 
   /**
@@ -410,10 +424,22 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       return ui.notifications.warn(game.i18n.localize(`${I18N}.import.nothingToImport`));
     }
 
+    const dest = this.#formDestination();
+    let campaign = dest.campaignId !== "__new" ? game.folders.get(dest.campaignId) ?? null : null;
+    if (!campaign) {
+      campaign = await createCampaign(this.state.docTitle || game.i18n.localize(`${I18N}.import.title`));
+    }
+    let targetFolderId = campaign?.id ?? null;
+    if (campaign && dest.subfolder) {
+      const sub = await Folder.create({ name: this.state.docTitle || campaign.name, type: "JournalEntry", folder: campaign.id });
+      targetFolderId = sub.id;
+    }
+
     const audience = this.#formAudience();
-    const ownership = audience === "players"
-      ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
-      : null;
+    const ownership =
+      audience === "players" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
+      : audience === "default" && campaign ? { default: baselineOwnership(campaign) }
+      : null;  // "gm", or "default" with no campaign -> Foundry default (GM-only)
     // Import-time auto-link (spec Part 2): same engine as the typing path,
     // empty baseline = whole document eligible. Gated on the same autoLink
     // world setting; failure never blocks the import (observer posture).
@@ -429,9 +455,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // page linking to GM-only entities; every other row keeps the chosen
     // audience's candidates.
     let linkedCount = 0;
+    const linkAudience = audience === "default"
+      ? (campaign && baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER ? "players" : "gm")
+      : audience;
     if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
       try {
-        const candidates = this.#linkCandidates(audience, plan.warnings);
+        const candidates = this.#linkCandidates(linkAudience, plan.warnings);
         const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
         const seenWarnings = new Set(plan.warnings);
         let sessionCandidates = null;
@@ -479,10 +508,10 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         const page = plan.pages[i];
         const campaignDate = safeCampaignDate(dates[i], page.name, plan.warnings);
         try {
-          const created = await this.#createPage(page, campaignDate, ownership);
+          const created = await this.#createPage(page, campaignDate, ownership, targetFolderId);
           results.created++;
           if (page.timepoint) {
-            timeline ??= await ensureTimelineJournal();
+            timeline ??= await ensureTimelineJournal(campaign);
             if (timeline) {
               let filingError = null;
               await queueFiling(async () => {

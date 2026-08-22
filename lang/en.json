@@ -258,7 +258,11 @@
       "audiencePlayers": "All players (Observer)",
       "audienceHint": "Sets ownership of the created entries and bounds which entities the imported text may auto-link to.",
       "ambiguousSkipped": "Ambiguous name not auto-linked (multiple entities share it): {name}",
-      "linked": "{count} name mention(s) auto-linked."
+      "linked": "{count} name mention(s) auto-linked.",
+      "destination": "Import into",
+      "destinationNew": "New Campaign…",
+      "subfolder": "Create a subfolder named after the document",
+      "audienceDefault": "Campaign default"
     },
     "export": {
       "title": "Export to Word",
