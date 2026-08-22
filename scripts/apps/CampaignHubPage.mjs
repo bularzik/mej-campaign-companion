@@ -14,10 +14,10 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -103,7 +103,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
       editCampaign: CampaignHubPage.onEditCampaign,
       toggleEntryHidden: CampaignHubPage.onToggleEntryHidden,
-      setCaptureCampaign: CampaignHubPage.onSetCaptureCampaign
+      setCaptureCampaign: CampaignHubPage.onSetCaptureCampaign,
+      adoptWorld: CampaignHubPage.onAdoptWorld,
+      dismissAdoption: CampaignHubPage.onDismissAdoption,
+      fileIntoCampaign: CampaignHubPage.onFileIntoCampaign,
+      fileAllShown: CampaignHubPage.onFileAllShown
     }
   };
 
@@ -205,6 +209,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(legacy, isGM) });
         }
       }
+    }
+    if (isGM && !getCampaigns().length && !game.settings.get(MODULE_ID, ADOPTION_PROMPTED_SETTING)) {
+      const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
+      context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
     }
     context.index = this.#indexContext();
     context.timeline = { stacks };
@@ -802,6 +810,84 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const n = await applyBaselineToMembers(campaign);
       ui.notifications.info(game.i18n.format(`${I18N}.hub.baselineApplied`, { count: n }));
     }
+    this.render({ parts: ["main"] });
+  }
+
+  /**
+   * GM-only world adoption (spec §6): create a campaign folder from an
+   * existing pre-adoption world's content. Moves adoptionPlan()'s ids
+   * (root-level MEJ-typed entries + the legacy singleton timeline journal,
+   * see that function's doc comment for the foldered/untyped exclusions)
+   * into the new campaign, clears the legacy TIMELINE_JOURNAL_SETTING
+   * (the moved journal is found from then on via its own `timeline` flag,
+   * per campaignTimelineJournal() - no data rewrite needed), and scopes
+   * the Hub to the new campaign.
+   */
+  static async onAdoptWorld() {
+    if (!game.user.isGM) return;
+    const esc = foundry.utils.escapeHTML;
+    const baselineOptions = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <p>${esc(game.i18n.localize(`${I18N}.hub.adoptExplain`))}</p>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
+        <input type="text" name="name" value="${esc(game.world.title)}"></div>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${baselineOptions}</select></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.hub.adoptGo`) },
+      content,
+      ok: { callback: (event, button) => ({
+        name: button.form.elements.name.value.trim(),
+        baseline: button.form.elements.baseline.value
+      }) },
+      rejectClose: false
+    });
+    if (!result?.name) return;
+    const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
+    if (!campaign) return;
+    const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
+    const ids = adoptionPlan(game.journal.contents, mejType, legacyId);
+    if (ids.length) await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
+    if (legacyId) await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, "");
+    await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.state.campaignId = campaign.id;
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only dismissal of the adoption banner (spec §6), without creating a campaign. */
+  static async onDismissAdoption() {
+    if (!game.user.isGM) return;
+    await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only, Unfiled-scope-only: file a single index row into a chosen campaign (spec §6). */
+  static async onFileIntoCampaign(event, target) {
+    if (!game.user.isGM) return;
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    const entry = uuid ? await fromUuid(uuid) : null;
+    const campaign = entry ? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileInto`)) : null;
+    if (!campaign) return;
+    await entry.update({ folder: campaign.id });
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row into a chosen campaign (spec §6). */
+  static async onFileAllShown() {
+    if (!game.user.isGM) return;
+    // The currently-filtered Unfiled rows: recompute exactly what the pane shows.
+    const entries = this.#scopedEntries();
+    const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));
+    const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
+    if (!rows.length) return;
+    const campaign = await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileAllShown`));
+    if (!campaign) return;
+    const ids = rows.map((r) => foundry.utils.parseUuid(r.uuid).id);
+    await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
+    ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
     this.render({ parts: ["main"] });
   }
 

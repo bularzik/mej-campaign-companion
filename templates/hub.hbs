@@ -5,6 +5,13 @@
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
                     <div class="tab-inner flexcol mej-cc-index">
+                        {{#if adoption}}
+                        <div class="mej-cc-adoption-banner">
+                            <span>{{localize "MEJCampaignCompanion.hub.adoptOffer"}}</span>
+                            <button type="button" data-action="adoptWorld">{{localize "MEJCampaignCompanion.hub.adoptGo"}}</button>
+                            <button type="button" data-action="dismissAdoption"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        {{/if}}
                         <div class="mej-cc-index-controls">
                             <select name="campaign-scope" class="mej-cc-campaign-scope" aria-label="{{localize 'MEJCampaignCompanion.hub.scope.label'}}">
                                 {{#each index.campaignScope.options}}
@@ -76,6 +83,11 @@
                                     data-tooltip="{{localize 'MEJCampaignCompanion.hub.captureTarget'}}">
                                 <i class="fa-solid fa-crosshairs"></i>
                             </button>
+                            {{#if index.isUnfiledScope}}
+                            <button type="button" class="mej-cc-file-all" data-action="fileAllShown">
+                                <i class="fa-solid fa-folder-open"></i> {{localize "MEJCampaignCompanion.hub.fileAllShown"}}
+                            </button>
+                            {{/if}}
                             <button type="button" class="mej-cc-import-open" data-action="openImportWizard"
                                     data-tooltip="{{localize 'MEJCampaignCompanion.import.title'}}">
                                 <i class="fa-solid fa-file-import"></i> {{localize 'MEJCampaignCompanion.import.button'}}
@@ -99,6 +111,12 @@
                                         {{#if this.hidden}}data-tooltip="{{localize 'MEJCampaignCompanion.hub.reveal'}}"{{else}}data-tooltip="{{localize 'MEJCampaignCompanion.hub.hide'}}"{{/if}}>
                                     <i class="fa-solid {{#if this.hidden}}fa-eye-slash{{else}}fa-eye{{/if}}"></i>
                                 </button>
+                                {{#if @root.index.isUnfiledScope}}
+                                <button type="button" class="mej-cc-row-file" data-action="fileIntoCampaign"
+                                        data-tooltip="{{localize 'MEJCampaignCompanion.hub.fileInto'}}">
+                                    <i class="fa-solid fa-folder-open"></i>
+                                </button>
+                                {{/if}}
                                 {{/if}}
                             </li>
                             {{else}}

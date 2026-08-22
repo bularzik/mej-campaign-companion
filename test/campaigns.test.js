@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_ID } from "../scripts/constants.mjs";
+import { adoptionPlan } from "../scripts/logic/campaigns.mjs";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
@@ -123,4 +124,19 @@ describe("campaigns module", async () => {
     });
   });
 
+});
+
+describe("adoptionPlan (spec §6)", () => {
+  const typed = (id) => ({ id, folder: null, documentName: "JournalEntry", flags: {} });
+  const getMEJType = (e) => (e.id.startsWith("t") ? "person" : false);
+  it("moves root-level MEJ-typed entries and the legacy timeline; skips foldered and untyped", () => {
+    const entries = [
+      typed("t1"),
+      { ...typed("t2"), folder: { id: "f1", flags: {} } },   // user-foldered: preserved
+      typed("plain"),                                        // untyped: manual filing
+      typed("timeline-x")                                    // untyped but IS the legacy timeline
+    ];
+    expect(adoptionPlan(entries, getMEJType, "timeline-x")).toEqual(["t1", "timeline-x"]);
+    expect(adoptionPlan([], getMEJType, null)).toEqual([]);
+  });
 });

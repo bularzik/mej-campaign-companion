@@ -1,7 +1,7 @@
 import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
-  RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, I18N, DATA_VERSION_SETTING, AUTO_CAPTURE_CAMPAIGN_SETTING,
+  RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
@@ -209,4 +209,10 @@ Hooks.once("ready", async () => {
   // type flag scrubbed off its Session pages; put it back so MEJ's shell
   // routes them again. No-op in native mode and for non-active-GM clients.
   await healSessionFlags();
+
+  // Spec §6: versioned migration hook. No migrations exist yet at version 1;
+  // future schema changes bump CURRENT_DATA_VERSION and add steps here.
+  if (game.user.isGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
+    await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
+  }
 });

@@ -80,3 +80,18 @@ export function bulkOwnershipPlan(entries, level) {
     .filter((e) => (e.ownership?.default ?? null) !== level)
     .map((e) => ({ _id: e.id, "ownership.default": level }));
 }
+
+/**
+ * Spec §6 adoption plan: ids of entries to move into the new campaign
+ * folder - root-level MEJ-typed entries plus the legacy timeline journal.
+ * Foldered entries are preserved where they are (documented refinement);
+ * untyped root entries stay for manual filing via the Unfiled scope.
+ */
+export function adoptionPlan(entries, getMEJType, legacyTimelineId) {
+  const ids = [];
+  for (const e of entries ?? []) {
+    if (e.folder) continue;
+    if (e.id === legacyTimelineId || getMEJType(e)) ids.push(e.id);
+  }
+  return ids;
+}
