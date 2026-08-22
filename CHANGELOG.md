@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.6.0 (2026-08-22)
+
+- New: **Campaigns**. A campaign is a journal folder the companion manages:
+  everything inside it — typed entries, plain journal entries, imported
+  prose — is a member, and multiple campaigns can share one world. The
+  Campaign Hub gains a campaign picker (All campaigns / each campaign /
+  Unfiled) that scopes the Index, Search (with an "N more matches in other
+  campaigns" jump), Dashboards, Secrets, and the Timeline, which is now
+  per-campaign instead of one world singleton.
+- New: plain journal entries are first-class Hub citizens — they list in
+  the Index as "Journal" rows and are covered by campaign scoping, fixing
+  imported prose being invisible to the Hub.
+- New: campaign ownership baseline (GM only / players view / players
+  edit) stamped on entries created into the campaign, with a bulk "apply
+  to all members" action and a per-entry hide/reveal toggle that restores
+  the campaign baseline on reveal. Hidden entries are never revealed by
+  the bulk apply.
+- New: the docx import wizard gains an "Import into" campaign destination
+  (with "New Campaign…"), an optional per-document subfolder, and a
+  "Campaign default" audience option; import timepoints file onto the
+  chosen campaign's timeline.
+- New: auto-capture targets a campaign (Hub crosshairs button); with
+  campaigns present but no target set, captures decline with a clear
+  message instead of creating loose entries. The world's first campaign
+  becomes the target automatically.
+- New: one-time adoption offer for existing worlds — creates a campaign
+  from the world's typed entries and its legacy timeline, non-destructively;
+  everything else is filed by hand from the new Unfiled view ("File into
+  campaign…" / "File all shown into…").
+- Fixed: cross-campaign timeline discipline — entries only attach to their
+  own campaign's timepoints (actors, scenes, items, and images are exempt).
+- Fixed (tests): a pre-existing e2e cleanup helper deleted the world's real
+  "Campaign Timeline" journal by name on every run; cleanup is now
+  id-tracked and content-guarded.
+
 ## 0.5.3 (2026-08-21)
 
 - Fixed: the Campaign Hub's type and sort dropdowns rendered a white panel
