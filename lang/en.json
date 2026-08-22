@@ -83,6 +83,12 @@
         "dashboards": "Dashboards",
         "secrets": "Secrets"
       },
+      "scope": { "label": "Campaign", "all": "All campaigns", "unfiled": "Unfiled" },
+      "newCampaign": "New Campaign",
+      "newCampaignName": "Name",
+      "newCampaignBaseline": "Player access",
+      "baseline": { "none": "GM only", "observer": "Players can view", "owner": "Players can edit" },
+      "journalType": "Journal",
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
       "sortBy": "Sort By",

@@ -20,13 +20,14 @@ describe("buildIndexSource", () => {
   const getMEJType = (e) => e.mejType ?? false;
   const getIcon = (type) => `fa-${type}`;
 
-  it("skips entries with no MEJ type", () => {
+  it("includes entries with no MEJ type as type 'journal' (spec §2: membership, not typing)", () => {
     const entries = [
       { ...entry("a", "A"), mejType: "person" },
       { ...entry("b", "B"), mejType: false }
     ];
     const rows = buildIndexSource(entries, { isGM: true }, getMEJType, getIcon);
-    expect(rows.map((r) => r.uuid)).toEqual(["a"]);
+    expect(rows.map((r) => r.uuid)).toEqual(["a", "b"]);
+    expect(rows.find((r) => r.uuid === "b").type).toBe("journal");
   });
 
   it("maps each typed entry to {uuid,name,type,icon}", () => {
@@ -47,6 +48,22 @@ describe("buildIndexSource", () => {
   it("returns [] for no entries", () => {
     expect(buildIndexSource([], { isGM: true }, getMEJType, getIcon)).toEqual([]);
     expect(buildIndexSource(undefined, { isGM: true }, getMEJType, getIcon)).toEqual([]);
+  });
+});
+
+describe("buildIndexSource untyped rows (spec §2)", () => {
+  it("includes untyped entries as type 'journal' with a book icon", () => {
+    const entries = [
+      { uuid: "e1", name: "Typed", testUserPermission: () => true },
+      { uuid: "e2", name: "Plain prose", testUserPermission: () => true }
+    ];
+    const user = { isGM: true };
+    const getMEJType = (e) => (e.uuid === "e1" ? "person" : false);
+    const rows = buildIndexSource(entries, user, getMEJType, () => "fas fa-user");
+    expect(rows).toEqual([
+      { uuid: "e1", name: "Typed", type: "person", icon: "fas fa-user" },
+      { uuid: "e2", name: "Plain prose", type: "journal", icon: "fas fa-book" }
+    ]);
   });
 });
 

@@ -14,8 +14,10 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, I18N, guideUrl } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, I18N, guideUrl } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { getCampaigns, campaignEntries, unfiledEntries, createCampaign } from "../data/campaign-store.mjs";
+import { campaignOf, isCampaignFolder } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -63,7 +65,8 @@ const HUB_STATE = {
   restoreSearchFocus: false,
   secretsType: "",
   secretsState: "all",
-  secretsPlayer: ""
+  secretsPlayer: "",
+  campaignId: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -95,7 +98,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       trackerAudience: CampaignHubPage.onTrackerAudience,
       addGroup: CampaignHubPage.onAddGroup,
       editGroup: CampaignHubPage.onEditGroup,
-      deleteGroup: CampaignHubPage.onDeleteGroup
+      deleteGroup: CampaignHubPage.onDeleteGroup,
+      newCampaign: CampaignHubPage.onNewCampaign
     }
   };
 
@@ -194,6 +198,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #typeLabel(type) {
+    if (type === "journal") return game.i18n.localize(`${I18N}.hub.journalType`);
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     return labels[type] ? game.i18n.localize(labels[type]) : type;
   }
@@ -202,11 +207,56 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 
+  /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
+  #scope() {
+    if (this.state.campaignId === null) {
+      this.state.campaignId = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
+    }
+    const id = this.state.campaignId;
+    if (id === "unfiled") return { campaign: null, unfiled: true };
+    const folder = id ? game.folders.get(id) : null;
+    if (id && (!folder || !isCampaignFolder(folder))) {
+      this.state.campaignId = "";
+      return { campaign: null, unfiled: false };
+    }
+    return { campaign: folder ?? null, unfiled: false };
+  }
+
+  /** Spec §2: the entries the current scope covers. Zero-campaign worlds see everything (pre-adoption behavior). */
+  #scopedEntries() {
+    const { campaign, unfiled } = this.#scope();
+    if (unfiled) return unfiledEntries({ user: game.user });
+    if (campaign) return campaignEntries(campaign, { user: game.user });
+    const campaigns = getCampaigns();
+    if (!campaigns.length) return unfiledEntries({ user: game.user });
+    return campaigns.flatMap((c) => campaignEntries(c, { user: game.user }));
+  }
+
+  #campaignScopeContext() {
+    const campaigns = getCampaigns();
+    const current = this.state.campaignId ?? "";
+    const options = [
+      { value: "", label: game.i18n.localize(`${I18N}.hub.scope.all`), selected: current === "" },
+      ...campaigns.map((c) => ({ value: c.id, label: c.name, selected: current === c.id }))
+    ];
+    if (unfiledEntries({ user: game.user }).length) {
+      options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
+    }
+    return { hasCampaigns: campaigns.length > 0, options };
+  }
+
   #indexContext() {
-    const source = buildIndexSource(game.journal.contents, game.user, mejType, this.#typeIcon.bind(this));
+    const { campaign, unfiled } = this.#scope();
+    const entries = this.#scopedEntries();
+    const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));
     const rows = filterIndexRows(source, this.state, this.#typeLabel.bind(this));
     const mentionCounts = mentionBadgeCounts();
-    for (const row of rows) row.mentions = mentionCounts.get(row.uuid) ?? 0;
+    const badge = !campaign && !unfiled;
+    const campaignNames = badge ? new Map(entries.map((e) => [e.uuid, campaignOf(e)?.name ?? null])) : null;
+    for (const row of rows) {
+      row.mentions = mentionCounts.get(row.uuid) ?? 0;
+      if (badge) row.campaign = campaignNames.get(row.uuid);
+    }
     const allTypes = [...new Set(source.map((r) => r.type))].sort((a, b) => this.#typeLabel(a).localeCompare(this.#typeLabel(b)));
     return {
       rows,
@@ -215,7 +265,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       typeMenuOpen: this.state.typeMenuOpen,
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
-      sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`))
+      sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`)),
+      campaignScope: this.#campaignScopeContext(),
+      isUnfiledScope: unfiled
     };
   }
 
@@ -610,6 +662,42 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
   }
 
+  /**
+   * GM-only "New Campaign" entry point (spec §1/§2): creates a root-level
+   * campaign folder and switches the Hub's scope to it. `campaign-store.mjs`
+   * itself re-checks game.user.isGM before writing (createCampaign() returns
+   * null for a non-GM), so this action is safe to leave wired regardless of
+   * seat, same convention as onOpenImportWizard/onOpenExportDialog below.
+   */
+  static async onNewCampaign() {
+    const esc = foundry.utils.escapeHTML;
+    const baselineOptions = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
+        <input type="text" name="name" value="" autofocus></div>
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${baselineOptions}</select></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.hub.newCampaign`) },
+      content,
+      ok: {
+        callback: (event, button) => ({
+          name: button.form.elements.name.value.trim(),
+          baseline: button.form.elements.baseline.value
+        })
+      },
+      rejectClose: false
+    });
+    if (!result?.name) return;
+    const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
+    if (campaign) {
+      this.state.campaignId = campaign.id;
+      await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
+      this.render({ parts: ["main"] });
+    }
+  }
+
   // GM-only "Import Document" entry point (Task 11) - lives on the Index
   // tab's toolbar, next to the type filter/sort controls (see hub.hbs). The
   // action itself is registered regardless of GM status (Foundry always
@@ -908,6 +996,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         if (!radio) return;
         this.state.sort = radio.value;
         this.state.sortMenuOpen = false;
+        this.render({ parts: ["main"] });
+      });
+    }
+
+    // Deviation from brief: use `html` (as every other listener in this
+    // method does), not `this.element` - this.element is never assigned for
+    // a subsheet hosted in the shell (see the restore-focus comment on
+    // search below), so querying it here would throw for that hosting mode.
+    const scopeSelect = html.querySelector('select[name="campaign-scope"]');
+    if (scopeSelect && !scopeSelect.dataset.ccBound) {
+      scopeSelect.dataset.ccBound = "1";
+      scopeSelect.addEventListener("change", async (event) => {
+        this.state.campaignId = event.target.value;
+        await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
       });
     }

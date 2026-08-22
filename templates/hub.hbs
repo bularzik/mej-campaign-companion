@@ -6,6 +6,17 @@
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
                     <div class="tab-inner flexcol mej-cc-index">
                         <div class="mej-cc-index-controls">
+                            <select name="campaign-scope" class="mej-cc-campaign-scope" aria-label="{{localize 'MEJCampaignCompanion.hub.scope.label'}}">
+                                {{#each index.campaignScope.options}}
+                                <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+                                {{/each}}
+                            </select>
+                            {{#if isGM}}
+                            <button type="button" class="mej-cc-new-campaign" data-action="newCampaign"
+                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.newCampaign'}}">
+                                <i class="fa-solid fa-folder-plus"></i>
+                            </button>
+                            {{/if}}
                             <div class="mej-cc-doctype-filter">
                                 <button type="button" class="mej-cc-doctype-summary" data-action="toggleTypeMenu"
                                         aria-haspopup="true" aria-expanded="{{#if index.typeMenuOpen}}true{{else}}false{{/if}}"
@@ -72,6 +83,7 @@
                                 <span class="mej-cc-index-name">{{this.name}}</span>
                                 {{#if this.mentions}}<span class="mej-cc-mention-badge" title="{{localize 'MEJCampaignCompanion.hub.mentions'}}"><i class="fa-solid fa-link"></i>{{this.mentions}}</span>{{/if}}
                                 <span class="mej-cc-index-type">{{this.typeLabel}}</span>
+                                {{#if this.campaign}}<span class="mej-cc-row-campaign">{{this.campaign}}</span>{{/if}}
                             </li>
                             {{else}}
                             <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noEntries'}}</li>
