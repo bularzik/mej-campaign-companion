@@ -707,7 +707,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
       const { campaign: scoped } = this.#scope();
-      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name);
+      // RULING: onNewSession must always prompt when the scope doesn't
+      // already imply a campaign (Unfiled/All) - see promptCampaignChoice's
+      // doc comment for why the sole-campaign short-circuit is wrong here.
+      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true });
       // Zero-campaign world: campaign stays null -> legacy loose creation, unchanged.
       const destination = campaign
         ? { folder: campaign.id, ownership: { default: baselineOwnership(campaign) } }
@@ -902,11 +905,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** GM picks a campaign (used when the scope doesn't already imply one). Returns Folder|null; null = user cancelled or zero campaigns exist. */
-  static async promptCampaignChoice(title) {
+  /**
+   * GM picks a campaign (used when the scope doesn't already imply one).
+   * Returns Folder|null; null = user cancelled or zero campaigns exist.
+   * By default short-circuits to the sole campaign when exactly one exists
+   * (fileIntoCampaign/fileAllShown/capture-target: there's nothing to
+   * choose between, so no dialog is the right call). `alwaysPrompt: true`
+   * (onNewSession only) disables that short-circuit - RULING: a new
+   * session's destination is a real decision even with one campaign in the
+   * world, since the alternative is staying unfiled, and skipping the
+   * dialog would mean skipping the cancel-to-stay-unfiled path too.
+   */
+  static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
     const campaigns = getCampaigns();
     if (!campaigns.length) return null;
-    if (campaigns.length === 1) return campaigns[0];
+    if (campaigns.length === 1 && !alwaysPrompt) return campaigns[0];
     const esc = foundry.utils.escapeHTML;
     const options = campaigns.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
     const result = await foundry.applications.api.DialogV2.prompt({
