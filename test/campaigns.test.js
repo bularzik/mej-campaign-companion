@@ -1,0 +1,108 @@
+import { describe, it, expect } from "vitest";
+import { MODULE_ID } from "../scripts/constants.mjs";
+
+const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
+
+function folder(id, { campaign = null, parent = null } = {}) {
+  return { id, folder: parent, flags: campaign ? { [MODULE_ID]: { campaign } } : {} };
+}
+function entry(id, { folder: f = null, timeline = false } = {}) {
+  return {
+    id, documentName: "JournalEntry", folder: f,
+    flags: timeline ? { [MODULE_ID]: { timeline: { timepoints: [] } } } : {}
+  };
+}
+
+describe("campaigns module", async () => {
+  const { campaignFlagOf, isCampaignFolder, campaignOf, campaignIdOf, isMemberOf, partitionByCampaign, isTimelineJournal, ownershipLevelFor, canAttachToTimeline } = await import("../scripts/logic/campaigns.mjs");
+
+  describe("isCampaignFolder / campaignFlagOf", () => {
+    it("detects the campaign flag", () => {
+      const c = folder("c1", { campaign: { ownershipDefault: "owner" } });
+      expect(isCampaignFolder(c)).toBe(true);
+      expect(campaignFlagOf(c)).toEqual({ ownershipDefault: "owner" });
+    });
+    it("rejects plain folders and null", () => {
+      expect(isCampaignFolder(folder("f1"))).toBe(false);
+      expect(isCampaignFolder(null)).toBe(false);
+      expect(campaignFlagOf(undefined)).toBe(null);
+    });
+  });
+
+  describe("campaignOf", () => {
+    const camp = folder("c1", { campaign: { ownershipDefault: "observer" } });
+    it("resolves direct membership", () => {
+      expect(campaignOf(entry("e1", { folder: camp }))).toBe(camp);
+    });
+    it("resolves through subfolders (ancestry)", () => {
+      const sub = folder("s1", { parent: camp });
+      expect(campaignOf(entry("e1", { folder: sub }))).toBe(camp);
+    });
+    it("nearest flagged ancestor wins (defensive nesting rule)", () => {
+      const inner = folder("c2", { campaign: { ownershipDefault: "none" }, parent: camp });
+      expect(campaignOf(entry("e1", { folder: inner }))).toBe(inner);
+    });
+    it("returns null for loose entries and null docs", () => {
+      expect(campaignOf(entry("e1"))).toBe(null);
+      expect(campaignOf(entry("e1", { folder: folder("f1") }))).toBe(null);
+      expect(campaignOf(null)).toBe(null);
+    });
+    it("resolves a page via its parent entry", () => {
+      const page = { documentName: "JournalEntryPage", parent: entry("e1", { folder: camp }) };
+      expect(campaignOf(page)).toBe(camp);
+    });
+    it("campaignIdOf/isMemberOf wrap it", () => {
+      expect(campaignIdOf(entry("e1", { folder: camp }))).toBe("c1");
+      expect(campaignIdOf(entry("e1"))).toBe(null);
+      expect(isMemberOf(entry("e1", { folder: camp }), camp)).toBe(true);
+      expect(isMemberOf(entry("e1"), camp)).toBe(false);
+      expect(isMemberOf(entry("e1", { folder: camp }), null)).toBe(false);
+    });
+  });
+
+  describe("partitionByCampaign", () => {
+    it("groups by campaign id with null for unfiled", () => {
+      const camp = folder("c1", { campaign: {} });
+      const a = entry("a", { folder: camp });
+      const b = entry("b");
+      const byId = partitionByCampaign([a, b]);
+      expect(byId.get("c1")).toEqual([a]);
+      expect(byId.get(null)).toEqual([b]);
+    });
+  });
+
+  describe("isTimelineJournal", () => {
+    it("detects the timeline flag", () => {
+      expect(isTimelineJournal(entry("t", { timeline: true }))).toBe(true);
+      expect(isTimelineJournal(entry("e"))).toBe(false);
+      expect(isTimelineJournal(null)).toBe(false);
+    });
+  });
+
+  describe("ownershipLevelFor", () => {
+    it("maps keys, defaulting unknown to OBSERVER", () => {
+      expect(ownershipLevelFor("none", LEVELS)).toBe(0);
+      expect(ownershipLevelFor("observer", LEVELS)).toBe(2);
+      expect(ownershipLevelFor("owner", LEVELS)).toBe(3);
+      expect(ownershipLevelFor("banana", LEVELS)).toBe(2);
+      expect(ownershipLevelFor(undefined, LEVELS)).toBe(2);
+    });
+  });
+
+  describe("canAttachToTimeline (spec §3 attachment discipline)", () => {
+    const camp = folder("c1", { campaign: {} });
+    const other = folder("c2", { campaign: {} });
+    it("allows same-campaign attachment", () => {
+      expect(canAttachToTimeline(entry("e", { folder: camp }), entry("t", { folder: camp, timeline: true }))).toBe(true);
+    });
+    it("refuses cross-campaign and unfiled-entry attachment", () => {
+      expect(canAttachToTimeline(entry("e", { folder: other }), entry("t", { folder: camp, timeline: true }))).toBe(false);
+      expect(canAttachToTimeline(entry("e"), entry("t", { folder: camp, timeline: true }))).toBe(false);
+    });
+    it("legacy un-campaigned timeline accepts anything (pre-adoption worlds)", () => {
+      expect(canAttachToTimeline(entry("e"), entry("t", { timeline: true }))).toBe(true);
+      expect(canAttachToTimeline(entry("e", { folder: camp }), entry("t", { timeline: true }))).toBe(true);
+    });
+  });
+
+});
