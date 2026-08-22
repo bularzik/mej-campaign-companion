@@ -72,6 +72,11 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
     const prior = await page.evaluate(() => ({
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      // Fix 6 (createCampaign seeds the auto-capture target on the world's
+      // first campaign): this test's own createCampaign() call below is
+      // exactly that first-campaign call in a zero-campaign world, so it
+      // WILL set this setting - snapshot/restore it like the others.
+      captureCampaign: game.settings.get("mej-campaign-companion", "autoCaptureCampaign"),
       // Document-level snapshot, not just the setting: a GM Hub render in a
       // zero-campaign world can side-effect-create a fresh "Campaign
       // Timeline" journal via ensureTimelineJournal() (see the close()
@@ -189,12 +194,14 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
         }
         await game.settings.set("mej-campaign-companion", "timelineJournalId", prior.timelineId ?? "");
         await game.settings.set("mej-campaign-companion", "adoptionPrompted", prior.prompted ?? false);
+        await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", prior.captureCampaign ?? "");
       }, { seeded, campaignId, prior });
     }
 
     const after = await page.evaluate(() => ({
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      captureCampaign: game.settings.get("mej-campaign-companion", "autoCaptureCampaign"),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
     expect(after).toEqual(prior);
@@ -228,11 +235,13 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
     await page.evaluate(async (prior) => {
       await game.settings.set("mej-campaign-companion", "timelineJournalId", prior.timelineId ?? "");
       await game.settings.set("mej-campaign-companion", "adoptionPrompted", prior.prompted ?? false);
+      await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", prior.captureCampaign ?? "");
     }, prior);
 
     const final = await page.evaluate(() => ({
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
+      captureCampaign: game.settings.get("mej-campaign-companion", "autoCaptureCampaign"),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
     expect(final).toEqual(prior);
@@ -257,13 +266,19 @@ test.describe.serial("14 campaigns", () => {
   const TOKEN = "glimmerthorn";
 
   let alphaId, betaId;
-  let personAlphaId, personBetaId;
+  let personAlphaId, personBetaId, plainAlphaId;
+  // Fix 6: createCampaign() seeds AUTO_CAPTURE_CAMPAIGN_SETTING when it's
+  // the world's FIRST campaign. By this point the adoption describe block
+  // (above, and fully self-restoring) has left the world at zero campaigns,
+  // so scenario 1's ALPHA creation below is exactly that first-campaign
+  // call and WILL set it - snapshot before, restore in afterAll.
+  let captureCampaignPrior;
 
   test.afterAll(async ({ browser }) => {
     const page = await browser.newPage();
     try {
       await login(page, "Gamemaster");
-      await page.evaluate(async ({ alphaId, betaId }) => {
+      await page.evaluate(async ({ alphaId, betaId, captureCampaignPrior }) => {
         for (const id of [alphaId, betaId]) {
           if (!id) continue;
           const folder = game.folders.get(id);
@@ -274,7 +289,10 @@ test.describe.serial("14 campaigns", () => {
         // clean up in-run too.
         const loose = game.journal.filter((j) => !j.folder && j.name.startsWith("TT-"));
         if (loose.length) await JournalEntry.implementation.deleteDocuments(loose.map((j) => j.id));
-      }, { alphaId, betaId });
+        if (captureCampaignPrior !== undefined) {
+          await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", captureCampaignPrior);
+        }
+      }, { alphaId, betaId, captureCampaignPrior });
     } finally {
       await page.close();
     }
@@ -283,6 +301,7 @@ test.describe.serial("14 campaigns", () => {
   test("1. create campaign: picker contains it, and scoping persists across a real Hub re-open", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
+    captureCampaignPrior = await page.evaluate(() => game.settings.get("mej-campaign-companion", "autoCaptureCampaign"));
     const shell = await openHub(page);
 
     await shell.locator("button.mej-cc-new-campaign").click();
@@ -312,7 +331,7 @@ test.describe.serial("14 campaigns", () => {
     assertNoConsoleErrors(errors);
   });
 
-  test("2. membership + Journal rows; a loose entry appears only under Unfiled", async ({ page }) => {
+  test("2. membership + Journal rows; a loose entry appears under Unfiled AND All (no campaign badge), never when scoped to Alpha", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
@@ -339,6 +358,7 @@ test.describe.serial("14 campaigns", () => {
       return { personId: person.id, plainId: plain.id, looseId: loose.id };
     }, { prefix: TT_PREFIX, alphaId, token: TOKEN });
     personAlphaId = seeded.personId;
+    plainAlphaId = seeded.plainId;
 
     const shell = await openHub(page);
     await scopeHub(shell, page, alphaId);
@@ -352,6 +372,15 @@ test.describe.serial("14 campaigns", () => {
     await scopeHub(shell, page, "unfiled");
     await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}Loose Text` })).toHaveCount(1);
     await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}Alpha Person` })).toHaveCount(0);
+
+    // RULING (fix 5): All scope means everything - campaign members AND
+    // unfiled entries, the latter carrying no campaign badge (only filed
+    // rows get one - see #indexContext's `badge` map).
+    await scopeHub(shell, page, ""); // All
+    await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}Alpha Person` })).toHaveCount(1);
+    const looseRowAll = shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}Loose Text` });
+    await expect(looseRowAll).toHaveCount(1);
+    await expect(looseRowAll.locator(".mej-cc-row-campaign")).toHaveCount(0);
 
     assertNoConsoleErrors(errors);
   });
@@ -594,10 +623,15 @@ test.describe.serial("14 campaigns", () => {
     }
   });
 
-  test("8. permissions from the player seat: apply-to-all reveals members; hide removes one for the player", async ({ browser }) => {
+  test("8. permissions from the player seat: apply-to-all never un-hides a NONE member; per-row reveal/hide controls one at a time", async ({ browser }) => {
     // Both Alpha entries seeded in scenario 2 sit at Foundry's create-time
-    // ownership default (NONE) - invisible to players until the campaign's
-    // observer baseline (set in scenario 1) is actually applied.
+    // ownership default (NONE) - the SAME value setEntryHidden uses for
+    // "explicitly hidden via the eye toggle" (fix 3: bulkOwnershipPlan
+    // can't tell "never touched" apart from "a GM hid this on purpose", so
+    // it treats every NONE entry as off-limits to the bulk shortcut).
+    // "Apply now" therefore does NOT reveal them - proven first - and a
+    // fresh member only reaches the baseline via its own per-row reveal
+    // (the eye toggle), same control a GM uses to hide one afterward.
     await withGmPage(browser, async (gmPage) => {
       const errors = trackConsoleErrors(gmPage, { ignore: IGNORE });
       const shell = await openHub(gmPage);
@@ -607,6 +641,18 @@ test.describe.serial("14 campaigns", () => {
       await expect(dialog.locator('input[name="applyNow"]')).toBeChecked();
       await dialog.locator('button[data-action="ok"]').click();
       await settle(gmPage, 400);
+
+      const stillNone = await gmPage.evaluate(
+        ({ personId, plainId }) => [game.journal.get(personId)?.ownership?.default, game.journal.get(plainId)?.ownership?.default],
+        { personId: personAlphaId, plainId: plainAlphaId }
+      );
+      expect(stillNone).toEqual([0, 0]); // CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE - untouched by the bulk apply
+
+      // Per-row reveal brings both up to the baseline the bulk apply couldn't touch.
+      for (const label of [`${TT_PREFIX}Alpha Person`, `${TT_PREFIX}Alpha Plain`]) {
+        await shell.locator("li.mej-cc-index-row", { hasText: label }).locator("button.mej-cc-row-hide").click();
+        await settle(gmPage, 300);
+      }
       assertNoConsoleErrors(errors);
     });
 
@@ -648,5 +694,113 @@ test.describe.serial("14 campaigns", () => {
 
     assertNoConsoleErrors(playerErrors);
     await playerContext.close();
+
+    // Fix 3, end to end: a SECOND bulk apply (raising the baseline to
+    // "owner") must raise the still-visible Alpha Plain (currently at
+    // observer, not NONE) while leaving the now explicitly-hidden Alpha
+    // Person (NONE, set by the eye-toggle click above) exactly where it is.
+    await withGmPage(browser, async (gmPage) => {
+      const shell = await openHub(gmPage);
+      await scopeHub(shell, gmPage, alphaId);
+      await shell.locator("button.mej-cc-edit-campaign").click();
+      const dialog = gmPage.locator("dialog.application").last();
+      await dialog.locator('select[name="baseline"]').selectOption("owner");
+      await dialog.locator('button[data-action="ok"]').click();
+      await settle(gmPage, 400);
+
+      const levels = await gmPage.evaluate(
+        ({ personId, plainId }) => [game.journal.get(personId)?.ownership?.default, game.journal.get(plainId)?.ownership?.default],
+        { personId: personAlphaId, plainId: plainAlphaId }
+      );
+      expect(levels).toEqual([0, 3]); // Person stays NONE (hidden); Plain raised to OWNER by the bulk apply
+    });
+  });
+
+  test("9. unfiled filing: fileIntoCampaign (single row) and fileAllShown (bulk, respecting the current name filter)", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    // Fix 6 defensive snapshot/restore: Alpha/Beta already exist by this
+    // point in the suite, so this test's own createCampaign() call below is
+    // NOT the world's first and shouldn't touch this setting - but restore
+    // it anyway rather than assume that invariant holds forever.
+    const captureCampaignBefore = await page.evaluate(() => game.settings.get("mej-campaign-companion", "autoCaptureCampaign"));
+
+    let targetId = null;
+    let seededIds = [];
+    try {
+      const seeded = await page.evaluate(async (prefix) => {
+        const { createCampaign } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+        const target = await createCampaign(`${prefix}FileTarget`, { ownershipDefault: "observer" });
+        const single = await JournalEntry.create({ name: `${prefix}File Single`, pages: [{ name: `${prefix}File Single`, text: { content: "single" } }] });
+        const bulkA = await JournalEntry.create({ name: `${prefix}FileBulk Alpha`, pages: [{ name: `${prefix}FileBulk Alpha`, text: { content: "bulk a" } }] });
+        const bulkB = await JournalEntry.create({ name: `${prefix}FileBulk Beta`, pages: [{ name: `${prefix}FileBulk Beta`, text: { content: "bulk b" } }] });
+        const other = await JournalEntry.create({ name: `${prefix}NotFiled`, pages: [{ name: `${prefix}NotFiled`, text: { content: "excluded" } }] });
+        return { targetId: target.id, singleId: single.id, bulkAId: bulkA.id, bulkBId: bulkB.id, otherId: other.id };
+      }, TT_PREFIX);
+      targetId = seeded.targetId;
+      seededIds = [seeded.singleId, seeded.bulkAId, seeded.bulkBId, seeded.otherId];
+
+      const shell = await openHub(page);
+      await scopeHub(shell, page, "unfiled");
+
+      // fileIntoCampaign: a single Unfiled row's own "file" button, real UI
+      // action through to promptCampaignChoice's dialog (three campaigns
+      // now exist - Alpha, Beta, FileTarget - so it prompts, same as
+      // scenario 6's onNewSession dialog).
+      const singleRow = shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}File Single` });
+      await singleRow.locator("button.mej-cc-row-file").click();
+      const singleDialog = page.locator("dialog.application").last();
+      await expect(singleDialog).toBeVisible();
+      await expect(singleDialog.locator('select[name="campaign"]')).toHaveCount(1);
+      await singleDialog.locator('select[name="campaign"]').selectOption({ label: `${TT_PREFIX}FileTarget` });
+      await singleDialog.locator('button[data-action="ok"]').click();
+      await settle(page, 400);
+
+      // Filed - no longer an Unfiled row.
+      await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}File Single` })).toHaveCount(0);
+
+      // fileAllShown: bulk-files whatever the CURRENT name filter shows,
+      // not every Unfiled row - filter down to only the "FileBulk" pair
+      // first, leaving NotFiled out of scope.
+      await shell.locator('input[name="index-filter"]').fill(`${TT_PREFIX}FileBulk`);
+      await settle(page, 400);
+      await expect(shell.locator("li.mej-cc-index-row")).toHaveCount(2);
+      await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}NotFiled` })).toHaveCount(0);
+
+      await shell.locator("button.mej-cc-file-all").click();
+      const bulkDialog = page.locator("dialog.application").last();
+      await expect(bulkDialog).toBeVisible();
+      await bulkDialog.locator('select[name="campaign"]').selectOption({ label: `${TT_PREFIX}FileTarget` });
+      await bulkDialog.locator('button[data-action="ok"]').click();
+      await settle(page, 400);
+
+      await expect(shell.locator("li.mej-cc-index-row", { hasText: `${TT_PREFIX}FileBulk` })).toHaveCount(0);
+
+      const membership = await page.evaluate(({ singleId, bulkAId, bulkBId, otherId, targetId }) => ({
+        single: game.journal.get(singleId)?.folder?.id ?? null,
+        bulkA: game.journal.get(bulkAId)?.folder?.id ?? null,
+        bulkB: game.journal.get(bulkBId)?.folder?.id ?? null,
+        other: game.journal.get(otherId)?.folder?.id ?? null
+      }), { singleId: seeded.singleId, bulkAId: seeded.bulkAId, bulkBId: seeded.bulkBId, otherId: seeded.otherId, targetId });
+
+      expect(membership.single).toBe(targetId);
+      expect(membership.bulkA).toBe(targetId);
+      expect(membership.bulkB).toBe(targetId);
+      // NotFiled was excluded by the name filter at fileAllShown-click time - stays unfiled.
+      expect(membership.other).toBeNull();
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async ({ targetId, seededIds, captureCampaignBefore }) => {
+        if (targetId) {
+          const folder = game.folders.get(targetId);
+          if (folder) await folder.delete({ deleteSubfolders: true, deleteContents: true });
+        }
+        const remaining = seededIds.filter((id) => game.journal.get(id));
+        if (remaining.length) await JournalEntry.implementation.deleteDocuments(remaining);
+        await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", captureCampaignBefore ?? "");
+      }, { targetId, seededIds, captureCampaignBefore });
+    }
   });
 });
