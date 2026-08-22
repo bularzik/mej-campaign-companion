@@ -262,7 +262,8 @@
       "destination": "Import into",
       "destinationNew": "New Campaign…",
       "subfolder": "Create a subfolder named after the document",
-      "audienceDefault": "Campaign default"
+      "audienceDefault": "Campaign default",
+      "destinationError": "Could not create or find the import destination."
     },
     "export": {
       "title": "Export to Word",
