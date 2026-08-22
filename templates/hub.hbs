@@ -11,6 +11,12 @@
                                 <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
                                 {{/each}}
                             </select>
+                            {{#if index.campaignScope.isCampaignScope}}{{#if isGM}}
+                            <button type="button" class="mej-cc-edit-campaign" data-action="editCampaign"
+                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.editCampaign'}}">
+                                <i class="fa-solid fa-gear"></i>
+                            </button>
+                            {{/if}}{{/if}}
                             {{#if isGM}}
                             <button type="button" class="mej-cc-new-campaign" data-action="newCampaign"
                                     data-tooltip="{{localize 'MEJCampaignCompanion.hub.newCampaign'}}">
@@ -84,6 +90,12 @@
                                 {{#if this.mentions}}<span class="mej-cc-mention-badge" title="{{localize 'MEJCampaignCompanion.hub.mentions'}}"><i class="fa-solid fa-link"></i>{{this.mentions}}</span>{{/if}}
                                 <span class="mej-cc-index-type">{{this.typeLabel}}</span>
                                 {{#if this.campaign}}<span class="mej-cc-row-campaign">{{this.campaign}}</span>{{/if}}
+                                {{#if @root.isGM}}
+                                <button type="button" class="mej-cc-row-hide" data-action="toggleEntryHidden"
+                                        {{#if this.hidden}}data-tooltip="{{localize 'MEJCampaignCompanion.hub.reveal'}}"{{else}}data-tooltip="{{localize 'MEJCampaignCompanion.hub.hide'}}"{{/if}}>
+                                    <i class="fa-solid {{#if this.hidden}}fa-eye-slash{{else}}fa-eye{{/if}}"></i>
+                                </button>
+                                {{/if}}
                             </li>
                             {{else}}
                             <li class="instruction">{{localize 'MEJCampaignCompanion.hub.noEntries'}}</li>

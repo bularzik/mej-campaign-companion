@@ -14,10 +14,10 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, I18N, guideUrl } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
-import { getCampaigns, campaignEntries, unfiledEntries, createCampaign } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline } from "../logic/campaigns.mjs";
+import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden } from "../data/campaign-store.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -100,7 +100,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       editGroup: CampaignHubPage.onEditGroup,
       deleteGroup: CampaignHubPage.onDeleteGroup,
       newCampaign: CampaignHubPage.onNewCampaign,
-      searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns
+      searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
+      editCampaign: CampaignHubPage.onEditCampaign,
+      toggleEntryHidden: CampaignHubPage.onToggleEntryHidden
     }
   };
 
@@ -261,7 +263,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (unfiledEntries({ user: game.user }).length) {
       options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
     }
-    return { hasCampaigns: campaigns.length > 0, options };
+    return { hasCampaigns: campaigns.length > 0, options, isCampaignScope: !!current && current !== "unfiled" };
   }
 
   #indexContext() {
@@ -275,6 +277,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     for (const row of rows) {
       row.mentions = mentionCounts.get(row.uuid) ?? 0;
       if (badge) row.campaign = campaignNames.get(row.uuid);
+    }
+    const byUuid = new Map(entries.map((e) => [e.uuid, e]));
+    for (const row of rows) {
+      row.hidden = (byUuid.get(row.uuid)?.ownership?.default ?? null) === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
     }
     const allTypes = [...new Set(source.map((r) => r.type))].sort((a, b) => this.#typeLabel(a).localeCompare(this.#typeLabel(b)));
     return {
@@ -738,6 +744,53 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
       this.render({ parts: ["main"] });
     }
+  }
+
+  /**
+   * GM-only "Campaign settings" entry point (spec §5): edit the campaign's
+   * ownership baseline, optionally bulk-applying it to every current member
+   * right away. Renaming a campaign is renaming the folder - Foundry's
+   * native folder UI covers it, so there's no name field here.
+   */
+  static async onEditCampaign() {
+    const { campaign } = this.#scope();
+    if (!campaign || !game.user.isGM) return;
+    const esc = foundry.utils.escapeHTML;
+    const currentKey = campaignFlagOf(campaign)?.ownershipDefault ?? "observer";
+    const options = ["none", "observer", "owner"].map((k) =>
+      `<option value="${k}" ${k === currentKey ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const content = `
+      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
+        <select name="baseline">${options}</select></div>
+      <div class="form-group"><label><input type="checkbox" name="applyNow" checked>
+        ${esc(game.i18n.localize(`${I18N}.hub.applyBaselineNow`))}</label></div>`;
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: { title: campaign.name },
+      content,
+      ok: { callback: (event, button) => ({
+        baseline: button.form.elements.baseline.value,
+        applyNow: button.form.elements.applyNow.checked
+      }) },
+      rejectClose: false
+    });
+    if (!result) return;
+    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ownershipDefault: result.baseline });
+    if (result.applyNow) {
+      const n = await applyBaselineToMembers(campaign);
+      ui.notifications.info(game.i18n.format(`${I18N}.hub.baselineApplied`, { count: n }));
+    }
+    this.render({ parts: ["main"] });
+  }
+
+  /** GM-only hide/reveal toggle (spec §5) on an index row: NONE <-> the entry's campaign baseline. */
+  static async onToggleEntryHidden(event, target) {
+    if (!game.user.isGM) return;
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    const entry = uuid ? await fromUuid(uuid) : null;
+    if (!entry) return;
+    const isHidden = (entry.ownership?.default ?? null) === CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    await setEntryHidden(entry, !isHidden);
+    this.render({ parts: ["main"] });
   }
 
   // Search-tab spillover affordance (spec §2): clears the campaign scope so
