@@ -17,7 +17,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, I18N, guideUrl } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign } from "../data/campaign-store.mjs";
-import { campaignOf, isCampaignFolder } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -28,7 +28,7 @@ import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchAll, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
+import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
@@ -99,7 +99,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       addGroup: CampaignHubPage.onAddGroup,
       editGroup: CampaignHubPage.onEditGroup,
       deleteGroup: CampaignHubPage.onDeleteGroup,
-      newCampaign: CampaignHubPage.onNewCampaign
+      newCampaign: CampaignHubPage.onNewCampaign,
+      searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns
     }
   };
 
@@ -282,7 +283,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // (testUserPermission LIMITED on the resolved entry) - this just shapes
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
-    const results = searchAll(this.state.searchQuery).map((hit) => ({
+    const scopeId = this.state.campaignId || null;
+    const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
+    const results = hits.map((hit) => ({
       uuid: hit.uuid,
       name: hit.name,
       icon: this.#typeIcon(hit.type),
@@ -292,7 +295,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return {
       query: this.state.searchQuery,
       hasQuery: this.state.searchQuery.trim().length > 0,
-      results
+      results,
+      spillover
     };
   }
 
@@ -335,11 +339,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // flag. A stored query that no longer parses (e.g. after a tag rename)
   // renders as an error row via the catch below, rather than crashing the
   // whole Hub render (spec §6).
+  /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
+  #scopeFilterRows(rows) {
+    const id = this.state.campaignId;
+    if (!id) return rows;
+    return rows.filter((r) => {
+      const entry = fromUuidSync(r.uuid);
+      const cid = campaignIdOf(entry);
+      return id === "unfiled" ? cid === null : cid === id;
+    });
+  }
+
   #dashboardsContext(isGM) {
     const saved = game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [];
     const rows = saved.filter((q) => isGM || q.showPlayers === true).map((q) => {
       try {
-        const results = runQueryAll(q.query).map((hit) => ({
+        const results = this.#scopeFilterRows(runQueryAll(q.query)).map((hit) => ({
           uuid: hit.uuid, name: hit.name,
           icon: this.#typeIcon(hit.type), typeLabel: this.#typeLabel(hit.type)
         }));
@@ -373,7 +388,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     // 2. Session checklist items + 3. hidden/secret relationships - walk
     // MEJ pages once (single-page convention, same as graph-app's graphRows()).
-    for (const entry of game.journal?.contents ?? []) {
+    // Scoped to the Hub's campaign picker (spec §2) so the tracker only
+    // shows the current scope's entries.
+    for (const entry of this.#scopedEntries()) {
       for (const page of entry.pages?.contents ?? []) {
         const type = mejType(page);
         if (!type) continue;
@@ -696,6 +713,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
       this.render({ parts: ["main"] });
     }
+  }
+
+  // Search-tab spillover affordance (spec §2): clears the campaign scope so
+  // a query's out-of-scope matches (searchScoped's spillover count) become
+  // visible too. Available to any seat - search scoping applies to
+  // players and GMs alike.
+  static async onSearchAllCampaigns() {
+    this.state.campaignId = "";
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, "");
+    this.render({ parts: ["main"] });
   }
 
   // GM-only "Import Document" entry point (Task 11) - lives on the Index

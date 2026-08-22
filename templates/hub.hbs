@@ -173,6 +173,11 @@
                             </li>
                             {{/each}}
                         </ol>
+                        {{#if search.spillover}}
+                        <button type="button" class="mej-cc-search-spillover" data-action="searchAllCampaigns">
+                            {{localize "MEJCampaignCompanion.hub.search.spillover" count=search.spillover}}
+                        </button>
+                        {{/if}}
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.dashboards.active}} active{{/if}}" data-group="primary" data-tab="dashboards">
