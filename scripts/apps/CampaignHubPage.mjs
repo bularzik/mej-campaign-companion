@@ -397,8 +397,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   async #secretsContext() {
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     const rows = [];
+    // Campaign scoping (spec §2): every row kind the tracker emits is
+    // bounded by the Hub's campaign picker, so compute the scope once and
+    // share it between the block-secrets pass and the page walk below.
+    const scopedEntries = this.#scopedEntries();
+    const scopedUuids = new Set(scopedEntries.map((e) => e.uuid));
     // 1. Block secrets, via the index (spec §9).
     for (const rec of gmSecretRecords()) {
+      if (!scopedUuids.has(rec.uuid)) continue;
       const entry = fromUuidSync(rec.uuid);
       const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
       for (const s of rec.secrets) {
@@ -409,7 +415,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // MEJ pages once (single-page convention, same as graph-app's graphRows()).
     // Scoped to the Hub's campaign picker (spec §2) so the tracker only
     // shows the current scope's entries.
-    for (const entry of this.#scopedEntries()) {
+    for (const entry of scopedEntries) {
       for (const page of entry.pages?.contents ?? []) {
         const type = mejType(page);
         if (!type) continue;
