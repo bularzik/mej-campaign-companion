@@ -119,7 +119,8 @@
   top: 100%;
   left: 0;
   z-index: 10;
-  background: var(--color-form-background, #fff);
+  background: #fff;
+  color: var(--color-text-dark-primary, #191813);
   border: 1px solid var(--color-border-light-tertiary, #999);
   border-radius: 4px;
   padding: 0.4em;
@@ -762,7 +763,7 @@
   fill: var(--color-text-primary, #191813);
   pointer-events: none;
   paint-order: stroke;
-  stroke: var(--color-cool-5, #fff);
+  stroke: #fff;
   stroke-width: 3px;
 }
 
@@ -776,7 +777,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-rel-audience-secret { position: relative; }
 .mej-cc-rel-audience-secret::after {
   content: "S"; position: absolute; bottom: -3px; right: -3px; font-size: 8px; font-weight: bold;
-  line-height: 1; padding: 0 2px; border-radius: 50%; background: var(--color-bg, #fff); color: var(--color-text-primary, #191813);
+  line-height: 1; padding: 0 2px; border-radius: 50%; background: #fff; color: var(--color-text-dark-primary, #191813);
 }
 
 /* Secrets tracker pane (Task 10): GM-only Hub tab listing every secret in
@@ -906,3 +907,55 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 /* Retroactive auto-link confirm dialog */
 .mej-cc-retro-link .mej-cc-retro-row { display: block; margin: 2px 0; }
 .mej-cc-retro-link ul { margin: 4px 0 0 0; }
+
+/* Dark theme overrides. Several rules above lean on v11-era variables that
+   Foundry v13/v14 no longer defines (--color-form-background, --color-bg,
+   --color-bg-option, --color-hover-bg), so their light hard-coded fallbacks
+   rendered in BOTH themes — a white dropdown over light themed text in dark
+   mode. The bare .theme-dark descendant selector matches body.theme-dark
+   (the global UI color scheme) as well as .themed.theme-dark on an
+   individually themed ApplicationV2 window, mirroring how core themes its
+   own #context-menu. Surface/border pairs follow core's dark palette
+   (--color-cool-5 surface, --color-cool-4 border). */
+.theme-dark .mej-cc-menu {
+  background: var(--color-cool-5, #0b0a13);
+  color: var(--color-text-primary, var(--color-light-2, #efe6d8));
+  border-color: var(--color-cool-4, #47474f);
+}
+
+.theme-dark .mej-cc-index-row:hover,
+.theme-dark .mej-cc-search-row:hover,
+.theme-dark .mej-cc-backlink-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.theme-dark .mej-cc-link-chip,
+.theme-dark .mej-cc-tag-chip,
+.theme-dark .mej-cc-mention-badge {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .mej-cc-import-wizard-app .mej-cc-import-sections thead th {
+  background-color: var(--color-cool-5, #0b0a13);
+}
+
+/* The graph draws on the window's dark surface in dark mode; the legacy
+   border/text vars it uses (--color-border-dark-secondary #23221d,
+   --color-text-dark-secondary #4b4a44) are static near-black values that
+   vanish there. Node text keeps its themed fill and flips its halo to the
+   dark surface color instead of white. */
+.theme-dark .mej-cc-graph-edge {
+  stroke: var(--color-light-5, #9f8475);
+}
+
+.theme-dark .mej-cc-graph-edge-label {
+  fill: var(--color-light-4, #d0b8a3);
+}
+
+.theme-dark .mej-cc-graph-node circle {
+  stroke: var(--color-light-4, #d0b8a3);
+}
+
+.theme-dark .mej-cc-graph-node text {
+  stroke: var(--color-cool-5, #0b0a13);
+}
