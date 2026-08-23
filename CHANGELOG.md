@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 (2026-08-23)
+
+- New: **Hub header bar.** The campaign picker, New Session, and a Tools
+  menu (Import, Export, Auto-capture target, User Guide) now live above
+  the Hub's tabs instead of being buried on the Index toolbar. Creating
+  a campaign moved into the picker itself ("➕ New Campaign…"); the gear
+  beside the picker remains the home for campaign settings. The Index
+  toolbar keeps only its own controls (type filter, sort, name filter,
+  "File all shown…").
+- Changed: the **Relationship Graph is now a Hub tab** (between Timeline
+  and Search) and follows the campaign picker — a campaign scope shows
+  only that campaign's members, All shows the whole world, Unfiled shows
+  loose entries. The standalone graph window is retired; an entity's
+  graph header button opens the Hub on the Graph tab, centered on that
+  entity in its campaign.
+- Fixed: opening the graph from an entity now reliably lands on the
+  Graph tab in both hosting modes (shell tab and standalone window).
+
 ## 0.8.0 (2026-08-23)
 
 - Changed: docx import now **suggests Session** for session-shaped sections
