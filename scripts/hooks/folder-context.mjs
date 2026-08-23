@@ -1,13 +1,10 @@
-// "Open Campaign Hub" on campaign folders (spec C §2). Two hook names,
-// one handler: Foundry v13/v14's core JournalDirectory fires the
-// class-suffixed "getFolderContextOptions{Class}" chain
-// (ApplicationV2.#callHooks appends "{}" when parentClassHooks is true -
-// verified against client/applications/api/application.mjs and
-// client/applications/sidebar/document-directory.mjs), while MEJ's shell
-// sidebar recreates the menu with hookName "getFolderContextOptions" and
-// parentClassHooks: false, which fires the BARE name once
-// (enhanced-journal.js's activateListeners). Registering both covers both
-// surfaces; they never fire for the same menu instance.
+// "Open Campaign Hub" on campaign folders (spec C §2). One bare hook covers
+// both surfaces: Foundry's core JournalDirectory and MEJ's shell sidebar both
+// register their folder context menus with hookName "getFolderContextOptions"
+// and parentClassHooks: false (verified against
+// client/applications/sidebar/document-directory.mjs and MEJ
+// enhanced-journal.js ~1826-1830), so both fire the same bare hook once.
+// The idempotent addOption guard below handles any edge cases.
 import { MODULE_ID, I18N, HUB_CAMPAIGN_SCOPE_SETTING } from "../constants.mjs";
 import { isCampaignFolder } from "../logic/campaigns.mjs";
 
@@ -40,5 +37,4 @@ function addOption(options) {
 
 export function registerFolderContext() {
   Hooks.on("getFolderContextOptions", (app, options) => addOption(options));
-  Hooks.on("getFolderContextOptionsJournalDirectory", (app, options) => addOption(options));
 }
