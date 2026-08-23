@@ -200,6 +200,11 @@ export function registerKnowledgePanel() {
   Hooks.on("updateJournalEntryPage", (page, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
   Hooks.on("updateJournalEntry", (entry, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
   Hooks.on("createJournalEntryPage", () => scheduleRefresh());
+  // Pages embedded in JournalEntry.create({pages: [...]}) never fire
+  // createJournalEntryPage - and that shape IS every real creation path here
+  // (MEJ's New Entry dialog, auto-capture, the import wizard). Same Foundry
+  // behavior live-index.mjs's initSearchHooks documents and works around.
+  Hooks.on("createJournalEntry", () => scheduleRefresh());
   Hooks.on("deleteJournalEntryPage", () => scheduleRefresh());
   Hooks.on("deleteJournalEntry", () => scheduleRefresh());
 }
