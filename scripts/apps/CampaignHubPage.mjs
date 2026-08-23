@@ -934,7 +934,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!campaigns.length) return null;
     if (campaigns.length === 1 && !alwaysPrompt) return campaigns[0];
     const esc = foundry.utils.escapeHTML;
-    const options = campaigns.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    // Pre-select the Hub's currently scoped campaign (the client setting the
+    // picker persists) - the GM prompted while working inside a campaign
+    // almost always means THAT campaign; falls back to first-in-list when the
+    // scope is All/Unfiled or stale.
+    const active = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
+    const preselect = campaigns.some((c) => c.id === active) ? active : campaigns[0].id;
+    const options = campaigns.map((c) =>
+      `<option value="${c.id}"${c.id === preselect ? " selected" : ""}>${esc(c.name)}</option>`).join("");
     const result = await foundry.applications.api.DialogV2.prompt({
       window: { title },
       content: `<div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.scope.label`))}</label><select name="campaign">${options}</select></div>`,

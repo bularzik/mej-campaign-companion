@@ -13,8 +13,10 @@
 // HandlebarsApplicationMixin(ApplicationV2) - no AppV1-\>AppV2 migration was
 // needed here; this class is a straight structural port of that one.
 import {
-  MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING
+  MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
+  HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
+import { campaignOfFolder, destinationFolderOptions, resolveDestinationId } from "../logic/campaigns.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -150,7 +152,11 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   #typeOptions(selected) {
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     const options = [
-      { value: "text", label: game.i18n.localize(`${I18N}.import.typeText`) },
+      // The "text" plan-row value survives from campaign-record's pseudo-type,
+      // but rows so typed are created as MEJ "Text and Image" (journalentry)
+      // entries (see #createPage) - label them with MEJ's own name for that
+      // type so the select matches what actually gets created.
+      { value: "text", label: game.i18n.localize(labels.journalentry ?? `${I18N}.import.typeText`) },
       ...COMPANION_IMPORT_TYPES.map((t) => ({
         value: t,
         label: t === "session"
@@ -163,21 +169,25 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Campaign destination `<select>` options: every campaign folder plus a
-   * trailing "New Campaign…" (`__new`) sentinel. `selectedId` is
-   * `this.state.destination`, which starts out null (no explicit GM choice
-   * yet); when null, or when it names a campaign that's since disappeared,
-   * this falls back to the first option (the alphabetically-first campaign,
-   * or `__new` when there are none) - the same choice a plain unselected
-   * `<select>` would default to, kept explicit here so every re-render
-   * reproduces it identically instead of leaving it to DOM order.
+   * Destination `<select>` options: every campaign folder AND its descendant
+   * subfolders (indented per depth via non-breaking spaces - the template
+   * escapes labels, so markup indentation isn't an option), plus a trailing
+   * "New Campaign…" (`__new`) sentinel. `selectedId` is `this.state.
+   * destination`, which starts out null (no explicit GM choice yet); when
+   * null, or when it names a folder that's since disappeared, this falls
+   * back to the Hub's currently scoped campaign (the same client setting the
+   * Hub picker persists) and only then to the first option - so an import
+   * started while working in a campaign defaults into that campaign.
    */
   #destinationOptions(selectedId) {
+    const folders = game.folders.filter((f) => f.type === "JournalEntry");
+    const rows = destinationFolderOptions(getCampaigns(), folders);
     const options = [
-      ...getCampaigns().map((c) => ({ value: c.id, label: c.name })),
+      ...rows.map((r) => ({ value: r.id, label: `${"\u00A0\u00A0\u00A0".repeat(r.depth)}${r.name}` })),
       { value: "__new", label: game.i18n.localize(`${I18N}.import.destinationNew`) }
     ];
-    const resolved = options.some((o) => o.value === selectedId) ? selectedId : options[0]?.value ?? "__new";
+    const active = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
+    const resolved = resolveDestinationId(options.map((o) => o.value), selectedId, active) ?? "__new";
     return options.map((o) => ({ ...o, selected: o.value === resolved }));
   }
 
@@ -280,11 +290,11 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     return v === "players" || v === "gm" ? v : "default";
   }
 
-  /** { campaignId: string|"__new", subfolder: boolean } */
+  /** { folderId: string|"__new", subfolder: boolean } - folderId may be a campaign folder or a subfolder inside one. */
   #formDestination() {
     const form = this.element.querySelector("form.mej-cc-import-review");
     return {
-      campaignId: form?.elements.destination?.value ?? "__new",
+      folderId: form?.elements.destination?.value ?? "__new",
       subfolder: form?.elements.subfolder?.checked !== false
     };
   }
@@ -395,8 +405,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * wizard's OWN plan-row type ("text"/"session"/every COMPANION_IMPORT_TYPES
    * entry - see doc-import.mjs), not a Foundry document type - do not
    * confuse it with the `type:` field written into the pages[] array below.
-   * "text" is a plain, unflagged text page (no monks-enhanced-journal
-   * typing at all - same duality as campaign-record's "text" pseudo-type).
+   * "text" rows are created as MEJ "Text and Image" (journalentry) entries
+   * via createMejEntry - NOT as plain unflagged text pages, which
+   * campaign-record's "text" pseudo-type produced here originally: an
+   * unflagged page is invisible to the Hub index, search, auto-link, and
+   * export (the orphaned-prose defect the campaign-container spec's
+   * Provenance section records), and it opens outside the MEJ shell.
    * "session" is the companion's own JournalEntryPage subtype - the actual
    * page payload shape (native SESSION_DOCUMENT_TYPE, session flags, AND the
    * MEJ interop flag search/Hub/auto-link need to see it) is owned by
@@ -414,7 +428,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   async #createPage(page, campaignDate, ownership, folderId) {
     // JournalEntry.create() returns the created document directly (not an
     // array) for a single plain-object `data` argument - an array result
-    // only happens when `data` itself is an array. Both branches below
+    // only happens when `data` itself is an array. The "session" branch below
     // destructured it as `const [entry] = await JournalEntry.create({...})`,
     // which tried to iterate the returned Document; confirmed live via
     // Task 14's e2e suite this threw "TypeError: (intermediate value) is
@@ -423,13 +437,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // results.failed instead of actually creating anything) - the same bug
     // class already found and fixed in data/mej-entry.mjs's createMejEntry.
     if (page.type === "text") {
-      const entry = await JournalEntry.create({
-        name: page.name,
-        ...(ownership ? { ownership } : {}),
-        ...(folderId ? { folder: folderId } : {}),
-        pages: [{ name: page.name, type: "text", text: { content: page.html } }]
-      });
-      return entry.pages.contents[0];
+      return createMejEntry("journalentry", page.name, page.html, {}, ownership, folderId);
     }
     if (page.type === "session") {
       const entry = await JournalEntry.create({
@@ -505,14 +513,22 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     let campaign, targetFolderId;
     try {
       const dest = this.#formDestination();
-      campaign = dest.campaignId !== "__new" ? game.folders.get(dest.campaignId) ?? null : null;
+      // The chosen option may be a campaign folder or a subfolder inside one
+      // (see #destinationOptions); the governing campaign - which decides the
+      // timeline journal and the "Campaign default" audience baseline below -
+      // is the nearest flagged ancestor. A stale/non-campaign pick (folder
+      // deleted or re-parented mid-wizard) degrades to the "__new" path
+      // rather than filing entries outside any campaign.
+      let chosen = dest.folderId !== "__new" ? game.folders.get(dest.folderId) ?? null : null;
+      campaign = campaignOfFolder(chosen);
       if (!campaign) {
+        chosen = null;
         campaign = await createCampaign(this.state.docTitle || game.i18n.localize(`${I18N}.import.title`));
       }
       if (!campaign) throw new Error("createCampaign returned null (not GM?)");
-      targetFolderId = campaign.id;
+      targetFolderId = chosen?.id ?? campaign.id;
       if (dest.subfolder) {
-        const sub = await Folder.create({ name: this.state.docTitle || campaign.name, type: "JournalEntry", folder: campaign.id });
+        const sub = await Folder.create({ name: this.state.docTitle || campaign.name, type: "JournalEntry", folder: targetFolderId });
         targetFolderId = sub.id;
       }
     } catch (error) {

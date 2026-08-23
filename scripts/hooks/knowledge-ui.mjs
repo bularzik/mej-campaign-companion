@@ -26,9 +26,46 @@ function mejPageOf(sheet) {
   return mejType(doc) ? doc : null;
 }
 
+// --- Live "Mentioned in" refresh -------------------------------------------
+// injectPanel builds the backlink list once per render, so a panel already on
+// screen goes stale when a mention is added or removed on some OTHER entry -
+// exactly the auto-link case: typing "met Elara at the docks" into a session
+// page updates Elara's row in the backlink index (live-index.mjs's own page
+// hooks) but not her already-open sheet. Track every injected panel and
+// re-inject when journal content that can carry @UUID refs changes. The
+// debounce both coalesces multi-page bursts (imports, retro-link passes)
+// into one pass and guarantees the pass runs after live-index's handlers for
+// the same hooks, regardless of Hooks registration order.
+const trackedPanels = new Set();
+
+function trackPanel(sheet, element, shellHosted) {
+  for (const item of trackedPanels) {
+    if (item.element.deref() === element) trackedPanels.delete(item);
+  }
+  trackedPanels.add({ sheet: new WeakRef(sheet), element: new WeakRef(element), shellHosted });
+}
+
+function refreshTrackedPanels() {
+  for (const item of [...trackedPanels]) {
+    const sheet = item.sheet.deref();
+    const element = item.element.deref();
+    if (!sheet || !element?.isConnected) {
+      trackedPanels.delete(item);
+      continue;
+    }
+    // Never yank the DOM out from under a panel the user is typing in (tag
+    // input, attribute fields) - the next natural render catches it up.
+    const panel = element.querySelector(":scope .mej-cc-knowledge");
+    if (panel && panel.contains(document.activeElement)) continue;
+    injectPanel(sheet, element, { shellHosted: item.shellHosted })
+      .catch((err) => console.error(`${MODULE_ID} | knowledge panel refresh failed`, err));
+  }
+}
+
 async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   const page = mejPageOf(sheet);
   if (!page || !element) return;
+  trackPanel(sheet, element, shellHosted);
   element.querySelector(":scope .mej-cc-knowledge")?.remove();
 
   const entryUuid = page.parent?.uuid ?? page.uuid;
@@ -151,4 +188,18 @@ export function registerKnowledgePanel() {
   Hooks.on("renderEnhancedJournalSheet", (sheet, html) => {
     injectPanel(sheet, asElement(html), { shellHosted: false }).catch((err) => console.error(`${MODULE_ID} | knowledge panel injection failed`, err));
   });
+
+  // Live "Mentioned in" refresh (see trackedPanels above). The update filter
+  // mirrors what can actually move a backlink row: page text (new/removed
+  // @UUID refs - the auto-link path lands here), names (row labels), and
+  // ownership (row visibility). Creates/deletes always refresh - a deleted
+  // source drops its mentions, a created page may carry import-time links.
+  const scheduleRefresh = foundry.utils.debounce(refreshTrackedPanels, 250);
+  const relevantChange = (changes) =>
+    changes?.text?.content !== undefined || changes?.name !== undefined || changes?.ownership !== undefined;
+  Hooks.on("updateJournalEntryPage", (page, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
+  Hooks.on("updateJournalEntry", (entry, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
+  Hooks.on("createJournalEntryPage", () => scheduleRefresh());
+  Hooks.on("deleteJournalEntryPage", () => scheduleRefresh());
+  Hooks.on("deleteJournalEntry", () => scheduleRefresh());
 }

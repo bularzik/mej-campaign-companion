@@ -185,11 +185,22 @@ test.describe("05 docx import", () => {
           return Array.isArray(tps) && tps.some((t) => t.label?.startsWith("Session Zero"));
         });
       const timepoints = timeline?.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
+      // "Introduction" is a plain prose section (suggestType defaults it to
+      // the "text" plan-row type) - since the import-followups change, text
+      // rows are created as MEJ "Text and Image" (journalentry) entries, not
+      // unflagged text pages, so they're indexed/searchable/linkable.
+      const intro = game.journal.find((j) =>
+        j.name === "Introduction" &&
+        (campaignFolderIds.includes(j.folder?.id) || campaignFolderIds.includes(j.folder?.folder?.id)));
+      const introPage = intro?.pages?.contents?.[0];
       return {
         importedCount: game.journal.filter((j) => /^(Introduction|Session Zero|Arc \d)/.test(j.name ?? "")).length,
         sessionZeroFound: !!sessionZero,
         sessionZeroSourceType: sessionPage?._source?.type,
         sessionZeroFlagType: sessionPage?.getFlag("monks-enhanced-journal", "type"),
+        introFound: !!intro,
+        introNativeType: introPage?._source?.type,
+        introFlagType: introPage?.getFlag("monks-enhanced-journal", "type"),
         timepointCount: timepoints.length,
         timepointLabels: timepoints.map((t) => t.label)
       };
@@ -200,6 +211,11 @@ test.describe("05 docx import", () => {
     // native type and the bare MEJ interop flag (session-page-data.mjs).
     expect(summary.sessionZeroSourceType).toBe("mej-campaign-companion.session");
     expect(summary.sessionZeroFlagType).toBe("session");
+    // Text rows land as MEJ "Text and Image" entries (native text page +
+    // journalentry MEJ flag - the same shape createMejEntry stamps).
+    expect(summary.introFound).toBe(true);
+    expect(summary.introNativeType).toBe("text");
+    expect(summary.introFlagType).toBe("journalentry");
     expect(summary.timepointCount).toBeGreaterThan(5);
     expect(summary.timepointLabels.some((l) => l.startsWith("Session Zero"))).toBe(true);
 
