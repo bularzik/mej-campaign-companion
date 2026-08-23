@@ -1,0 +1,34 @@
+<div class="mej-cc-hub-header">
+    <select name="campaign-scope" class="mej-cc-campaign-scope" aria-label="{{localize 'MEJCampaignCompanion.hub.scope.label'}}">
+        {{#each header.scopeOptions}}
+        <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+        {{/each}}
+    </select>
+    {{#if header.isCampaignScope}}{{#if isGM}}
+    <button type="button" class="mej-cc-edit-campaign" data-action="editCampaign"
+            data-tooltip="{{localize 'MEJCampaignCompanion.hub.editCampaign'}}">
+        <i class="fa-solid fa-gear"></i>
+    </button>
+    {{/if}}{{/if}}
+    {{#if isGM}}
+    <button type="button" class="mej-cc-new-session" data-action="newSession">
+        <i class="fa-solid fa-dice-d20"></i> {{localize 'MEJCampaignCompanion.hub.newSession'}}
+    </button>
+    {{/if}}
+    <div class="mej-cc-tools">
+        <button type="button" class="mej-cc-tools-summary" data-action="toggleToolsMenu"
+                aria-haspopup="true" aria-expanded="{{#if header.toolsMenuOpen}}true{{else}}false{{/if}}">
+            <i class="fa-solid fa-ellipsis"></i> {{localize 'MEJCampaignCompanion.hub.tools'}}
+        </button>
+        {{#if header.toolsMenuOpen}}
+        <div class="mej-cc-tools-menu mej-cc-menu">
+            {{#if isGM}}
+            <button type="button" data-action="openImportWizard"><i class="fa-solid fa-file-import"></i> {{localize 'MEJCampaignCompanion.import.button'}}</button>
+            <button type="button" data-action="openExportDialog"><i class="fa-solid fa-file-export"></i> {{localize 'MEJCampaignCompanion.export.button'}}</button>
+            <button type="button" data-action="setCaptureCampaign"><i class="fa-solid fa-crosshairs"></i> {{localize 'MEJCampaignCompanion.hub.captureTarget'}}</button>
+            {{/if}}
+            <button type="button" data-action="openHelp"><i class="fa-solid fa-circle-question"></i> {{localize 'MEJCampaignCompanion.help.open'}}</button>
+        </div>
+        {{/if}}
+    </div>
+</div>

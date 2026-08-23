@@ -10,6 +10,10 @@ import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, heal
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 
 Hooks.once("init", () => {
+  foundry.applications.handlebars.loadTemplates([
+    `modules/${MODULE_ID}/templates/hub-header.hbs`
+  ]);
+
   game.settings.register(MODULE_ID, TIMELINE_JOURNAL_SETTING, {
     scope: "world",
     config: false,

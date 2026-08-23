@@ -54,6 +54,33 @@
   overflow: hidden;
 }
 
+/* Hub header */
+.mej-cc-hub-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-border-light-tertiary, #7a7971);
+}
+
+.mej-cc-hub-header .mej-cc-tools {
+  margin-left: auto;
+  position: relative;
+}
+
+.mej-cc-hub-header .mej-cc-tools-menu {
+  right: 0;
+  left: auto;
+}
+
+.mej-cc-tools-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+
 /* Index pane */
 .mej-cc-index {
   gap: 0.5em;

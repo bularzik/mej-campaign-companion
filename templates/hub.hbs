@@ -1,6 +1,7 @@
 <div class="mej-cc-hub">
     <div class="flexcol journal-subsheet" editable="{{editable}}">
         <div class="sheet-container mej-cc-hub-container flexcol">
+            {{> "modules/mej-campaign-companion/templates/hub-header.hbs"}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
@@ -13,23 +14,6 @@
                         </div>
                         {{/if}}
                         <div class="mej-cc-index-controls">
-                            <select name="campaign-scope" class="mej-cc-campaign-scope" aria-label="{{localize 'MEJCampaignCompanion.hub.scope.label'}}">
-                                {{#each index.campaignScope.options}}
-                                <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
-                                {{/each}}
-                            </select>
-                            {{#if index.campaignScope.isCampaignScope}}{{#if isGM}}
-                            <button type="button" class="mej-cc-edit-campaign" data-action="editCampaign"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.editCampaign'}}">
-                                <i class="fa-solid fa-gear"></i>
-                            </button>
-                            {{/if}}{{/if}}
-                            {{#if isGM}}
-                            <button type="button" class="mej-cc-new-campaign" data-action="newCampaign"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.newCampaign'}}">
-                                <i class="fa-solid fa-folder-plus"></i>
-                            </button>
-                            {{/if}}
                             <div class="mej-cc-doctype-filter">
                                 <button type="button" class="mej-cc-doctype-summary" data-action="toggleTypeMenu"
                                         aria-haspopup="true" aria-expanded="{{#if index.typeMenuOpen}}true{{else}}false{{/if}}"
@@ -70,32 +54,12 @@
                             {{#if index.query}}
                             <span class="mej-cc-filtered-count">{{localize "MEJCampaignCompanion.hub.filteredCount" shown=index.rows.length total=index.total}}</span>
                             {{/if}}
-                            <button type="button" class="mej-cc-graph-open" data-action="openGraph"
-                                    title="{{localize 'MEJCampaignCompanion.graph.open'}}"><i class="fa-solid fa-circle-nodes"></i></button>
-                            <button type="button" class="mej-cc-help-open" data-action="openHelp"
-                                    title="{{localize 'MEJCampaignCompanion.help.open'}}"><i class="fa-solid fa-circle-question"></i></button>
                             {{#if isGM}}
-                            <button type="button" class="mej-cc-new-session" data-action="newSession"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.newSession'}}">
-                                <i class="fa-solid fa-dice-d20"></i> {{localize 'MEJCampaignCompanion.hub.newSession'}}
-                            </button>
-                            <button type="button" class="mej-cc-capture-target" data-action="setCaptureCampaign"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.captureTarget'}}">
-                                <i class="fa-solid fa-crosshairs"></i>
-                            </button>
                             {{#if index.isUnfiledScope}}
                             <button type="button" class="mej-cc-file-all" data-action="fileAllShown">
                                 <i class="fa-solid fa-folder-open"></i> {{localize "MEJCampaignCompanion.hub.fileAllShown"}}
                             </button>
                             {{/if}}
-                            <button type="button" class="mej-cc-import-open" data-action="openImportWizard"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.import.title'}}">
-                                <i class="fa-solid fa-file-import"></i> {{localize 'MEJCampaignCompanion.import.button'}}
-                            </button>
-                            <button type="button" class="mej-cc-export-open" data-action="openExportDialog"
-                                    data-tooltip="{{localize 'MEJCampaignCompanion.export.title'}}">
-                                <i class="fa-solid fa-file-export"></i> {{localize 'MEJCampaignCompanion.export.button'}}
-                            </button>
                             {{/if}}
                         </div>
                         <ol class="mej-cc-index-list item-list scrollable">

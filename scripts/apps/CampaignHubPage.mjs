@@ -59,6 +59,7 @@ const HUB_STATE = {
   sort: "name",
   typeMenuOpen: false,
   sortMenuOpen: false,
+  toolsMenuOpen: false,
   timelineOrder: "manual",
   restoreIndexFilterFocus: false,
   searchQuery: "",
@@ -79,6 +80,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openIndexRow: CampaignHubPage.onOpenIndexRow,
       toggleTypeMenu: CampaignHubPage.onToggleTypeMenu,
       toggleSortMenu: CampaignHubPage.onToggleSortMenu,
+      toggleToolsMenu: CampaignHubPage.onToggleToolsMenu,
       setTimelineOrder: CampaignHubPage.onSetTimelineOrder,
       addTimepoint: CampaignHubPage.onAddTimepoint,
       renameTimepoint: CampaignHubPage.onRenameTimepoint,
@@ -99,7 +101,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       addGroup: CampaignHubPage.onAddGroup,
       editGroup: CampaignHubPage.onEditGroup,
       deleteGroup: CampaignHubPage.onDeleteGroup,
-      newCampaign: CampaignHubPage.onNewCampaign,
       searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
       editCampaign: CampaignHubPage.onEditCampaign,
       toggleEntryHidden: CampaignHubPage.onToggleEntryHidden,
@@ -214,6 +215,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
       context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
     }
+    const scopeContext = this.#campaignScopeContext();
+    context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.index = this.#indexContext();
     context.timeline = { stacks };
     context.search = this.#searchContext();
@@ -285,6 +288,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (unfiledEntries({ user: game.user }).length) {
       options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
     }
+    if (game.user.isGM) {
+      options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
+    }
     return { hasCampaigns: campaigns.length > 0, options, isCampaignScope: !!current && current !== "unfiled" };
   }
 
@@ -313,7 +319,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
       sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`)),
-      campaignScope: this.#campaignScopeContext(),
       isUnfiledScope: unfiled
     };
   }
@@ -1015,6 +1020,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
+  static onToggleToolsMenu() {
+    this.state.toolsMenuOpen = !this.state.toolsMenuOpen;
+    this.state.typeMenuOpen = false;
+    this.state.sortMenuOpen = false;
+    this.render({ parts: ["main"] });
+  }
+
   static async onSetTimelineOrder(event, target) {
     const order = target.dataset.order;
     if (!["manual", "created", "campaign"].includes(order)) return;
@@ -1280,6 +1292,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (scopeSelect && !scopeSelect.dataset.ccBound) {
       scopeSelect.dataset.ccBound = "1";
       scopeSelect.addEventListener("change", async (event) => {
+        if (event.target.value === "__new") {
+          // Action-as-option: revert the visible selection immediately;
+          // onNewCampaign itself switches scope only after a successful
+          // create, so dialog-cancel leaves the previous scope untouched.
+          event.target.value = this.state.campaignId ?? "";
+          return CampaignHubPage.onNewCampaign.call(this);
+        }
         this.state.campaignId = event.target.value;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
