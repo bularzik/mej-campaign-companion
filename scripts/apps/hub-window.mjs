@@ -83,6 +83,8 @@ let hubWindow = null;
 export async function openHubWindow() {
   if (hubWindow?.rendered) {
     hubWindow.bringToFront();
+    // Re-render so a pendingTab set by showGraphFor() is consumed now, not on some later unrelated render (pendingTab is consumed in _prepareTabs, which only runs during renders).
+    hubWindow.render({ parts: ["main"] });
     return hubWindow;
   }
 
