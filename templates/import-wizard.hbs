@@ -36,6 +36,9 @@
       </select>
       <p class="hint">{{localize "MEJCampaignCompanion.import.audienceHint"}}</p>
     </div>
+    {{#if sessionsDetected}}
+    <p class="hint mej-cc-import-sessions-detected">{{localize "MEJCampaignCompanion.import.sessionsDetected" count=sessionsDetected}}</p>
+    {{/if}}
     {{#if docTitle}}<h3 class="mej-cc-import-doctitle">{{docTitle}}</h3>{{/if}}
     <div class="mej-cc-import-sections-scroll">
     <table class="mej-cc-import-sections">

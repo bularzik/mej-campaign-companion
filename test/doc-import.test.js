@@ -164,9 +164,24 @@ describe("suggestType", () => {
     expect(suggestType(sec({ title: "Checklist" }), KINDS).type).toBe("list");
   });
 
-  it("defaults sessions and unknown titles to text", () => {
-    expect(suggestType(sec({ title: "Arc 1 Session 1 10/26/24", isSession: true }), KINDS).type).toBe("text");
-    expect(suggestType(sec({ title: "Radiant Citadel" }), KINDS).type).toBe("text");
+  it("suggests session for session-shaped sections", () => {
+    expect(suggestType(sec({ title: "Arc 1 Session 1 10/26/24", isSession: true }), KINDS).type).toBe("session");
+    // A session-shaped title never falls into the keyword table.
+    expect(suggestType(sec({ title: "Session 3 - The Quest Begins", isSession: true }), KINDS).type).toBe("session");
+  });
+
+  it("defaults unknown titles to journalentry (Text and Image)", () => {
+    expect(suggestType(sec({ title: "Radiant Citadel" }), KINDS).type).toBe("journalentry");
+  });
+
+  it("a round-trip marker still beats the session shape", () => {
+    const s = sec({ title: "Session 1 1/5/25", isSession: true, html: "<p>Campaign Record type: quest</p><p>body</p>" });
+    expect(suggestType(s, KINDS)).toEqual({ type: "quest", fromMarker: true });
+  });
+
+  it("normalizes a legacy text marker to journalentry", () => {
+    const s = sec({ title: "Untitled", html: "<p>Campaign Record type: text</p><p>body</p>" });
+    expect(suggestType(s, KINDS)).toEqual({ type: "journalentry", fromMarker: true });
   });
 
   it("honors the exporter round-trip marker over keywords", () => {
@@ -197,14 +212,14 @@ describe("buildImportPlan", () => {
 
   it("creates pages, merges, and skips", () => {
     const { pages, warnings } = buildImportPlan(sections, [
-      { title: "Intro", type: "text", timepoint: false },
-      { title: "Session 1", type: "text", timepoint: true },
+      { title: "Intro", type: "journalentry", timepoint: false },
+      { title: "Session 1", type: "journalentry", timepoint: true },
       { title: "Part 2", type: "merge", timepoint: false },
       { title: "Empty", type: "skip", timepoint: false }
     ], KINDS);
     expect(pages).toHaveLength(2);
     expect(pages[1]).toEqual({
-      name: "Session 1", type: "text",
+      name: "Session 1", type: "journalentry",
       html: "<p>x</p>\n<p>more</p>", timepoint: "Session 1"
     });
     expect(warnings).toEqual([]);
@@ -218,6 +233,13 @@ describe("buildImportPlan", () => {
     expect(warnings).toHaveLength(1);
     expect(() => buildImportPlan([sections[0]], [{ title: "x", type: "wizard", timepoint: false }], KINDS))
       .toThrow(/unknown/i);
+  });
+
+  it("normalizes the retired text pseudo-type to journalentry (stale form state)", () => {
+    const { pages } = buildImportPlan([sections[0]], [
+      { title: "Intro", type: "text", timepoint: false }
+    ], KINDS);
+    expect(pages[0].type).toBe("journalentry");
   });
 });
 

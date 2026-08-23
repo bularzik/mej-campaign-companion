@@ -98,9 +98,10 @@ export const guideUrl = (isGM) =>
  * import wizard knows how to create a page for via createMejEntry()
  * (data/mej-entry.mjs), plus "session" (the companion's own JournalEntryPage
  * subtype, created separately - see apps/import-wizard.mjs). The wizard's
- * type dropdown also offers "text" (a plain, unflagged page) and "skip",
- * same as campaign-record - those aren't part of this list because
- * buildImportPlan special-cases them regardless of the recordTypes list.
+ * type dropdown offers these plus "skip" (not part of this list;
+ * buildImportPlan handles it). The old "text" pseudo-type is retired:
+ * legacy markers/rows normalize to "journalentry" (see LEGACY_TYPE_ALIASES
+ * in logic/doc-import.mjs).
  */
 export const COMPANION_IMPORT_TYPES = [
   "person", "place", "quest", "shop", "loot", "encounter",

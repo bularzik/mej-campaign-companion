@@ -211,7 +211,12 @@ const LEGACY_TYPE_ALIASES = {
   pc: "person",
   checklist: "list",
   item: "journalentry",
-  media: "journalentry"
+  media: "journalentry",
+  // campaign-record's "text" pseudo-type (and this module's own, retired
+  // 2026-08-23): a plain-prose page, whose companion equivalent is the MEJ
+  // "Text and Image" (journalentry) entry — 0.7.0 already made the two
+  // create identical documents, which is what makes the alias lossless.
+  text: "journalentry"
 };
 
 function normalizeType(type) {
@@ -224,18 +229,23 @@ function markerType(html) {
   return marker ? marker[1].toLowerCase() : null;
 }
 
-/** Suggest a wizard type for a section: exporter marker > title keywords > text. */
+/** Suggest a wizard type for a section: exporter marker > session shape > title keywords > journalentry. */
 export function suggestType(section, recordTypes) {
   const rawMarker = markerType(section.html);
   const fromMarker = rawMarker ? normalizeType(rawMarker) : null;
   if (fromMarker && recordTypes.includes(fromMarker)) return { type: fromMarker, fromMarker: true };
+  // Session-shaped sections (detectSessionHeader) suggest the session type
+  // itself, not just a pre-checked timepoint — before 2026-08-23 the shape
+  // only skipped the keyword table and fell through to the prose fallback,
+  // so every real session log imported as prose unless retyped by hand.
+  if (section.isSession && recordTypes.includes("session")) return { type: "session", fromMarker: false };
   if (!section.isSession) {
     for (const [re, rawType] of TYPE_KEYWORDS) {
       const type = normalizeType(rawType);
       if (re.test(section.title) && recordTypes.includes(type)) return { type, fromMarker: false };
     }
   }
-  return { type: "text", fromMarker: false };
+  return { type: "journalentry", fromMarker: false };
 }
 
 /** Remove a leading round-trip marker paragraph from section html. */
@@ -247,7 +257,7 @@ export function stripTypeMarker(html) {
 
 /**
  * Turn wizard rows into a creation plan. rows[i] corresponds to sections[i].
- * type: "text" | record kind | "skip" | "merge".
+ * type: record kind | "skip" | "merge" (legacy "text" normalizes to "journalentry").
  */
 export function buildImportPlan(sections, rows, recordTypes) {
   const pages = [];
@@ -269,10 +279,13 @@ export function buildImportPlan(sections, rows, recordTypes) {
       previous.html = [previous.html, html].filter(Boolean).join("\n");
       return;
     }
-    if (row.type !== "text" && !recordTypes.includes(row.type)) {
+    // Normalize before validating: a stale form still posting the retired
+    // "text" pseudo-type (mid-upgrade client) plans as journalentry.
+    const type = normalizeType(row.type);
+    if (!recordTypes.includes(type)) {
       throw new Error(`unknown import type "${row.type}"`);
     }
-    pages.push({ name, type: row.type, html, timepoint: row.timepoint ? name : null });
+    pages.push({ name, type, html, timepoint: row.timepoint ? name : null });
   });
   return { pages, warnings };
 }

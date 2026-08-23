@@ -140,6 +140,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     context.destinationOptions = this.#destinationOptions(this.state.destination);
     context.subfolder = this.state.subfolder;
     context.audienceOptions = this.#audienceOptions(this.state.audience);
+    context.sessionsDetected = this.state.sections.filter((s) => s.isSession).length;
     context.rows = this.state.rows.map((row, index) => ({
       ...row, index,
       canMergeUp: index > 0,
@@ -149,15 +150,19 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     return context;
   }
 
+  // Explicit presentation order (spec A §2): prose first, session next, then
+  // the typed sheets roughly by how often docx sections map to them, Skip
+  // last. Every entry is in COMPANION_IMPORT_TYPES; the retired "text"
+  // pseudo-type is gone — journalentry ("Text and Image") IS the prose type.
+  static #TYPE_ORDER = [
+    "journalentry", "session", "person", "place", "organization", "quest",
+    "encounter", "event", "poi", "shop", "loot", "list"
+  ];
+
   #typeOptions(selected) {
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     const options = [
-      // The "text" plan-row value survives from campaign-record's pseudo-type,
-      // but rows so typed are created as MEJ "Text and Image" (journalentry)
-      // entries (see #createPage) - label them with MEJ's own name for that
-      // type so the select matches what actually gets created.
-      { value: "text", label: game.i18n.localize(labels.journalentry ?? `${I18N}.import.typeText`) },
-      ...COMPANION_IMPORT_TYPES.map((t) => ({
+      ...ImportWizard.#TYPE_ORDER.map((t) => ({
         value: t,
         label: t === "session"
           ? game.i18n.localize(`${I18N}.sheettype.session`)
@@ -402,15 +407,12 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /**
    * Create the document for one plan.pages[] row. `page.type` here is the
-   * wizard's OWN plan-row type ("text"/"session"/every COMPANION_IMPORT_TYPES
+   * wizard's OWN plan-row type ("session"/every COMPANION_IMPORT_TYPES
    * entry - see doc-import.mjs), not a Foundry document type - do not
    * confuse it with the `type:` field written into the pages[] array below.
-   * "text" rows are created as MEJ "Text and Image" (journalentry) entries
-   * via createMejEntry - NOT as plain unflagged text pages, which
-   * campaign-record's "text" pseudo-type produced here originally: an
-   * unflagged page is invisible to the Hub index, search, auto-link, and
-   * export (the orphaned-prose defect the campaign-container spec's
-   * Provenance section records), and it opens outside the MEJ shell.
+   * The retired "text" pseudo-type never reaches here — buildImportPlan
+   * normalizes it to "journalentry" (logic/doc-import.mjs), which the
+   * generic createMejEntry tail below handles.
    * "session" is the companion's own JournalEntryPage subtype - the actual
    * page payload shape (native SESSION_DOCUMENT_TYPE, session flags, AND the
    * MEJ interop flag search/Hub/auto-link need to see it) is owned by
@@ -422,7 +424,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    *
    * `folderId` (the destination resolved in #onCreate - the chosen/created
    * campaign, or a subfolder inside it) is threaded into whichever of the
-   * three JournalEntry.create payloads below actually runs; null/undefined
+   * two JournalEntry.create payloads below actually runs; null/undefined
    * leaves the entry unfiled, same as `ownership`'s null case above it.
    */
   async #createPage(page, campaignDate, ownership, folderId) {
@@ -433,12 +435,9 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // which tried to iterate the returned Document; confirmed live via
     // Task 14's e2e suite this threw "TypeError: (intermediate value) is
     // not iterable" on every real call (caught by #onCreate's per-row
-    // try/catch, so it silently landed every "text"/"session" section in
+    // try/catch, so it silently landed every "session" section in
     // results.failed instead of actually creating anything) - the same bug
     // class already found and fixed in data/mej-entry.mjs's createMejEntry.
-    if (page.type === "text") {
-      return createMejEntry("journalentry", page.name, page.html, {}, ownership, folderId);
-    }
     if (page.type === "session") {
       const entry = await JournalEntry.create({
         name: page.name,
