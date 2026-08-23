@@ -189,6 +189,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // class already uses to drop its own "relationships" tab for non-GMs)
   // removes the tab entry before the tab-navigation partial ever sees it.
   _prepareTabs(group) {
+    // A pending tab (showGraphFor) is consumed pre-render: setting the
+    // group's active tab BEFORE super computes the tab contexts makes the
+    // initial render come up on that tab natively - patching the DOM after
+    // mount via changeTab() proved unreliable in shell-subsheet hosting
+    // (state updated, DOM untouched; see task-5 report addendum).
+    if (group === "primary" && this.state.pendingTab) {
+      this.tabGroups.primary = this.state.pendingTab;
+      this.state.pendingTab = null;
+    }
     const tabs = super._prepareTabs(group);
     if (group === "primary" && !game.user.isGM) delete tabs.secrets;
     return tabs;
@@ -1387,22 +1396,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         }
       });
     }
-    if (this.state.pendingTab) {
-      const tab = this.state.pendingTab;
-      this.state.pendingTab = null;
-      // Bind to the real shell instance, not `this`: when the Hub is hosted
-      // as a subsheet inside MEJ's tabbed shell (not rendered as its own
-      // top-level ApplicationV2), `this` has no `#content` (a private
-      // ApplicationV2 field only populated by the normal top-level
-      // _render()/_replaceHTML() lifecycle, which this hosting mode
-      // bypasses) - calling changeTab() unbound throws. MEJ's own base
-      // class already has this exact fix for this exact situation
-      // (EnhancedJournalSheet.js:1747): `this.changeTab.call(this.enhancedjournal
-      // || this, tab, group, ...)`. `enhancedjournal` is unset (falls back
-      // to `this`) in native/standalone mode, where changeTab on `this` is
-      // already correct.
-      this.changeTab.call(this.enhancedjournal || this, tab, "primary");
-    }
+    // pendingTab (showGraphFor) used to be consumed here via
+    // `this.changeTab.call(this.enhancedjournal || this, tab, "primary")` -
+    // the `.call(this.enhancedjournal || this, ...)` rebind itself is a
+    // real, correct fix for a shell-hosted subsheet's missing `#content`
+    // (MEJ's own EnhancedJournalSheet.js:1747 does the same for its
+    // click-driven tab switches), but calling it here, mid-mount, patches
+    // `tabGroups` state fine while leaving the live DOM untouched (proved
+    // unreliable live - see task-5 report addendum). Consumed in
+    // _prepareTabs() instead now, so the initial render comes up on the
+    // right tab natively rather than patching after the fact.
   }
 }
 
