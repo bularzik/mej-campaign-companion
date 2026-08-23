@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0 (2026-08-23)
+
+- Changed: docx import now **suggests Session** for session-shaped sections
+  (dated or "Session N" headers) instead of only pre-checking their
+  timepoint box — session logs import as Sessions with no manual retyping.
+  Round-trip type markers still take precedence.
+- Changed: the import type select no longer offers the legacy "text"
+  pseudo-type (it duplicated "Text and Image" since 0.7.0). Old exported
+  documents carrying `Campaign Record type: text` markers import as Text
+  and Image automatically.
+- Improved: the type select is ordered sensibly (Text and Image, Session,
+  then the typed sheets, Skip last), and the review step shows
+  "N sections detected as sessions" so detection is visible.
+
 ## 0.7.0 (2026-08-22)
 
 - Changed: docx import's "Text" rows now create MEJ **Text and Image**
