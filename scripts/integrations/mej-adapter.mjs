@@ -113,6 +113,11 @@ export async function registerCore() {
     const { registerPortalSync } = await import("../hooks/portal-sync.mjs");
     registerPortalSync();
   });
+
+  await step("folder context menu", async () => {
+    const { registerFolderContext } = await import("../hooks/folder-context.mjs");
+    registerFolderContext();
+  });
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */

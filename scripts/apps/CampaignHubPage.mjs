@@ -1450,6 +1450,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 }
 
+/** Set the Hub's campaign scope without opening it (folder context menu, spec C §2). */
+export function setHubScope(campaignId) {
+  HUB_STATE.campaignId = campaignId;
+}
+
 /**
  * Entity-header entry point (spec B §2): open the Hub on the Graph tab,
  * ego-centered on `uuid`. If the entity belongs to a campaign, scope

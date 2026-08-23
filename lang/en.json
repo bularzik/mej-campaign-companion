@@ -76,6 +76,7 @@
     },
     "hub": {
       "title": "Campaign Hub",
+      "openCampaignHub": "Open Campaign Hub",
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
