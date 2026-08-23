@@ -134,16 +134,32 @@ test.describe("05 docx import", () => {
     createdTitles = rows.map((r) => r.title).filter(Boolean);
     const sessionZeroIndex = rows.findIndex((r) => r.title?.startsWith("Session Zero"));
     expect(sessionZeroIndex).toBeGreaterThanOrEqual(0);
-    // Types suggested: every dated "session" row's type <select> at least
-    // offers "session" as a choice (the review UI's whole point).
+    // Session-shaped sections arrive SUGGESTED as session (spec A §1) — the
+    // import below relies on the suggestion; no manual retype. Before
+    // 2026-08-23 this test had to selectOption("session") by hand.
     expect(rows[sessionZeroIndex].typeOptions).toContain("session");
-    // Dated session rows are pre-checked to become timepoints regardless of
-    // the chosen entry type.
+    expect(rows[sessionZeroIndex].type).toBe("session");
+
+    // Dated session rows are pre-checked to become timepoints.
     expect(rows[sessionZeroIndex].timepoint).toBe(true);
 
-    // Explicitly choose "session" for this one row so we can verify it
-    // actually opens as a companion Session afterward.
-    await wizard.locator(`select[name="type-${sessionZeroIndex}"]`).selectOption("session");
+    // The retired "text" pseudo-type is gone — journalentry is the only
+    // prose option (spec A §2: exactly one "Text and Image" in the list).
+    expect(rows[sessionZeroIndex].typeOptions).not.toContain("text");
+    expect(rows[sessionZeroIndex].typeOptions.filter((v) => v === "journalentry")).toHaveLength(1);
+
+    // Detection is visible in the review step, with the right count: the
+    // pre-checked timepoint rows ARE the isSession sections, so their tally
+    // is the expected number.
+    const sessionsDetected = rows.filter((r) => r.timepoint).length;
+    await expect(wizard.locator(".mej-cc-import-sessions-detected")).toContainText(String(sessionsDetected));
+
+    // Must be campaign-agnostic: the wizard's destination select defaults to
+    // the Hub's active campaign (or the first existing one) whenever World A
+    // already has campaigns, so a real world is not the "zero-campaign"
+    // world this test used to assume - state the destination explicitly
+    // rather than relying on an empty world to fall through to "__new".
+    await wizard.locator('select[name="destination"]').selectOption("__new");
 
     await wizard.locator('button[data-action="createImport"]').click();
     // Result dialog (DialogV2.wait) reports created/timepoint counts.
