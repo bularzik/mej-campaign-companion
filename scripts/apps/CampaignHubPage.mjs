@@ -178,6 +178,28 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return false;
   }
 
+  /**
+   * Task 5 live-e2e finding (Bug C): EnhancedJournalSheet.js's own
+   * _toggleDisabled(disabled) (~line 1119) sweeps every input/select/
+   * textarea/button under the subsheet's element and sets `.disabled` -
+   * called as `subsheet._toggleDisabled.call(subsheet, true)` from
+   * enhanced-journal.js's renderSubSheet (~line 646) whenever
+   * `!this.isEditable`, i.e. whenever the mounted document isn't
+   * owner-editable for the current user. Correct for ordinary content
+   * sheets (an OBSERVER-only page really should be read-only), but the
+   * Hub already gates every control per-seat in its own templates (GM-only
+   * chrome - the edit-campaign pencil, New Session, the Tools menu's GM
+   * items - simply never renders for a player; see hub-header.hbs's own
+   * `{{#if isGM}}` guards). A portal's baseline ownership is deliberately
+   * OBSERVER for players (spec C §1), so every portal-direct-open by a
+   * non-owner hit `!isEditable` and froze the ENTIRE toolbar solid -
+   * including the harmless Tools-summary button (User Guide link only,
+   * no editing) - confirmed live via tests/e2e/15-campaign-portal.spec.mjs
+   * scenario 7. No-op: the Hub owns its own enablement, not MEJ's blanket
+   * per-document sweep.
+   */
+  _toggleDisabled(_disabled) {}
+
   // Client-only UI state (filters, sort, open menus, timeline order) -
   // module-level HUB_STATE (see above), not an instance field, so it
   // survives subsheet reconstruction by the shell.
