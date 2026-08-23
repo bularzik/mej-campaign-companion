@@ -8,6 +8,8 @@ import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
+import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
+import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 
 Hooks.once("init", () => {
   foundry.applications.handlebars.loadTemplates([
@@ -214,9 +216,13 @@ Hooks.once("ready", async () => {
   // routes them again. No-op in native mode and for non-active-GM clients.
   await healSessionFlags();
 
-  // Spec §6: versioned migration hook. No migrations exist yet at version 1;
-  // future schema changes bump CURRENT_DATA_VERSION and add steps here.
+  // Spec §6 (campaign-container) + spec C §1: versioned migrations.
   if (game.user.isGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
+    // v2: every campaign gets its portal entry (idempotent - the planner
+    // returns only campaigns lacking one).
+    for (const campaign of missingPortalPlan(getCampaigns(), campaignPortal)) {
+      await ensureCampaignPortal(campaign);
+    }
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
 });

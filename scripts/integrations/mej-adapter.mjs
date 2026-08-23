@@ -107,6 +107,11 @@ export async function registerCore() {
     const { registerRelationshipsUi } = await import("../hooks/relationships-ui.mjs");
     registerRelationshipsUi();
   });
+
+  await step("portal rename sync", async () => {
+    const { registerPortalSync } = await import("../hooks/portal-sync.mjs");
+    registerPortalSync();
+  });
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */

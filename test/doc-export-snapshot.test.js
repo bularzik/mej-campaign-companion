@@ -63,6 +63,41 @@ describe("eligibleEntries", () => {
   });
 });
 
+// Task 2 (campaign portal lifecycle): a campaign's own portal entry carries
+// the MEJ type flag "campaign" (see buildCampaignPortalData) purely for
+// interop - it is not export-worthy record content and must never surface
+// in an export, alone or alongside real entries.
+describe("eligibleEntries: campaign portal exclusion", () => {
+  const getMEJType = (entry) => entry.pages.contents[0].flags["monks-enhanced-journal"]?.type || false;
+
+  it("excludes campaign portals from export eligibility", () => {
+    const rows = eligibleEntries([mejEntry("u1", "My Campaign", "campaign")], getMEJType);
+    expect(rows).toEqual([]);
+  });
+
+  it("still exports ordinary typed entries alongside an excluded portal", () => {
+    const rows = eligibleEntries([
+      mejEntry("u1", "My Campaign", "campaign"),
+      mejEntry("u2", "Verity", "person")
+    ], getMEJType);
+    expect(rows.map((r) => r.uuid)).toEqual(["u2"]);
+  });
+
+  it("round-trip snapshot never emits a campaign kind", () => {
+    const i18n = (key) => key.split(".").pop();
+    const parse = (html) => new JSDOM(`<body>${html}</body>`).window.document.body;
+    const rows = eligibleEntries([
+      mejEntry("u1", "My Campaign", "campaign"),
+      mejEntry("u2", "Verity", "person")
+    ], getMEJType);
+    const snapshot = buildGroupSnapshot("G", [], rows, (row) => recordSnapshot(row, { includeGM: false, labels }));
+    expect(snapshot.records.some((r) => r.kind === "campaign")).toBe(false);
+    const nodes = snapshotToDocModel(snapshot, { includeGM: false, parse, i18n });
+    const markers = nodes.filter((n) => n.style === "subtitle").map((n) => n.runs[0].text);
+    expect(markers).not.toContain("Campaign Record type: campaign");
+  });
+});
+
 describe("orderEligibleEntries", () => {
   const entries = [
     { uuid: "c", name: "Charlie" }, { uuid: "a", name: "Alpha" }, { uuid: "b", name: "Bravo" }, { uuid: "z", name: "Zulu" }
