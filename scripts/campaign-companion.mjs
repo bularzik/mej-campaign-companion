@@ -10,6 +10,7 @@ import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, heal
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
+import { registerFolderContext } from "./hooks/folder-context.mjs";
 
 Hooks.once("init", () => {
   foundry.applications.handlebars.loadTemplates([
@@ -109,6 +110,22 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, ADOPTION_PROMPTED_SETTING, {
     scope: "world", config: false, type: Boolean, default: false
   });
+
+  // Task 5 live-e2e finding: Foundry's DocumentDirectory resolves its
+  // getFolderContextOptions listeners into a fixed ContextMenu instance
+  // once, at the sidebar tab's own first render (client boot, well before
+  // any module's ready hook) - it is NOT re-resolved per right-click.
+  // Registering this from registerCore() (fired from onHandshake/onReady,
+  // i.e. at "setup"/"ready") reliably missed that window: the option was
+  // provably correct in isolation (Hooks.callAll + condition both worked
+  // when invoked directly) but never appeared on a real right-click,
+  // because the sidebar's ContextMenu had already been built without it.
+  // folder-context.mjs only imports constants + pure logic (campaigns.mjs)
+  // at its own top level - its one heavy dependency (CampaignHubPage.mjs,
+  // which statically imports MEJ's EnhancedJournalSheet.js) is already
+  // dynamically imported inside the click callback, not here - so it's
+  // safe to import and register this early, at init.
+  registerFolderContext();
 });
 
 // Grants player-writable default ownership to Session entries created

@@ -114,10 +114,10 @@ export async function registerCore() {
     registerPortalSync();
   });
 
-  await step("folder context menu", async () => {
-    const { registerFolderContext } = await import("../hooks/folder-context.mjs");
-    registerFolderContext();
-  });
+  // Folder context menu ("Open Campaign Hub") is registered at "init" now,
+  // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
+  // registering this late (registerCore only ever runs from "setup"/"ready")
+  // reliably missed the sidebar's own one-time ContextMenu construction.
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */

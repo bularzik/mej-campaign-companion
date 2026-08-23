@@ -14,7 +14,7 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan } from "../logic/campaigns.mjs";
@@ -218,7 +218,27 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // the portal fighting them. The shell's synthetic hub page and the
     // native window's synthetic document never have the campaign subtype,
     // so plain Hub opens are untouched.
-    if (this.document?.type === CAMPAIGN_DOCUMENT_TYPE && this.#portalScopedFor !== this.document.uuid) {
+    //
+    // Task 5 live-e2e finding: MEJ's own MonksEnhancedJournal.fixType()
+    // (monks-enhanced-journal.js ~line 4321, `object.type = type;`)
+    // normalizes a hosted page's IN-MEMORY `.type` to the bare mejType key
+    // (here "campaign", from flags["monks-enhanced-journal"].type) as part
+    // of mounting it into the shell - `_source.type` keeps the real,
+    // persisted, module-prefixed value, but `.type` does not, by the time
+    // this runs. Confirmed live: `this.document.type` reads "campaign" here
+    // even though `this.document._source.type` and a fresh, un-mounted
+    // fetch of the same page both read "mej-campaign-companion.campaign".
+    // Accept whichever form is actually in front of us rather than assume
+    // one - the bare mejType key (CAMPAIGN_TYPE, the common case once MEJ
+    // has mounted the page), the full native subtype (CAMPAIGN_DOCUMENT_TYPE,
+    // in case some hosting path leaves `.type` untouched), or _source.type
+    // directly as a last-resort fallback.
+    const isCampaignPage = this.document?.documentName === "JournalEntryPage" && (
+      this.document.type === CAMPAIGN_DOCUMENT_TYPE ||
+      this.document.type === CAMPAIGN_TYPE ||
+      this.document._source?.type === CAMPAIGN_DOCUMENT_TYPE
+    );
+    if (isCampaignPage && this.#portalScopedFor !== this.document.uuid) {
       this.#portalScopedFor = this.document.uuid;
       const portalCampaign = campaignOf(this.document);
       if (portalCampaign) {
