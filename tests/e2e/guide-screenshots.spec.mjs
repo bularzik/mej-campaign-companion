@@ -698,11 +698,14 @@ guideDescribe("guide screenshots", () => {
     await settle(page, 300);
     await shot(secretsShell, "hub-secrets-tab");
 
-    // Ego/Focus mode centered on Aldric, opened the same way MEJ's own
-    // "open graph" header button does (openGraph({centerUuid}), imported
-    // directly — that real header button is absent from the DOM on v14 for
+    // Ego/Focus mode centered on Aldric, opened the same way the entity-
+    // header "open graph" button does (showGraphFor(uuid), imported
+    // directly — the real header button is absent from the DOM on v14 for
     // an unrelated, already-documented MEJ-side bug; see the prep-board
     // shot below), rather than the Hub's plain "Whole campaign" button.
+    // showGraphFor() scopes+centers the Hub's graph state AND opens the
+    // Hub itself (apps/CampaignHubPage.mjs) — the graph is now a Hub tab,
+    // not a standalone popup (retired apps/graph-app.mjs).
     //
     // Review finding: a whole-campaign-mode shot's toBeVisible() checks on
     // the two named nodes passed, yet the committed PNG showed an
@@ -719,10 +722,12 @@ guideDescribe("guide screenshots", () => {
     // regardless of how large the rest of the world's fixture set grows.
     const aldricUuid = await uuidOf(page, demo.aldricId);
     await page.evaluate(async (centerUuid) => {
-      const { openGraph } = await import("/modules/mej-campaign-companion/scripts/apps/graph-app.mjs");
-      openGraph({ centerUuid });
+      const { showGraphFor } = await import("/modules/mej-campaign-companion/scripts/apps/CampaignHubPage.mjs");
+      await showGraphFor(centerUuid);
     }, aldricUuid);
-    const graphApp = page.locator(".mej-cc-graph-app");
+    await settle(page, 500);
+    const graphShell = page.locator("#MonksEnhancedJournal");
+    const graphApp = graphShell.locator(".mej-cc-graph-pane");
     await expect(graphApp).toHaveCount(1);
     await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
     await settle(page, 2500); // let the (now tiny) simulation's alpha decay toward rest
@@ -734,8 +739,6 @@ guideDescribe("guide screenshots", () => {
     await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "Captain Aldric Vane" }));
     await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" }));
     await shot(graphApp, "graph-gm");
-    await page.keyboard.press("Escape");
-    await settle(page, 300);
 
     const sessionShell = await openEntry(page, demo.sessionId);
     await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
@@ -831,7 +834,8 @@ guideDescribe("guide screenshots", () => {
     // opened and populated, but never actually imported (Escape-closed
     // afterward) so it doesn't add extra, unmanaged demo content.
     const importShell = await openHub(page);
-    await importShell.locator("button.mej-cc-import-open").click();
+    await importShell.locator(".mej-cc-tools-summary").click();
+    await importShell.locator('.mej-cc-tools-menu button[data-action="openImportWizard"]').click();
     await settle(page, 300);
     const wizard = page.locator(".mej-cc-import-wizard-app");
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
@@ -847,7 +851,8 @@ guideDescribe("guide screenshots", () => {
     // Export dialog, with "Include GM Content" visible — Escape-closed
     // rather than triggering a real download.
     const exportShell = await openHub(page);
-    await exportShell.locator("button.mej-cc-export-open").click();
+    await exportShell.locator(".mej-cc-tools-summary").click();
+    await exportShell.locator('.mej-cc-tools-menu button[data-action="openExportDialog"]').click();
     const exportDialog = page.locator("dialog.application").last();
     await expect(exportDialog).toBeVisible();
     await expect(exportDialog.locator('input[name="includeGM"]')).toHaveCount(1);
@@ -1055,65 +1060,58 @@ async function capturePlayerShots(page) {
   await expect.poll(() => whisperMsgs.count()).toBeGreaterThanOrEqual(1);
   await shot(whisperMsgs.last(), "reveal-whisper");
 
-  // Relationship graph, whole-campaign mode ("all", the Hub's own
-  // mej-cc-graph-open button — the same one 08-query-graph.spec.mjs's own
-  // GM-vs-player comparison test uses), as User 1. Sparser than
-  // graph-gm.png (which shows MEJ's ego/Focus mode centered on Aldric,
-  // switched to for reliability against a much larger node cluster — see
-  // that shot's own comment above): graph-data.mjs's buildGraph() only
-  // ever receives rows the caller has already permission-filtered for the
-  // viewer (file header comment), so this world's other test-spec debris
-  // that lacks player-level ownership is invisible here even though a GM
-  // viewing the same "all" mode would see it — genuinely fewer nodes for
-  // this viewer, not just a different mode. assertNodeOnscreen() (defined
-  // above, shared with the GM capture) is still used as a
-  // belt-and-suspenders check on the two named nodes.
+  // Relationship graph, whole-campaign mode ("all", the Hub's own Graph tab
+  // — the same one 08-query-graph.spec.mjs's own GM-vs-player comparison
+  // test uses), as User 1. Sparser than graph-gm.png (which shows ego/
+  // Focus mode centered on Aldric, used there for reliability against a
+  // much larger node cluster — see that shot's own comment above): graph-
+  // data.mjs's buildGraph() only ever receives rows the caller has
+  // already permission-filtered for the viewer (file header comment), so
+  // this world's other test-spec debris that lacks player-level ownership
+  // is invisible here even though a GM viewing the same "all" mode would
+  // see it — genuinely fewer nodes for this viewer, not just a different
+  // mode. assertNodeOnscreen() (defined above, shared with the GM
+  // capture) is still used as a belt-and-suspenders check on the two
+  // named nodes.
   //
-  // Live investigation: even with that permission filtering, this
-  // environment's accumulated fixture set (this persistent world is
-  // shared and never wiped across spec files or sessions) still puts
-  // ~10 nodes in this viewer's whole-campaign graph — confirmed live via
-  // a debug capture of every node's actual bounding box, spread from
-  // roughly x=-105..1310, y=-249..1222, far larger than the app's
-  // DEFAULT 820×620 frame. Root cause (graph-app.mjs's own #draw()):
-  // `d3.forceManyBody().strength(-220)`/`forceLink().distance(90)` are
-  // fixed, frame-size-independent repulsion/link forces — the simulated
-  // spread stays roughly the same physical size regardless of window
-  // size — while the viewBox AND forceCenter() target are both derived
-  // from the live SVG's `clientWidth`/`clientHeight` at draw time. A
-  // small default frame just can't contain that spread around its
-  // center, so d3-force's unseeded initial layout randomly decides which
-  // nodes land inside vs. outside it (reproduced live at many different
-  // positions/nodes, including one run where 15 consecutive default-size
-  // attempts all failed — genuinely unreliable at the default size, not
-  // just an occasional fluke).
+  // Live investigation (carried over from the graph's original standalone-
+  // popup incarnation, still true now that it's embedded as a Hub tab):
+  // this environment's accumulated fixture set (this persistent world is
+  // shared and never wiped across spec files or sessions) can put ~10
+  // nodes in this viewer's whole-campaign graph, spread far larger than
+  // the pane's default frame — hub-graph-pane.mjs's drawGraphPane() uses
+  // fixed, frame-size-independent d3-force repulsion/link forces, while
+  // the SVG's viewBox AND forceCenter() target are both derived from its
+  // OWN clientWidth/clientHeight at draw time. A small/hidden frame can't
+  // contain that spread around its center, so d3-force's unseeded initial
+  // layout can randomly decide which nodes land inside vs. outside it.
   //
-  // Fix: enlarge the graph app's own window BEFORE letting it draw
-  // (`app.setPosition()` then `app.render()` to re-trigger `_onRender`'s
-  // `#draw()` against the new, larger `clientWidth`/`clientHeight` — the
-  // app has no resize-observer of its own, confirmed live via
-  // grep — so a bare `setPosition()` alone leaves the old, small-frame
-  // simulation as-is). A frame close to the full 1440×900 viewport
-  // covers most of the observed spread, which is what actually fixes
-  // this (verified live: reliable across repeated runs afterward) rather
-  // than papering over it with more retries of the same undersized
-  // frame. The retry loop below is now just a belt-and-suspenders
-  // fallback for whatever spread this world's fixture set grows to next.
+  // Two things matter for a large, reliable draw here, both different
+  // from the old standalone popup: (1) the graph pane has no window of
+  // its own anymore — it's embedded in the MEJ shell, so enlarging the
+  // SHELL is what grows the SVG's real clientWidth/clientHeight; (2) the
+  // Graph tab's own <div> only reports a non-zero clientWidth once it is
+  // the ACTIVE (visible) tab — switching tabs (changeTab()) is a plain
+  // DOM class-toggle with no re-render of its own (confirmed against
+  // Foundry's ApplicationV2#changeTab), so drawGraphPane() must be
+  // re-triggered via an explicit subsheet render AFTER the tab is already
+  // active and the shell already enlarged, or it draws against a stale/
+  // hidden (0-width, falls back to a fixed 800×540) frame instead.
   const graphShell = await openHub(page);
-  await graphShell.locator("button.mej-cc-graph-open").click();
-  await settle(page, 300);
-  let graphApp = page.locator(".mej-cc-graph-app");
-  await expect(graphApp).toHaveCount(1);
   await page.evaluate(() => {
-    const app = foundry.applications.instances.get("mej-cc-graph");
-    app.setPosition({ left: 20, top: 20, width: 1400, height: 840 });
-    app.render();
+    game.MonksEnhancedJournal.journal?.setPosition({ left: 20, top: 20, width: 1400, height: 840 });
   });
   await settle(page, 300);
+  await graphShell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+  await settle(page, 200);
+  await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
+  await settle(page, 300);
+  let graphApp = graphShell.locator(".mej-cc-graph-pane");
+  await expect(graphApp).toHaveCount(1);
 
   let lastError;
   for (let attempt = 1; attempt <= 4; attempt++) {
-    graphApp = page.locator(".mej-cc-graph-app");
+    graphApp = graphShell.locator(".mej-cc-graph-pane");
     await expect(graphApp).toHaveCount(1);
     await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
     await settle(page, 2500); // let the simulation's alpha decay toward rest
@@ -1124,15 +1122,13 @@ async function capturePlayerShots(page) {
       break;
     } catch (err) {
       lastError = err;
-      // A plain re-render (not a full close/reopen — the enlarged
-      // position already stuck via setPosition above) is enough to get
-      // a fresh, independently-randomized simulation for the next try.
-      await page.evaluate(() => foundry.applications.instances.get("mej-cc-graph")?.render());
+      // The tab is already active and the shell already enlarged, so a
+      // plain re-render of the Hub's "main" part is enough to get a
+      // fresh, independently-randomized simulation for the next try.
+      await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
       await settle(page, 300);
     }
   }
   if (lastError) throw lastError;
   await shot(graphApp, "graph-player");
-  await graphApp.locator('button.header-control[data-action="close"]').click({ force: true });
-  await expect(graphApp).toHaveCount(0);
 }
