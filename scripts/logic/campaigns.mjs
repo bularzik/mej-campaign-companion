@@ -2,7 +2,7 @@
 // can load it directly - same convention as hub-index.mjs. Operates on
 // doc-shaped plain objects: folders have .flags/.folder, entries have
 // .documentName/.folder/.flags, pages have .documentName/.parent.
-import { MODULE_ID, CAMPAIGN_FLAG } from "../constants.mjs";
+import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE } from "../constants.mjs";
 
 /** The campaign flag object ({ ownershipDefault, ... }) or null. */
 export function campaignFlagOf(folder) {
@@ -159,4 +159,11 @@ export function adoptionPlan(entries, getMEJType, legacyTimelineId) {
     if (e.id === legacyTimelineId || getMEJType(e)) ids.push(e.id);
   }
   return ids;
+}
+
+/** Is this a campaign portal (spec C): the entry/page whose sheet IS the scoped Hub. Accepts a JournalEntry (any page matches) or a JournalEntryPage. */
+export function isCampaignPortal(doc) {
+  if (!doc) return false;
+  if (doc.documentName === "JournalEntryPage") return doc.type === CAMPAIGN_DOCUMENT_TYPE;
+  return (doc.pages?.contents ?? []).some((p) => p.type === CAMPAIGN_DOCUMENT_TYPE);
 }

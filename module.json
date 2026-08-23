@@ -51,7 +51,8 @@
             "IMAGE"
           ]
         }
-      }
+      },
+      "campaign": {}
     }
   },
   "socket": true
