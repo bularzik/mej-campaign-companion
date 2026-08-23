@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 (2026-08-22)
+
+- Changed: docx import's "Text" rows now create MEJ **Text and Image**
+  entries instead of plain unflagged text pages, so imported prose is
+  indexed, searchable, auto-linkable, exportable, and opens inside the
+  MEJ shell. The row type select shows MEJ's own "Text and Image" label.
+- New: the import wizard's "Import into" select lists each campaign's
+  subfolders (indented) so a document can be imported directly into an
+  existing subfolder; the governing campaign (timeline, audience
+  baseline) is resolved from the chosen folder's campaign.
+- New: the import destination and campaign-choice prompts default to the
+  campaign currently scoped in the Hub picker, and the New Entry dialog's
+  folder select defaults to the folder of the entry open in the MEJ shell
+  (implemented entirely companion-side; MEJ stays unpatched).
+- Fixed: an open sheet's "Mentioned in" list now updates live when a
+  mention is added or removed elsewhere (including auto-linked mentions),
+  instead of staying stale until the sheet re-renders.
+
 ## 0.6.0 (2026-08-22)
 
 - New: **Campaigns**. A campaign is a journal folder the companion manages:

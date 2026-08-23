@@ -21,12 +21,63 @@ export function isCampaignFolder(folder) {
  */
 export function campaignOf(doc) {
   const entry = doc?.documentName === "JournalEntryPage" ? doc.parent : doc;
-  let folder = entry?.folder ?? null;
-  while (folder) {
-    if (isCampaignFolder(folder)) return folder;
-    folder = folder.folder ?? null;
+  return campaignOfFolder(entry?.folder ?? null);
+}
+
+/**
+ * The campaign a Folder belongs to: itself when flagged, else its nearest
+ * flagged ancestor, else null. The folder-shaped counterpart of campaignOf,
+ * for callers holding a destination folder rather than an entry (the import
+ * wizard's subfolder-aware destination select).
+ */
+export function campaignOfFolder(folder) {
+  let f = folder ?? null;
+  while (f) {
+    if (isCampaignFolder(f)) return f;
+    f = f.folder ?? null;
   }
   return null;
+}
+
+/**
+ * Flattened destination rows for the import wizard's "Import into" select:
+ * each campaign (depth 0, in the order given) followed by its descendant
+ * subfolders depth-first, name-sorted per level. A defensively-nested
+ * campaign folder is skipped during the walk - it already appears at depth 0
+ * via `campaigns`, and listing it twice would duplicate its subtree.
+ * `folders` is every JournalEntry folder in the world.
+ */
+export function destinationFolderOptions(campaigns, folders) {
+  const byParent = new Map();
+  for (const f of folders ?? []) {
+    const pid = f?.folder?.id;
+    if (!pid) continue;
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid).push(f);
+  }
+  const out = [];
+  const walk = (node, depth) => {
+    out.push({ id: node.id, name: node.name, depth });
+    const kids = (byParent.get(node.id) ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    for (const kid of kids) {
+      if (isCampaignFolder(kid)) continue;
+      walk(kid, depth + 1);
+    }
+  };
+  for (const c of campaigns ?? []) walk(c, 0);
+  return out;
+}
+
+/**
+ * Which destination option starts selected: the GM's explicit pick when it
+ * still names an option, else the active campaign (the Hub's current scope),
+ * else the first option. Null only for an empty option list.
+ */
+export function resolveDestinationId(optionIds, selectedId, activeId) {
+  const ids = optionIds ?? [];
+  if (selectedId != null && ids.includes(selectedId)) return selectedId;
+  if (activeId != null && ids.includes(activeId)) return activeId;
+  return ids[0] ?? null;
 }
 
 export function campaignIdOf(doc) {

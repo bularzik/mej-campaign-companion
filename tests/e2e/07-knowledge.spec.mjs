@@ -115,6 +115,38 @@ test.describe("07 knowledge panel", () => {
     assertNoConsoleErrors(errors);
   });
 
+  test("Mentioned-in updates live while the target's sheet stays open", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const targetName = `${TT_PREFIX}Live-Target`;
+    const sourceName = `${TT_PREFIX}Live-Source`;
+    const targetId = await createPerson(page, targetName);
+    const targetUuid = await entryUuid(page, targetId);
+
+    // Open the target FIRST - its panel is built with no mentions yet.
+    const { panel } = await openEntry(page, targetId);
+    const backlinks = panel.locator(".mej-cc-knowledge-backlinks");
+    await expect(backlinks.locator(".mej-cc-backlink-row", { hasText: sourceName })).toHaveCount(0);
+
+    // A mention created elsewhere appears WITHOUT re-opening the sheet
+    // (knowledge-ui's tracked-panel refresh, debounced 250ms).
+    const sourceId = await createPlace(page, sourceName, {
+      text: `<p>Home of @UUID[${targetUuid}]{${targetName}}.</p>`
+    });
+    await settle(page, 900);
+    await expect(backlinks.locator(".mej-cc-backlink-row", { hasText: sourceName })).toHaveCount(1);
+
+    // And disappears again when the mentioning page drops the link.
+    await page.evaluate(async (id) => {
+      await game.journal.get(id).pages.contents[0].update({ text: { content: "<p>Quiet now.</p>" } });
+    }, sourceId);
+    await settle(page, 900);
+    await expect(backlinks.locator(".mej-cc-backlink-row", { hasText: sourceName })).toHaveCount(0);
+
+    assertNoConsoleErrors(errors);
+  });
+
   test("tags round-trip: add via widget, indexed by search, then removed", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");

@@ -88,6 +88,11 @@ export async function registerCore() {
     registerKnowledgePanel();
   });
 
+  await step("create-dialog folder default", async () => {
+    const { registerCreateDialogDefault } = await import("../hooks/create-dialog-default.mjs");
+    registerCreateDialogDefault();
+  });
+
   await step("query enricher", async () => {
     const { registerQueryEnricher } = await import("../hooks/query-enricher.mjs");
     registerQueryEnricher();
