@@ -79,11 +79,13 @@
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
+        "graph": "Graph",
         "search": "Search",
         "dashboards": "Dashboards",
         "secrets": "Secrets"
       },
-      "scope": { "label": "Campaign", "all": "All campaigns", "unfiled": "Unfiled" },
+      "scope": { "label": "Campaign", "all": "All campaigns", "unfiled": "Unfiled", "newCampaign": "➕ New Campaign…" },
+      "tools": "Tools",
       "newCampaign": "New Campaign",
       "newCampaignName": "Name",
       "newCampaignBaseline": "Player access",

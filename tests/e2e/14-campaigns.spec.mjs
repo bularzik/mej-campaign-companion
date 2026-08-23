@@ -304,7 +304,7 @@ test.describe.serial("14 campaigns", () => {
     captureCampaignPrior = await page.evaluate(() => game.settings.get("mej-campaign-companion", "autoCaptureCampaign"));
     const shell = await openHub(page);
 
-    await shell.locator("button.mej-cc-new-campaign").click();
+    await shell.locator('select[name="campaign-scope"]').selectOption("__new");
     const dialog = page.locator("dialog.application").last();
     await dialog.locator('input[name="name"]').fill(ALPHA);
     await dialog.locator('select[name="baseline"]').selectOption("observer"); // "Players can view"
@@ -500,7 +500,8 @@ test.describe.serial("14 campaigns", () => {
     });
 
     const shell = await openHub(page);
-    await shell.locator("button.mej-cc-import-open").click();
+    await shell.locator(".mej-cc-tools-summary").click();
+    await shell.locator('.mej-cc-tools-menu button[data-action="openImportWizard"]').click();
     await settle(page, 300);
     const wizard = page.locator(".mej-cc-import-wizard-app");
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
@@ -802,5 +803,64 @@ test.describe.serial("14 campaigns", () => {
         await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", captureCampaignBefore ?? "");
       }, { targetId, seededIds, captureCampaignBefore });
     }
+  });
+
+  test("10. header bar: controls above the tabs, Tools menu, picker New Campaign with cancel-revert", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHub(page); // this spec's own hub-open helper
+
+    // Header renders above the tab nav with the relocated controls.
+    const header = shell.locator(".mej-cc-hub-header");
+    await expect(header).toHaveCount(1);
+    await expect(header.locator('select[name="campaign-scope"]')).toHaveCount(1);
+    await expect(header.locator(".mej-cc-new-session")).toHaveCount(1);
+    // The Index toolbar no longer carries the moved controls.
+    await expect(shell.locator(".mej-cc-index-controls .mej-cc-new-campaign")).toHaveCount(0);
+    await expect(shell.locator(".mej-cc-index-controls .mej-cc-import-open")).toHaveCount(0);
+
+    // Tools menu opens with the four GM items and closes.
+    await header.locator(".mej-cc-tools-summary").click();
+    const menu = header.locator(".mej-cc-tools-menu");
+    await expect(menu.locator('button[data-action="openImportWizard"]')).toHaveCount(1);
+    await expect(menu.locator('button[data-action="openExportDialog"]')).toHaveCount(1);
+    await expect(menu.locator('button[data-action="setCaptureCampaign"]')).toHaveCount(1);
+    await expect(menu.locator('button[data-action="openHelp"]')).toHaveCount(1);
+    await header.locator(".mej-cc-tools-summary").click();
+    await expect(header.locator(".mej-cc-tools-menu")).toHaveCount(0);
+
+    // Picker "New Campaign…": cancel reverts the visible selection. DialogV2
+    // .prompt() (CampaignHubPage.mjs#onNewCampaign) only ever adds an "Ok"
+    // button - the only way to cancel is the window header's own close (x)
+    // control, `button[data-action="close"]` (confirmed against Foundry's
+    // ApplicationV2 header markup, client/applications/api/application.mjs).
+    const before = await header.locator('select[name="campaign-scope"]').inputValue();
+    await header.locator('select[name="campaign-scope"]').selectOption("__new");
+    await settle(page, 400);
+    const dialog = page.locator("dialog.application").last();
+    await dialog.locator('button[data-action="cancel"], button[data-action="close"]').first().click().catch(() => dialog.evaluate((d) => d.close()));
+    await settle(page, 400);
+    expect(await header.locator('select[name="campaign-scope"]').inputValue()).toBe(before);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("11. player seat: Tools menu offers only the User Guide; no GM chrome", async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await login(page, "User 1");
+    const shell = await openHub(page); // same helper scenario 8 uses
+
+    const header = shell.locator(".mej-cc-hub-header");
+    await expect(header).toHaveCount(1);
+    await expect(header.locator(".mej-cc-new-session")).toHaveCount(0);
+    await expect(header.locator(".mej-cc-edit-campaign")).toHaveCount(0);
+    // Picker exists but offers players no "__new" creation option.
+    await expect(header.locator('select[name="campaign-scope"] option[value="__new"]')).toHaveCount(0);
+
+    await header.locator(".mej-cc-tools-summary").click();
+    const menu = header.locator(".mej-cc-tools-menu");
+    await expect(menu.locator("button")).toHaveCount(1);
+    await expect(menu.locator('button[data-action="openHelp"]')).toHaveCount(1);
+    await context.close();
   });
 });

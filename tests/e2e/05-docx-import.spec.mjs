@@ -18,7 +18,8 @@ async function openImportWizard(page) {
   const shell = page.locator("#MonksEnhancedJournal");
   await shell.locator(".nav-button.campaign-hub").click();
   await settle(page, 500);
-  await shell.locator("button.mej-cc-import-open").click();
+  await shell.locator(".mej-cc-tools-summary").click();
+  await shell.locator('.mej-cc-tools-menu button[data-action="openImportWizard"]').click();
   await settle(page, 300);
   return { shell, wizard: page.locator(".mej-cc-import-wizard-app") };
 }

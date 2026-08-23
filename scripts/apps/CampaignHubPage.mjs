@@ -38,7 +38,8 @@ import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
-import { mejType } from "../integrations/mej-adapter.mjs";
+import { mejType, openHub } from "../integrations/mej-adapter.mjs";
+import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -59,6 +60,7 @@ const HUB_STATE = {
   sort: "name",
   typeMenuOpen: false,
   sortMenuOpen: false,
+  toolsMenuOpen: false,
   timelineOrder: "manual",
   restoreIndexFilterFocus: false,
   searchQuery: "",
@@ -66,7 +68,11 @@ const HUB_STATE = {
   secretsType: "",
   secretsState: "all",
   secretsPlayer: "",
-  campaignId: null
+  campaignId: null,
+  graphMode: "all",
+  graphCenterUuid: null,
+  graphBacklinks: false,
+  pendingTab: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -79,6 +85,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openIndexRow: CampaignHubPage.onOpenIndexRow,
       toggleTypeMenu: CampaignHubPage.onToggleTypeMenu,
       toggleSortMenu: CampaignHubPage.onToggleSortMenu,
+      toggleToolsMenu: CampaignHubPage.onToggleToolsMenu,
       setTimelineOrder: CampaignHubPage.onSetTimelineOrder,
       addTimepoint: CampaignHubPage.onAddTimepoint,
       renameTimepoint: CampaignHubPage.onRenameTimepoint,
@@ -89,7 +96,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       newSession: CampaignHubPage.onNewSession,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
-      openGraph: CampaignHubPage.onOpenGraph,
+      setGraphMode: CampaignHubPage.onSetGraphMode,
       openHelp: CampaignHubPage.onOpenHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
@@ -99,7 +106,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       addGroup: CampaignHubPage.onAddGroup,
       editGroup: CampaignHubPage.onEditGroup,
       deleteGroup: CampaignHubPage.onDeleteGroup,
-      newCampaign: CampaignHubPage.onNewCampaign,
       searchAllCampaigns: CampaignHubPage.onSearchAllCampaigns,
       editCampaign: CampaignHubPage.onEditCampaign,
       toggleEntryHidden: CampaignHubPage.onToggleEntryHidden,
@@ -125,6 +131,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       tabs: [
         { id: "index", icon: "fa-solid fa-list" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
+        { id: "graph", icon: "fa-solid fa-circle-nodes" },
         { id: "search", icon: "fa-solid fa-magnifying-glass" },
         { id: "dashboards", icon: "fa-solid fa-table-columns" },
         { id: "secrets", icon: "fa-solid fa-user-secret" }
@@ -133,6 +140,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       labelPrefix: `${I18N}.hub.tabs`
     }
   };
+
+  // Graph tab's computed nodes/edges for this render pass, set in
+  // _prepareBodyContext and reused by activateListeners' draw call (same
+  // "compute once, draw from the cached graph" pattern the popup used for
+  // its truncated-notice/drawn-graph sync - see hub-graph-pane.mjs).
+  #graphData = null;
 
   static get type() {
     return HUB_PAGE_ID;
@@ -176,6 +189,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // class already uses to drop its own "relationships" tab for non-GMs)
   // removes the tab entry before the tab-navigation partial ever sees it.
   _prepareTabs(group) {
+    // A pending tab (showGraphFor) is consumed pre-render: setting the
+    // group's active tab BEFORE super computes the tab contexts makes the
+    // initial render come up on that tab natively - patching the DOM after
+    // mount via changeTab() proved unreliable in shell-subsheet hosting
+    // (state updated, DOM untouched; see task-5 report addendum).
+    if (group === "primary" && this.state.pendingTab) {
+      this.tabGroups.primary = this.state.pendingTab;
+      this.state.pendingTab = null;
+    }
     const tabs = super._prepareTabs(group);
     if (group === "primary" && !game.user.isGM) delete tabs.secrets;
     return tabs;
@@ -214,8 +236,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
       context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
     }
+    const scopeContext = this.#campaignScopeContext();
+    context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.index = this.#indexContext();
     context.timeline = { stacks };
+    const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
+    this.#graphData = graphPrep.graph;
+    context.graph = graphPrep.context;
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -285,6 +312,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (unfiledEntries({ user: game.user }).length) {
       options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
     }
+    if (game.user.isGM) {
+      options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
+    }
     return { hasCampaigns: campaigns.length > 0, options, isCampaignScope: !!current && current !== "unfiled" };
   }
 
@@ -313,7 +343,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
       sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`)),
-      campaignScope: this.#campaignScopeContext(),
       isUnfiledScope: unfiled
     };
   }
@@ -980,15 +1009,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     openExportDialog();
   }
 
-  // Player-visible "Open graph" entry point (Task 12): lives on the Index
-  // tab's toolbar, outside the isGM guard around the import/export buttons -
-  // the relationship graph itself is a read-only view any observer-level
-  // player can open (spec §5).
-  static async onOpenGraph() {
-    const { openGraph } = await import("./graph-app.mjs");
-    openGraph();
-  }
-
   // Help button (Index toolbar, outside the isGM guard): opens the published
   // user guide matching this seat in a new browser tab.
   static onOpenHelp() {
@@ -1015,10 +1035,24 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
+  static onToggleToolsMenu() {
+    this.state.toolsMenuOpen = !this.state.toolsMenuOpen;
+    this.state.typeMenuOpen = false;
+    this.state.sortMenuOpen = false;
+    this.render({ parts: ["main"] });
+  }
+
   static async onSetTimelineOrder(event, target) {
     const order = target.dataset.order;
     if (!["manual", "created", "campaign"].includes(order)) return;
     this.state.timelineOrder = order;
+    this.render({ parts: ["main"] });
+  }
+
+  static onSetGraphMode(event, target) {
+    const mode = target.dataset.mode;
+    if (!["ego", "all"].includes(mode)) return;
+    this.state.graphMode = mode;
     this.render({ parts: ["main"] });
   }
 
@@ -1280,6 +1314,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (scopeSelect && !scopeSelect.dataset.ccBound) {
       scopeSelect.dataset.ccBound = "1";
       scopeSelect.addEventListener("change", async (event) => {
+        if (event.target.value === "__new") {
+          // Action-as-option: revert the visible selection immediately;
+          // onNewCampaign itself switches scope only after a successful
+          // create, so dialog-cancel leaves the previous scope untouched.
+          event.target.value = this.state.campaignId ?? "";
+          return CampaignHubPage.onNewCampaign.call(this);
+        }
         this.state.campaignId = event.target.value;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
@@ -1336,5 +1377,53 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         );
       }
     }
+
+    const backlinksToggle = html.querySelector('[data-action-change="toggleGraphBacklinks"]');
+    if (backlinksToggle && !backlinksToggle.dataset.ccBound) {
+      backlinksToggle.dataset.ccBound = "1";
+      backlinksToggle.addEventListener("change", () => {
+        this.state.graphBacklinks = backlinksToggle.checked;
+        this.render({ parts: ["main"] });
+      });
+    }
+    const graphSvg = html.querySelector(".mej-cc-graph-svg");
+    if (graphSvg && this.#graphData) {
+      drawGraphPane(graphSvg, this.#graphData, {
+        centerUuid: this.state.graphCenterUuid,
+        onOpen: async (uuid) => {
+          const entry = await fromUuid(uuid);
+          if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
+        }
+      });
+    }
+    // pendingTab (showGraphFor) used to be consumed here via
+    // `this.changeTab.call(this.enhancedjournal || this, tab, "primary")` -
+    // the `.call(this.enhancedjournal || this, ...)` rebind itself is a
+    // real, correct fix for a shell-hosted subsheet's missing `#content`
+    // (MEJ's own EnhancedJournalSheet.js:1747 does the same for its
+    // click-driven tab switches), but calling it here, mid-mount, patches
+    // `tabGroups` state fine while leaving the live DOM untouched (proved
+    // unreliable live - see task-5 report addendum). Consumed in
+    // _prepareTabs() instead now, so the initial render comes up on the
+    // right tab natively rather than patching after the fact.
   }
+}
+
+/**
+ * Entity-header entry point (spec B §2): open the Hub on the Graph tab,
+ * ego-centered on `uuid`. If the entity belongs to a campaign, scope
+ * switches to that campaign first so the ego view is in-context.
+ */
+export async function showGraphFor(uuid) {
+  const doc = await fromUuid(uuid);
+  const entry = doc?.documentName === "JournalEntryPage" ? doc.parent : doc;
+  const cid = entry ? campaignIdOf(entry) : null;
+  if (cid) {
+    HUB_STATE.campaignId = cid;
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
+  }
+  HUB_STATE.graphCenterUuid = entry?.uuid ?? uuid;
+  HUB_STATE.graphMode = "ego";
+  HUB_STATE.pendingTab = "graph";
+  await openHub();
 }

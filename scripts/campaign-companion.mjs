@@ -10,6 +10,10 @@ import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, heal
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 
 Hooks.once("init", () => {
+  foundry.applications.handlebars.loadTemplates([
+    `modules/${MODULE_ID}/templates/hub-header.hbs`
+  ]);
+
   game.settings.register(MODULE_ID, TIMELINE_JOURNAL_SETTING, {
     scope: "world",
     config: false,
@@ -148,8 +152,8 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
     class: "mej-cc-open-graph",
     icon: "fas fa-circle-nodes",
     onclick: async () => {
-      const { openGraph } = await import("./apps/graph-app.mjs");
-      openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
+      const { showGraphFor } = await import("./apps/CampaignHubPage.mjs");
+      showGraphFor(doc.parent?.uuid ?? doc.uuid);
     }
   });
 
