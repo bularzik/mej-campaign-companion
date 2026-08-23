@@ -152,8 +152,8 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
     class: "mej-cc-open-graph",
     icon: "fas fa-circle-nodes",
     onclick: async () => {
-      const { openGraph } = await import("./apps/graph-app.mjs");
-      openGraph({ centerUuid: doc.parent?.uuid ?? doc.uuid });
+      const { showGraphFor } = await import("./apps/CampaignHubPage.mjs");
+      showGraphFor(doc.parent?.uuid ?? doc.uuid);
     }
   });
 

@@ -38,7 +38,7 @@ import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
-import { mejType } from "../integrations/mej-adapter.mjs";
+import { mejType, openHub } from "../integrations/mej-adapter.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
@@ -96,7 +96,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       newSession: CampaignHubPage.onNewSession,
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
-      openGraph: CampaignHubPage.onOpenGraph,
       setGraphMode: CampaignHubPage.onSetGraphMode,
       openHelp: CampaignHubPage.onOpenHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
@@ -1001,15 +1000,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     openExportDialog();
   }
 
-  // Player-visible "Open graph" entry point (Task 12): lives on the Index
-  // tab's toolbar, outside the isGM guard around the import/export buttons -
-  // the relationship graph itself is a read-only view any observer-level
-  // player can open (spec §5).
-  static async onOpenGraph() {
-    const { openGraph } = await import("./graph-app.mjs");
-    openGraph();
-  }
-
   // Help button (Index toolbar, outside the isGM guard): opens the published
   // user guide matching this seat in a new browser tab.
   static onOpenHelp() {
@@ -1403,4 +1393,23 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.changeTab(tab, "primary");
     }
   }
+}
+
+/**
+ * Entity-header entry point (spec B §2): open the Hub on the Graph tab,
+ * ego-centered on `uuid`. If the entity belongs to a campaign, scope
+ * switches to that campaign first so the ego view is in-context.
+ */
+export async function showGraphFor(uuid) {
+  const doc = await fromUuid(uuid);
+  const entry = doc?.documentName === "JournalEntryPage" ? doc.parent : doc;
+  const cid = entry ? campaignIdOf(entry) : null;
+  if (cid) {
+    HUB_STATE.campaignId = cid;
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
+  }
+  HUB_STATE.graphCenterUuid = entry?.uuid ?? uuid;
+  HUB_STATE.graphMode = "ego";
+  HUB_STATE.pendingTab = "graph";
+  await openHub();
 }
