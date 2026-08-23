@@ -10,12 +10,13 @@
 
 /**
  * Which of our sheet registrations failed to take effect?
- * @param {object} sheetClasses  CONFIG.JournalEntryPage.sheetClasses (or a lookalike)
- * @param {string} sessionType   the native Session subtype key
- * @param {string} hubType       the Hub's synthetic type key
- * @returns {{session: boolean, hub: boolean}} true = missing, needs registering
+ * @param {object} sheetClasses   CONFIG.JournalEntryPage.sheetClasses (or a lookalike)
+ * @param {string} sessionType    the native Session subtype key
+ * @param {string} hubType        the Hub's synthetic type key
+ * @param {string} campaignType   the native campaign-portal subtype key
+ * @returns {{session: boolean, hub: boolean, campaign: boolean}} true = missing, needs registering
  */
-export function missingSheetRegistrations(sheetClasses, sessionType, hubType) {
+export function missingSheetRegistrations(sheetClasses, sessionType, hubType, campaignType) {
   const has = (t) => Object.keys((sheetClasses ?? {})[t] ?? {}).length > 0;
-  return { session: !has(sessionType), hub: !has(hubType) };
+  return { session: !has(sessionType), hub: !has(hubType), campaign: !has(campaignType) };
 }
