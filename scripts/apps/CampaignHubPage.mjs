@@ -870,6 +870,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         callback: async () => {
           await ensureCampaignPortal(campaign);
           this.render({ parts: ["main"] });
+          // Explicit false, not a bare return: DialogV2._onSubmit does
+          // `(await button.callback(...)) ?? button.action` (dialog.mjs
+          // :264-276), so an undefined-returning callback resolves the
+          // dialog's promise to the STRING "restorePortal" - truthy, so
+          // `if (!result) return;` below would fall through into
+          // campaign.setFlag(...) with result.baseline undefined.
+          return false;
         }
       });
     }
