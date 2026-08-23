@@ -29,7 +29,7 @@ popup window that ignores the Hub's campaign picker entirely
 | Tools menu contents & order | **Import Document…, Export…, Auto-capture target…, User Guide** — bring-in/out pair first, configuration, help last. GM-only items hidden for players (Import, Export, Auto-capture are GM-gated as today; players see User Guide). |
 | Graph surface | **A Hub tab**, not a popup. Tab order: **Index \| Timeline \| Graph \| Search \| Dashboards \| Secrets**. The standalone `RelationshipGraphApp` popup is retired (file deleted). |
 | Graph scoping | The pane feeds `buildGraph` from the Hub's scoped entries (same seam as every pane): campaign → members only; All → whole world (today's behavior); Unfiled → unfiled entries. Out-of-scope relationship targets are **clipped** (no ghost nodes) — All shows the full web. |
-| Graph entry points | Hub's old Graph button removed (the tab replaces it). The entity-header graph button opens the Hub → Graph tab, ego-centered on that entity; if the entity belongs to a campaign, scope switches to that campaign first. Node click re-centers (existing behavior preserved). |
+| Graph entry points | Hub's old Graph button removed (the tab replaces it). The entity-header graph button opens the Hub → Graph tab, ego-centered on that entity; if the entity belongs to a campaign, scope switches to that campaign first. Node click OPENS the entry (the popup's existing behavior, preserved); ego-centering comes only from the entity-header entry point. |
 | Index toolbar | Keeps ONLY index-scoped controls: type-filter menu, sort menu, "File all shown…". Adoption banner stays on the Index pane (content, not chrome). |
 | New Session semantics | Unchanged (scoped campaign, or prompt with cancel-to-stay-loose in All/Unfiled). |
 
@@ -95,8 +95,8 @@ relocation, not behavior change, except the picker's `__new` option.
   button are removed. The entity-header button
   (campaign-companion.mjs:152) now: opens/focuses the Hub, sets scope to
   the entity's campaign when it has one (via `campaignIdOf`), sets
-  `centerUuid` + ego mode, and activates the Graph tab. Node click
-  re-centers within the pane (existing popup behavior).
+  `centerUuid` + ego mode, and activates the Graph tab. Node click opens
+  the clicked entry in the MEJ shell (existing popup behavior, preserved).
 
 ## 3. Non-goals
 
