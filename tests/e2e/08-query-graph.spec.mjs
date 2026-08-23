@@ -323,28 +323,67 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     assertNoConsoleErrors(errors);
   });
 
-  // "entity header button lands on the Graph tab, scoped and ego-centered"
-  // (spec'd by the task-5 brief) is intentionally NOT included here yet.
-  // Live investigation found a genuine product bug in this branch's own
-  // Task 4 commit (a9453b5, CampaignHubPage.mjs's pendingTab consumption
-  // in activateListeners): `this.changeTab(tab, "primary")` is called
-  // unbound, but when CampaignHubPage is hosted as a subsheet inside MEJ's
-  // shell (not rendered as a standalone top-level ApplicationV2), `this`
-  // has no `#content` (a private ApplicationV2 field only populated by the
-  // normal top-level _render()/_replaceHTML() lifecycle, which this
-  // hosting mode bypasses - see this file's own header comment) - so
-  // ApplicationV2#changeTab throws "Cannot read properties of undefined
-  // (reading 'querySelector')", confirmed live via a page-error listener.
-  // showGraphFor()'s scope+ego-mode state IS set correctly (the campaign-
-  // scope <select> and the ego mode button both reflect it once the Hub
-  // renders), and the Hub DOES mount - only the visual tab switch itself
-  // silently fails, leaving the Index tab showing. MEJ's OWN base class
-  // already has the fix pattern for exactly this situation
-  // (EnhancedJournalSheet.js:1747): `this.changeTab.call(this.enhancedjournal
-  // || this, tab, group, ...)` - rebinding to the real shell instance
-  // (which has a working #content) when hosted, falling back to `this`
-  // otherwise. CampaignHubPage.mjs's own pendingTab block needs the same
-  // `.call(this.enhancedjournal || this, ...)` fix before this scenario
-  // can be added back. See task-5-report.md for the full test code this
-  // omits and the live diagnostic evidence.
+  test("entity header button lands on the Graph tab, scoped and ego-centered", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    // Create a TT- campaign folder + one member person entry: repeat the
+    // scoping test's evaluate block verbatim (folder with campaign flag,
+    // member JournalEntry inside it) minus the loose entry.
+    const ids = await page.evaluate(async (prefix) => {
+      const folder = await Folder.create({
+        name: `${prefix}GraphEgo`, type: "JournalEntry",
+        flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
+      });
+      const member = await JournalEntry.create({
+        name: `${prefix}Ego-Member`, folder: folder.id,
+        pages: [{ name: `${prefix}Ego-Member`, type: "text", flags: { "monks-enhanced-journal": { type: "person" } } }]
+      });
+      return { folderId: folder.id, memberId: member.id };
+    }, TT_PREFIX);
+
+    await page.evaluate(async (id) => {
+      await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+    }, ids.memberId);
+    await settle(page, 500);
+    // Not a real click on ".mej-cc-open-graph": that header button never
+    // renders at all on v14, for a SEPARATE, pre-existing, already-
+    // documented MEJ-side bug (10-secrets-hub.spec.mjs's prep-board
+    // comment) - confirmed live, the mounted subsheet's <header> carries
+    // only Foundry's own stock controls, no ".subsheet"-classed link.
+    // Route around it the same way that spec's prep-board test does: call
+    // the button's own onclick target (showGraphFor) directly, exercising
+    // the real code path end-to-end - only the broken header-button wiring
+    // is bypassed, and every assertion below still proves the entry
+    // point's real effect (scoped + ego-centered + landed on the Graph
+    // tab). This also exercises the pendingTab/changeTab fix
+    // (CampaignHubPage.mjs, activateListeners): showGraphFor() is the same
+    // call the real button makes.
+    const memberUuid = await page.evaluate((id) => game.journal.get(id).uuid, ids.memberId);
+    await page.evaluate(async (uuid) => {
+      const { showGraphFor } = await import("/modules/mej-campaign-companion/scripts/apps/CampaignHubPage.mjs");
+      await showGraphFor(uuid);
+    }, memberUuid);
+    await settle(page, 800);
+
+    // try/finally around the assertions: World A's own id-tracked cleanup
+    // below must run even if an assertion throws (as it currently does —
+    // see task-5-report.md's fix-round-1 addendum), so a failing run here
+    // never leaks the TT-GraphEgo folder/entry into the shared world.
+    try {
+      const shell = page.locator("#MonksEnhancedJournal");
+      await expect(shell.locator('nav.sheet-tabs [data-tab="graph"]')).toHaveClass(/active/);
+      expect(await shell.locator('select[name="campaign-scope"]').inputValue()).toBe(ids.folderId);
+      await expect(shell.locator('.mej-cc-graph-controls button[data-mode="ego"]')).toHaveClass(/active/);
+      await expect(shell.locator(".mej-cc-graph-pane .mej-cc-graph-node.center")).toHaveCount(1);
+    } finally {
+      // Restore: scope back to All, id-tracked cleanup.
+      await page.locator("#MonksEnhancedJournal").locator('select[name="campaign-scope"]').selectOption("").catch(() => {});
+      await settle(page, 300);
+      await page.evaluate(async (x) => {
+        await JournalEntry.implementation.deleteDocuments([x.memberId]);
+        await game.folders.get(x.folderId)?.delete();
+      }, ids);
+    }
+    assertNoConsoleErrors(errors);
+  });
 });

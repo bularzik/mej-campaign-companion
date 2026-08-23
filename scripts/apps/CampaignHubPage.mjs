@@ -1390,7 +1390,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (this.state.pendingTab) {
       const tab = this.state.pendingTab;
       this.state.pendingTab = null;
-      this.changeTab(tab, "primary");
+      // Bind to the real shell instance, not `this`: when the Hub is hosted
+      // as a subsheet inside MEJ's tabbed shell (not rendered as its own
+      // top-level ApplicationV2), `this` has no `#content` (a private
+      // ApplicationV2 field only populated by the normal top-level
+      // _render()/_replaceHTML() lifecycle, which this hosting mode
+      // bypasses) - calling changeTab() unbound throws. MEJ's own base
+      // class already has this exact fix for this exact situation
+      // (EnhancedJournalSheet.js:1747): `this.changeTab.call(this.enhancedjournal
+      // || this, tab, group, ...)`. `enhancedjournal` is unset (falls back
+      // to `this`) in native/standalone mode, where changeTab on `this` is
+      // already correct.
+      this.changeTab.call(this.enhancedjournal || this, tab, "primary");
     }
   }
 }
