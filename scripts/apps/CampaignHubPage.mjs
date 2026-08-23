@@ -39,6 +39,7 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -67,7 +68,11 @@ const HUB_STATE = {
   secretsType: "",
   secretsState: "all",
   secretsPlayer: "",
-  campaignId: null
+  campaignId: null,
+  graphMode: "all",
+  graphCenterUuid: null,
+  graphBacklinks: false,
+  pendingTab: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -92,6 +97,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       openGraph: CampaignHubPage.onOpenGraph,
+      setGraphMode: CampaignHubPage.onSetGraphMode,
       openHelp: CampaignHubPage.onOpenHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
@@ -126,6 +132,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       tabs: [
         { id: "index", icon: "fa-solid fa-list" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
+        { id: "graph", icon: "fa-solid fa-circle-nodes" },
         { id: "search", icon: "fa-solid fa-magnifying-glass" },
         { id: "dashboards", icon: "fa-solid fa-table-columns" },
         { id: "secrets", icon: "fa-solid fa-user-secret" }
@@ -134,6 +141,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       labelPrefix: `${I18N}.hub.tabs`
     }
   };
+
+  // Graph tab's computed nodes/edges for this render pass, set in
+  // _prepareBodyContext and reused by activateListeners' draw call (same
+  // "compute once, draw from the cached graph" pattern the popup used for
+  // its truncated-notice/drawn-graph sync - see hub-graph-pane.mjs).
+  #graphData = null;
 
   static get type() {
     return HUB_PAGE_ID;
@@ -219,6 +232,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.index = this.#indexContext();
     context.timeline = { stacks };
+    const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
+    this.#graphData = graphPrep.graph;
+    context.graph = graphPrep.context;
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -1034,6 +1050,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
+  static onSetGraphMode(event, target) {
+    const mode = target.dataset.mode;
+    if (!["ego", "all"].includes(mode)) return;
+    this.state.graphMode = mode;
+    this.render({ parts: ["main"] });
+  }
+
   // Timepoint label + optional campaign-date prompt. Mirrors campaign-record's
   // hub-mixin #promptTimepoint (see mej-campaign-companion's task-7 reference).
   static async #promptTimepoint(initial = {}, { titleKey, okKey = `${I18N}.hub.create` } = {}) {
@@ -1354,6 +1377,30 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           }, 150)
         );
       }
+    }
+
+    const backlinksToggle = html.querySelector('[data-action-change="toggleGraphBacklinks"]');
+    if (backlinksToggle && !backlinksToggle.dataset.ccBound) {
+      backlinksToggle.dataset.ccBound = "1";
+      backlinksToggle.addEventListener("change", () => {
+        this.state.graphBacklinks = backlinksToggle.checked;
+        this.render({ parts: ["main"] });
+      });
+    }
+    const graphSvg = html.querySelector(".mej-cc-graph-svg");
+    if (graphSvg && this.#graphData) {
+      drawGraphPane(graphSvg, this.#graphData, {
+        centerUuid: this.state.graphCenterUuid,
+        onOpen: async (uuid) => {
+          const entry = await fromUuid(uuid);
+          if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
+        }
+      });
+    }
+    if (this.state.pendingTab) {
+      const tab = this.state.pendingTab;
+      this.state.pendingTab = null;
+      this.changeTab(tab, "primary");
     }
   }
 }

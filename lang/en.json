@@ -79,6 +79,7 @@
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
+        "graph": "Graph",
         "search": "Search",
         "dashboards": "Dashboards",
         "secrets": "Secrets"
