@@ -611,6 +611,8 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
           const created = await this.#createPage(page, campaignDate, ownership, targetFolderId);
           results.created++;
           if (page.timepoint) {
+            // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
+            // never prompts and never follows the Hub's currently-viewed one.
             timeline ??= await ensureTimelineJournal(campaign);
             if (timeline) {
               let filingError = null;
