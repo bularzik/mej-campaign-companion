@@ -114,6 +114,38 @@ test.describe("15 campaign portal", () => {
       await expect(shell.locator(".mej-cc-hub-header")).toBeVisible();
       await expect(shell.locator('select[name="campaign-scope"]')).toHaveValue(folderId);
 
+      // C1 regression: after OPENING the portal, MEJ's fixType() normalizes
+      // its in-memory page .type to bare "campaign" for the rest of the
+      // session. isCampaignPortal must still recognize it, or three things
+      // break silently: (a) the Hub index gains a spurious row for the
+      // portal itself, (b) campaignPortal() stops finding it and the
+      // settings dialog offers a duplicate-creating Restore, and (c) the
+      // rename-sync hooks no-op. Assert all three still hold post-open.
+
+      // (a) No index row for the portal, in the campaign's own scope (lands
+      // on Index tab by default - static TABS.initial).
+      const nameCell = (name) => shell.locator("li.mej-cc-index-row .mej-cc-index-name", { hasText: name });
+      await expect(nameCell(NAME)).toHaveCount(0);
+
+      // (b) The edit-campaign dialog does NOT show Restore - the portal
+      // still resolves as existing.
+      await shell.locator("button.mej-cc-edit-campaign").click();
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog.locator('button[data-action="restorePortal"]')).toHaveCount(0);
+      await dialog.locator('button[data-action="cancel"], button[data-action="close"]').first().click().catch(() => dialog.evaluate((d) => d.close()));
+      await settle(page, 300);
+
+      // (c) A folder rename still syncs to the portal (both entry and page name).
+      const RENAMED = `${NAME} Renamed`;
+      await page.evaluate(async ({ id, name }) => { await game.folders.get(id).update({ name }); }, { id: folderId, name: RENAMED });
+      await settle(page, 400);
+      const afterRename = await page.evaluate((id) => {
+        const entry = game.journal.get(id);
+        return { entryName: entry.name, pageName: entry.pages.contents[0]?.name };
+      }, created.portalId);
+      expect(afterRename.entryName).toBe(RENAMED);
+      expect(afterRename.pageName).toBe(RENAMED);
+
       assertNoConsoleErrors(errors);
     } finally {
       await deleteCampaignFolder(page, folderId);
