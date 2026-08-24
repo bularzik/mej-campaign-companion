@@ -97,6 +97,8 @@ function captureCampaign() {
 async function fileOntoNewestTimepoint(link) {
   const campaign = captureCampaign();
   if (!campaign && getCampaigns().length) return; // campaigns exist but no target: decline silently for media
+  // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
+  // never prompts and never follows the Hub's currently-viewed one.
   const journal = await ensureTimelineJournal(campaign);
   if (!journal) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);

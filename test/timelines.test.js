@@ -1,0 +1,90 @@
+import { describe, it, expect } from "vitest";
+import { orderTimelines, resolveDefaultTimelineId, partitionTimelines, sortByCreation } from "../scripts/logic/timelines.mjs";
+
+const tl = (id, name) => ({ id, name });
+
+describe("orderTimelines", () => {
+  it("puts the default first, then name-sorts the rest", () => {
+    const list = [tl("a", "Zed"), tl("b", "Mid"), tl("c", "Apex")];
+    expect(orderTimelines(list, "b").map((t) => t.id)).toEqual(["b", "c", "a"]);
+  });
+  it("name-sorts everything when the default is absent or unknown", () => {
+    const list = [tl("a", "Zed"), tl("c", "Apex")];
+    expect(orderTimelines(list, null).map((t) => t.id)).toEqual(["c", "a"]);
+    expect(orderTimelines(list, "gone").map((t) => t.id)).toEqual(["c", "a"]);
+  });
+  it("returns a new array and tolerates empty/nullish input", () => {
+    const list = [tl("a", "A")];
+    expect(orderTimelines(list, "a")).not.toBe(list);
+    expect(orderTimelines([], "x")).toEqual([]);
+    expect(orderTimelines(null, null)).toEqual([]);
+  });
+});
+
+describe("resolveDefaultTimelineId", () => {
+  const list = [tl("first", "Zed"), tl("second", "Apex")];
+  it("honors a flag id that names one of the timelines", () => {
+    expect(resolveDefaultTimelineId(list, "second")).toBe("second");
+  });
+  it("falls back to the FIRST element as given (creation order), not name order", () => {
+    expect(resolveDefaultTimelineId(list, null)).toBe("first");
+    expect(resolveDefaultTimelineId(list, "stale")).toBe("first");
+  });
+  it("returns null for an empty or nullish list", () => {
+    expect(resolveDefaultTimelineId([], "x")).toBe(null);
+    expect(resolveDefaultTimelineId(null, null)).toBe(null);
+  });
+});
+
+describe("sortByCreation", () => {
+  const timed = (id, t) => ({ id, createdAt: t });
+  const at = (e) => e.createdAt;
+
+  it("sorts oldest-first by createdTime", () => {
+    const list = [timed("c", 300), timed("a", 100), timed("b", 200)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("tie-breaks equal timestamps by document id (total order)", () => {
+    const list = [timed("z", 100), timed("a", 100), timed("m", 100)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "m", "z"]);
+  });
+
+  it("treats a missing/undefined timestamp as 0 and still totally orders", () => {
+    const list = [timed("z", undefined), timed("a", undefined), timed("early", 50)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "z", "early"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const list = [timed("b", 2), timed("a", 1)];
+    const copy = [...list];
+    sortByCreation(list, at);
+    expect(list).toEqual(copy);
+  });
+
+  it("tolerates empty/nullish input", () => {
+    expect(sortByCreation([], at)).toEqual([]);
+    expect(sortByCreation(null, at)).toEqual([]);
+  });
+});
+
+describe("partitionTimelines", () => {
+  const campaignIdOf = (e) => e.campaignId ?? null;
+  const entry = (id, campaignId) => ({ id, name: id, campaignId });
+  it("groups by campaign and buckets campaign-less timelines as world", () => {
+    const { byCampaign, world } = partitionTimelines(
+      [entry("t1", "c1"), entry("t2", "c1"), entry("t3", null), entry("t4", "c2")], campaignIdOf);
+    expect(byCampaign.get("c1").map((t) => t.id)).toEqual(["t1", "t2"]);
+    expect(byCampaign.get("c2").map((t) => t.id)).toEqual(["t4"]);
+    expect(world.map((t) => t.id)).toEqual(["t3"]);
+  });
+  it("returns empty structures for no input", () => {
+    const { byCampaign, world } = partitionTimelines([], campaignIdOf);
+    expect(byCampaign.size).toBe(0);
+    expect(world).toEqual([]);
+  });
+  it("preserves input order within each bucket", () => {
+    const { byCampaign } = partitionTimelines([entry("b", "c1"), entry("a", "c1")], campaignIdOf);
+    expect(byCampaign.get("c1").map((t) => t.id)).toEqual(["b", "a"]);
+  });
+});

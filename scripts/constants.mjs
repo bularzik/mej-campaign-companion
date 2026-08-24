@@ -70,6 +70,9 @@ export const MEJ_ENCOUNTER_TYPE = "encounter";
 /** Folder flag key: marks a journal Folder as a campaign (spec §1). Flag shape: { ownershipDefault: "none"|"observer"|"owner" }. */
 export const CAMPAIGN_FLAG = "campaign";
 
+/** Key on the campaign flag naming its auto-filing default timeline (spec D §1). Absent = fall back to the campaign's first timeline. */
+export const DEFAULT_TIMELINE_KEY = "defaultTimelineId";
+
 /** World setting: schema version for future migrations (spec §6). */
 export const DATA_VERSION_SETTING = "dataVersion";
 
@@ -84,6 +87,9 @@ export const HUB_CAMPAIGN_SCOPE_SETTING = "hubCampaignScope";
 
 /** World setting: the one-time adoption offer has been shown/dismissed (spec §6). */
 export const ADOPTION_PROMPTED_SETTING = "adoptionPrompted";
+
+/** Client setting: the Hub Timeline pane's selected timeline id ("" = the scope's default/stacked view). Spec D §3. */
+export const HUB_TIMELINE_SELECTION_SETTING = "hubTimelineSelection";
 
 /** i18n prefix for all companion strings. */
 export const I18N = "MEJCampaignCompanion";
