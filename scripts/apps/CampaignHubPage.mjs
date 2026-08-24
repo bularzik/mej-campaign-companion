@@ -14,10 +14,11 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
-import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, DEFAULT_TIMELINE_KEY, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal } from "../logic/campaigns.mjs";
+import { orderTimelines, partitionTimelines, resolveDefaultTimelineId } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -26,7 +27,7 @@ import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
-import { buildIndexSource, filterIndexRows } from "../logic/hub-index.mjs";
+import { buildIndexSource, filterIndexRows, isVisibleToUser } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
@@ -69,6 +70,7 @@ const HUB_STATE = {
   secretsState: "all",
   secretsPlayer: "",
   campaignId: null,
+  timelineId: null,
   graphMode: "all",
   graphCenterUuid: null,
   graphBacklinks: false,
@@ -99,6 +101,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       toggleSortMenu: CampaignHubPage.onToggleSortMenu,
       toggleToolsMenu: CampaignHubPage.onToggleToolsMenu,
       setTimelineOrder: CampaignHubPage.onSetTimelineOrder,
+      makeTimelineDefault: CampaignHubPage.onMakeTimelineDefault,
+      renameTimeline: CampaignHubPage.onRenameTimeline,
+      deleteTimeline: CampaignHubPage.onDeleteTimeline,
       addTimepoint: CampaignHubPage.onAddTimepoint,
       renameTimepoint: CampaignHubPage.onRenameTimepoint,
       deleteTimepoint: CampaignHubPage.onDeleteTimepoint,
@@ -277,9 +282,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
 
     const { campaign, unfiled } = this.#scope();
+    const selectedTimeline = this.#timelineSelection();
     let stacks;
     if (unfiled) {
       stacks = [];
+    } else if (selectedTimeline) {
+      // Explicit pick wins in every scope (spec D §3).
+      stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM) }];
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
@@ -290,12 +299,25 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
         stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
       } else {
-        // Spec §2: All mode stacks per-campaign timelines, never interleaved.
-        // No lazy creation here - creating N journals on a render would be a
-        // side-effect storm; a campaign's timeline is created when scoped to it.
-        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(resolveTimelineJournal(c), isGM) }));
+        // Spec D §3: All mode stacks each campaign's DEFAULT timeline plus
+        // every world timeline, never interleaved. No lazy creation here -
+        // creating N journals on a render would be a side-effect storm.
+        // One pass over the world's visible timelines, partitioned once
+        // (logic/timelines.mjs), instead of re-scanning every folder.
+        const visibleTimelines = game.journal.contents
+          .filter((e) => isTimelineJournal(e) && isVisibleToUser(e, game.user));
+        const { byCampaign, world } = partitionTimelines(visibleTimelines, campaignIdOf);
+        stacks = campaigns.map((c) => {
+          const list = byCampaign.get(c.id) ?? [];
+          const defId = resolveDefaultTimelineId(list, c.getFlag(MODULE_ID, CAMPAIGN_FLAG)?.[DEFAULT_TIMELINE_KEY] ?? null);
+          const journal = defId ? list.find((t) => t.id === defId) ?? null : null;
+          return { name: c.name, ...this.#timelineContext(journal, isGM) };
+        });
+        for (const w of orderTimelines(world, null)) {
+          stacks.push({ name: w.name, ...this.#timelineContext(w, isGM) });
+        }
         const legacy = getTimelineJournal();
-        if (legacy && !campaignOf(legacy)) {
+        if (legacy && !campaignOf(legacy) && !stacks.some((s) => s.journalId === legacy.id)) {
           stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(legacy, isGM) });
         }
       }
@@ -307,7 +329,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const scopeContext = this.#campaignScopeContext();
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.index = this.#indexContext();
-    context.timeline = { stacks };
+    context.timeline = { stacks, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
     this.#graphData = graphPrep.graph;
     context.graph = graphPrep.context;
@@ -349,6 +371,58 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       return { campaign: null, unfiled: false };
     }
     return { campaign: folder ?? null, unfiled: false };
+  }
+
+  /** Lazily seeded from the client setting; a stale/invisible id resets to "" (same discipline as #scope). */
+  #timelineSelection() {
+    if (this.state.timelineId === null) {
+      this.state.timelineId = game.settings.get(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING);
+    }
+    const id = this.state.timelineId;
+    if (!id) return null;
+    const journal = game.journal.get(id);
+    if (!journal || !isTimelineJournal(journal) || !isVisibleToUser(journal, game.user)) {
+      this.state.timelineId = "";
+      return null;
+    }
+    return journal;
+  }
+
+  /**
+   * Picker options (spec D §3): the scoped campaign's timelines (default
+   * marked), a separator, world timelines, then GM-only "New timeline…".
+   * The separator is a disabled option so the template stays a plain select.
+   */
+  #timelineSelectionContext(campaign) {
+    const user = game.user;
+    const mine = campaign ? campaignTimelines(campaign, { user }) : [];
+    const defId = campaign ? defaultTimeline(campaign)?.id ?? null : null;
+    const ordered = orderTimelines(mine, defId);
+    const world = worldTimelines({ user });
+    const selectedId = this.#timelineSelection()?.id ?? "";
+    const options = [
+      { value: "", label: game.i18n.localize(`${I18N}.hub.timeline.allInScope`), selected: selectedId === "" },
+      ...ordered.map((t) => ({
+        value: t.id,
+        label: t.id === defId ? `★ ${t.name}` : t.name,
+        selected: selectedId === t.id
+      }))
+    ];
+    if (world.length) {
+      options.push({ value: "__sep", label: game.i18n.localize(`${I18N}.hub.timeline.worldGroup`), disabled: true, selected: false });
+      options.push(...world.map((t) => ({ value: t.id, label: t.name, selected: selectedId === t.id })));
+    }
+    if (game.user.isGM) {
+      options.push({ value: "__newtl", label: game.i18n.localize(`${I18N}.hub.timeline.newTimeline`), selected: false });
+    }
+    const selected = this.#timelineSelection();
+    return {
+      options,
+      selectedId,
+      canManage: game.user.isGM && !!selected,
+      isDefault: !!selected && selected.id === defId,
+      isWorld: !!selected && !campaignIdOf(selected)
+    };
   }
 
   /**
@@ -1139,6 +1213,47 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
+  static async onMakeTimelineDefault() {
+    if (!game.user.isGM) return;
+    const { campaign } = this.#scope();
+    const journal = game.journal.get(this.state.timelineId);
+    if (!campaign || !journal) return;
+    await setDefaultTimeline(campaign, journal.id);
+    this.render({ parts: ["main"] });
+  }
+
+  static async onRenameTimeline() {
+    if (!game.user.isGM) return;
+    const journal = game.journal.get(this.state.timelineId);
+    if (!journal) return;
+    const name = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.hub.timeline.rename`) },
+      content: `<div class="form-group"><label>${foundry.utils.escapeHTML(game.i18n.localize(`${I18N}.hub.timeline.nameLabel`))}</label><input type="text" name="name" value="${foundry.utils.escapeHTML(journal.name)}"></div>`,
+      ok: { callback: (event, button) => button.form.elements.name.value.trim() },
+      rejectClose: false
+    });
+    if (!name) return;
+    await journal.update({ name });
+    this.render({ parts: ["main"] });
+  }
+
+  static async onDeleteTimeline() {
+    if (!game.user.isGM) return;
+    const journal = game.journal.get(this.state.timelineId);
+    if (!journal) return;
+    const count = (journal.getFlag(MODULE_ID, "timeline")?.timepoints ?? []).length;
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize(`${I18N}.hub.timeline.deleteTitle`) },
+      content: `<p>${game.i18n.format(`${I18N}.hub.timeline.deleteBody`, { name: foundry.utils.escapeHTML(journal.name), count })}</p>`,
+      rejectClose: false
+    });
+    if (!ok) return;
+    await journal.delete();
+    this.state.timelineId = "";
+    await game.settings.set(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING, "");
+    this.render({ parts: ["main"] });
+  }
+
   static onSetGraphMode(event, target) {
     const mode = target.dataset.mode;
     if (!["ego", "all"].includes(mode)) return;
@@ -1413,6 +1528,39 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         }
         this.state.campaignId = event.target.value;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
+        this.render({ parts: ["main"] });
+      });
+    }
+
+    const tlSelect = html.querySelector('select[name="timeline-select"]');
+    if (tlSelect && !tlSelect.dataset.ccBound) {
+      tlSelect.dataset.ccBound = "1";
+      tlSelect.addEventListener("change", async (event) => {
+        const value = event.target.value;
+        if (value === "__sep") {           // disabled separator; restore the visible value
+          event.target.value = this.state.timelineId ?? "";
+          return;
+        }
+        if (value === "__newtl") {
+          // Action-as-option (same idiom as the campaign picker's New Campaign…):
+          // revert the visible selection first so a cancelled dialog leaves it alone.
+          event.target.value = this.state.timelineId ?? "";
+          const name = await foundry.applications.api.DialogV2.prompt({
+            window: { title: game.i18n.localize(`${I18N}.hub.timeline.newTimeline`) },
+            content: `<div class="form-group"><label>${foundry.utils.escapeHTML(game.i18n.localize(`${I18N}.hub.timeline.nameLabel`))}</label><input type="text" name="name" value=""></div>`,
+            ok: { callback: (e, button) => button.form.elements.name.value.trim() },
+            rejectClose: false
+          });
+          if (!name) return;
+          const { campaign } = this.#scope();
+          const created = await createTimeline({ campaign, name });
+          if (!created) return;
+          this.state.timelineId = created.id;
+          await game.settings.set(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING, created.id);
+          return this.render({ parts: ["main"] });
+        }
+        this.state.timelineId = value;
+        await game.settings.set(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING, value);
         this.render({ parts: ["main"] });
       });
     }

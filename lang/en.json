@@ -154,6 +154,17 @@
       "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
       "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
       "timelineEmptyScope": "No timeline in this scope.",
+      "timeline": {
+        "pickerLabel": "Timeline",
+        "allInScope": "All timelines in scope",
+        "worldGroup": "— World timelines —",
+        "newTimeline": "➕ New timeline…",
+        "nameLabel": "Timeline name",
+        "makeDefault": "Make default",
+        "rename": "Rename timeline",
+        "deleteTitle": "Delete timeline",
+        "deleteBody": "Delete “{name}” and its {count} timepoints? This cannot be undone."
+      },
       "search": {
         "placeholder": "Search everything...",
         "noResults": "No matches.",
