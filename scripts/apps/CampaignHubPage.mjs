@@ -14,11 +14,11 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, DEFAULT_TIMELINE_KEY, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal } from "../logic/campaigns.mjs";
-import { orderTimelines, partitionTimelines, resolveDefaultTimelineId } from "../logic/timelines.mjs";
+import { orderTimelines, partitionTimelines } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
@@ -284,11 +284,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const { campaign, unfiled } = this.#scope();
     const selectedTimeline = this.#timelineSelection();
     let stacks;
-    if (unfiled) {
-      stacks = [];
-    } else if (selectedTimeline) {
-      // Explicit pick wins in every scope (spec D §3).
+    if (selectedTimeline) {
+      // Explicit pick outranks scope emptiness (spec D §3): choosing a
+      // timeline narrows to it even in Unfiled scope, where the unselected
+      // default is an empty pane - checked before the `unfiled` branch below.
       stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM) }];
+    } else if (unfiled) {
+      stacks = [];
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
@@ -302,17 +304,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         // Spec D §3: All mode stacks each campaign's DEFAULT timeline plus
         // every world timeline, never interleaved. No lazy creation here -
         // creating N journals on a render would be a side-effect storm.
-        // One pass over the world's visible timelines, partitioned once
-        // (logic/timelines.mjs), instead of re-scanning every folder.
+        // Per-campaign defaults resolve through defaultTimeline() - the same
+        // glue function auto-filing uses - so the Hub can never show a
+        // different default than what filing actually targets, even for a
+        // viewer who can't see the flagged default (defaultTimeline() itself
+        // resolves over the UNFILTERED list; #timelineContext below handles
+        // a journal the viewer can't see the same way it does elsewhere).
+        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(defaultTimeline(c), isGM) }));
+        // World bucket only: visibility-filtered for display (no per-campaign
+        // "default" concept applies to it), via partitionTimelines.
         const visibleTimelines = game.journal.contents
           .filter((e) => isTimelineJournal(e) && isVisibleToUser(e, game.user));
-        const { byCampaign, world } = partitionTimelines(visibleTimelines, campaignIdOf);
-        stacks = campaigns.map((c) => {
-          const list = byCampaign.get(c.id) ?? [];
-          const defId = resolveDefaultTimelineId(list, c.getFlag(MODULE_ID, CAMPAIGN_FLAG)?.[DEFAULT_TIMELINE_KEY] ?? null);
-          const journal = defId ? list.find((t) => t.id === defId) ?? null : null;
-          return { name: c.name, ...this.#timelineContext(journal, isGM) };
-        });
+        const { world } = partitionTimelines(visibleTimelines, campaignIdOf);
         for (const w of orderTimelines(world, null)) {
           stacks.push({ name: w.name, ...this.#timelineContext(w, isGM) });
         }
