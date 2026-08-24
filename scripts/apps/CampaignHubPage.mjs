@@ -322,9 +322,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         for (const w of orderTimelines(world, null)) {
           stacks.push({ name: w.name, ...this.#timelineContext(w, isGM) });
         }
+        // Fourth and final #visibleTimeline call site (Finding 2, closure
+        // round): the legacy singleton is exactly as unfiltered as
+        // defaultTimeline(c) above - same render-seam guard required, or a
+        // legacy world timeline a player can't observe would print its
+        // timepoint labels here instead of degrading to the empty stack.
         const legacy = getTimelineJournal();
         if (legacy && !campaignOf(legacy) && !stacks.some((s) => s.journalId === legacy.id)) {
-          stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(legacy, isGM) });
+          stacks.push({ name: game.i18n.localize(`${I18N}.hub.scope.unfiled`), ...this.#timelineContext(this.#visibleTimeline(legacy), isGM) });
         }
       }
     }
