@@ -20,6 +20,11 @@ export const SESSION_TYPE = "session";
 /** The actual native JournalEntryPage `type` value for a Session page (module-declared subtype key). */
 export const SESSION_DOCUMENT_TYPE = `${MODULE_ID}.${SESSION_TYPE}`;
 
+/** MEJ-flag type key for a campaign portal entry (flags["monks-enhanced-journal"].type). */
+export const CAMPAIGN_TYPE = "campaign";
+/** Native module-declared JournalEntryPage subtype for campaign portals (see module.json documentTypes). */
+export const CAMPAIGN_DOCUMENT_TYPE = `${MODULE_ID}.campaign`;
+
 export const HUB_PAGE_ID = "campaign-hub";
 export const SOCKET = `module.${MODULE_ID}`;
 
@@ -69,7 +74,7 @@ export const CAMPAIGN_FLAG = "campaign";
 export const DATA_VERSION_SETTING = "dataVersion";
 
 /** Current schema version written by the adoption/migration runner. */
-export const CURRENT_DATA_VERSION = 1;
+export const CURRENT_DATA_VERSION = 2;
 
 /** World setting: Folder id of the campaign that receives auto-captured encounters/media (spec §4). "" = unset → capture declines. */
 export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";

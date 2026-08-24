@@ -20,7 +20,7 @@
  */
 
 import { sessionData } from "../sheets/session-data.mjs";
-import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+import { SESSION_TYPE, SESSION_DOCUMENT_TYPE, CAMPAIGN_TYPE } from "../constants.mjs";
 import { stripSecretSections } from "./secret-blocks.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
@@ -55,7 +55,11 @@ function bodyText(page) {
  * Session page's `type` is the prefixed SESSION_DOCUMENT_TYPE
  * (`${MODULE_ID}.session` - see constants.mjs's doc comment); the bare
  * SESSION_TYPE is also accepted defensively, for any page shaped by a path
- * outside this module's control.
+ * outside this module's control. A campaign's own portal entry carries the
+ * MEJ type flag CAMPAIGN_TYPE ("campaign" - see buildCampaignPortalData in
+ * campaign-portal-data.mjs) purely for the interop machinery it needs to
+ * ride; it is not real record content and is never eligible for export
+ * (spec C §1) - the exported document must never contain a portal section.
  * @returns {{uuid:string, name:string, kind:string, page:object}[]}
  */
 export function eligibleEntries(entries, getMEJType) {
@@ -66,7 +70,7 @@ export function eligibleEntries(entries, getMEJType) {
     const mejType = getMEJType(entry);
     const isSessionPage = page.type === SESSION_TYPE || page.type === SESSION_DOCUMENT_TYPE;
     const kind = mejType || (isSessionPage ? SESSION_KIND : null);
-    if (!kind) continue;
+    if (!kind || kind === CAMPAIGN_TYPE) continue;
     rows.push({ uuid: entry.uuid, name: entry.name, kind, page });
   }
   return rows;

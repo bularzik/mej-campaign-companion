@@ -29,7 +29,7 @@
         "silent": "Silent (whisper summary)"
       }
     },
-    "sheettype": { "session": "Session" },
+    "sheettype": { "session": "Session", "campaign": "Campaign" },
     "autoCapture": {
       "died": "Died",
       "injured": "Injured",
@@ -76,6 +76,7 @@
     },
     "hub": {
       "title": "Campaign Hub",
+      "openCampaignHub": "Open Campaign Hub",
       "tabs": {
         "index": "Index",
         "timeline": "Timeline",
@@ -91,6 +92,7 @@
       "newCampaignBaseline": "Player access",
       "baseline": { "none": "GM only", "observer": "Players can view", "owner": "Players can edit" },
       "editCampaign": "Campaign settings",
+      "restorePortal": "Restore campaign entry",
       "applyBaselineNow": "Apply to all current members now",
       "baselineApplied": "Updated default permissions on {count} entries.",
       "adoptOffer": "This world has campaign content but no campaign. Create one from it?",

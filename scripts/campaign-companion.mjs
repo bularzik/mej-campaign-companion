@@ -8,6 +8,9 @@ import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
+import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
+import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
+import { registerFolderContext } from "./hooks/folder-context.mjs";
 
 Hooks.once("init", () => {
   foundry.applications.handlebars.loadTemplates([
@@ -107,6 +110,22 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, ADOPTION_PROMPTED_SETTING, {
     scope: "world", config: false, type: Boolean, default: false
   });
+
+  // Task 5 live-e2e finding: Foundry's DocumentDirectory resolves its
+  // getFolderContextOptions listeners into a fixed ContextMenu instance
+  // once, at the sidebar tab's own first render (client boot, well before
+  // any module's ready hook) - it is NOT re-resolved per right-click.
+  // Registering this from registerCore() (fired from onHandshake/onReady,
+  // i.e. at "setup"/"ready") reliably missed that window: the option was
+  // provably correct in isolation (Hooks.callAll + condition both worked
+  // when invoked directly) but never appeared on a real right-click,
+  // because the sidebar's ContextMenu had already been built without it.
+  // folder-context.mjs only imports constants + pure logic (campaigns.mjs)
+  // at its own top level - its one heavy dependency (CampaignHubPage.mjs,
+  // which statically imports MEJ's EnhancedJournalSheet.js) is already
+  // dynamically imported inside the click callback, not here - so it's
+  // safe to import and register this early, at init.
+  registerFolderContext();
 });
 
 // Grants player-writable default ownership to Session entries created
@@ -214,9 +233,18 @@ Hooks.once("ready", async () => {
   // routes them again. No-op in native mode and for non-active-GM clients.
   await healSessionFlags();
 
-  // Spec §6: versioned migration hook. No migrations exist yet at version 1;
-  // future schema changes bump CURRENT_DATA_VERSION and add steps here.
-  if (game.user.isGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
+  // Spec §6 (campaign-container) + spec C §1: versioned migrations. Gated on
+  // the elected activeGM (not just isGM) - two connected GMs would otherwise
+  // both pass the version check and race the v2 backfill below, each
+  // creating a portal for the same campaign before either's dataVersion
+  // write lands (see hooks/socket.mjs and hooks/auto-capture.mjs for the
+  // same single-writer pattern).
+  if (game.user === game.users.activeGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
+    // v2: every campaign gets its portal entry (idempotent - the planner
+    // returns only campaigns lacking one).
+    for (const campaign of missingPortalPlan(getCampaigns(), campaignPortal)) {
+      await ensureCampaignPortal(campaign);
+    }
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
 });

@@ -15,7 +15,7 @@ function entry(id, { folder: f = null, timeline = false } = {}) {
 }
 
 describe("campaigns module", async () => {
-  const { campaignFlagOf, isCampaignFolder, campaignOf, campaignIdOf, isMemberOf, partitionByCampaign, isTimelineJournal, ownershipLevelFor, canAttachToTimeline } = await import("../scripts/logic/campaigns.mjs");
+  const { campaignFlagOf, isCampaignFolder, campaignOf, campaignIdOf, isMemberOf, partitionByCampaign, isTimelineJournal, ownershipLevelFor, canAttachToTimeline, isCampaignPortal } = await import("../scripts/logic/campaigns.mjs");
 
   describe("isCampaignFolder / campaignFlagOf", () => {
     it("detects the campaign flag", () => {
@@ -142,6 +142,49 @@ describe("campaigns module", async () => {
         { _id: "a", "ownership.default": 2 },
         { _id: "b", "ownership.default": 2 }
       ]);
+    });
+  });
+
+  describe("isCampaignPortal exclusion shape", () => {
+    const portalEntry = {
+      id: "pe", documentName: "JournalEntry", folder: null,
+      pages: { contents: [{ documentName: "JournalEntryPage", type: "mej-campaign-companion.campaign" }] },
+      flags: {}
+    };
+    it("marks portal entries", () => {
+      expect(isCampaignPortal(portalEntry)).toBe(true);
+    });
+    it("does not mark timeline journals or plain entries", () => {
+      expect(isCampaignPortal(entry("t1", { timeline: true }))).toBe(false);
+      expect(isCampaignPortal(entry("e1"))).toBe(false);
+    });
+
+    // C1 regression: MEJ's fixType() normalizes an OPENED portal page's
+    // in-memory `.type` to bare "campaign" for the rest of the session;
+    // isCampaignPortal must still match so campaignEntries/unfiledEntries
+    // keep excluding the portal after a GM has opened it once.
+    it("still marks a portal entry whose page .type was normalized to bare \"campaign\" by MEJ", () => {
+      const normalizedEntry = {
+        id: "pe2", documentName: "JournalEntry", folder: null,
+        pages: {
+          contents: [{
+            documentName: "JournalEntryPage",
+            type: "campaign",
+            _source: { type: "mej-campaign-companion.campaign" }
+          }]
+        },
+        flags: {}
+      };
+      expect(isCampaignPortal(normalizedEntry)).toBe(true);
+    });
+
+    it("marks a page-shaped entry via the companion's own campaignPortal flag alone", () => {
+      const flaggedEntry = {
+        id: "pe3", documentName: "JournalEntry", folder: null,
+        pages: { contents: [{ documentName: "JournalEntryPage", type: "text", flags: { [MODULE_ID]: { campaignPortal: true } } }] },
+        flags: {}
+      };
+      expect(isCampaignPortal(flaggedEntry)).toBe(true);
     });
   });
 

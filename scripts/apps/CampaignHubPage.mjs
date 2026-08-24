@@ -14,9 +14,9 @@
 // styles/campaign-companion.css under .mej-cc-hub, and don't rely on
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal } from "../data/timeline-journal.mjs";
-import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden } from "../data/campaign-store.mjs";
+import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -72,7 +72,19 @@ const HUB_STATE = {
   graphMode: "all",
   graphCenterUuid: null,
   graphBacklinks: false,
-  pendingTab: null
+  pendingTab: null,
+  // Spec C §2: which portal document's mount already applied the one-time
+  // campaign scope (see _prepareBodyContext below) - null until a portal
+  // mount has happened. Lives here rather than as an instance field because
+  // MEJ's shell reconstructs the subsheet whenever
+  // `this.subsheet.type != this.document.type` - always true for a portal
+  // mount ("campaign-hub" vs the portal page's type) despite the `get type()`
+  // override above, since that override only fixes the comparison for the
+  // Hub's OWN synthetic document, not the portal page hosting it. An instance
+  // field would reset on every such reconstruction and re-scope the user
+  // back to the portal's campaign mid-session, fighting a deliberate re-scope
+  // via the picker.
+  portalScopedFor: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -173,6 +185,28 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return false;
   }
 
+  /**
+   * Task 5 live-e2e finding (Bug C): EnhancedJournalSheet.js's own
+   * _toggleDisabled(disabled) (~line 1119) sweeps every input/select/
+   * textarea/button under the subsheet's element and sets `.disabled` -
+   * called as `subsheet._toggleDisabled.call(subsheet, true)` from
+   * enhanced-journal.js's renderSubSheet (~line 646) whenever
+   * `!this.isEditable`, i.e. whenever the mounted document isn't
+   * owner-editable for the current user. Correct for ordinary content
+   * sheets (an OBSERVER-only page really should be read-only), but the
+   * Hub already gates every control per-seat in its own templates (GM-only
+   * chrome - the edit-campaign pencil, New Session, the Tools menu's GM
+   * items - simply never renders for a player; see hub-header.hbs's own
+   * `{{#if isGM}}` guards). A portal's baseline ownership is deliberately
+   * OBSERVER for players (spec C §1), so every portal-direct-open by a
+   * non-owner hit `!isEditable` and froze the ENTIRE toolbar solid -
+   * including the harmless Tools-summary button (User Guide link only,
+   * no editing) - confirmed live via tests/e2e/15-campaign-portal.spec.mjs
+   * scenario 7. No-op: the Hub owns its own enablement, not MEJ's blanket
+   * per-document sweep.
+   */
+  _toggleDisabled(_disabled) {}
+
   // Client-only UI state (filters, sort, open menus, timeline order) -
   // module-level HUB_STATE (see above), not an instance field, so it
   // survives subsheet reconstruction by the shell.
@@ -207,6 +241,40 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     context = await super._prepareBodyContext(context, options);
     const isGM = game.user.isGM;
     context.isGM = isGM;
+
+    // Spec C §2: a portal mount scopes the Hub to its campaign - once per
+    // mount, so the user can re-scope with the picker afterwards without
+    // the portal fighting them. The shell's synthetic hub page and the
+    // native window's synthetic document never have the campaign subtype,
+    // so plain Hub opens are untouched.
+    //
+    // Task 5 live-e2e finding: MEJ's own MonksEnhancedJournal.fixType()
+    // (monks-enhanced-journal.js ~line 4321, `object.type = type;`)
+    // normalizes a hosted page's IN-MEMORY `.type` to the bare mejType key
+    // (here "campaign", from flags["monks-enhanced-journal"].type) as part
+    // of mounting it into the shell - `_source.type` keeps the real,
+    // persisted, module-prefixed value, but `.type` does not, by the time
+    // this runs. Confirmed live: `this.document.type` reads "campaign" here
+    // even though `this.document._source.type` and a fresh, un-mounted
+    // fetch of the same page both read "mej-campaign-companion.campaign".
+    // Accept whichever form is actually in front of us rather than assume
+    // one - the bare mejType key (CAMPAIGN_TYPE, the common case once MEJ
+    // has mounted the page), the full native subtype (CAMPAIGN_DOCUMENT_TYPE,
+    // in case some hosting path leaves `.type` untouched), or _source.type
+    // directly as a last-resort fallback.
+    const isCampaignPage = this.document?.documentName === "JournalEntryPage" && (
+      this.document.type === CAMPAIGN_DOCUMENT_TYPE ||
+      this.document.type === CAMPAIGN_TYPE ||
+      this.document._source?.type === CAMPAIGN_DOCUMENT_TYPE
+    );
+    if (isCampaignPage && this.state.portalScopedFor !== this.document.uuid) {
+      this.state.portalScopedFor = this.document.uuid;
+      const portalCampaign = campaignOf(this.document);
+      if (portalCampaign) {
+        this.state.campaignId = portalCampaign.id;
+        await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, portalCampaign.id);
+      }
+    }
 
     const { campaign, unfiled } = this.#scope();
     let stacks;
@@ -840,9 +908,31 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         <select name="baseline">${options}</select></div>
       <div class="form-group"><label><input type="checkbox" name="applyNow" checked>
         ${esc(game.i18n.localize(`${I18N}.hub.applyBaselineNow`))}</label></div>`;
+    // Spec C §2: the campaign settings dialog is also where a GM who deleted
+    // (or never had) the campaign's portal entry can get one back. Absent
+    // when a portal already exists - nothing to restore.
+    const buttons = [];
+    if (!campaignPortal(campaign)) {
+      buttons.push({
+        action: "restorePortal",
+        label: `${I18N}.hub.restorePortal`,
+        callback: async () => {
+          await ensureCampaignPortal(campaign);
+          this.render({ parts: ["main"] });
+          // Explicit false, not a bare return: DialogV2._onSubmit does
+          // `(await button.callback(...)) ?? button.action` (dialog.mjs
+          // :264-276), so an undefined-returning callback resolves the
+          // dialog's promise to the STRING "restorePortal" - truthy, so
+          // `if (!result) return;` below would fall through into
+          // campaign.setFlag(...) with result.baseline undefined.
+          return false;
+        }
+      });
+    }
     const result = await foundry.applications.api.DialogV2.prompt({
       window: { title: campaign.name },
       content,
+      buttons,
       ok: { callback: (event, button) => ({
         baseline: button.form.elements.baseline.value,
         applyNow: button.form.elements.applyNow.checked
@@ -1407,6 +1497,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // _prepareTabs() instead now, so the initial render comes up on the
     // right tab natively rather than patching after the fact.
   }
+}
+
+/** Set the Hub's campaign scope without opening it (folder context menu, spec C §2). */
+export function setHubScope(campaignId) {
+  HUB_STATE.campaignId = campaignId;
 }
 
 /**

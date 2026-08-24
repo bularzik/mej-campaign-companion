@@ -5,6 +5,7 @@
 // the extension API - see docs/superpowers/specs/2026-08-17-mej-api-optional-design.md.
 import {
   MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE,
+  CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE,
   FORCE_NATIVE_MODE_SETTING, I18N
 } from "../constants.mjs";
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
@@ -107,6 +108,16 @@ export async function registerCore() {
     const { registerRelationshipsUi } = await import("../hooks/relationships-ui.mjs");
     registerRelationshipsUi();
   });
+
+  await step("portal rename sync", async () => {
+    const { registerPortalSync } = await import("../hooks/portal-sync.mjs");
+    registerPortalSync();
+  });
+
+  // Folder context menu ("Open Campaign Hub") is registered at "init" now,
+  // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
+  // registering this late (registerCore only ever runs from "setup"/"ready")
+  // reliably missed the sidebar's own one-time ContextMenu construction.
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */
@@ -127,6 +138,15 @@ async function wireApiMode(api) {
     label: `${I18N}.sheettype.session`,
     icon: "fa-dice-d20",
     relationships: ["person", "place", "quest", "encounter", "event", "organization", "loot", "shop", "poi"]
+  });
+
+  api.registerSheetType({
+    key: CAMPAIGN_TYPE,
+    moduleId: MODULE_ID,
+    sheetClass: CampaignHubPage,
+    label: `${I18N}.sheettype.campaign`,
+    icon: "fa-flag",
+    relationships: []
   });
 
   api.registerShellPage({
@@ -170,9 +190,9 @@ export function registerHubSheetClass(CampaignHubPage) {
  */
 async function ensureSheetRegistrations() {
   const missing = missingSheetRegistrations(
-    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID
+    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE
   );
-  if (!missing.session && !missing.hub) return;
+  if (!missing.session && !missing.hub && !missing.campaign) return;
 
   console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, missing);
   const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
@@ -188,6 +208,15 @@ async function ensureSheetRegistrations() {
     });
   }
   if (missing.hub) registerHubSheetClass(CampaignHubPage);
+  if (missing.campaign) {
+    foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
+      types: [CAMPAIGN_DOCUMENT_TYPE],
+      makeDefault: true,
+      canBeDefault: true,
+      canConfigure: false,
+      label: `${I18N}.sheettype.campaign`
+    });
+  }
 }
 
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */
@@ -208,6 +237,16 @@ async function wireNativeMode() {
     types: [SESSION_DOCUMENT_TYPE],
     makeDefault: true,
     label: `${I18N}.sheettype.session`
+  });
+
+  // Campaign portal pages: same story, but the portal's sheet IS the Hub -
+  // makeDefault/canBeDefault so a core sidebar click opens it directly.
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
+    types: [CAMPAIGN_DOCUMENT_TYPE],
+    makeDefault: true,
+    canBeDefault: true,
+    canConfigure: false,
+    label: `${I18N}.sheettype.campaign`
   });
 
   // The Hub's synthetic type needs its sheetClasses entry in this mode too -
