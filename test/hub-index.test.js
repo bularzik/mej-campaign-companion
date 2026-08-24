@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isVisibleToUser, buildIndexSource, filterIndexRows } from "../scripts/logic/hub-index.mjs";
+import { isVisibleToUser, buildIndexSource, filterIndexRows, nativeRowType } from "../scripts/logic/hub-index.mjs";
 
 function entry(uuid, name, { limited = true } = {}) {
   return { uuid, name, testUserPermission: () => limited };
@@ -100,5 +100,55 @@ describe("filterIndexRows", () => {
   it("combines type and text filters", () => {
     const out = filterIndexRows(rows, { types: new Set(["person"]), query: "ire", sort: "name" }, labelOf);
     expect(out.map((r) => r.uuid)).toEqual(["c"]);
+  });
+});
+
+describe("nativeRowType", () => {
+  const entry = (pageTypes) => ({ pages: { contents: pageTypes.map((type) => ({ type })) } });
+
+  it("maps the first page's native type to a row type", () => {
+    expect(nativeRowType(entry(["pdf"]))).toBe("pdf");
+    expect(nativeRowType(entry(["video"]))).toBe("video");
+    expect(nativeRowType(entry(["image"]))).toBe("image");
+  });
+  it("falls back to journal for text and unknown page types", () => {
+    expect(nativeRowType(entry(["text"]))).toBe("journal");
+    expect(nativeRowType(entry(["whatever"]))).toBe("journal");
+  });
+  it("falls back to journal for an entry with no pages", () => {
+    expect(nativeRowType(entry([]))).toBe("journal");
+    expect(nativeRowType({})).toBe("journal");
+    expect(nativeRowType(null)).toBe("journal");
+  });
+  it("only considers the FIRST page (single-page convention)", () => {
+    expect(nativeRowType(entry(["text", "pdf"]))).toBe("journal");
+  });
+});
+
+describe("buildIndexSource media rows", () => {
+  const user = { isGM: true };
+  const mediaEntry = (uuid, name, type) => ({
+    uuid, name, testUserPermission: () => true,
+    pages: { contents: [{ type }] }
+  });
+
+  it("gives untyped pdf/video entries their own row types and icons", () => {
+    const rows = buildIndexSource(
+      [mediaEntry("J.p", "Rules", "pdf"), mediaEntry("J.v", "Session 3 VOD", "video")],
+      user, () => false, () => "fa-unused");
+    expect(rows.map((r) => [r.type, r.icon])).toEqual([
+      ["pdf", "fas fa-file-pdf"],
+      ["video", "fas fa-film"]
+    ]);
+  });
+  it("still lists untyped text entries as journal rows", () => {
+    const rows = buildIndexSource([mediaEntry("J.t", "Prose", "text")], user, () => false, () => "fa-unused");
+    expect(rows[0].type).toBe("journal");
+    expect(rows[0].icon).toBe("fas fa-book");
+  });
+  it("lets an MEJ type win over the native page type", () => {
+    const rows = buildIndexSource([mediaEntry("J.x", "Person", "pdf")], user, () => "person", (t) => `fa-${t}`);
+    expect(rows[0].type).toBe("person");
+    expect(rows[0].icon).toBe("fa-person");
   });
 });

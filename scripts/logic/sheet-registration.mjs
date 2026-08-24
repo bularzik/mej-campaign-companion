@@ -14,9 +14,17 @@
  * @param {string} sessionType    the native Session subtype key
  * @param {string} hubType        the Hub's synthetic type key
  * @param {string} campaignType   the native campaign-portal subtype key
- * @returns {{session: boolean, hub: boolean, campaign: boolean}} true = missing, needs registering
+ * @param {string[]} [mediaTypes] the native media subtype keys (e.g. pdf, video)
+ * @returns {{session: boolean, hub: boolean, campaign: boolean, media: boolean}} true = missing, needs registering
  */
-export function missingSheetRegistrations(sheetClasses, sessionType, hubType, campaignType) {
+export function missingSheetRegistrations(sheetClasses, sessionType, hubType, campaignType, mediaTypes = []) {
   const has = (t) => Object.keys((sheetClasses ?? {})[t] ?? {}).length > 0;
-  return { session: !has(sessionType), hub: !has(hubType), campaign: !has(campaignType) };
+  return {
+    session: !has(sessionType),
+    hub: !has(hubType),
+    campaign: !has(campaignType),
+    // Media covers TWO native types; report missing unless BOTH are registered,
+    // so a partial repair still re-runs.
+    media: (mediaTypes ?? []).some((t) => !has(t))
+  };
 }

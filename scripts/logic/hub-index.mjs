@@ -8,6 +8,28 @@ export function isVisibleToUser(entry, user) {
 }
 
 /**
+ * Row type for an entry carrying no MEJ type, derived from its FIRST page's
+ * native Foundry type (spec E §2). Single-page convention, the same one
+ * graph-rows.mjs and the Hub's other consumers use. Anything not in the
+ * table - text, or a type a future Foundry adds - stays "journal", so this
+ * can only refine the untyped bucket, never break it.
+ */
+const NATIVE_ROW_TYPES = { pdf: "pdf", video: "video", image: "image" };
+
+export function nativeRowType(entry) {
+  const first = entry?.pages?.contents?.[0]?.type;
+  return NATIVE_ROW_TYPES[first] ?? "journal";
+}
+
+/** Icon per synthetic row type (those MEJ's own getIcon map doesn't know). */
+export const SYNTHETIC_ICONS = {
+  journal: "fas fa-book",
+  pdf: "fas fa-file-pdf",
+  video: "fas fa-film",
+  image: "fas fa-image"
+};
+
+/**
  * Row descriptors for every campaign-scoped journal entry handed in,
  * permission-filtered for non-GM users. `getMEJType`/`getIcon` are injected
  * (they're game.MonksEnhancedJournal statics) so this stays callable without
@@ -23,11 +45,13 @@ export function buildIndexSource(entries, user, getMEJType, getIcon) {
   const rows = [];
   for (const entry of entries ?? []) {
     if (!isVisibleToUser(entry, user)) continue;
-    // Spec §2: membership, not typing - untyped members list as "journal".
-    const type = getMEJType(entry) || "journal";
+    // Spec §2 (campaign-container): membership, not typing - an untyped
+    // member still lists, now under a row type derived from its native page
+    // type (spec E §2) instead of the generic "journal" bucket.
+    const type = getMEJType(entry) || nativeRowType(entry);
     rows.push({
       uuid: entry.uuid, name: entry.name, type,
-      icon: type === "journal" ? "fas fa-book" : getIcon(type)
+      icon: SYNTHETIC_ICONS[type] ?? getIcon(type)
     });
   }
   return rows;
