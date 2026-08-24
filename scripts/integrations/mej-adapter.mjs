@@ -209,7 +209,7 @@ export function registerMediaSheetClass(MediaPageSheet) {
  */
 async function ensureSheetRegistrations() {
   const missing = missingSheetRegistrations(
-    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES
+    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES, MODULE_ID
   );
   if (!missing.session && !missing.hub && !missing.campaign && !missing.media) return;
 
