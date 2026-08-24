@@ -104,6 +104,9 @@
       "hide": "Hide from players",
       "reveal": "Reveal to players",
       "journalType": "Journal",
+      "pdfType": "Document",
+      "videoType": "Recording",
+      "imageType": "Picture",
       "allTypes": "All Types",
       "typeFilter": "Filter by Type",
       "sortBy": "Sort By",
@@ -338,6 +341,10 @@
       "skip": "Skip",
       "ambiguous": "Skipped as ambiguous (another entity shares this name):",
       "summary": "Auto-linked \"{name}\" in {count} page(s)."
+    },
+    "media": {
+      "missingSrc": "This page has no file attached yet.",
+      "openExternal": "Open in a new tab"
     }
   }
 }

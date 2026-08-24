@@ -135,3 +135,6 @@ export const UPLOAD_MEDIA_RESULT_ACTION = "relay-upload-media-result";
 
 /** Socket action: a player relays a playerRecaps write to the active GM (scripts/hooks/player-recap.mjs). */
 export const SAVE_RECAP_ACTION = "save-player-recap";
+
+/** Native Foundry JournalEntryPage types the companion mounts inside the MEJ shell (spec E §1). */
+export const MEDIA_PAGE_TYPES = ["pdf", "video"];
