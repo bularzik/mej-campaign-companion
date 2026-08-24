@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.0 (2026-08-24)
+
+- New: **a campaign can hold several named timelines.** Keep world
+  history apart from session events; the Timeline tab gains a picker
+  listing the campaign's timelines (the default marked ★), and GMs can
+  create, rename, delete, or re-designate the default from beside it.
+- New: **world timelines** — a timeline that belongs to no campaign,
+  shown in the All-campaigns scope. Unlike a campaign's own timeline, a
+  world timeline accepts links from any campaign, so shared history can
+  reference everything.
+- New: each campaign designates one **default timeline**, and everything
+  filed automatically (combat captures, imported session timepoints,
+  media shared with players) goes there — no prompts mid-session.
+- Existing worlds are unaffected: a campaign's single timeline simply
+  becomes its default, with no migration and no settings to change.
+- Fixed: which timeline received automatic filing could change after a
+  reload; the timeline picker could display one timeline while showing
+  another; and a GM-only timeline could reveal its entry labels to
+  players in the All-campaigns view.
+
 ## 0.10.0 (2026-08-24)
 
 - New: **campaigns are openable entities.** Every campaign now has a
