@@ -79,7 +79,7 @@ test.describe.serial("16 multi-timeline", () => {
 
   // Shared across the serial scenarios (1 -> 5 build directly on each
   // other's fixtures, same pattern as 14-campaigns.spec.mjs).
-  let campaignId, tl1Id, tl2Id, worldTlId, playerCampaignId;
+  let campaignId, tl1Id, tl2Id, worldTlId, playerCampaignId, crossCampaignId;
 
   // Fix 6 (campaign-store.mjs's createCampaign): seeds AUTO_CAPTURE_CAMPAIGN_SETTING
   // (a world setting) when it's the world's FIRST campaign - true for this
@@ -93,7 +93,7 @@ test.describe.serial("16 multi-timeline", () => {
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (page) => {
       await resetHubState(page);
-      const ids = [campaignId, playerCampaignId].filter(Boolean);
+      const ids = [campaignId, playerCampaignId, crossCampaignId].filter(Boolean);
       for (const id of ids) {
         const gone = await page.evaluate(async (fid) => {
           const f = game.folders.get(fid);
@@ -185,12 +185,18 @@ test.describe.serial("16 multi-timeline", () => {
       // Extra assertion (a): an explicit pick outranks Unfiled's own empty
       // default (regression pinned from Task 3 review) - switching campaign
       // scope to Unfiled with tl1 still explicitly selected must keep
-      // rendering tl1's stack, not go blank.
+      // rendering tl1's stack, not go blank. Final-review Finding 1: the
+      // PICKER must agree with the pane, not just render its content - a
+      // <select> with no `selected:true` option silently paints its first
+      // option ("All timelines in scope"), which is exactly the
+      // picker/pane contradiction this ruling exists to prevent. Assert
+      // the select's own displayed value, not just the rendered stack.
       await scopeHub(shell, page, "unfiled");
       await gotoTab(shell, page, "timeline");
       await expect(shell.locator(".mej-cc-timeline-stack")).toHaveCount(1);
       await expect(shell.locator(".mej-cc-timeline-stack")).toHaveAttribute("data-journal-id", tl1Id);
       await expect(shell.locator("li.mej-cc-timepoint", { hasText: `${TT_PREFIX}TP-One` })).toHaveCount(1);
+      await expect(shell.locator('select[name="timeline-select"]')).toHaveValue(tl1Id);
 
       assertNoConsoleErrors(errors);
     } finally {
@@ -411,7 +417,111 @@ test.describe.serial("16 multi-timeline", () => {
     }
   });
 
-  test("6. player seat: only observable timelines, no management controls", async ({ browser }) => {
+  test("6. cross-campaign pick survives a scope switch; management acts on the picked timeline's own campaign", async ({ page }) => {
+    // Final-review Finding 1: HUB_STATE.timelineId is a GLOBAL pointer, but
+    // the picker's option list and the management gating are SCOPE-LOCAL.
+    // Pick a timeline in campaign A, switch scope to a second campaign B
+    // (never touching the pick), and assert both halves of the fix: the
+    // <select> still displays the A pick (not "All timelines in scope"),
+    // and Make default / Delete still act on A's own campaign flag - never
+    // silently on B's.
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    let tl3Id = null;
+    try {
+      await login(page, "Gamemaster");
+
+      crossCampaignId = await page.evaluate(async ({ mod, name }) => {
+        const { createCampaign } = await import(mod);
+        const c = await createCampaign(name, { ownershipDefault: "observer" });
+        return c.id;
+      }, { mod: CAMPAIGN_STORE_MOD, name: `${TT_PREFIX}CrossCamp` });
+      expect(crossCampaignId).toBeTruthy();
+
+      const shell = await openHub(page);
+      await scopeHub(shell, page, campaignId);
+      await gotoTab(shell, page, "timeline");
+
+      // A second timeline in campaign A, not yet its default (tl1 - the
+      // sole survivor of scenario 5's delete - still resolves as the
+      // fallback default at this point).
+      await shell.locator('select[name="timeline-select"]').selectOption("__newtl");
+      const newDialog = page.locator("dialog.application").last();
+      await newDialog.locator('input[name="name"]').fill(`${TT_PREFIX}Cross3`);
+      await newDialog.locator('button[data-action="ok"]').click();
+      await settle(page, 500);
+      tl3Id = await shell.locator('select[name="timeline-select"]').inputValue();
+      expect(tl3Id).toBeTruthy();
+      expect(tl3Id).not.toBe(tl1Id);
+
+      // Switch scope to campaign B. The pick (tl3, campaign A's timeline)
+      // is neither in B's option list nor visible in the world group -
+      // per the fix it must still be the select's displayed value.
+      await scopeHub(shell, page, crossCampaignId);
+      await gotoTab(shell, page, "timeline");
+      await expect(shell.locator('select[name="timeline-select"]')).toHaveValue(tl3Id);
+      await expect(shell.locator(".mej-cc-timeline-stack")).toHaveCount(1);
+      await expect(shell.locator(".mej-cc-timeline-stack")).toHaveAttribute("data-journal-id", tl3Id);
+
+      // Management trio still renders (GM, and the pick resolves to a real
+      // timeline entry) - "Make default" included, since tl3 isn't yet A's default.
+      await expect(shell.locator("button.mej-cc-timeline-default")).toHaveCount(1);
+      await expect(shell.locator("button.mej-cc-timeline-rename")).toHaveCount(1);
+      await expect(shell.locator("button.mej-cc-timeline-delete")).toHaveCount(1);
+
+      await shell.locator("button.mej-cc-timeline-default").click();
+      await settle(page, 400);
+
+      const flags = await page.evaluate(({ campaignId, crossCampaignId }) => {
+        const a = game.folders.get(campaignId);
+        const b = game.folders.get(crossCampaignId);
+        return {
+          aDefault: a.flags?.["mej-campaign-companion"]?.campaign?.defaultTimelineId ?? null,
+          bDefault: b.flags?.["mej-campaign-companion"]?.campaign?.defaultTimelineId ?? null
+        };
+      }, { campaignId, crossCampaignId });
+      // Acts on the picked timeline's OWN campaign (A) ...
+      expect(flags.aDefault).toBe(tl3Id);
+      // ... and never silently writes a foreign id into the scoped campaign (B).
+      expect(flags.bDefault).not.toBe(tl3Id);
+      expect(flags.bDefault).toBeFalsy();
+
+      // Still scoped to B: "Make default" is now hidden (tl3 IS A's
+      // default), but Delete remains and still targets A's timeline.
+      await expect(shell.locator("button.mej-cc-timeline-default")).toHaveCount(0);
+      await shell.locator("button.mej-cc-timeline-delete").click();
+      const confirmDialog = page.locator("dialog.application").last();
+      await confirmDialog.locator('button[data-action="yes"]').click();
+      await settle(page, 500);
+
+      const tl3Gone = await page.evaluate((id) => !game.journal.get(id), tl3Id);
+      expect(tl3Gone).toBe(true);
+      const tl1Untouched = await page.evaluate((id) => !!game.journal.get(id), tl1Id);
+      expect(tl1Untouched).toBe(true); // campaign A's other timeline, unaffected
+
+      // The raw flag still names the now-deleted tl3 (delete never clears
+      // it, same as any other stale-default case) - but resolution falls
+      // back to A's one remaining timeline, restoring the state scenario
+      // 2/3 relied on for anything that re-reads it after this test.
+      const resolvedDefaultId = await page.evaluate(async ({ mod, campaignId }) => {
+        const { defaultTimeline } = await import(mod);
+        return defaultTimeline(game.folders.get(campaignId))?.id ?? null;
+      }, { mod: TIMELINE_JOURNAL_MOD, campaignId });
+      expect(resolvedDefaultId).toBe(tl1Id);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      if (crossCampaignId) {
+        await page.evaluate(async (fid) => {
+          const f = game.folders.get(fid);
+          if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
+        }, crossCampaignId);
+        crossCampaignId = null;
+      }
+      await resetHubState(page);
+    }
+  });
+
+  test("7. player seat: only observable timelines, no management controls", async ({ browser }) => {
     let visibleId, hiddenId;
     try {
       await withGmPage(browser, async (gmPage) => {
@@ -473,6 +583,68 @@ test.describe.serial("16 multi-timeline", () => {
       }
     } finally {
       await withGmPage(browser, async (gmPage) => { await resetHubState(gmPage); });
+    }
+  });
+
+  test("8. Finding 2: a GM-only default timeline never renders its timepoint labels to a player in All scope", async ({ browser }) => {
+    // #timelineContext has no visibility check of its own (defaultTimeline()
+    // resolves unfiltered by design - it's the single source of truth
+    // auto-filing and the picker's ★ share) - the guard has to be applied
+    // at the render seam (#visibleTimeline), for every branch that stacks a
+    // campaign's default in All scope. Reuses scenario 7's playerCampaignId
+    // (still exists; deleted in afterAll), re-pointing its default at a
+    // brand-new NONE-ownership timeline so it's the DEFAULT that's hidden,
+    // not merely a non-default timeline (scenario 7's own `hiddenId`).
+    let hiddenDefaultId = null;
+    try {
+      await withGmPage(browser, async (gmPage) => {
+        hiddenDefaultId = await gmPage.evaluate(async ({ tpMod, tlMod, campaignId, prefix }) => {
+          const { addTimepoint } = await import(tpMod);
+          const { setDefaultTimeline } = await import(tlMod);
+          const camp = game.folders.get(campaignId);
+          const hiddenDefault = await JournalEntry.create({
+            name: `${prefix}HiddenDefault TL`, folder: camp.id,
+            flags: { "mej-campaign-companion": { timeline: { timepoints: [] } } },
+            ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE }
+          });
+          await addTimepoint(hiddenDefault, `${prefix}SecretPoint`);
+          await setDefaultTimeline(camp, hiddenDefault.id);
+          return hiddenDefault.id;
+        }, { tpMod: TIMEPOINTS_MOD, tlMod: TIMELINE_JOURNAL_MOD, campaignId: playerCampaignId, prefix: TT_PREFIX });
+      });
+      expect(hiddenDefaultId).toBeTruthy();
+
+      const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+      const playerPage = await playerContext.newPage();
+      const errors = trackConsoleErrors(playerPage, { ignore: IGNORE });
+      try {
+        await login(playerPage, "User 1");
+        const shell = await openHub(playerPage);
+        await scopeHub(shell, playerPage, ""); // All scope
+        await gotoTab(shell, playerPage, "timeline");
+
+        // The campaign's stack still renders (no crash), but the
+        // now-invisible default resolves to an empty pane, not a leak.
+        const campStack = shell.locator(".mej-cc-timeline-stack", { hasText: `${TT_PREFIX}PlayerCamp` });
+        await expect(campStack).toHaveCount(1);
+        await expect(shell.locator("li.mej-cc-timepoint", { hasText: `${TT_PREFIX}SecretPoint` })).toHaveCount(0);
+        await expect(shell.locator(`text=${TT_PREFIX}SecretPoint`)).toHaveCount(0);
+
+        assertNoConsoleErrors(errors);
+      } finally {
+        await resetHubState(playerPage);
+        await playerContext.close();
+      }
+    } finally {
+      await withGmPage(browser, async (gmPage) => {
+        if (hiddenDefaultId) {
+          await gmPage.evaluate(async (id) => {
+            const j = game.journal.get(id);
+            if (j) await JournalEntry.implementation.deleteDocuments([id]);
+          }, hiddenDefaultId);
+        }
+        await resetHubState(gmPage);
+      });
     }
   });
 });

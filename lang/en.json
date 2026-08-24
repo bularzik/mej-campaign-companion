@@ -158,6 +158,8 @@
         "pickerLabel": "Timeline",
         "allInScope": "All timelines in scope",
         "worldGroup": "— World timelines —",
+        "otherGroup": "— Selected elsewhere —",
+        "otherCampaignLabel": "{name} — {campaign}",
         "newTimeline": "➕ New timeline…",
         "nameLabel": "Timeline name",
         "makeDefault": "Make default",

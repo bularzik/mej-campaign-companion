@@ -68,9 +68,13 @@ singleton-shaped helpers, keeping their names where callers depend on them):
   `resolveDefaultTimelineId`.
 - `createTimeline({ campaign = null, name }) -> JournalEntry` — GM-only;
   creates a timeline-flagged journal in the campaign folder (ownership =
-  campaign baseline) or at root for a world timeline (Foundry default
-  ownership). Never touches `defaultTimelineId` — the fallback covers the
-  first one, and later ones are made default explicitly.
+  campaign baseline) or at root for a world timeline (ownership =
+  **OBSERVER**, matching the legacy singleton timeline's own default —
+  players should be able to see world history even though they can't edit
+  it; Foundry's own document default is NONE, which would hide a world
+  timeline from every player until a GM manually reset its ownership).
+  Never touches `defaultTimelineId` — the fallback covers the first one,
+  and later ones are made default explicitly.
 - `setDefaultTimeline(campaign, timelineId)` — GM-only; writes the flag.
 - `resolveTimelineJournal(campaign)` keeps its name and now returns the
   **default** timeline; `ensureTimelineJournal(campaign)` keeps its

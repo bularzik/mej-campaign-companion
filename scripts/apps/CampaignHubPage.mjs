@@ -293,13 +293,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       stacks = [];
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
-      stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+      stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
     } else {
       const campaigns = getCampaigns();
       if (!campaigns.length) {
         // Pre-adoption world: legacy singleton behavior, unchanged.
         const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
-        stacks = [{ name: null, ...this.#timelineContext(journal, isGM) }];
+        stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
       } else {
         // Spec D §3: All mode stacks each campaign's DEFAULT timeline plus
         // every world timeline, never interleaved. No lazy creation here -
@@ -308,9 +308,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         // glue function auto-filing uses - so the Hub can never show a
         // different default than what filing actually targets, even for a
         // viewer who can't see the flagged default (defaultTimeline() itself
-        // resolves over the UNFILTERED list; #timelineContext below handles
-        // a journal the viewer can't see the same way it does elsewhere).
-        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(defaultTimeline(c), isGM) }));
+        // resolves over the UNFILTERED list, deliberately - it's the single
+        // source of truth auto-filing and the picker's ★ both share).
+        // #timelineContext itself does NOT filter by visibility (only a
+        // null check) - the guard has to happen here, at the render seam,
+        // via #visibleTimeline, same as the world bucket below already does.
+        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM) }));
         // World bucket only: visibility-filtered for display (no per-campaign
         // "default" concept applies to it), via partitionTimelines.
         const visibleTimelines = game.journal.contents
@@ -395,6 +398,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * Picker options (spec D §3): the scoped campaign's timelines (default
    * marked), a separator, world timelines, then GM-only "New timeline…".
    * The separator is a disabled option so the template stays a plain select.
+   *
+   * Finding 1 (final review): the selection (HUB_STATE.timelineId) is a
+   * GLOBAL pointer, but the option list built above is SCOPE-LOCAL - so a
+   * pick made under campaign A survives a switch to campaign B (per the
+   * standing D§3 ruling: an explicit pick outranks scope, see
+   * #timelineSelection/_prepareBodyContext) yet campaign B's option list
+   * has no entry for it. A <select> with no `selected:true` option silently
+   * paints its first option, so the picker would show "All timelines in
+   * scope" while the pane actually renders campaign A's pick - the exact
+   * picker/pane contradiction the D§3 ruling exists to prevent, just
+   * inverted. If the selection isn't already in `options`, append it as its
+   * own entry (labeled with its owning campaign) so the select always
+   * displays the truth, and derive canManage/isDefault from that same
+   * assembled set rather than a bare `!!selected` - so the management trio
+   * only ever renders for, and only ever acts on, a timeline the picker is
+   * actually showing as selected.
    */
   #timelineSelectionContext(campaign) {
     const user = game.user;
@@ -402,7 +421,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const defId = campaign ? defaultTimeline(campaign)?.id ?? null : null;
     const ordered = orderTimelines(mine, defId);
     const world = worldTimelines({ user });
-    const selectedId = this.#timelineSelection()?.id ?? "";
+    const selected = this.#timelineSelection();
+    const selectedId = selected?.id ?? "";
     const options = [
       { value: "", label: game.i18n.localize(`${I18N}.hub.timeline.allInScope`), selected: selectedId === "" },
       ...ordered.map((t) => ({
@@ -415,15 +435,29 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       options.push({ value: "__sep", label: game.i18n.localize(`${I18N}.hub.timeline.worldGroup`), disabled: true, selected: false });
       options.push(...world.map((t) => ({ value: t.id, label: t.name, selected: selectedId === t.id })));
     }
+    if (selected && !options.some((o) => o.value === selectedId)) {
+      const owner = campaignOf(selected);
+      const label = owner ? game.i18n.format(`${I18N}.hub.timeline.otherCampaignLabel`, { name: selected.name, campaign: owner.name }) : selected.name;
+      options.push({ value: "__sep2", label: game.i18n.localize(`${I18N}.hub.timeline.otherGroup`), disabled: true, selected: false });
+      options.push({ value: selectedId, label, selected: true });
+    }
     if (game.user.isGM) {
       options.push({ value: "__newtl", label: game.i18n.localize(`${I18N}.hub.timeline.newTimeline`), selected: false });
     }
-    const selected = this.#timelineSelection();
+    // A real timeline entry (not "", a separator, or "New timeline…") is
+    // now guaranteed present whenever `selected` resolved - either from
+    // `ordered`/`world` above, or appended just above - so this also
+    // guarantees the management buttons agree with what the select shows.
+    const selectedIsRealOption = selectedId !== "" && options.some((o) => o.value === selectedId && !o.disabled);
+    const ownerCampaign = selected ? campaignOf(selected) : null;
     return {
       options,
       selectedId,
-      canManage: game.user.isGM && !!selected,
-      isDefault: !!selected && selected.id === defId,
+      canManage: game.user.isGM && selectedIsRealOption,
+      // Selected timeline's OWN campaign, not the scoped one (Finding 1) -
+      // so a pick made under a different campaign doesn't read as "default"
+      // (or not) against the wrong campaign's flag.
+      isDefault: !!selected && defaultTimeline(ownerCampaign)?.id === selected.id,
       isWorld: !!selected && !campaignIdOf(selected)
     };
   }
@@ -520,10 +554,36 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     };
   }
 
+  /**
+   * Render-seam visibility guard (Finding 2, final review): #timelineContext
+   * itself only null-checks its `journal` argument - it does NOT filter by
+   * visibility (see its own doc comment) - so every stack built for GM-only
+   * consumers as well as players must pass its journal through here first.
+   * A no-op for a GM (isVisibleToUser is always true for game.user.isGM).
+   */
+  #visibleTimeline(journal) {
+    return journal && isVisibleToUser(journal, game.user) ? journal : null;
+  }
+
+  /**
+   * Finding 2 (final review): this is the RESOLUTION seam, not the
+   * VISIBILITY seam - it only null-checks `journal`, deliberately, since
+   * some callers resolve over an unfiltered list on purpose (defaultTimeline()
+   * is the single source of truth auto-filing and the picker's ★ both share,
+   * and must stay unfiltered so a GM and a player agree on which timeline
+   * IS the default even when the player can't see it). Visibility has to be
+   * filtered by the CALLER before the journal ever reaches here - see
+   * #visibleTimeline below and its call sites in _prepareBodyContext -
+   * otherwise a GM-only (NONE) timeline a GM made default renders every
+   * timepoint label to players in All scope (Foundry ships NONE documents
+   * to clients; there's no server-side filtering to fall back on).
+   */
   #timelineContext(journal, isGM) {
     if (!journal) {
       // Players before a GM has ever opened the hub: no timeline journal
-      // exists yet. Render an explicit empty state rather than erroring.
+      // exists yet (or the resolved journal isn't visible to them - see
+      // #visibleTimeline). Render an explicit empty state rather than
+      // erroring or leaking timepoint labels.
       return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false, journalId: null };
     }
     const canEdit = isGM;
@@ -1218,9 +1278,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onMakeTimelineDefault() {
     if (!game.user.isGM) return;
-    const { campaign } = this.#scope();
     const journal = game.journal.get(this.state.timelineId);
-    if (!campaign || !journal) return;
+    if (!journal) return;
+    // Finding 1 (final review): the selected timeline's OWN campaign, never
+    // the currently-scoped one - the pick can outlive a scope switch (D§3
+    // ruling), so writing against #scope().campaign could silently persist
+    // a foreign campaign's timeline id into a campaign it doesn't belong to.
+    const campaign = campaignOf(journal);
+    if (!campaign) return;
     await setDefaultTimeline(campaign, journal.id);
     this.render({ parts: ["main"] });
   }
