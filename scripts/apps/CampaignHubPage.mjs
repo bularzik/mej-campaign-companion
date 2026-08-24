@@ -27,7 +27,7 @@ import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
-import { buildIndexSource, filterIndexRows, isVisibleToUser } from "../logic/hub-index.mjs";
+import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
@@ -356,16 +356,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   #typeLabel(type) {
-    if (type === "journal") return game.i18n.localize(`${I18N}.hub.journalType`);
+    const synthetic = {
+      journal: `${I18N}.hub.journalType`,
+      pdf: `${I18N}.hub.pdfType`,
+      video: `${I18N}.hub.videoType`,
+      image: `${I18N}.hub.imageType`
+    };
+    if (synthetic[type]) return game.i18n.localize(synthetic[type]);
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     return labels[type] ? game.i18n.localize(labels[type]) : type;
   }
 
   #typeIcon(type) {
-    // "journal" (the doctype-filter's synthetic label for an untyped page -
-    // see #typeLabel above) has no entry in MEJ's own type-icon map, so
-    // getIcon() would return undefined and render "fas undefined".
-    if (type === "journal") return "fas fa-book";
+    // The synthetic row types (hub-index.mjs's nativeRowType) have no entry
+    // in MEJ's own type-icon map, so getIcon() would render "fas undefined".
+    if (SYNTHETIC_ICONS[type]) return SYNTHETIC_ICONS[type];
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 

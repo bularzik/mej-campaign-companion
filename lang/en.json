@@ -29,7 +29,7 @@
         "silent": "Silent (whisper summary)"
       }
     },
-    "sheettype": { "session": "Session", "campaign": "Campaign" },
+    "sheettype": { "session": "Session", "campaign": "Campaign", "media": "Media (Enhanced Journal)" },
     "autoCapture": {
       "died": "Died",
       "injured": "Injured",

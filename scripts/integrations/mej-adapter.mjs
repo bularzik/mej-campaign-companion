@@ -5,7 +5,7 @@
 // the extension API - see docs/superpowers/specs/2026-08-17-mej-api-optional-design.md.
 import {
   MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE,
-  CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE,
+  CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES,
   FORCE_NATIVE_MODE_SETTING, I18N
 } from "../constants.mjs";
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
@@ -122,13 +122,14 @@ export async function registerCore() {
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */
 async function wireApiMode(api) {
-  // Deferred imports: these two files statically import MEJ's
+  // Deferred imports: these files statically import MEJ's
   // EnhancedJournalSheet.js, and our script tag runs BEFORE MEJ's. Importing
   // them at top level would re-enter MEJ's own import chain mid-evaluation
   // and take both modules down - see campaign-companion.mjs's header comment.
-  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
     import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs")
+    import("../apps/CampaignHubPage.mjs"),
+    import("../sheets/MediaPageSheet.mjs")
   ]);
 
   api.registerSheetType({
@@ -162,6 +163,7 @@ async function wireApiMode(api) {
   // long comment this replaced in campaign-companion.mjs for why poking
   // CONFIG directly does not stick.
   registerHubSheetClass(CampaignHubPage);
+  registerMediaSheetClass(MediaPageSheet);
 }
 
 /**
@@ -181,6 +183,23 @@ export function registerHubSheetClass(CampaignHubPage) {
 }
 
 /**
+ * Route Foundry's native pdf/video pages to the companion's viewer sheet so
+ * they open inside the MEJ shell (spec E §1). makeDefault claims them as the
+ * default sheet; canConfigure stays true so a GM can opt an individual page
+ * back to core's sheet. Registered in BOTH modes - the shell hosts it in api
+ * mode, and it stands alone in native mode.
+ */
+export function registerMediaSheetClass(MediaPageSheet) {
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, MediaPageSheet, {
+    types: MEDIA_PAGE_TYPES,
+    makeDefault: true,
+    canBeDefault: true,
+    canConfigure: true,
+    label: `${I18N}.sheettype.media`
+  });
+}
+
+/**
  * Repair sheet registrations Foundry's pre-ready registerSheet queue may
  * have silently dropped (see onHandshake's comment for the mechanism). Safe
  * to call any time after game.ready is true, in either mode: registerSheet
@@ -190,14 +209,15 @@ export function registerHubSheetClass(CampaignHubPage) {
  */
 async function ensureSheetRegistrations() {
   const missing = missingSheetRegistrations(
-    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE
+    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES
   );
-  if (!missing.session && !missing.hub && !missing.campaign) return;
+  if (!missing.session && !missing.hub && !missing.campaign && !missing.media) return;
 
   console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, missing);
-  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
     import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs")
+    import("../apps/CampaignHubPage.mjs"),
+    import("../sheets/MediaPageSheet.mjs")
   ]);
 
   if (missing.session) {
@@ -217,15 +237,17 @@ async function ensureSheetRegistrations() {
       label: `${I18N}.sheettype.campaign`
     });
   }
+  if (missing.media) registerMediaSheetClass(MediaPageSheet);
 }
 
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */
 async function wireNativeMode() {
   // Same deferred-import discipline as api mode: these files statically
   // import MEJ's EnhancedJournalSheet.js.
-  const [{ SessionSheet }, { CampaignHubPage }] = await Promise.all([
+  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
     import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs")
+    import("../apps/CampaignHubPage.mjs"),
+    import("../sheets/MediaPageSheet.mjs")
   ]);
 
   // Pure core Foundry - no MEJ involvement. The subtype itself comes from
@@ -252,6 +274,10 @@ async function wireNativeMode() {
   // The Hub's synthetic type needs its sheetClasses entry in this mode too -
   // getSheetThemeForDocument does the same lookup however the sheet is hosted.
   registerHubSheetClass(CampaignHubPage);
+
+  // Native pdf/video pages: same registration as api mode, standing alone
+  // rather than shell-hosted (spec E §1).
+  registerMediaSheetClass(MediaPageSheet);
 }
 
 /** Called from MEJ's setupMonksEnhancedJournal hook. */
