@@ -158,6 +158,34 @@ describe("campaigns module", async () => {
       expect(isCampaignPortal(entry("t1", { timeline: true }))).toBe(false);
       expect(isCampaignPortal(entry("e1"))).toBe(false);
     });
+
+    // C1 regression: MEJ's fixType() normalizes an OPENED portal page's
+    // in-memory `.type` to bare "campaign" for the rest of the session;
+    // isCampaignPortal must still match so campaignEntries/unfiledEntries
+    // keep excluding the portal after a GM has opened it once.
+    it("still marks a portal entry whose page .type was normalized to bare \"campaign\" by MEJ", () => {
+      const normalizedEntry = {
+        id: "pe2", documentName: "JournalEntry", folder: null,
+        pages: {
+          contents: [{
+            documentName: "JournalEntryPage",
+            type: "campaign",
+            _source: { type: "mej-campaign-companion.campaign" }
+          }]
+        },
+        flags: {}
+      };
+      expect(isCampaignPortal(normalizedEntry)).toBe(true);
+    });
+
+    it("marks a page-shaped entry via the companion's own campaignPortal flag alone", () => {
+      const flaggedEntry = {
+        id: "pe3", documentName: "JournalEntry", folder: null,
+        pages: { contents: [{ documentName: "JournalEntryPage", type: "text", flags: { [MODULE_ID]: { campaignPortal: true } } }] },
+        flags: {}
+      };
+      expect(isCampaignPortal(flaggedEntry)).toBe(true);
+    });
   });
 
 });

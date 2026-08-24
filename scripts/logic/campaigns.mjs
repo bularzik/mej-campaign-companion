@@ -161,9 +161,32 @@ export function adoptionPlan(entries, getMEJType, legacyTimelineId) {
   return ids;
 }
 
-/** Is this a campaign portal (spec C): the entry/page whose sheet IS the scoped Hub. Accepts a JournalEntry (any page matches) or a JournalEntryPage. */
+/**
+ * Is this a campaign portal (spec C): the entry/page whose sheet IS the
+ * scoped Hub. Accepts a JournalEntry (any page matches) or a
+ * JournalEntryPage.
+ *
+ * MEJ's fixType() (monks-enhanced-journal.js, `object.type = type;`)
+ * normalizes an OPENED portal page's IN-MEMORY `.type` to the bare mejType
+ * key ("campaign") as part of mounting it into the shell - the collection
+ * instance mutates for the rest of the session, so `.type` alone stops
+ * matching CAMPAIGN_DOCUMENT_TYPE the moment a GM opens the portal once.
+ * Match on any of: the companion's own flags[MODULE_ID].campaignPortal
+ * marker (stamped by buildCampaignPortalData - the cheap identity check its
+ * doc comment already promises), the prefixed native subtype, the bare
+ * normalized type, or `_source.type` (the persisted value, untouched by
+ * fixType) as a last-resort fallback.
+ */
+function isCampaignPortalPage(page) {
+  if (!page) return false;
+  if (page.flags?.[MODULE_ID]?.campaignPortal === true) return true;
+  return page.type === CAMPAIGN_DOCUMENT_TYPE ||
+    page.type === "campaign" ||
+    page._source?.type === CAMPAIGN_DOCUMENT_TYPE;
+}
+
 export function isCampaignPortal(doc) {
   if (!doc) return false;
-  if (doc.documentName === "JournalEntryPage") return doc.type === CAMPAIGN_DOCUMENT_TYPE;
-  return (doc.pages?.contents ?? []).some((p) => p.type === CAMPAIGN_DOCUMENT_TYPE);
+  if (doc.documentName === "JournalEntryPage") return isCampaignPortalPage(doc);
+  return (doc.pages?.contents ?? []).some((p) => isCampaignPortalPage(p));
 }

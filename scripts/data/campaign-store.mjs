@@ -84,11 +84,18 @@ export function baselineOwnership(campaign) {
  * Spec §5 bulk apply: set every member's ownership.default to the baseline.
  * Skips entries currently hidden (NONE) via the eye toggle - a bulk apply
  * must not silently un-hide them (see bulkOwnershipPlan's doc comment).
- * Returns the update count.
+ * Spec C's Ownership row treats the portal as an ordinary member for
+ * baseline purposes - campaignEntries() excludes it (it's not player-facing
+ * "content"), so it's added back in explicitly here; otherwise a baseline
+ * change would update every member EXCEPT the portal, leaving players
+ * granted view unable to ever open the campaign entity. Returns the update
+ * count.
  */
 export async function applyBaselineToMembers(campaign) {
   const level = baselineOwnership(campaign);
-  const updates = bulkOwnershipPlan(campaignEntries(campaign, { user: game.user }), level, {
+  const portal = campaignPortal(campaign);
+  const targets = [...campaignEntries(campaign, { user: game.user }), ...(portal ? [portal] : [])];
+  const updates = bulkOwnershipPlan(targets, level, {
     skipLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
   });
   if (updates.length) await JournalEntry.updateDocuments(updates);

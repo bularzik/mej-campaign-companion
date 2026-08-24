@@ -55,4 +55,33 @@ describe("isCampaignPortal", () => {
     expect(isCampaignPortal(null)).toBe(false);
     expect(isCampaignPortal({ documentName: "JournalEntry", pages: { contents: [] } })).toBe(false);
   });
+
+  // C1 regression: MEJ's fixType() normalizes an OPENED portal page's
+  // in-memory `.type` to the bare mejType key ("campaign") for the rest of
+  // the session - `_source.type` keeps the real, persisted, prefixed value.
+  // isCampaignPortal must still recognize the page in every form it can take
+  // once mounted, or campaignEntries/unfiledEntries/campaignPortal()/the
+  // rename-sync hooks all silently stop excluding or finding it.
+  it("detects a page whose .type MEJ normalized to the bare mejType key", () => {
+    const normalizedPage = {
+      documentName: "JournalEntryPage",
+      type: "campaign",
+      _source: { type: CAMPAIGN_DOCUMENT_TYPE }
+    };
+    expect(isCampaignPortal(normalizedPage)).toBe(true);
+    expect(isCampaignPortal({ documentName: "JournalEntry", pages: { contents: [normalizedPage] } })).toBe(true);
+  });
+
+  it("detects a page via the companion's own campaignPortal flag alone, independent of .type", () => {
+    const flagMarkedPage = {
+      documentName: "JournalEntryPage",
+      type: "text",
+      flags: { [MODULE_ID]: { campaignPortal: true } }
+    };
+    expect(isCampaignPortal(flagMarkedPage)).toBe(true);
+  });
+
+  it("is false for an ordinary text page with no portal marker at all", () => {
+    expect(isCampaignPortal({ documentName: "JournalEntryPage", type: "text" })).toBe(false);
+  });
 });

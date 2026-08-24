@@ -72,7 +72,19 @@ const HUB_STATE = {
   graphMode: "all",
   graphCenterUuid: null,
   graphBacklinks: false,
-  pendingTab: null
+  pendingTab: null,
+  // Spec C §2: which portal document's mount already applied the one-time
+  // campaign scope (see _prepareBodyContext below) - null until a portal
+  // mount has happened. Lives here rather than as an instance field because
+  // MEJ's shell reconstructs the subsheet whenever
+  // `this.subsheet.type != this.document.type` - always true for a portal
+  // mount ("campaign-hub" vs the portal page's type) despite the `get type()`
+  // override above, since that override only fixes the comparison for the
+  // Hub's OWN synthetic document, not the portal page hosting it. An instance
+  // field would reset on every such reconstruction and re-scope the user
+  // back to the portal's campaign mid-session, fighting a deliberate re-scope
+  // via the picker.
+  portalScopedFor: null
 };
 
 export class CampaignHubPage extends EnhancedJournalSheet {
@@ -146,11 +158,6 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // "compute once, draw from the cached graph" pattern the popup used for
   // its truncated-notice/drawn-graph sync - see hub-graph-pane.mjs).
   #graphData = null;
-
-  // Spec C §2: which portal document's mount already applied the one-time
-  // campaign scope (see _prepareBodyContext below) - null until a portal
-  // mount has happened.
-  #portalScopedFor = null;
 
   static get type() {
     return HUB_PAGE_ID;
@@ -260,8 +267,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.document.type === CAMPAIGN_TYPE ||
       this.document._source?.type === CAMPAIGN_DOCUMENT_TYPE
     );
-    if (isCampaignPage && this.#portalScopedFor !== this.document.uuid) {
-      this.#portalScopedFor = this.document.uuid;
+    if (isCampaignPage && this.state.portalScopedFor !== this.document.uuid) {
+      this.state.portalScopedFor = this.document.uuid;
       const portalCampaign = campaignOf(this.document);
       if (portalCampaign) {
         this.state.campaignId = portalCampaign.id;

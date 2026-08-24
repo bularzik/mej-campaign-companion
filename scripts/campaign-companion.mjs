@@ -233,8 +233,13 @@ Hooks.once("ready", async () => {
   // routes them again. No-op in native mode and for non-active-GM clients.
   await healSessionFlags();
 
-  // Spec §6 (campaign-container) + spec C §1: versioned migrations.
-  if (game.user.isGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
+  // Spec §6 (campaign-container) + spec C §1: versioned migrations. Gated on
+  // the elected activeGM (not just isGM) - two connected GMs would otherwise
+  // both pass the version check and race the v2 backfill below, each
+  // creating a portal for the same campaign before either's dataVersion
+  // write lands (see hooks/socket.mjs and hooks/auto-capture.mjs for the
+  // same single-writer pattern).
+  if (game.user === game.users.activeGM && game.settings.get(MODULE_ID, DATA_VERSION_SETTING) < CURRENT_DATA_VERSION) {
     // v2: every campaign gets its portal entry (idempotent - the planner
     // returns only campaigns lacking one).
     for (const campaign of missingPortalPlan(getCampaigns(), campaignPortal)) {
