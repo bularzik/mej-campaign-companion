@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.10.0 (2026-08-24)
+
+- New: **campaigns are openable entities.** Every campaign now has a
+  campaign entry inside its folder, named after the campaign. It shows up
+  in the journal sidebar, in search, and as an auto-link target — and
+  opening it opens the Campaign Hub already scoped to that campaign.
+  Existing campaigns get their entry automatically on first load.
+- New: **"Open Campaign Hub"** on the right-click menu of any campaign
+  folder, in both Foundry's journal sidebar and the Enhanced Journal
+  shell.
+- New: renaming a campaign folder renames its campaign entry and vice
+  versa; deleting the entry never deletes the campaign (campaign settings
+  gains "Restore campaign entry"). Campaign entries follow the campaign's
+  ownership baseline, including bulk "apply to all members".
+- Fixed: several routing and permission defects found while building the
+  above — the Hub no longer greys out its own controls for players
+  viewing a campaign, and the campaign scope no longer snaps back while
+  you are re-scoping the picker.
+
 ## 0.9.0 (2026-08-23)
 
 - New: **Hub header bar.** The campaign picker, New Session, and a Tools
