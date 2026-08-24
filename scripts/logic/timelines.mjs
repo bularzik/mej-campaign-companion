@@ -30,6 +30,22 @@ export function resolveDefaultTimelineId(timelines, flagId) {
 }
 
 /**
+ * Deterministic creation order. Foundry's Folder#contents is an unsorted
+ * filter over the live WorldCollection, so its order is stable only within
+ * one session - resolveDefaultTimelineId's "first as given" fallback would
+ * otherwise pick a different timeline after a reload for a campaign whose
+ * default was never set explicitly. Sorts oldest-first by createdTime, with
+ * the document id as a total-order tie-break for equal/absent timestamps.
+ */
+export function sortByCreation(timelines, createdTimeOf) {
+  return [...(timelines ?? [])].sort((a, b) => {
+    const ta = createdTimeOf(a) ?? 0;
+    const tb = createdTimeOf(b) ?? 0;
+    return ta === tb ? String(a.id).localeCompare(String(b.id)) : ta - tb;
+  });
+}
+
+/**
  * Split timeline entries into per-campaign buckets plus the world bucket
  * (timelines under no campaign - spec D's world timelines). Input order is
  * preserved within every bucket so callers can feed the result straight to

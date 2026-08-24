@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderTimelines, resolveDefaultTimelineId, partitionTimelines } from "../scripts/logic/timelines.mjs";
+import { orderTimelines, resolveDefaultTimelineId, partitionTimelines, sortByCreation } from "../scripts/logic/timelines.mjs";
 
 const tl = (id, name) => ({ id, name });
 
@@ -33,6 +33,38 @@ describe("resolveDefaultTimelineId", () => {
   it("returns null for an empty or nullish list", () => {
     expect(resolveDefaultTimelineId([], "x")).toBe(null);
     expect(resolveDefaultTimelineId(null, null)).toBe(null);
+  });
+});
+
+describe("sortByCreation", () => {
+  const timed = (id, t) => ({ id, createdAt: t });
+  const at = (e) => e.createdAt;
+
+  it("sorts oldest-first by createdTime", () => {
+    const list = [timed("c", 300), timed("a", 100), timed("b", 200)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("tie-breaks equal timestamps by document id (total order)", () => {
+    const list = [timed("z", 100), timed("a", 100), timed("m", 100)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "m", "z"]);
+  });
+
+  it("treats a missing/undefined timestamp as 0 and still totally orders", () => {
+    const list = [timed("z", undefined), timed("a", undefined), timed("early", 50)];
+    expect(sortByCreation(list, at).map((t) => t.id)).toEqual(["a", "z", "early"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const list = [timed("b", 2), timed("a", 1)];
+    const copy = [...list];
+    sortByCreation(list, at);
+    expect(list).toEqual(copy);
+  });
+
+  it("tolerates empty/nullish input", () => {
+    expect(sortByCreation([], at)).toEqual([]);
+    expect(sortByCreation(null, at)).toEqual([]);
   });
 });
 

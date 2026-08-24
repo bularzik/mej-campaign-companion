@@ -1,7 +1,7 @@
 import { MODULE_ID, TIMELINE_JOURNAL_SETTING, CAMPAIGN_FLAG, DEFAULT_TIMELINE_KEY } from "../constants.mjs";
 import { isTimelineJournal, campaignIdOf } from "../logic/campaigns.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
-import { orderTimelines, resolveDefaultTimelineId } from "../logic/timelines.mjs";
+import { orderTimelines, resolveDefaultTimelineId, sortByCreation } from "../logic/timelines.mjs";
 import { baselineOwnership } from "./campaign-store.mjs";
 
 /** The legacy world-singleton timeline JournalEntry, or null. Retained for pre-adoption worlds; adoption (campaign-container spec §6) moves it into a campaign and clears the setting. */
@@ -11,12 +11,20 @@ export function getTimelineJournal() {
 }
 
 /**
- * Every timeline journal directly inside the campaign folder, in Foundry
- * collection (creation) order - the order resolveDefaultTimelineId's
- * fallback depends on. Visibility-filtered when `user` is given.
+ * Every timeline journal directly inside the campaign folder, in
+ * deterministic creation order - the order resolveDefaultTimelineId's
+ * fallback depends on. Foundry's Folder#contents is an unsorted filter over
+ * the live WorldCollection (stable within one session, NOT guaranteed to
+ * reproduce creation order after a reload/fresh login - confirmed live), so
+ * this sorts explicitly by each journal's own `_stats.createdTime` (server-
+ * stamped on every primary document) rather than trusting collection
+ * position. Visibility-filtered when `user` is given.
  */
 export function campaignTimelines(campaign, { user = null } = {}) {
-  const list = (campaign?.contents ?? []).filter((e) => isTimelineJournal(e));
+  const list = sortByCreation(
+    (campaign?.contents ?? []).filter((e) => isTimelineJournal(e)),
+    (e) => e._stats?.createdTime
+  );
   return user ? list.filter((e) => isVisibleToUser(e, user)) : list;
 }
 
