@@ -70,6 +70,9 @@ export const MEJ_ENCOUNTER_TYPE = "encounter";
 /** Folder flag key: marks a journal Folder as a campaign (spec §1). Flag shape: { ownershipDefault: "none"|"observer"|"owner" }. */
 export const CAMPAIGN_FLAG = "campaign";
 
+/** Key on the campaign flag naming its auto-filing default timeline (spec D §1). Absent = fall back to the campaign's first timeline. */
+export const DEFAULT_TIMELINE_KEY = "defaultTimelineId";
+
 /** World setting: schema version for future migrations (spec §6). */
 export const DATA_VERSION_SETTING = "dataVersion";
 

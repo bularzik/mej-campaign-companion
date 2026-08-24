@@ -109,6 +109,23 @@ describe("campaigns module", async () => {
       const actor = { documentName: "Actor", folder: otherFolder };
       expect(canAttachToTimeline(actor, entry("t", { folder: camp, timeline: true }))).toBe(true);
     });
+    it("a world timeline (no campaign) accepts an entry from any campaign", () => {
+      const camp = folder("c1", { campaign: { ownershipDefault: "observer" } });
+      const worldTimeline = entry("wt", { timeline: true });           // no folder => no campaign
+      const member = entry("m1", { folder: camp });
+      expect(canAttachToTimeline(member, worldTimeline)).toBe(true);
+    });
+    it("a campaign timeline still refuses another campaign's entry", () => {
+      const campA = folder("ca", { campaign: { ownershipDefault: "observer" } });
+      const campB = folder("cb", { campaign: { ownershipDefault: "observer" } });
+      const timelineA = entry("ta", { folder: campA, timeline: true });
+      expect(canAttachToTimeline(entry("mb", { folder: campB }), timelineA)).toBe(false);
+    });
+    it("a campaign timeline accepts its own campaign's entry", () => {
+      const camp = folder("c1", { campaign: { ownershipDefault: "observer" } });
+      const timeline = entry("t1", { folder: camp, timeline: true });
+      expect(canAttachToTimeline(entry("m1", { folder: camp }), timeline)).toBe(true);
+    });
   });
 
   describe("bulkOwnershipPlan", () => {
