@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractSecretBlocks, stripSecretSections, setSectionRevealed } from "../scripts/logic/secret-blocks.mjs";
+import { extractSecretBlocks, stripSecretSections, setSectionRevealed, sectionRevealedAll } from "../scripts/logic/secret-blocks.mjs";
 
 const HTML = [
   "<p>Intro prose.</p>",
@@ -132,5 +132,48 @@ describe("setSectionRevealed", () => {
     expect(setSectionRevealed(dollars, "secret-a", true)).toBe(
       '<section class="secret revealed" id="secret-a">Cost $5 &amp; $&amp; $` $\'</section>'
     );
+  });
+});
+
+// The single reader every surface shares (design §4). Both eras count as
+// "everyone": the native class written today, and the legacy audience.all
+// flag left in worlds written before it - which is never written true again
+// but is honoured forever, so an unconvertible record keeps working.
+describe("sectionRevealedAll", () => {
+  const native = '<section class="secret revealed" id="secret-a">A</section>';
+  const plain = '<section class="secret" id="secret-a">A</section>';
+  const legacy = { users: [], groups: [], all: true };
+
+  it("is true from the native class alone", () => {
+    expect(sectionRevealedAll(native, "secret-a", { users: [], groups: [], all: false })).toBe(true);
+    expect(sectionRevealedAll(native, "secret-a", undefined)).toBe(true);
+  });
+
+  it("is true from the legacy flag alone", () => {
+    expect(sectionRevealedAll(plain, "secret-a", legacy)).toBe(true);
+  });
+
+  it("is true when both agree", () => {
+    expect(sectionRevealedAll(native, "secret-a", legacy)).toBe(true);
+  });
+
+  it("is false when neither says everyone", () => {
+    expect(sectionRevealedAll(plain, "secret-a", { users: ["u1"], groups: [], all: false })).toBe(false);
+  });
+
+  it("is false for an id that isn't in the body, and ignores OTHER sections' reveal state", () => {
+    expect(sectionRevealedAll(native, "secret-zzz", undefined)).toBe(false);
+    expect(sectionRevealedAll(native, "secret-zzz", { all: false })).toBe(false);
+  });
+
+  it("tolerates an empty or null body", () => {
+    expect(sectionRevealedAll("", "secret-a", undefined)).toBe(false);
+    expect(sectionRevealedAll(null, "secret-a", undefined)).toBe(false);
+    expect(sectionRevealedAll(undefined, "secret-a", legacy)).toBe(true);
+  });
+
+  it("only accepts a strictly-true legacy flag, not a truthy one", () => {
+    expect(sectionRevealedAll(plain, "secret-a", { all: "yes" })).toBe(false);
+    expect(sectionRevealedAll(plain, "secret-a", { all: 1 })).toBe(false);
   });
 });

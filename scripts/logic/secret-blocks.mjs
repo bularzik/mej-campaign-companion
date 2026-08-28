@@ -56,6 +56,33 @@ export function stripSecretSections(html, { includeAll = false } = {}) {
   );
 }
 
+/**
+ * "Is this secret revealed to everyone?" - the ONE definition, shared by every
+ * reader (design §4): the Hub tracker, the sheet overlay's chip, and the
+ * audience dialog's seeded state.
+ *
+ * Two sources, because there are two eras. Foundry's native `revealed` class in
+ * the page body is where "everyone" lives now (setSectionRevealed below writes
+ * it, core sheets and the player-safe export honour it). A legacy
+ * `secretReveals.<id>.all === true` flag is what worlds written before that
+ * change carry; it is never written true again, but is read here forever, so a
+ * record the migration could not convert (its section deleted, its page
+ * locked) keeps working instead of silently un-revealing.
+ *
+ * Every read site must go through this. When one of them read only the flag,
+ * a natively-revealed secret showed as "None" on the sheet while the tracker
+ * said "Everyone", and reopening the dialog to add one player seeded "Everyone"
+ * unchecked - so applying it stripped the class and un-revealed the secret
+ * from the whole table.
+ *
+ * Pure and Foundry-free: `record` is the raw stored audience object, not a
+ * document.
+ */
+export function sectionRevealedAll(bodyHtml, sectionId, record) {
+  return extractSecretBlocks(bodyHtml).some((s) => s.id === sectionId && s.revealedAll)
+    || record?.all === true;
+}
+
 /** Replace an open tag's class attribute value, preserving its quote style. */
 function withClasses(openTag, classes) {
   return openTag.replace(/(\sclass\s*=\s*)(["'])(.*?)\2/i, (match, prefix, quote) => `${prefix}${quote}${classes}${quote}`);

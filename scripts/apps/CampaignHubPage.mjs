@@ -33,6 +33,8 @@ import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
+import { extractSecretBlocks, sectionRevealedAll } from "../logic/secret-blocks.mjs";
+import { bodyRegion } from "../logic/field-extractors.mjs";
 import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
@@ -680,8 +682,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (!scopedUuids.has(rec.uuid)) continue;
       const entry = fromUuidSync(rec.uuid);
       const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
+      // One definition of "revealed to everyone" (sectionRevealedAll), shared
+      // with the sheet overlay and the dialog: the native class in the live
+      // body, or a legacy flag. Every MEJ page's body is concatenated rather
+      // than just the first one's - the index keys these records by ENTRY
+      // (last page wins), so on a multi-page entry the first page is not
+      // necessarily the one the secret came from. sectionRevealedAll only ever
+      // looks up one section id, so a joined body reads exactly the same.
+      const body = (entry?.pages?.contents ?? []).filter((p) => mejType(p)).map((p) => bodyRegion(p).content).join("");
       for (const s of rec.secrets) {
-        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: s.revealedAll || normalizeAudience(reveals[s.id]).all });
+        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: sectionRevealedAll(body, s.id, reveals[s.id]) });
       }
     }
     // 2. Session checklist items + 3. hidden/secret relationships - walk
@@ -908,14 +918,29 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!entry) return;
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     if (secretKind === "block") {
-      const previous = normalizeAudience((entry.getFlag(MODULE_ID, "secretReveals") ?? {})[secretId]);
-      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
-      if (!audience) return;
       // The tracker can act with no sheet open, so there is no <secret-block>
       // element here to call core's toggleRevealed on - applyBlockReveal works
       // from the body string instead, which is why it is shared with the
       // sheet-side path rather than each surface doing its own thing.
-      const page = entry.pages?.contents?.find((p) => mejType(p));
+      //
+      // Resolve the page by CONTAINMENT first: the search index keys these
+      // rows by entry with last-page-wins, so on a multi-page entry the first
+      // MEJ page is not necessarily the one holding this secret - writing the
+      // class into the wrong page's body would do nothing while the flag
+      // claimed the reveal had happened. Falls back to the first MEJ page
+      // (the single-page convention this file uses elsewhere) when no page
+      // carries the id, which leaves applyBlockReveal's not-present branch to
+      // preserve any legacy flag.
+      const page = entry.pages?.contents?.find(
+        (p) => mejType(p) && extractSecretBlocks(bodyRegion(p).content).some((s) => s.id === secretId)
+      ) ?? entry.pages?.contents?.find((p) => mejType(p));
+      const record = (entry.getFlag(MODULE_ID, "secretReveals") ?? {})[secretId];
+      // Seed from both sources, exactly as the sheet overlay does - a
+      // flag-only seed shows Everyone unchecked on a natively-revealed secret,
+      // so applying the dialog would strip the class back off (C1).
+      const previous = { ...normalizeAudience(record), all: sectionRevealedAll(bodyRegion(page).content, secretId, record) };
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
+      if (!audience) return;
       const stored = await applyBlockReveal(page, secretId, audience);
       await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
       // Whisper the secret's actual content, not the 140-char index preview

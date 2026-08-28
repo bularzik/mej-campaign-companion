@@ -7,7 +7,7 @@ import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, canSee, pruneReveals } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
-import { extractSecretBlocks, setSectionRevealed } from "../logic/secret-blocks.mjs";
+import { extractSecretBlocks, setSectionRevealed, sectionRevealedAll } from "../logic/secret-blocks.mjs";
 import { bodyRegion } from "../logic/field-extractors.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
@@ -50,7 +50,7 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   // else into text.content. Pinning text.content meant recap secrets got no
   // audience button at all, so they could be seen in the tracker and never
   // revealed to anyone.
-  const { key } = bodyRegion(page);
+  const { key, content } = bodyRegion(page);
   const sections = element.querySelectorAll(`.editor-display[data-key="${key}"] section.secret`);
   for (const section of sections) {
     if (section.querySelector(":scope > .mej-cc-secret-audience")) continue;
@@ -63,7 +63,11 @@ async function injectGmOverlay(sheet, element, shellHosted) {
       button.dataset.tooltip = game.i18n.localize(`${I18N}.secrets.noId`);
       button.innerHTML = '<i class="fa-solid fa-user-secret"></i>';
     } else {
-      const audience = normalizeAudience(reveals[id]);
+      // The chip must read the SAME two sources the tracker and the dialog do
+      // (sectionRevealedAll): "Everyone" now lives as Foundry's class in the
+      // body, so a flag-only read here showed "None" on a secret the Hub was
+      // simultaneously reporting as revealed to everyone.
+      const audience = { ...normalizeAudience(reveals[id]), all: sectionRevealedAll(content, id, reveals[id]) };
       button.innerHTML = `<i class="fa-solid fa-user-secret"></i> <span class="mej-cc-secret-chips">${foundry.utils.escapeHTML(chipText(audience, groups))}</span>`;
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -92,22 +96,37 @@ async function injectGmOverlay(sheet, element, shellHosted) {
  * SessionSheet.onSecretAudience already applies to the secrets array.
  *
  * Returns the audience to persist. Throws only if the body update itself
- * fails, so the caller can skip the flag write and leave the two halves from
- * disagreeing.
+ * fails, so the caller can skip the flag write - leaving the two halves in
+ * agreement rather than storing an audience the body never got.
+ *
+ * `all` is forced false ONLY when the class can actually carry the reveal. If
+ * there is no page, or the section id isn't in this body, the requested `all`
+ * is returned untouched: clearing it there would downgrade a legacy
+ * `all: true` record - which readers honour forever - to "revealed to nobody",
+ * silently un-revealing a secret we simply had no native place to express.
  */
 export async function applyBlockReveal(page, sectionId, audience) {
-  const stored = { ...normalizeAudience(audience), all: false };
-  if (!page) return stored;
-  const { key, content } = bodyRegion(page);
-  const next = setSectionRevealed(content, sectionId, audience?.all === true);
+  const requested = normalizeAudience(audience);
+  const { key, content } = bodyRegion(page ?? {});
+  const present = extractSecretBlocks(content).some((s) => s.id === sectionId);
+  if (!page || !present) return requested;
+  const next = setSectionRevealed(content, sectionId, requested.all);
   if (next !== content) await page.update({ [key]: next });
-  return stored;
+  return { ...requested, all: false };
 }
 
 async function editAudience(entry, page, sectionId, section, sheet, shellHosted) {
   if (!game.user.isGM) return;
   const groups = groupsSetting();
-  const previous = normalizeAudience(revealsOf(entry)[sectionId]);
+  const record = revealsOf(entry)[sectionId];
+  // Seed the dialog from BOTH sources (sectionRevealedAll), not the flag
+  // alone: with "Everyone" now stored as the native class, a flag-only seed
+  // opened the dialog with Everyone unchecked on an already-everyone secret,
+  // so simply adding one player to it stripped the class back off and
+  // un-revealed the secret from the table. It also kept sendRevealWhisper's
+  // "already everyone -> whisper nobody" branch permanently dead, re-whispering
+  // every player on every re-confirmation.
+  const previous = { ...normalizeAudience(record), all: sectionRevealedAll(bodyRegion(page).content, sectionId, record) };
   const audience = await promptAudience({
     title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups
   });
@@ -145,7 +164,7 @@ async function pruneOrphans(entry, page) {
   const reveals = revealsOf(entry);
   const keys = Object.keys(reveals);
   if (!keys.length) return;
-  const liveIds = extractSecretBlocks(page?.system?.recap ?? page?.text?.content ?? "").map((s) => s.id);
+  const liveIds = extractSecretBlocks(bodyRegion(page).content).map((s) => s.id);
   const { map, changed } = pruneReveals(reveals, liveIds);
   // recursive:false replaces the whole secretReveals object outright -
   // Document#update otherwise merges nested objects key-by-key by default

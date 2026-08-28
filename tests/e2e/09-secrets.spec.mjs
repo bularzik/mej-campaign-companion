@@ -282,6 +282,196 @@ test.describe("09 secrets", () => {
     }
   });
 
+  // The regression test for the final review's C1. The two write-path tests
+  // above call applyBlockReveal() directly, which cannot see C1 at all: the
+  // bug lived entirely in the gap between the DIALOG's seeded state, the
+  // chip, and that function. Everything here therefore goes through the real
+  // control a GM actually clicks. Against the pre-fix code the reopened
+  // dialog shows "Everyone" UNCHECKED (it read the flag, which this branch
+  // guarantees is false), so applying it strips the class and silently
+  // un-reveals the secret from the whole table - the final assertion fails.
+  test("reveal to Everyone round-trips through the real control without un-revealing", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    let entryId = null;
+    try {
+      entryId = await page.evaluate(async (prefix) => {
+        const entry = await JournalEntry.create({
+          name: `${prefix}RoundTrip`,
+          ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+          pages: [{
+            name: `${prefix}RoundTrip`,
+            type: "monks-enhanced-journal.place",
+            flags: { "monks-enhanced-journal": { type: "place" } },
+            text: { content: '<p>Public intro.</p><section class="secret" id="secret-roundtrip"><p>TT-roundtrip-secret</p></section>' }
+          }]
+        });
+        return entry.id;
+      }, TT_PREFIX);
+
+      const shell = await openEntry(page, entryId);
+      const btn = shell.locator(".mej-cc-secret-audience");
+      await expect(btn).toHaveCount(1);
+
+      // 1. Reveal to Everyone through the button.
+      await btn.click();
+      await settle(page, 300);
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog).toBeVisible();
+      await dialog.locator('input[name="all"]').check();
+      await dialog.locator('button[data-action="ok"]').click();
+      await settle(page, 800);
+
+      // Foundry's own class is in the stored body - the whole point of the round.
+      const afterFirst = await page.evaluate((id) => game.journal.get(id).pages.contents[0].text.content, entryId);
+      expect(afterFirst).toContain("secret revealed");
+
+      // 2. Reopen the dialog: it must SEE that native reveal.
+      await btn.click();
+      await settle(page, 300);
+      const reopened = page.locator("dialog.application").last();
+      await expect(reopened).toBeVisible();
+      await expect(reopened.locator('input[name="all"]')).toBeChecked();
+
+      // 3. Add one player on top of Everyone and apply. The class must survive.
+      const u1Id = await page.evaluate(() => game.users.getName("User 1").id);
+      await reopened.locator(`input[name="user-${u1Id}"]`).check();
+      await reopened.locator('button[data-action="ok"]').click();
+      await settle(page, 800);
+
+      const afterSecond = await page.evaluate((id) => {
+        const entry = game.journal.get(id);
+        return {
+          body: entry.pages.contents[0].text.content,
+          users: entry.getFlag("mej-campaign-companion", "secretReveals")["secret-roundtrip"].users
+        };
+      }, entryId);
+      expect(afterSecond.body).toContain("secret revealed");
+      expect(afterSecond.users).toContain(u1Id);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      // By id, never by name (a name-based cleanup in this project once
+      // destroyed real campaign data).
+      await page.evaluate(async (id) => {
+        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+        const stale = game.messages.filter((m) => m.content?.includes("TT-roundtrip-secret")).map((m) => m.id);
+        if (stale.length) await ChatMessage.implementation.deleteDocuments(stale);
+      }, entryId);
+    }
+  });
+
+  // Task 4's actual deliverable, sheet half: a secret written in a Session
+  // RECAP now gets a GM audience button. Before this round injectGmOverlay
+  // pinned data-key="text.content", which is empty on a session page, so the
+  // control never appeared and a recap secret could be seen in the tracker
+  // but revealed to nobody.
+  test("a recap secret gets a GM audience control on the sheet", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    let entryId = null;
+    try {
+      entryId = await page.evaluate(async (prefix) => {
+        const entry = await JournalEntry.create({
+          name: `${prefix}RecapControl`,
+          ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+          pages: [{
+            name: `${prefix}RecapControl`,
+            type: "mej-campaign-companion.session",
+            flags: { "monks-enhanced-journal": { type: "session" } },
+            system: { recap: '<p>Public recap.</p><section class="secret" id="secret-recap-ui"><p>TT-recap-ui-secret</p></section>', gmNotes: "" }
+          }]
+        });
+        return entry.id;
+      }, TT_PREFIX);
+
+      await page.evaluate(async (id) => {
+        await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+      }, entryId);
+      await settle(page, 800);
+      const shell = page.locator("#MonksEnhancedJournal");
+      const recap = shell.locator('.editor-display[data-key="system.recap"]');
+      // Positive render guard before the count assertion below (same reason
+      // openEntry() has one): a shell that never rendered would otherwise make
+      // a "the control is there" check fail for the wrong reason, and any
+      // negative check pass vacuously.
+      await expect(recap).toContainText("Public recap.");
+
+      const btn = recap.locator(".mej-cc-secret-audience");
+      await expect(btn).toHaveCount(1);
+
+      // Drive a real reveal through it.
+      const u1Id = await page.evaluate(() => game.users.getName("User 1").id);
+      await btn.click();
+      await settle(page, 300);
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog).toBeVisible();
+      await dialog.locator(`input[name="user-${u1Id}"]`).check();
+      await dialog.locator('button[data-action="ok"]').click();
+      await settle(page, 800);
+
+      const stored = await page.evaluate((id) =>
+        game.journal.get(id).getFlag("mej-campaign-companion", "secretReveals")["secret-recap-ui"], entryId);
+      expect(stored.users).toContain(u1Id);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async (id) => {
+        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+        const stale = game.messages.filter((m) => m.content?.includes("TT-recap-ui-secret")).map((m) => m.id);
+        if (stale.length) await ChatMessage.implementation.deleteDocuments(stale);
+      }, entryId);
+    }
+  });
+
+  // Task 4's deliverable, tracker half: the Hub used to suppress the audience
+  // control on every session-type block row (canAudience), because a recap
+  // reveal could not reach a player. It can now, so the row must offer it.
+  test("the Hub tracker offers the audience control on a recap-sourced secret", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    let entryId = null;
+    try {
+      entryId = await page.evaluate(async (prefix) => {
+        const entry = await JournalEntry.create({
+          name: `${prefix}RecapTracker`,
+          pages: [{
+            name: `${prefix}RecapTracker`,
+            type: "mej-campaign-companion.session",
+            flags: { "monks-enhanced-journal": { type: "session" } },
+            system: { recap: '<p>Public recap.</p><section class="secret" id="secret-recap-track"><p>TT-recap-tracker-secret</p></section>', gmNotes: "" }
+          }]
+        });
+        return entry.id;
+      }, TT_PREFIX);
+
+      await page.evaluate(async (id) => {
+        await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+      }, entryId);
+      await settle(page, 800);
+      const shell = page.locator("#MonksEnhancedJournal");
+      await expect(shell.locator('.editor-display[data-key="system.recap"]')).toContainText("Public recap.");
+
+      await shell.locator(".nav-button.campaign-hub").click();
+      await settle(page, 500);
+      await shell.locator('nav.sheet-tabs a[data-tab="secrets"]').click();
+      await settle(page, 300);
+
+      const row = shell.locator(".mej-cc-secret-row").filter({ hasText: "TT-recap-tracker-secret" });
+      await expect(row).toHaveCount(1);
+      await expect(row.locator('a[data-action="trackerAudience"]')).toHaveCount(1);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async (id) => {
+        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+      }, entryId);
+    }
+  });
+
   // Legacy audience.all records convert on load; a record whose section has
   // since been deleted must be left alone and keep reading as "everyone",
   // rather than silently un-revealing.

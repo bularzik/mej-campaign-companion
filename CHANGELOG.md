@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.14.0 (2026-08-28)
+
+Secrets round. **This release runs a one-time conversion when your world
+loads: it rewrites the secret markup in journal pages that had secrets
+revealed to Everyone.** Only the reveal marker on those secret blocks
+changes — your text is not touched otherwise — but it is an automatic
+edit to your journal content, so back up your world first if that matters
+to you. It runs once, on the GM's client, and does nothing on later loads.
+
+- **"Everyone" now means what Foundry means by it.** Revealing a secret to
+  Everyone used to be a Campaign Companion arrangement that only Campaign
+  Companion understood: the secret still looked unrevealed on a core
+  journal sheet, to anyone at the table without this module, and in a
+  player-safe Word export. It now sets Foundry's own reveal on the block —
+  the same thing Foundry's built-in Reveal control does — so all of those
+  honor it, and the two controls no longer contradict each other on the
+  same secret. Reveals to specific players or groups are unchanged.
+- **Secrets you write in a Session recap can finally be revealed.** They
+  showed up in the Hub's Secrets tab but had no audience control anywhere,
+  so there was no way to actually show one to a player. The recap now
+  behaves like any other entry's description: audience control on the
+  secret, a working control on its tracker row, and the reveal reaches the
+  player.
+- **Existing "Everyone" reveals are converted for you** by the one-time
+  pass described above. A secret whose block has since been deleted or
+  edited away is left exactly as it is and keeps reading as revealed to
+  everyone, so nothing goes dark on you.
+
 ## 0.13.2 (2026-08-28)
 
 Second bugfix round. No new features; nothing is migrated.
