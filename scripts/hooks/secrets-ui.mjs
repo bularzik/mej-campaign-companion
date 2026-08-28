@@ -100,16 +100,31 @@ async function injectGmOverlay(sheet, element, shellHosted) {
  * agreement rather than storing an audience the body never got.
  *
  * `all` is forced false ONLY when the class can actually carry the reveal. If
- * there is no page, or the section id isn't in this body, the requested `all`
- * is returned untouched: clearing it there would downgrade a legacy
- * `all: true` record - which readers honour forever - to "revealed to nobody",
- * silently un-revealing a secret we simply had no native place to express.
+ * there is no page, or the section id isn't in this body, we cannot express
+ * "everyone" natively - and what to store then depends on whether the record
+ * ALREADY meant everyone:
+ *
+ * - It did (`legacyAll`): keep `all: true`. Clearing it would downgrade a
+ *   legacy record - which readers honour forever - to "revealed to nobody",
+ *   silently un-revealing a secret we simply had no native place to express.
+ * - It did not: store `all: false`, even though the GM asked for everyone.
+ *   Minting a fresh `all: true` here would claim a reveal that nothing backs:
+ *   the chip and tracker would read "Everyone" while core sheets and the
+ *   player-safe export - which key on the class - still strip the block. That
+ *   is exactly the companion-private "Everyone" this round exists to abolish,
+ *   so we refuse to create a new one. The reveal simply does not take, which
+ *   is visible in the chip rather than hidden behind a false claim.
+ *
+ * Reachable when the live DOM shows a section our regex parser cannot see -
+ * a `<section class="secret">` nested inside another `<section>`, which
+ * SECTION_RE is documented not to support (secret-blocks.mjs) but pasted
+ * HTML can still produce.
  */
-export async function applyBlockReveal(page, sectionId, audience) {
+export async function applyBlockReveal(page, sectionId, audience, { legacyAll = false } = {}) {
   const requested = normalizeAudience(audience);
   const { key, content } = bodyRegion(page ?? {});
   const present = extractSecretBlocks(content).some((s) => s.id === sectionId);
-  if (!page || !present) return requested;
+  if (!page || !present) return { ...requested, all: requested.all && legacyAll === true };
   const next = setSectionRevealed(content, sectionId, requested.all);
   if (next !== content) await page.update({ [key]: next });
   return { ...requested, all: false };
@@ -131,7 +146,7 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
     title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups
   });
   if (!audience) return;
-  const stored = await applyBlockReveal(page, sectionId, audience);
+  const stored = await applyBlockReveal(page, sectionId, audience, { legacyAll: record?.all === true });
   await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
   // Whisper the section's content (already enriched in the GM's DOM) minus our own button.
   const clone = section.cloneNode(true);

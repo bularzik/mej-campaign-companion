@@ -941,7 +941,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const previous = { ...normalizeAudience(record), all: sectionRevealedAll(bodyRegion(page).content, secretId, record) };
       const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
       if (!audience) return;
-      const stored = await applyBlockReveal(page, secretId, audience);
+      const stored = await applyBlockReveal(page, secretId, audience, { legacyAll: record?.all === true });
       await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
       // Whisper the secret's actual content, not the 140-char index preview
       // (M5) - chat enrichment happens at render time, so the raw inner

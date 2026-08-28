@@ -282,6 +282,70 @@ test.describe("09 secrets", () => {
     }
   });
 
+  // A secret the live DOM shows but our regex parser cannot see: SECTION_RE
+  // is documented not to handle a <section> nested inside a <section>, and
+  // pasted HTML still produces them. The GM gets an audience button (the
+  // overlay walks the DOM) but the class write has nowhere to land - so the
+  // question is what gets STORED. Minting `all: true` there would recreate
+  // exactly the companion-private "Everyone" this round exists to abolish:
+  // chip and tracker reading "Everyone" while core sheets and the player-safe
+  // export still strip the block. Refusing the reveal is honest; claiming one
+  // that nothing backs is not. A record that ALREADY meant everyone is a
+  // different case and must survive untouched.
+  test("a reveal the body cannot carry is refused, but a legacy one survives", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    let entryId = null;
+    try {
+      entryId = await page.evaluate(async (prefix) => {
+        const entry = await JournalEntry.create({
+          name: `${prefix}NestedSecret`,
+          pages: [{
+            name: `${prefix}Nested`,
+            type: "monks-enhanced-journal.person",
+            flags: { "monks-enhanced-journal": { type: "person" } },
+            // The secret section is nested one level down, out of SECTION_RE's reach.
+            text: { content: '<p>Public.</p><section class="wrap"><section class="secret" id="secret-nested">Hidden truth.</section></section>' }
+          }],
+          ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
+        });
+        return entry.id;
+      }, TT_PREFIX);
+
+      const result = await page.evaluate(async (id) => {
+        const { applyBlockReveal } = await import("/modules/mej-campaign-companion/scripts/hooks/secrets-ui.mjs");
+        const entry = game.journal.get(id);
+        const pg = entry.pages.contents[0];
+        const wanted = { all: true, users: [], groups: [] };
+        return {
+          // No prior record: the reveal does not take, and nothing claims it did.
+          fresh: (await applyBlockReveal(pg, "secret-nested", wanted, { legacyAll: false })).all,
+          // A pre-existing "everyone" record has no native home either, but
+          // readers honour it forever - clearing it would go dark on the table.
+          legacy: (await applyBlockReveal(pg, "secret-nested", wanted, { legacyAll: true })).all,
+          // An explicit un-reveal still clears a legacy record, as it always did.
+          cleared: (await applyBlockReveal(pg, "secret-nested", { all: false, users: [], groups: [] }, { legacyAll: true })).all,
+          body: game.journal.get(id).pages.contents[0].text.content
+        };
+      }, entryId);
+
+      expect(result.fresh).toBe(false);
+      expect(result.legacy).toBe(true);
+      expect(result.cleared).toBe(false);
+      // No write reached the body in any of those cases.
+      expect(result.body).not.toContain("revealed");
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      if (entryId) {
+        await page.evaluate(async (id) => {
+          if (game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+        }, entryId);
+      }
+    }
+  });
+
   // The regression test for the final review's C1. The two write-path tests
   // above call applyBlockReveal() directly, which cannot see C1 at all: the
   // bug lived entirely in the gap between the DIALOG's seeded state, the
