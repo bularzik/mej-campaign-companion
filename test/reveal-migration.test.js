@@ -61,4 +61,23 @@ describe("planNativeRevealMigration", () => {
     expect(planNativeRevealMigration([entry({ reveals: { a: null, b: 7 }, sectionIds: ["a"] })])).toEqual([]);
     expect(planNativeRevealMigration([null, undefined])).toEqual([]);
   });
+
+  it("requires all === true, not merely a truthy all value", () => {
+    // String "yes" is truthy but not `true`
+    expect(planNativeRevealMigration([entry({
+      reveals: { "secret-a": { all: "yes" } }, sectionIds: ["secret-a"]
+    })])).toEqual([]);
+    // Number 1 is truthy but not `true`
+    expect(planNativeRevealMigration([entry({
+      reveals: { "secret-b": { all: 1 } }, sectionIds: ["secret-b"]
+    })])).toEqual([]);
+    // Empty object is truthy but not `true`
+    expect(planNativeRevealMigration([entry({
+      reveals: { "secret-c": { all: {} } }, sectionIds: ["secret-c"]
+    })])).toEqual([]);
+    // Only strict `true` should plan
+    expect(planNativeRevealMigration([entry({
+      reveals: { "secret-d": { all: true } }, sectionIds: ["secret-d"]
+    })]).length).toBe(1);
+  });
 });
