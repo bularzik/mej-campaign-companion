@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 (2026-08-28)
 
 - New: **Relationship graph nodes show the entity's picture**, clipped
   into the node circle — a person's portrait, a place's illustration, or
