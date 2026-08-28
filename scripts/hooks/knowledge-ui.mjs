@@ -173,7 +173,7 @@ function bindPanel(panel, page, sheet, shellHosted) {
     refresh();
   });
   panel.querySelectorAll(".mej-cc-attr-delete").forEach((a) => a.addEventListener("click", () => {
-    a.closest("[data-attr-id]").remove();
+    a.closest("[data-attr-id]")?.remove();
     commitAttributes();
   }));
   panel.querySelectorAll(".mej-cc-attr-key, .mej-cc-attr-value, .mej-cc-attr-hidden").forEach((input) =>

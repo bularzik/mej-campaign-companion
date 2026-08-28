@@ -76,6 +76,58 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     });
   });
 
+  // C5 regression. Validation used to live in the dialog's own ok callback and
+  // return null when a field was missing - but DialogV2.prompt closes
+  // regardless of what that callback returns, so the GM got a warning toast
+  // and lost everything already typed. The dialog must now stay open with the
+  // typed text intact, and still save once completed.
+  //
+  // Exercised via the blank-query path, which is the reachable one: parseQuery
+  // is permissive enough that it only ever throws on empty input, and
+  // #promptDashboard's own !name/!query check catches that first - so the
+  // "can't be parsed" branch below it cannot currently fire at all (recorded
+  // in the sweep spec as C16, not fixed here). The input-preservation
+  // behaviour under test is identical on both paths.
+  test("dashboard dialog keeps what you typed when a field is missing", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const dashName = `${TT_PREFIX}KeepTyped`;
+    try {
+      const shell = await openHubTab(page, "dashboards");
+      await shell.locator('button[data-action="addDashboard"]').click();
+
+      const dialog = page.locator("dialog.application").last();
+      // A name worth not losing, and no query yet.
+      await dialog.locator('input[name="name"]').fill(dashName);
+      await dialog.locator('input[name="query"]').fill("");
+      await dialog.locator('button[data-action="ok"]').click();
+      await settle(page, 400);
+
+      // Still open, and the name the GM typed survived.
+      const reopened = page.locator("dialog.application").last();
+      await expect(reopened).toBeVisible();
+      await expect(reopened.locator('input[name="name"]')).toHaveValue(dashName);
+      // Nothing was saved on the rejected attempt.
+      await expect(shell.locator(".mej-cc-dashboard", { hasText: dashName })).toHaveCount(0);
+
+      // Completing it from there saves normally, without retyping the name.
+      await reopened.locator('input[name="query"]').fill("tag:villain");
+      await reopened.locator('button[data-action="ok"]').click();
+      await settle(page, 400);
+      await expect(page.locator("dialog.application")).toHaveCount(0);
+      await expect(shell.locator(".mej-cc-dashboard", { hasText: dashName })).toHaveCount(1);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async (n) => {
+        const saved = (game.settings.get("mej-campaign-companion", "savedQueries") ?? [])
+          .filter((q) => q.name !== n);
+        await game.settings.set("mej-campaign-companion", "savedQueries", saved);
+      }, dashName);
+    }
+  });
+
   test("dashboard CRUD + rendering, hidden/shown per showPlayers", async ({ browser }) => {
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();

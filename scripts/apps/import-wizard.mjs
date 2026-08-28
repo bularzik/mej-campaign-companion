@@ -340,8 +340,8 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static #onMergeUp(event, target) {
-    const index = Number(target.closest("[data-index]").dataset.index);
-    if (index <= 0) return;
+    const index = Number(target.closest("[data-index]")?.dataset.index);
+    if (!Number.isInteger(index) || index <= 0) return;
     this.state.rows = this.#formRows();
     this.state.sections = mergeSections(this.state.sections, index);
     this.state.rows.splice(index, 1);
@@ -355,7 +355,8 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static async #onSplitSection(event, target) {
-    const index = Number(target.closest("[data-index]").dataset.index);
+    const index = Number(target.closest("[data-index]")?.dataset.index);
+    if (!Number.isInteger(index)) return;
     this.state.rows = this.#formRows();
     const cutIndices = await this.#promptSplit(this.state.sections[index]);
     if (!cutIndices?.length) return;

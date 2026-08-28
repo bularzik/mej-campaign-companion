@@ -10,7 +10,7 @@
 // (or a specific row within it) can't be located, affected rows fall back
 // into a plain "Known connections" list of their own.
 import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
-import { normalizeAudience } from "../logic/reveal-state.mjs";
+import { normalizeAudience, pruneReveals } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
@@ -83,12 +83,33 @@ function relAudienceButton({ tooltip, extraClass }, onClick) {
   return a;
 }
 
+/**
+ * Drop relReveals records whose relationship no longer exists on the page.
+ *
+ * Deleting a relationship in MEJ's own UI removes it from the relationships
+ * flag but knows nothing about our reveal overlay keyed on its id, so those
+ * records accumulated forever - and if MEJ ever reissued a previously-used
+ * relationship id, a stale audience would silently reattach to a brand-new
+ * relationship. Mirrors secrets-ui.mjs's pruneOrphans for block secrets,
+ * including its `recursive: false` (Document#update merges nested objects
+ * key-by-key by default, so a plain update would leave the pruned ids in
+ * storage). GM-side only, on render, same as that one.
+ */
+async function pruneRelOrphans(entry, rels) {
+  const reveals = relRevealsOf(entry);
+  if (!Object.keys(reveals).length) return;
+  const { map, changed } = pruneReveals(reveals, Object.keys(rels ?? {}));
+  if (changed) await entry.update({ [`flags.${MODULE_ID}.${REL_FLAG}`]: map }, { recursive: false });
+}
+
 function injectGm(sheet, element, shellHosted) {
   const page = mejPageOf(sheet);
   if (!page || !element || !game.user.isGM) return;
   const entry = page.parent;
   if (!entry) return;
   const rels = page.flags?.[MEJ_FLAGS]?.relationships ?? {};
+  pruneRelOrphans(entry, rels).catch((err) =>
+    console.error(`${MODULE_ID} | pruning orphaned relationship reveals failed`, err));
   const rows = visibleRelRows(rels, relRevealsOf(entry), { userId: game.user.id, groups: groupsSetting(), isGM: true });
   for (const row of rows) {
     const li = findMejRow(element, row.id, row.uuid)?.querySelector(".item-controls");

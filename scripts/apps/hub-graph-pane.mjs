@@ -26,6 +26,10 @@ const MEJ_ASSET_TYPES = new Set([
 ]);
 
 let activeSim = null;
+// Cleanup for a drag still in flight, if any (C9). A pointerdown installs
+// window-level listeners that outlive the node they started on, so a redraw
+// arriving mid-drag has to release them - see drawGraphPane's first line.
+let releaseDrag = null;
 
 /** Compute the scoped graph + the template context for the pane. */
 export function prepareGraphContext(entries, state) {
@@ -68,6 +72,9 @@ function typeHue(type) {
 /** Draw the graph into `svg` (replacing its contents), wiring drag/zoom/click. */
 export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   if (!svg) return;
+  // A drag in flight belongs to the graph we are about to discard: end it
+  // before its node elements are detached (C9).
+  releaseDrag?.();
   svg.replaceChildren();
   const width = svg.clientWidth || 800;
   const height = svg.clientHeight || 540;
@@ -77,6 +84,16 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   // a time, so this is shared across every node's click handler and drag
   // binding (see the click handler and bindDrag below).
   let dragged = false;
+
+  // THIS draw's simulation, not the module-global one (C9). The handlers below
+  // are installed before the simulation exists (bindDrag runs while building
+  // nodes, forceSimulation is created after), so they cannot capture it by
+  // value - but reading the module global instead meant a drag that outlived a
+  // redraw drove the NEW graph's simulation using the OLD graph's node
+  // objects. A per-draw holder keeps each drag bound to the graph it started
+  // on; once that graph is replaced, the drag can only perturb the simulation
+  // that is already stopped and detached.
+  const sim = { current: null };
 
   /** Drag to pin (sets fx/fy, per the d3-force convention). */
   function bindDrag(g, node) {
@@ -89,21 +106,27 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
         return point.matrixTransform(svg.getScreenCTM().inverse());
       };
       const move = (event) => {
-        if (!activeSim) return;
+        if (!sim.current) return;
         dragged = true;
         const p = toSvg(event);
         node.fx = p.x;
         node.fy = p.y;
-        activeSim.alphaTarget(0.3).restart();
+        sim.current.alphaTarget(0.3).restart();
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
-        activeSim.alphaTarget(0);
+        if (releaseDrag === up) releaseDrag = null;
+        // Optional-chained to match `move`'s own guard above. The asymmetry
+        // between the two - move guarded, up not - was the original defect:
+        // whatever can leave the simulation absent for one can leave it
+        // absent for the other.
+        sim.current?.alphaTarget(0);
         setTimeout(() => { dragged = false; }, 0); // let click see the flag
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      releaseDrag = up;
     });
   }
 
@@ -173,7 +196,7 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   });
 
   activeSim?.stop();
-  activeSim = d3.forceSimulation(nodes)
+  activeSim = sim.current = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id((d) => d.uuid).distance(90))
     .force("charge", d3.forceManyBody().strength(-220))
     .force("center", d3.forceCenter(width / 2, height / 2))

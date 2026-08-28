@@ -199,6 +199,7 @@
         "showPlayers": "Visible to players",
         "visibleToPlayers": "Visible to players",
         "badQuery": "That query can't be parsed.",
+        "incomplete": "A dashboard needs both a name and a query.",
         "noResults": "No matches.",
         "empty": "No dashboards yet."
       }

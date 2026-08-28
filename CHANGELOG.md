@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.13.2 (2026-08-28)
+
+Second bugfix round. No new features; nothing is migrated.
+
+- **Fixed: the "new dashboard" dialog no longer throws away what you
+  typed.** Leaving a field blank used to close the dialog and discard the
+  name and query both; it now stays open with your text intact.
+- **Fixed: reveals now reach popped-out sheets.** A player watching a
+  secret in its own window saw nothing when you revealed it — they had to
+  close and reopen the sheet.
+- **Fixed: moving a player into or out of a group takes effect
+  immediately**, rather than at whatever render happened to come next.
+- **Fixed: reveal records for deleted relationships are cleaned up**
+  instead of accumulating forever.
+- **Fixed: an auto-captured Encounter is named after the scene the combat
+  actually happened on**, not whichever scene the GM was looking at.
+- **Fixed: dragging a graph node while the graph redraws no longer
+  disturbs the new graph.**
+- Assorted robustness: adding a timepoint with no position now appends
+  rather than inserting at the top, editing a saved dashboard no longer
+  updates the display before the save succeeds, and several click
+  handlers no longer assume the element they were fired from.
+
 ## 0.13.1 (2026-08-28)
 
 Bugfix and hardening round. No new features; nothing is migrated.

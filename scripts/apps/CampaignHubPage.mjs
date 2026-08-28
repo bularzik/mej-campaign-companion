@@ -751,8 +751,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     };
   }
 
-  /** Name + query + showPlayers prompt; returns {name, query, showPlayers} or null. */
-  static async #promptDashboard(initial = {}, { titleKey }) {
+  /**
+   * One pass of the dashboard dialog. Returns exactly what was typed
+   * ({name, query, showPlayers}), or null if the GM cancelled or closed it.
+   * Deliberately does NOT validate - see #promptDashboard, which owns that.
+   */
+  static async #dashboardDialog(initial, { titleKey }) {
     const esc = foundry.utils.escapeHTML;
     return foundry.applications.api.DialogV2.prompt({
       window: { title: titleKey },
@@ -768,20 +772,51 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         label: `${I18N}.hub.save`,
         callback: (event, button) => {
           const form = button.form.elements;
-          const name = form.name.value.trim();
-          const query = form.query.value.trim();
-          if (!name || !query) return null;
-          try {
-            parseQuery(query);
-          } catch {
-            ui.notifications.warn(game.i18n.localize(`${I18N}.hub.dashboards.badQuery`));
-            return null;
-          }
-          return { name, query, showPlayers: form.showPlayers.checked === true };
+          return {
+            name: form.name.value.trim(),
+            query: form.query.value.trim(),
+            showPlayers: form.showPlayers.checked === true
+          };
         }
       },
       rejectClose: false
     });
+  }
+
+  /**
+   * Name + query + showPlayers prompt; returns {name, query, showPlayers} or
+   * null when the GM gave up.
+   *
+   * C5: validation used to live in the dialog's own ok callback and return
+   * null when a field was missing - but DialogV2.prompt closes regardless of
+   * what the callback returns, so the GM got a warning toast and lost
+   * everything already typed, including a long query. Validate out here
+   * instead and re-open pre-filled with what they actually wrote. Cancelling
+   * still exits, so this cannot trap anyone in a loop.
+   *
+   * Note (C16, recorded not fixed): the parseQuery branch below is currently
+   * unreachable - parseQuery only throws on empty input, which the !query
+   * check above it already catches - so "that query can't be parsed" can
+   * never actually appear. Kept so a stricter grammar stays covered.
+   */
+  static async #promptDashboard(initial = {}, { titleKey }) {
+    let current = initial;
+    for (;;) {
+      const typed = await CampaignHubPage.#dashboardDialog(current, { titleKey });
+      if (!typed) return null;
+      current = typed;
+      if (!typed.name || !typed.query) {
+        ui.notifications.warn(game.i18n.localize(`${I18N}.hub.dashboards.incomplete`));
+        continue;
+      }
+      try {
+        parseQuery(typed.query);
+      } catch {
+        ui.notifications.warn(game.i18n.localize(`${I18N}.hub.dashboards.badQuery`));
+        continue;
+      }
+      return typed;
+    }
   }
 
   static async onAddDashboard() {
@@ -797,13 +832,17 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onEditDashboard(event, target) {
     if (!game.user.isGM) return;
     const id = target.closest("[data-dashboard-id]")?.dataset.dashboardId;
-    const saved = [...(game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [])];
+    const saved = game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? [];
     const existing = saved.find((q) => q.id === id);
     if (!existing) return;
     const result = await CampaignHubPage.#promptDashboard(existing, { titleKey: `${I18N}.hub.dashboards.edit` });
     if (!result) return;
-    Object.assign(existing, result);
-    await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
+    // C11: `[...saved]` is a shallow copy, so the previous
+    // `Object.assign(existing, result)` mutated the very object the settings
+    // cache holds - the edit showed client-side before the write, and stayed
+    // showing until reload if the write failed. Replace the row instead.
+    const next = saved.map((q) => (q.id === id ? { ...q, ...result } : q));
+    await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, next);
     this.render({ parts: ["main"] });
   }
 
@@ -866,6 +905,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onTrackerAudience(event, target) {
     if (!game.user.isGM) return;
     const row = target.closest("[data-secret-kind]");
+    if (!row) return;
     const { secretKind, entryUuid, secretId } = row.dataset;
     const entry = await fromUuid(entryUuid);
     if (!entry) return;
@@ -1430,8 +1470,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
     const journal = journalId ? game.journal.get(journalId) : null;
     if (!journal) return;
-    const raw = Number(target.dataset.position);
-    const position = target.dataset.position != null && Number.isInteger(raw) ? raw : null;
+    // C14: guard on a NON-EMPTY attribute. Number("") is 0 and "" != null, so
+    // an empty data-position used to mean "insert at the head" when it means
+    // "no position given", i.e. append.
+    const rawAttr = target.dataset.position;
+    const raw = Number(rawAttr);
+    const position = rawAttr != null && rawAttr !== "" && Number.isInteger(raw) ? raw : null;
     const result = await CampaignHubPage.#promptTimepoint(
       { campaignDate: currentWorldComponents() },
       { titleKey: `${I18N}.hub.addTimepoint` }
@@ -1476,6 +1520,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onOpenLink(event, target) {
     const chip = target.closest("[data-link-id]");
+    if (!chip) return;
     const { uuid, src, name } = chip.dataset;
     if (src) {
       return new foundry.applications.apps.ImagePopout({ src, window: { title: name } }).render(true);
