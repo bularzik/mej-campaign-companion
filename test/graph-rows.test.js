@@ -32,13 +32,32 @@ describe("graphRowsFor", () => {
       entry("J.b", "B", [page("quest")])
     ], ctx());
     expect(rows).toEqual([
-      { uuid: "J.a", name: "A", type: "person", relationships: [] },
-      { uuid: "J.b", name: "B", type: "quest", relationships: [] }
+      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [] },
+      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [] }
     ]);
   });
 
   it("skips untyped entries entirely", () => {
     expect(graphRowsFor([entry("J.x", "X", [page(null)])], ctx())).toEqual([]);
+  });
+
+  it("carries img from imageOf, called with the winning typed page and its type", () => {
+    const calls = [];
+    const rows = graphRowsFor(
+      [entry("J.a", "A", [page(null), page("person"), page("place")])],
+      ctx({ imageOf: (p, type) => { calls.push([p, type]); return "worlds/x/a.png"; } })
+    );
+    expect(rows[0].img).toBe("worlds/x/a.png");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0].__type).toBe("person");
+    expect(calls[0][1]).toBe("person");
+  });
+
+  it("img is null when imageOf is absent or returns nothing", () => {
+    const es = [entry("J.a", "A", [page("person")])];
+    expect(graphRowsFor(es, ctx()).map((r) => r.img)).toEqual([null]);
+    expect(graphRowsFor(es, ctx({ imageOf: () => undefined })).map((r) => r.img)).toEqual([null]);
+    expect(graphRowsFor(es, ctx({ imageOf: () => "" })).map((r) => r.img)).toEqual([null]);
   });
 
   it("gates non-observable entries for players but not for the GM", () => {

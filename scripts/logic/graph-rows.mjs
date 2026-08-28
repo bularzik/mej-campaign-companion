@@ -20,9 +20,9 @@ export function combineLabel(label, secretText) {
  * first typed page wins). Scope IS the entries argument - callers decide
  * membership (the Hub passes its #scopedEntries()).
  * ctx: { isGM, userId, groups, getType(page), canObserve(entry),
- *        relRevealsOf(entry), relationshipsOf(page) }
+ *        relRevealsOf(entry), relationshipsOf(page), imageOf?(page, type) }
  */
-export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserve, relRevealsOf, relationshipsOf }) {
+export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserve, relRevealsOf, relationshipsOf, imageOf }) {
   const rows = [];
   for (const entry of entries ?? []) {
     if (!isGM && !canObserve(entry)) continue;
@@ -34,7 +34,8 @@ export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserv
         relRevealsOf(entry) ?? {},
         { userId, groups, isGM }
       ).map((r) => ({ id: r.id, uuid: r.uuid, hidden: r.hidden, revealedToViewer: r.rowRevealedToUser, label: combineLabel(r.label, r.secretText) }));
-      rows.push({ uuid: entry.uuid, name: entry.name, type, relationships });
+      const img = typeof imageOf === "function" ? imageOf(page, type) : null;
+      rows.push({ uuid: entry.uuid, name: entry.name, type, img: typeof img === "string" && img.length ? img : null, relationships });
       break;
     }
   }
