@@ -1,0 +1,339 @@
+# Bugfix sweep — design
+
+**Date:** 2026-08-28
+**Branch:** `fix/bugfix-sweep`
+**Baseline:** `main` @ `731e715` (0.12.0)
+**Status:** inventory complete; Round 1 awaiting approval to implement
+
+## Purpose
+
+A whole-module defect sweep of `mej-campaign-companion`: collect every known
+open issue carried forward from prior rounds, add what a fresh read of the
+source turns up, and decompose the result into implementable rounds.
+
+This document is the authority the per-round plans argue from. Round 3
+(secrets-layer semantics) is explicitly **not** covered here beyond scoping —
+it changes a persisted data contract and gets its own spec.
+
+## Baseline health
+
+Measured on `main` @ `731e715` before any change:
+
+- `npm test` — **1204 passing**, 0 failing.
+- `npm audit` — **0 vulnerabilities** (with and without dev dependencies).
+- Open GitHub issues — none.
+- 52 unit-test files; 19 Playwright e2e spec files.
+
+Nothing below is a regression. Every item is either a defect that has always
+been present, or a known issue previously parked by an earlier round.
+
+## Method and coverage
+
+Two passes.
+
+**Pass 1 — pattern sweep** across all 82 source files: HTML-injection sinks,
+`eval`/`Function`, unescaped Handlebars, socket registration and gating,
+`isGM` distribution, upload and `fetch` surfaces, settings scopes, regex
+construction, loose equality, `parseInt` radix, swallowed `catch`, floating
+promises, unguarded DOM derefs, `await`-in-`forEach`, hook-registration leaks.
+
+**Pass 2 — full line-by-line read** of the highest-risk files (~6,000 lines):
+
+`apps/CampaignHubPage.mjs` (all 1751 lines) · `apps/import-wizard.mjs` ·
+`apps/import-upload.mjs` · `apps/hub-graph-pane.mjs` · `sheets/SessionSheet.mjs` ·
+`integrations/mej-adapter.mjs` · `search/live-index.mjs` · `campaign-companion.mjs` ·
+`hooks/auto-capture.mjs` · `hooks/retro-link.mjs` · `hooks/secrets-ui.mjs` ·
+`hooks/knowledge-ui.mjs` · `hooks/media-relay.mjs` · `hooks/player-recap.mjs` ·
+`hooks/socket.mjs` · `logic/media-relay.mjs` · `logic/reveal-state.mjs` ·
+`data/timepoints.mjs` · `data/campaign-store.mjs`
+
+**Not** read line-by-line: the remaining pure `logic/` modules, which carry
+dense unit-test coverage and were covered only by Pass 1. A residual defect
+is most likely to be hiding there.
+
+### Audited and found sound
+
+Recorded so these are not re-audited in a later round:
+
+- **Socket dispatcher** (`hooks/socket.mjs`) — single registration, routed by
+  action, GM actions gated on the *elected* `activeGM` rather than bare
+  `isGM`, per-handler try/catch isolation. The authorization decision is
+  extracted as a pure, unit-tested function.
+- **Player-recap relay** — GM-side ProseMirror round-trip sanitization before
+  any write, writes scoped to a single flag path, sender validated against
+  the real user list. Stricter than MEJ's own `saveUserData` precedent.
+- **Upload relay** — MIME validated against a renderable-image allowlist,
+  caller's extension never trusted (`enforcedImageName`), size cap, chunk-count
+  cap, concurrent-buffer cap, stale-buffer eviction, filename uniquified.
+- **Regex construction** — both `new RegExp` sites are safe: `search-index.mjs:75`
+  escapes its input; `secret-blocks.mjs:14` interpolates only literal attribute
+  names. No ReDoS surface.
+- **Settings** — no sensitive data in any `world`-scope setting.
+- **Search-index permission gating** — `searchAll`/`runQueryAll`/`backlinksForEntry`/
+  `mentionBadgeCounts`/`backlinkPairs`/`gmSecretRecords` all gate on `isGM` and
+  re-check `testUserPermission` against the live document.
+- **Client-side-only confidentiality of GM content** — already documented
+  honestly in `README.md:39` and `docs/gm-guide.md:157`. Inherent to Foundry's
+  document model, not a defect, and the docs already say so.
+
+## Finding inventory
+
+Severity is impact-on-a-real-table, not exploitability.
+
+### Security
+
+**S1 — Unsafe HTML parser on authored content (Medium).**
+`apps/CampaignHubPage.mjs:852` and `hooks/secrets-ui.mjs:145` parse page HTML
+with `document.createRange().createContextualFragment()`, which parses in the
+live document's context — `<img src=x onerror=…>` can fire. The codebase
+already uses the inert `DOMParser` for the same job at `apps/import-upload.mjs:82`
+and `apps/import-wizard.mjs:267`, so this is an inconsistency rather than a
+missing idea.
+*Reachability:* the GM-side site runs when a GM clicks reveal on a block
+secret, against body HTML anyone with edit rights on that page authored —
+relevant when `playersWriteSessions` is on, or on any shared entry. The
+player-side site additionally starts image fetches for secret sections that
+viewer is not cleared for, before line 155 removes them.
+*Fix:* `DOMParser().parseFromString(html, "text/html")` at both sites.
+
+**S2 — Search index goes stale across a confidentiality-relevant setting (Medium).**
+`search/live-index.mjs:82-90` splits a person's attributes into public
+(`record.fields`) and GM-only (`record.gmFields`) using
+`personAttributeHiddenKeys()` (`:50-62`), which reads MEJ's `sheet-settings`
+world setting **at index time**. No hook re-indexes when that setting changes;
+`rebuildIndex()` exists but nothing calls it for this. A GM who marks a person
+attribute `playerHidden` leaves its value in the **public** token set —
+searchable by players — until a world reload.
+*Fix:* re-index on the setting change. MEJ owns the setting, so watch it via
+its registered `onChange` if reachable, else re-derive the hidden-key set at
+search time rather than index time.
+
+**S3 — Upload-result path check permits traversal (Low).**
+`hooks/media-relay.mjs:170` guards a claimed reply path with
+`startsWith(RELAY_UPLOAD_DIR() + "/")`. The guard's own comment states its
+purpose is to stop a forged reply pointing outside the relay directory;
+`…/uploads/../../../elsewhere.png` satisfies `startsWith` and walks straight
+past it. Requires guessing a `randomID()` request id.
+*Fix:* reject any path whose segments include `..` (or normalize before compare).
+
+**S4 — Relay assembler trusts first-chunk metadata only (Low).**
+`logic/media-relay.mjs:86-95` records `senderId`/`name`/`type` from the first
+chunk of a request id and never re-checks them on subsequent chunks, so a
+client that learns an in-flight request id can contribute bytes to it. Only
+`total` is cross-checked (`:97-100`).
+*Fix:* reject a chunk whose `senderId`/`name`/`type` disagree with the buffer.
+
+**S5 — Vendored bundles are unversioned and outside dependency auditing (Medium).**
+`vendor/mammoth.browser.min.js` (636 KB) and `vendor/docx.iife.js` (1.1 MB)
+carry no version string, no provenance comment, and no regeneration script,
+and appear in no manifest — so `npm audit`'s clean result never examined them.
+`vendor/d3-force.esm.js` at least carries a provenance comment. Mammoth is the
+parser fed untrusted `.docx` input.
+*Fix:* record exact version and source for each, add a provenance header and a
+documented regeneration command, and list them somewhere a CVE check can reach.
+
+### Correctness — data integrity
+
+**C1 — `onFileAllShown` can mass-refolder the world (Medium-High).**
+`apps/CampaignHubPage.mjs:1161-1174`. The method's own doc comment says
+"GM-only, Unfiled-scope-only", but the only guard is `isGM`. It recomputes
+rows from `#scopedEntries()`, which in **All** scope returns every campaign's
+members plus unfiled entries, and bulk-writes `folder` on all of them via
+`JournalEntry.updateDocuments`. Only the template's render gate prevents this;
+the file's stated convention everywhere else is that a handler re-checks its
+own precondition ("the action is wired regardless of GM status … re-checks
+`game.user.isGM` itself as a second guard", `:1230-1235`). Bulk, silent, and
+laborious to undo by hand.
+*Fix:* return early unless `#scope().unfiled` is true. Apply the same guard to
+`onFileIntoCampaign` (`:1150`), which carries the identical doc claim for a
+single row.
+
+**C2 — `mergeEncounter` destroys GM edits (Medium).**
+`hooks/auto-capture.mjs:183-190`. Documented as an additive merge, and the
+actor roster genuinely is merged — but `text.content` is replaced wholesale
+with a regenerated summary. A GM who writes up an encounter loses that prose
+when the same combat's end fires again (the re-fire path the
+`encounterPagesByCombatId` map exists to serve).
+*Fix:* merge the description rather than replace it, or leave existing
+`text.content` untouched when it differs from what this module last generated.
+
+**C3 — Import dies silently on a malformed inline image (Medium).**
+`apps/import-upload.mjs:92` calls `dataUriToFile` **outside** the per-image
+try/catch at `:97-102` (which wraps only `uploadImportFile`). `dataUriToFile`
+runs `atob(parsed.base64)` at `:21`, which throws on a corrupt base64 body.
+That propagates out of `uploadInlineImages`, out of `#onCreate`'s outer try
+(`apps/import-wizard.mjs:598-638`) past its `finally`, so `this.close()` and
+`#showResult` at `:640-641` never run. The GM sees no error, no result dialog,
+and a re-enabled button — with some documents already created.
+*Fix:* bring `dataUriToFile` inside the per-image try; treat a throw as a
+skipped image with a warning, matching the existing `result.skipped` path.
+
+**C4 — Recap save races the form submit (Medium).**
+`sheets/SessionSheet.mjs:489` fires `savePlayerRecap(...)` without awaiting,
+then `:492` calls `super.onSubmit`. On the owner path `savePlayerRecap` issues
+`document.update()` directly, so two updates to the same document are in
+flight concurrently. (The relay path is fire-and-forget by design and is fine.)
+*Fix:* await the direct-write path before delegating to `super.onSubmit`.
+
+### Correctness — UX and robustness
+
+**C5 — Dashboard dialog discards everything typed (Medium).**
+`apps/CampaignHubPage.mjs:767-782`. The `ok` callback returns `null` on a
+blank name or an unparseable query, but `DialogV2.prompt` closes regardless of
+the callback's return value. The GM types a name and a long query, gets a
+"bad query" toast, and loses both. Parked since Phase B; confirmed still live.
+*Fix:* validate before the dialog resolves and keep it open, or re-open
+pre-filled with the rejected input.
+
+**C6 — Graph redraws on every unrelated re-render (Medium, performance).**
+`apps/CampaignHubPage.mjs:1705-1714` calls `drawGraphPane` whenever the SVG is
+present in the DOM, and `drawGraphPane` (`apps/hub-graph-pane.mjs:134-135`)
+stops and rebuilds the d3 force simulation. Every debounced keystroke in the
+index filter re-renders `main` (`:1664-1668`), so typing a filter restarts the
+physics simulation — with the graph tab not necessarily visible.
+*Fix:* only draw when the graph tab is the active tab, and skip the rebuild
+when the graph data is unchanged.
+
+**C7 — Retro-link walks the whole world per created entry (Medium, scale).**
+`hooks/retro-link.mjs:30-61`. `planForEntity` iterates every page of every
+journal and computes `viewerIds` per entry, once per newly created MEJ entry,
+serialized through `retroChain`. A 50-section docx import performs 50
+consecutive full-world walks.
+*Fix:* hoist the page/viewer snapshot out of the per-entity pass, or batch a
+creation burst into one pass.
+
+**C8 — Encounter naming prefers the wrong scene (Low-Medium).**
+`hooks/auto-capture.mjs:204` resolves `game.scenes?.current ?? combat.scene`.
+The combat's own scene is authoritative for naming an encounter that happened
+there; it should not be the fallback.
+*Fix:* prefer `combat.scene`.
+
+**C9 — Graph drag closes over the module-global simulation (Low).**
+`apps/hub-graph-pane.mjs:67-92`. `move()` guards `if (!activeSim) return`
+while `up()` dereferences `activeSim.alphaTarget(0)` unguarded — an asymmetry
+that is itself the smell. Both close over the module-level `activeSim`
+(`:18`) rather than the simulation the handler was bound for, so a drag still
+in progress across a redraw perturbs the *new* simulation with the *old*
+graph's node objects.
+*Fix:* capture the simulation in the closure; guard `up()`.
+
+**C10 — Unguarded `closest().dataset` derefs (Low).**
+`hooks/knowledge-ui.mjs:170`, `apps/import-wizard.mjs:343` and `:358`,
+`apps/CampaignHubPage.mjs:860` and `:1447`. Each dereferences a `closest()`
+result with no `?.`. Safe today given where the handlers bind; a
+one-character hardening against markup drift.
+
+**C11 — `onEditDashboard` mutates the settings cache in place (Low).**
+`apps/CampaignHubPage.mjs:800-806`. `[...array]` is a shallow copy, so
+`existing` is the same object the settings cache holds; `Object.assign(existing,
+result)` mutates it before `set()` is called. If the write fails, the client
+shows the change anyway until reload.
+
+**C12 — `campaign-store` ownership writers lack the guard the file claims (Low).**
+`data/campaign-store.mjs` — `createCampaign:28` and `ensureCampaignPortal:54`
+both self-check `isGM`, and `apps/CampaignHubPage.mjs:1006-1009` documents
+that convention as the reason its actions are safe to leave wired. But
+`applyBaselineToMembers:94` and `setEntryHidden:106` — the two ownership-
+mutating functions — have no such check. Not exploitable (Foundry rejects
+server-side), but it breaks the stated invariant.
+
+**C13 — `trackedPanels` grows and rescans (Low).**
+`hooks/knowledge-ui.mjs:41-65`. The `Set` holds wrapper objects strongly (only
+their `sheet`/`element` fields are `WeakRef`), pruned solely inside
+`refreshTrackedPanels`; and `trackPanel` scans the whole set on every
+injection.
+
+**C14 — Empty `data-position` inserts a timepoint at the head (Low).**
+`apps/CampaignHubPage.mjs:1401-1402`. `Number("")` is `0`, which is an
+integer, and `"" != null` is true — so an empty attribute yields position 0
+rather than the intended "append".
+
+### Carried known issues
+
+Parked by earlier rounds, still open. Sources: project memory and
+`docs/manual-test-checklist.md`.
+
+| Item | Round |
+|---|---|
+| "Everyone" stored as `audience.all`, not Foundry's native `revealed` class — core sheets and player-safe exports treat it as unrevealed | 3 |
+| Recap-sourced block secrets have no reveal path (`injectPlayerSecrets` re-enriches only `text.content`; the tracker suppresses the control at `CampaignHubPage.mjs:745`) | 3 |
+| Popped-out player sheets don't live-refresh on reveal | 2 |
+| `relReveals` records orphan when a relationship is deleted | 2 |
+| Group-membership changes apply only at next render | 2 |
+| Graph windows sharing a fixed DOM id — **verify first**, likely obsolete since 0.9.0 made the graph a Hub pane | 2 |
+| User guides and their 23 screenshots still describe the pre-0.9.0 toolbar | 5 |
+| In-repo `module.json` `download` field still points at 0.3.0 (release assets are patched per convention; only the repo copy misleads) | 5 |
+| `14-campaigns` "world unchanged" assertion flip-flops — a GM Hub render lazily creates a timeline via `ensureTimelineJournal()` | 5 |
+| `06-player-collab` flakes on full-suite runs, passes in isolation | 5 |
+
+### Out of scope
+
+- **MEJ-side defects.** The Session sheet header squeeze that hides Player
+  Recaps, the Convert-Sheet "text" flag strip, and the TOC full-text toggle
+  all live in Monk's Enhanced Journal. Standing project ruling: companion
+  features never patch MEJ. Report upstream; do not fix here.
+- **Client-side-only confidentiality of GM notes and secrets.** Inherent to
+  Foundry's document model and already documented (see *Audited and found
+  sound*).
+- **Sub-project-2 follow-ups** (import "no campaign" option, adoption-before-
+  import UX, bulk-apply "include hidden", timeline-journal-in-subfolder).
+  These are enhancements, not defects.
+
+## Round decomposition
+
+Each round is a separate branch, review, and release. Rounds 1, 2, 4, and 5
+are bounded work against flows that already exist — no plan document. Round 3
+gets the full ceremony.
+
+**Round 1 — Security and data integrity.**
+S1, S2, S3, S4, S5, C1, C2, C3, C4.
+Rationale: every item is contained and independently testable, and this round
+carries the two findings that cause real harm without anyone noticing — S2
+(a player-visible attribute that the GM believes is hidden) and C1 (silent
+bulk refoldering).
+
+**Round 2 — UX correctness.**
+C5, C8, C9, C10, C11, C12, C14, plus the carried items marked Round 2 above.
+The graph-DOM-id item is a verification task first: confirm whether 0.9.0's
+pane rewrite already closed it before writing any fix.
+
+**Round 3 — Secrets-layer semantics.** *(own spec required)*
+The two coupled carried items: "Everyone" writing the native `revealed` class,
+and a reveal path for recap-sourced block secrets. These are one problem seen
+twice — the reveal engine's relationship to Foundry's native secret model.
+Changing what "Everyone" persists alters a stored data contract and requires a
+migration decision for existing worlds, so this round starts at brainstorming,
+not at a patch.
+
+**Round 4 — Performance and scale.**
+C6, C7, C13. Separated from Round 2 because each needs a before/after
+measurement rather than a pass/fail test.
+
+**Round 5 — Documentation and test hygiene.**
+The four carried Round 5 items.
+
+## Verification
+
+Per round:
+
+- Every behavioral fix lands with a unit test that fails before it and passes
+  after. The pure-logic seam (`scripts/logic/`) is where that test belongs
+  whenever the fix can be expressed there.
+- Fixes to Foundry-touching code that unit tests cannot reach get e2e
+  coverage in the relevant existing spec file rather than a new one, unless
+  the round introduces a genuinely new surface.
+- **Assert usability, not just presence.** The 0.12.0 round shipped a viewer
+  with no CSS that survived four green e2e runs because every assertion was
+  presence-only. Where a fix is about what the user can actually do, assert
+  dimensions, enablement, or content — not existence.
+- Full `npm test` green before the round's PR; the e2e specs covering the
+  touched areas green against the live Foundry v14 world.
+- `npm audit` clean.
+
+Round 1 additionally needs:
+
+- A regression test proving S2: index a person with a hidden attribute, flip
+  the setting, and assert a non-GM search no longer matches it.
+- A regression test proving C1 refuses to act outside Unfiled scope.
+- A test proving C3 reports a malformed inline image rather than aborting the
+  import.
