@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { EXTRACTORS, extractRecord, registerExtractor, splitHiddenAttributes } from "../scripts/logic/field-extractors.mjs";
+import { EXTRACTORS, extractRecord, registerExtractor, splitHiddenAttributes, bodyRegion, bodyText } from "../scripts/logic/field-extractors.mjs";
 
 // Fixtures below mirror real MEJ flag/system shapes, verified against the
 // MEJ worktree (see task-8 report for the exact evidence per type):
@@ -290,5 +290,49 @@ describe("splitHiddenAttributes", () => {
   it("defensively handles missing attributes / hiddenKeys", () => {
     expect(splitHiddenAttributes(undefined, undefined)).toEqual({ visible: "", hidden: "" });
     expect(splitHiddenAttributes({}, ["race"])).toEqual({ visible: "", hidden: "" });
+  });
+});
+
+describe("bodyRegion", () => {
+  it("routes a session page to system.recap", () => {
+    expect(bodyRegion({ system: { recap: "<p>Recap.</p>" } })).toEqual({
+      key: "system.recap", content: "<p>Recap.</p>"
+    });
+  });
+
+  it("routes every other page to text.content", () => {
+    expect(bodyRegion({ text: { content: "<p>Body.</p>" } })).toEqual({
+      key: "text.content", content: "<p>Body.</p>"
+    });
+  });
+
+  it("treats an empty-string recap as the recap region, not a fallback", () => {
+    // Matches bodyText's `??`: only null/undefined falls through.
+    expect(bodyRegion({ system: { recap: "" }, text: { content: "<p>Body.</p>" } })).toEqual({
+      key: "system.recap", content: ""
+    });
+  });
+
+  it("falls through when recap is null or undefined", () => {
+    expect(bodyRegion({ system: { recap: null }, text: { content: "x" } }).key).toBe("text.content");
+    expect(bodyRegion({ system: {}, text: { content: "x" } }).key).toBe("text.content");
+  });
+
+  it("defaults to an empty text.content for a page with neither", () => {
+    expect(bodyRegion({})).toEqual({ key: "text.content", content: "" });
+    expect(bodyRegion(null)).toEqual({ key: "text.content", content: "" });
+  });
+
+  it("agrees with bodyText on every shape", () => {
+    for (const page of [
+      { system: { recap: "<p>R</p>" } },
+      { text: { content: "<p>T</p>" } },
+      { system: { recap: "" }, text: { content: "<p>T</p>" } },
+      { system: { recap: null }, text: { content: "<p>T</p>" } },
+      {},
+      null
+    ]) {
+      expect(bodyRegion(page).content).toBe(bodyText(page));
+    }
   });
 });

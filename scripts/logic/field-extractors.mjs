@@ -54,12 +54,22 @@ import { stripSecretSections } from "./secret-blocks.mjs";
 const MEJ_FLAGS = "monks-enhanced-journal";
 const COMPANION_FLAGS = "mej-campaign-companion";
 
-/** Main body text: session pages carry it under system.recap; every other
- * MEJ page type carries it under text.content. Exported so live-index.mjs's
- * recordFor() can reuse it for meta.secrets extraction instead of
- * duplicating the same fallback chain (T4 review note). */
+/**
+ * Which field holds a page's body, and what is in it. Session pages keep their
+ * body in system.recap; everything else uses text.content. Callers that need
+ * to WRITE the body (hooks/secrets-ui.mjs, apps/CampaignHubPage.mjs) need the
+ * key as well as the content, and a second copy of this fallback would be free
+ * to drift from this one - so bodyText is defined in terms of it below rather
+ * than beside it.
+ */
+export function bodyRegion(page) {
+  const recap = page?.system?.recap;
+  if (recap !== undefined && recap !== null) return { key: "system.recap", content: String(recap) };
+  return { key: "text.content", content: String(page?.text?.content ?? "") };
+}
+
 export function bodyText(page) {
-  return page?.system?.recap ?? page?.text?.content ?? "";
+  return bodyRegion(page).content;
 }
 
 /**
