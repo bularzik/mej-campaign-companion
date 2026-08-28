@@ -1155,9 +1155,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** GM-only, Unfiled-scope-only: file a single index row into a chosen campaign (spec §6). */
+  /**
+   * GM-only, Unfiled-scope-only: file a single index row into a chosen
+   * campaign (spec §6).
+   *
+   * The scope re-check is not redundant with the template only rendering this
+   * control in Unfiled scope - Foundry wires every data-action handler
+   * regardless of what rendered, and this file's own convention is that an
+   * action re-checks its precondition rather than trusting the markup (see
+   * onOpenImportWizard/onOpenExportDialog). Cheap here; load-bearing in
+   * onFileAllShown below, which does this in bulk.
+   */
   static async onFileIntoCampaign(event, target) {
     if (!game.user.isGM) return;
+    if (!this.#scope().unfiled) return;
     const uuid = target.closest("[data-uuid]")?.dataset.uuid;
     const entry = uuid ? await fromUuid(uuid) : null;
     const campaign = entry ? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileInto`)) : null;
@@ -1166,9 +1177,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row into a chosen campaign (spec §6). */
+  /**
+   * GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row
+   * into a chosen campaign (spec §6).
+   *
+   * The Unfiled re-check is load-bearing, not defensive tidiness. #scopedEntries()
+   * returns EVERY campaign's members plus unfiled entries in All scope, and
+   * this method bulk-writes `folder` across all of them - so running it
+   * outside Unfiled would silently collapse every campaign in the world into
+   * one, with no confirmation step and nothing but hand-refiling to undo it.
+   * The control only renders in Unfiled scope, but Foundry wires data-action
+   * handlers regardless of what rendered, so the markup is not the guard.
+   */
   static async onFileAllShown() {
     if (!game.user.isGM) return;
+    if (!this.#scope().unfiled) return;
     // The currently-filtered Unfiled rows: recompute exactly what the pane shows.
     const entries = this.#scopedEntries();
     const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));
