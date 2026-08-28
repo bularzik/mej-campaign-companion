@@ -48,6 +48,20 @@ describe("buildGraph", () => {
     expect(g.nodes).toHaveLength(5);
     expect(g.truncated).toBe(true);
   });
+
+  it("copies img onto nodes, null when the row has none, through ego mode and truncation", () => {
+    const withImg = rows.map((r) => (r.uuid === "JournalEntry.a" ? { ...r, img: "worlds/x/a.png" } : r));
+    const all = buildGraph(withImg, [], { mode: "all", isGM: true });
+    expect(all.nodes.find((n) => n.uuid === "JournalEntry.a").img).toBe("worlds/x/a.png");
+    expect(all.nodes.find((n) => n.uuid === "JournalEntry.b").img).toBeNull();
+
+    const ego = buildGraph(withImg, pairs, { mode: "ego", centerUuid: "JournalEntry.a", isGM: false, includeBacklinks: true });
+    expect(ego.nodes.find((n) => n.uuid === "JournalEntry.a").img).toBe("worlds/x/a.png");
+
+    const many = Array.from({ length: 10 }, (_, i) => ({ uuid: `JournalEntry.n${i}`, name: `N${i}`, type: "person", img: `n${i}.png`, relationships: [] }));
+    const capped = buildGraph(many, [], { mode: "all", isGM: true, maxNodes: 5 });
+    expect(capped.nodes.every((n) => typeof n.img === "string")).toBe(true);
+  });
 });
 
 describe("edge labels (Phase C)", () => {

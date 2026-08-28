@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- New: **Relationship graph nodes show the entity's picture**, clipped
+  into the node circle — a person's portrait, a place's illustration, or
+  Monk's Enhanced Journal's per-type icon when no picture is set. Nodes
+  are slightly larger to make the pictures legible.
+
 ## 0.12.0 (2026-08-28)
 
 - New: **PDF and video pages open inside the Enhanced Journal.** A

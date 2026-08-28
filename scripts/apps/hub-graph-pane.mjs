@@ -6,7 +6,7 @@
 // game.journal, and pane state lives in the Hub's HUB_STATE.
 import { MODULE_ID, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
-import { graphRowsFor } from "../logic/graph-rows.mjs";
+import { graphRowsFor, nodeImage } from "../logic/graph-rows.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
@@ -14,6 +14,16 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
+const NODE_R = 14;
+const MEJ_ASSET_PATH = "modules/monks-enhanced-journal/assets";
+// MEJ ships a placeholder PNG only for its built-in types (assets/<type>.png).
+// Other types mejType() can return — "session" (ours), "picture", externally
+// registered types — have none, so synthesizing the path would 404 on every
+// node on every redraw; those nodes keep the plain ring instead.
+const MEJ_ASSET_TYPES = new Set([
+  "person", "place", "poi", "quest", "encounter", "event",
+  "organization", "shop", "loot", "list", "slideshow", "journalentry"
+]);
 
 let activeSim = null;
 
@@ -26,7 +36,12 @@ export function prepareGraphContext(entries, state) {
     getType: (page) => mejType(page),
     canObserve: (entry) => entry.testUserPermission(game.user, "OBSERVER") === true,
     relRevealsOf: (entry) => entry.getFlag(MODULE_ID, "relReveals"),
-    relationshipsOf: (page) => page.flags?.[MEJ_FLAGS]?.relationships
+    relationshipsOf: (page) => page.flags?.[MEJ_FLAGS]?.relationships,
+    // Entity picture is the typed page's src (MEJ's own convention, see
+    // EnhancedJournalSheet relationship rendering); MEJ's generic per-type
+    // placeholder otherwise, but only for the built-in types MEJ_ASSET_TYPES
+    // ships an asset for — other typed nodes keep the plain ring.
+    imageOf: (page, type) => nodeImage(page.src, type, MEJ_ASSET_TYPES, MEJ_ASSET_PATH)
   });
   const graph = buildGraph(rows, state.graphBacklinks ? backlinkPairs() : [], {
     mode: state.graphMode, centerUuid: state.graphCenterUuid,
@@ -111,17 +126,43 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
     svg.append(text);
     return text;
   });
-  const nodeEls = nodes.map((node) => {
+  const clipNonce = Math.random().toString(36).slice(2, 8);
+  const nodeEls = nodes.map((node, i) => {
     const g = document.createElementNS(NS, "g");
     g.classList.add("mej-cc-graph-node");
     if (node.uuid === centerUuid) g.classList.add("center");
+    // Ring: type-hued fill (visible only when there is no image or it fails
+    // to load), border stroke and ego-center stroke come from CSS.
     const circle = document.createElementNS(NS, "circle");
-    circle.setAttribute("r", "10");
+    circle.setAttribute("r", String(NODE_R));
     circle.style.fill = `hsl(${typeHue(node.type)} 55% 45%)`;
     const label = document.createElementNS(NS, "text");
-    label.setAttribute("dy", "22");
+    label.setAttribute("dy", String(NODE_R + 12));
     label.textContent = node.name;
-    g.append(circle, label);
+    g.append(circle);
+    if (node.img) {
+      // Cover-fit the picture into the ring: clip to the circle, "slice"
+      // fills and crops rather than squashing. Ids carry a per-draw nonce
+      // because url(#id) resolves document-wide and two Hub windows may be
+      // open at once. A failed load removes the image, leaving the ring.
+      const clipId = `mej-cc-clip-${clipNonce}-${i}`;
+      const clip = document.createElementNS(NS, "clipPath");
+      clip.setAttribute("id", clipId);
+      const clipCircle = document.createElementNS(NS, "circle");
+      clipCircle.setAttribute("r", String(NODE_R));
+      clip.append(clipCircle);
+      const image = document.createElementNS(NS, "image");
+      image.setAttribute("href", node.img);
+      image.setAttribute("x", String(-NODE_R));
+      image.setAttribute("y", String(-NODE_R));
+      image.setAttribute("width", String(NODE_R * 2));
+      image.setAttribute("height", String(NODE_R * 2));
+      image.setAttribute("preserveAspectRatio", "xMidYMid slice");
+      image.setAttribute("clip-path", `url(#${clipId})`);
+      image.addEventListener("error", () => image.remove());
+      g.append(clip, image);
+    }
+    g.append(label);
     g.addEventListener("click", () => {
       if (dragged) return;
       onOpen(node.uuid);
