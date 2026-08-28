@@ -428,3 +428,46 @@ live refresh, popped-out sheets refreshing on reveal).
 
 Round 2 fixes are all Foundry-glue, so they carry e2e rather than unit
 coverage; the unit suite is unchanged at 635.
+
+## Round 3 outcome (complete)
+
+Landed on `feature/secrets-native-reveal`, cut from `main` @ 0.13.2. Released
+as **0.13.3**. Both carried secrets defects are closed: "Everyone" now writes
+Foundry's native `revealed` class, and recap-sourced block secrets have a
+reveal path from both the sheet and the Hub tracker.
+
+The final whole-branch review found two Criticals I had introduced, both worth
+recording because neither was visible to a green suite:
+
+- **C1** — I under-implemented my own spec §4. The shared "revealed to
+  everyone" reader was wired only at the tracker, so the audience dialog
+  seeded Everyone from a flag that is never written true any more. Adding one
+  player to an everyone-revealed secret stripped the class and silently
+  un-revealed it for the whole table. The existing e2e passed throughout: it
+  called `applyBlockReveal` directly, one layer below where the bug lived.
+- **C2** — `applyBlockReveal` cleared `all` on paths where it never wrote the
+  class, destroying a legacy record with nothing replacing it.
+
+### Carried forward from the Round 3 re-review
+
+- **Duplicate section ids across pages of one entry.** Duplicating a journal
+  page copies section ids verbatim. The search index keys reveal records by
+  entry (last-page-wins) while the tracker resolves the page by containment
+  (first match), so with pages A and B both holding `id="secret-dup"` a row
+  sourced from B can resolve to A: un-revealing strips A's class and leaves
+  B — the row's actual subject — untouched. The honest fix is for the index
+  to key by page rather than entry, which is a structural change, not a
+  patch. **Round 4 or later.**
+- **`#secretSectionHtml` uses a first-MEJ-page find** plus an inline
+  `system.recap ?? text.content` rather than `bodyRegion`, so on a multi-page
+  entry the tracker whisper falls back to the 140-char index preview instead
+  of the real section HTML. Pre-existing; cosmetic.
+- **`pruneOrphans` reads one page's body but prunes the entry-level flag**, so
+  opening page 1 of a two-page entry deletes reveal records belonging to
+  page 2's secrets. Pre-existing and a genuine data-loss path — it should be
+  fixed with the index-keying change above, since both stem from reveal
+  records being entry-scoped while the sections they name are page-scoped.
+- **One observed flake:** "reveal to Everyone round-trips through the real
+  control" failed once in a full 14-test run, then passed in an isolated run,
+  a paired run, and two further full runs. Not order-dependent as far as those
+  runs show. Recorded rather than dismissed; belongs with Round 5's flake work.

@@ -11,6 +11,9 @@ import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
+import { planNativeRevealMigration } from "./logic/reveal-migration.mjs";
+import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
+import { bodyRegion } from "./logic/field-extractors.mjs";
 
 Hooks.once("init", () => {
   foundry.applications.handlebars.loadTemplates([
@@ -248,6 +251,44 @@ Hooks.once("ready", async () => {
     for (const campaign of missingPortalPlan(getCampaigns(), campaignPortal)) {
       await ensureCampaignPortal(campaign);
     }
+
+    // v3: "revealed to everyone" moves from our private audience.all flag to
+    // Foundry's own `revealed` class, so core sheets, viewers without this
+    // module, and the player-safe export all honour it. Per-page failures are
+    // logged and skipped rather than aborting: the record's flag is left
+    // intact and the reader's legacy fallback keeps that secret working.
+    const candidates = [];
+    for (const entry of game.journal.contents) {
+      const reveals = entry.getFlag(MODULE_ID, "secretReveals");
+      if (!reveals || !Object.keys(reveals).length) continue;
+      const page = entry.pages?.contents?.find((p) => mejType(p));
+      if (!page) continue;
+      const { key, content } = bodyRegion(page);
+      candidates.push({
+        entryUuid: entry.uuid, pageUuid: page.uuid, bodyKey: key, reveals,
+        sectionIds: extractSecretBlocks(content).map((s) => s.id)
+      });
+    }
+    let converted = 0;
+    for (const step of planNativeRevealMigration(candidates)) {
+      try {
+        const page = await fromUuid(step.pageUuid);
+        const entry = await fromUuid(step.entryUuid);
+        if (!page || !entry) continue;
+        const { key, content } = bodyRegion(page);
+        let next = content;
+        for (const id of step.sectionIds) next = setSectionRevealed(next, id, true);
+        if (next !== content) await page.update({ [key]: next });
+        const cleared = {};
+        for (const id of step.sectionIds) cleared[`flags.${MODULE_ID}.secretReveals.${id}.all`] = false;
+        await entry.update(cleared);
+        converted += step.sectionIds.length;
+      } catch (err) {
+        console.error(`${MODULE_ID} | native-reveal migration failed for ${step.pageUuid}`, err);
+      }
+    }
+    if (converted) console.log(`${MODULE_ID} | converted ${converted} "everyone" reveal(s) to Foundry's native revealed class`);
+
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
 });

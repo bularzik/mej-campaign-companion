@@ -7,7 +7,8 @@ import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, canSee, pruneReveals } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
-import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
+import { extractSecretBlocks, setSectionRevealed, sectionRevealedAll } from "../logic/secret-blocks.mjs";
+import { bodyRegion } from "../logic/field-extractors.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REVEALS_FLAG = "secretReveals";
@@ -45,7 +46,12 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   if (!entry) return;
   const groups = groupsSetting();
   const reveals = revealsOf(entry);
-  const sections = element.querySelectorAll('.editor-display[data-key="text.content"] section.secret');
+  // A session page renders its body into data-key="system.recap"; everything
+  // else into text.content. Pinning text.content meant recap secrets got no
+  // audience button at all, so they could be seen in the tracker and never
+  // revealed to anyone.
+  const { key, content } = bodyRegion(page);
+  const sections = element.querySelectorAll(`.editor-display[data-key="${key}"] section.secret`);
   for (const section of sections) {
     if (section.querySelector(":scope > .mej-cc-secret-audience")) continue;
     const id = section.id ?? "";
@@ -57,7 +63,11 @@ async function injectGmOverlay(sheet, element, shellHosted) {
       button.dataset.tooltip = game.i18n.localize(`${I18N}.secrets.noId`);
       button.innerHTML = '<i class="fa-solid fa-user-secret"></i>';
     } else {
-      const audience = normalizeAudience(reveals[id]);
+      // The chip must read the SAME two sources the tracker and the dialog do
+      // (sectionRevealedAll): "Everyone" now lives as Foundry's class in the
+      // body, so a flag-only read here showed "None" on a secret the Hub was
+      // simultaneously reporting as revealed to everyone.
+      const audience = { ...normalizeAudience(reveals[id]), all: sectionRevealedAll(content, id, reveals[id]) };
       button.innerHTML = `<i class="fa-solid fa-user-secret"></i> <span class="mej-cc-secret-chips">${foundry.utils.escapeHTML(chipText(audience, groups))}</span>`;
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -71,15 +81,73 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   await pruneOrphans(entry, page);
 }
 
+/**
+ * Apply an audience to one block secret.
+ *
+ * "Everyone" is Foundry's own `revealed` class in the page body, not a flag of
+ * ours - that is what core sheets, viewers without this module, and the
+ * player-safe docx export all honour. So this writes the class and stores the
+ * audience with `all` forced false; `audience.all` is never written true again
+ * (readers still honour a legacy true forever - see the sweep spec).
+ *
+ * The body is re-read here rather than taken from a render-time snapshot: a
+ * co-GM or another window may have edited it while the dialog was open, and
+ * writing back a stale body would revert their edit. Same discipline
+ * SessionSheet.onSecretAudience already applies to the secrets array.
+ *
+ * Returns the audience to persist. Throws only if the body update itself
+ * fails, so the caller can skip the flag write - leaving the two halves in
+ * agreement rather than storing an audience the body never got.
+ *
+ * `all` is forced false ONLY when the class can actually carry the reveal. If
+ * there is no page, or the section id isn't in this body, we cannot express
+ * "everyone" natively - and what to store then depends on whether the record
+ * ALREADY meant everyone:
+ *
+ * - It did (`legacyAll`): keep `all: true`. Clearing it would downgrade a
+ *   legacy record - which readers honour forever - to "revealed to nobody",
+ *   silently un-revealing a secret we simply had no native place to express.
+ * - It did not: store `all: false`, even though the GM asked for everyone.
+ *   Minting a fresh `all: true` here would claim a reveal that nothing backs:
+ *   the chip and tracker would read "Everyone" while core sheets and the
+ *   player-safe export - which key on the class - still strip the block. That
+ *   is exactly the companion-private "Everyone" this round exists to abolish,
+ *   so we refuse to create a new one. The reveal simply does not take, which
+ *   is visible in the chip rather than hidden behind a false claim.
+ *
+ * Reachable when the live DOM shows a section our regex parser cannot see -
+ * a `<section class="secret">` nested inside another `<section>`, which
+ * SECTION_RE is documented not to support (secret-blocks.mjs) but pasted
+ * HTML can still produce.
+ */
+export async function applyBlockReveal(page, sectionId, audience, { legacyAll = false } = {}) {
+  const requested = normalizeAudience(audience);
+  const { key, content } = bodyRegion(page ?? {});
+  const present = extractSecretBlocks(content).some((s) => s.id === sectionId);
+  if (!page || !present) return { ...requested, all: requested.all && legacyAll === true };
+  const next = setSectionRevealed(content, sectionId, requested.all);
+  if (next !== content) await page.update({ [key]: next });
+  return { ...requested, all: false };
+}
+
 async function editAudience(entry, page, sectionId, section, sheet, shellHosted) {
   if (!game.user.isGM) return;
   const groups = groupsSetting();
-  const previous = normalizeAudience(revealsOf(entry)[sectionId]);
+  const record = revealsOf(entry)[sectionId];
+  // Seed the dialog from BOTH sources (sectionRevealedAll), not the flag
+  // alone: with "Everyone" now stored as the native class, a flag-only seed
+  // opened the dialog with Everyone unchecked on an already-everyone secret,
+  // so simply adding one player to it stripped the class back off and
+  // un-revealed the secret from the table. It also kept sendRevealWhisper's
+  // "already everyone -> whisper nobody" branch permanently dead, re-whispering
+  // every player on every re-confirmation.
+  const previous = { ...normalizeAudience(record), all: sectionRevealedAll(bodyRegion(page).content, sectionId, record) };
   const audience = await promptAudience({
     title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups
   });
   if (!audience) return;
-  await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: audience });
+  const stored = await applyBlockReveal(page, sectionId, audience, { legacyAll: record?.all === true });
+  await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
   // Whisper the section's content (already enriched in the GM's DOM) minus our own button.
   const clone = section.cloneNode(true);
   clone.querySelector(":scope > .mej-cc-secret-audience")?.remove();
@@ -111,7 +179,7 @@ async function pruneOrphans(entry, page) {
   const reveals = revealsOf(entry);
   const keys = Object.keys(reveals);
   if (!keys.length) return;
-  const liveIds = extractSecretBlocks(page?.system?.recap ?? page?.text?.content ?? "").map((s) => s.id);
+  const liveIds = extractSecretBlocks(bodyRegion(page).content).map((s) => s.id);
   const { map, changed } = pruneReveals(reveals, liveIds);
   // recursive:false replaces the whole secretReveals object outright -
   // Document#update otherwise merges nested objects key-by-key by default
@@ -137,10 +205,11 @@ async function injectPlayerSecrets(sheet, element) {
   const groups = groupsSetting();
   const mine = Object.entries(reveals).filter(([, aud]) => canSee(aud, game.user.id, groups)).map(([id]) => id);
   if (!mine.length) return;
-  const container = element.querySelector('.editor-display[data-key="text.content"]');
+  const { key, content } = bodyRegion(page);
+  const container = element.querySelector(`.editor-display[data-key="${key}"]`);
   if (!container) return;
   const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
-    page.text?.content ?? "", { relativeTo: page, secrets: true, async: true }
+    content, { relativeTo: page, secrets: true, async: true }
   );
   // DOMParser, never createContextualFragment (S1). Two reasons here. The
   // enriched body is authored markup and createContextualFragment parses it in

@@ -38,7 +38,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 
 **Trust model:** like Foundry's own secret blocks and MEJ's GM notes, secret text is hidden by client-side filtering — the data still replicates to any client that can see the journal entry. A technically savvy player could read it from the raw document data. Do not use this module to protect genuinely sensitive information. A player granted OWNER permission on a journal entry sees all its native secret blocks via Foundry's own rendering, outside the companion's audience gate — inherent to the soft-hidden model.
 
-**Limitation:** choosing "Everyone" in a secret's reveal dialog reveals it via the companion's own per-user re-enrichment, not Foundry's native per-block Reveal control (the `revealed` class Foundry itself toggles). Core-sheet viewers that don't run this module, and player-safe docx exports, only honor the native `revealed` class — use Foundry's own Reveal control (not this module's "Everyone") for a secret that needs to survive those paths.
+**"Everyone" is Foundry's own reveal (0.13.3):** choosing "Everyone" in a secret's reveal dialog writes the same native `revealed` class Foundry's own per-block Reveal control toggles, straight into the page's stored text. An "Everyone" reveal is therefore honored everywhere the native one is — core sheets, viewers who don't run this module, and player-safe docx exports — and the two controls no longer disagree about the same secret. Per-player and per-group audiences stay companion-side re-enrichment, since Foundry has no native equivalent for them. Secrets in a Session's **recap** can be revealed this way too, from the sheet or the Hub Secrets tab.
 
 ### Auto-link scoping (0.4.0)
 

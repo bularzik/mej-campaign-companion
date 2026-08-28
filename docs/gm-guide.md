@@ -132,7 +132,7 @@ Both are independent of each other and off by default. Neither ever blocks the o
 
 Campaign Companion gives you two related but distinct ways to keep things hidden from players until you're ready to reveal them, and both reveal through the same audience machinery.
 
-**Block-level secrets** live inside an entry's own description text — mark a block as a secret section the same way you would with Foundry's native secret blocks, on any MEJ entry that has a text region (Persons, Places, Quests, Shops, and so on). Session pages don't have a text-content region of their own, so a Session's secrets surface is its **secret checklist** instead, described above under [Running your first session](#running-your-first-session) — for block-level secrets, use the entry they're actually about. In the demo campaign, the secret about the caravan ambush being staged lives on the Quest "The Missing Caravan," not on the Session page.
+**Block-level secrets** live inside an entry's own description text — mark a block as a secret section the same way you would with Foundry's native secret blocks, on any MEJ entry that has a text region (Persons, Places, Quests, Shops, and so on). A Session page's **recap** counts as one of those: a secret you write into a recap gets its own audience control, on the sheet and in the Hub Secrets tab, exactly like a secret anywhere else. A Session also has its **secret checklist**, described above under [Running your first session](#running-your-first-session), for the short clues you want to tick off at the table. Either way, a secret that is really *about* something usually reads best on the entry it's about. In the demo campaign, the secret about the caravan ambush being staged lives on the Quest "The Missing Caravan," not on the Session page.
 
 Click a block secret's audience control to open the reveal dialog. Check **Everyone**, individual players, or one of your player groups, then apply:
 
@@ -154,7 +154,9 @@ When you reveal a secret to a player, they get a private whisper notification wi
 
 The relationship graph, described above under [Building your campaign record](#building-your-campaign-record), has its own reveal mechanism too: you can designate which players or groups can see each edge, with a label per edge, so a player's view of the graph only shows the relationships and labels you've granted them.
 
-**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets-layer-030) for the full statement, including the caveat about choosing "Everyone" in the reveal dialog versus Foundry's own native Reveal control.
+**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets-layer-030) for the full statement.
+
+**"Everyone" is Foundry's own reveal.** Checking **Everyone** in the reveal dialog does the same thing Foundry's own per-block Reveal control does — it marks the secret revealed in the page text itself. So it holds up outside this module too: on core journal sheets, for anyone at your table not running Campaign Companion, and in a player-safe Word export. (Reveals to specific players or groups are still this module's own doing, and only show up where it's installed.) You can use either control; they now agree.
 
 ## Word import & export
 
