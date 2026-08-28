@@ -35,7 +35,7 @@ import {
 } from "../constants.mjs";
 import {
   chunkBase64, createRelayAssembler, base64ByteLength, isRelayableImageType, enforcedImageName,
-  MAX_RELAY_FILE_BYTES
+  isSafeRelayPath, MAX_RELAY_FILE_BYTES
 } from "../logic/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 
@@ -166,8 +166,11 @@ export function handleUploadResult(payload) {
   clearTimeout(entry.timer);
   // The GM-side reply claims a stored path; never trust it blindly - a compromised or
   // forged GM-side reply could otherwise point a requester at an arbitrary path outside
-  // the relay's own upload directory. Only accept paths actually rooted under RELAY_UPLOAD_DIR().
-  if (typeof payload.path === "string" && payload.path && payload.path.startsWith(`${RELAY_UPLOAD_DIR()}/`)) {
+  // the relay's own upload directory. Only accept paths actually rooted under
+  // RELAY_UPLOAD_DIR() - isSafeRelayPath checks every segment, because the bare
+  // `startsWith(dir + "/")` this replaced accepted traversal straight back out of the
+  // directory it was meant to confine the path to (see its doc comment).
+  if (isSafeRelayPath(payload.path, RELAY_UPLOAD_DIR())) {
     entry.resolve(payload.path);
   } else if (typeof payload.path === "string" && payload.path) {
     console.warn(`${MODULE_ID} | dropped relay upload result with path outside RELAY_UPLOAD_DIR()`, payload.path);

@@ -23,6 +23,7 @@ import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, back
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { campaignIdOf } from "../logic/campaigns.mjs";
+import { invalidatesSearchIndex } from "../logic/index-invalidation.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
 
@@ -309,6 +310,21 @@ export function initSearchHooks() {
     if (!index) return;
     if (changes?.name === undefined) return;
     reindexEntry(entry);
+  });
+
+  // recordFor()'s public/GM attribute split is decided at INDEX time from a
+  // world setting MEJ owns (see personAttributeHiddenKeys above and
+  // logic/index-invalidation.mjs). Nothing here re-indexed when that setting
+  // changed, so an attribute a GM newly marked playerHidden stayed in the
+  // PUBLIC token set - findable by any player's search - until a world
+  // reload, while the GM believed it was hidden. Rebuild wholesale rather
+  // than re-indexing selectively: the setting is world-wide and per-type, so
+  // any person record can be affected, and it changes rarely enough that the
+  // cost never matters.
+  Hooks.on("updateSetting", (setting) => {
+    if (!index) return;
+    if (!invalidatesSearchIndex(setting?.key)) return;
+    rebuildIndex();
   });
 }
 

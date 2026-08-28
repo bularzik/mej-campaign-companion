@@ -131,3 +131,44 @@ export function describeUnlinkedParticipants(participants) {
 export function buildEncounterName(sceneName, dateLabel) {
   return sceneName ? `Encounter: ${sceneName} (${dateLabel})` : `Encounter (${dateLabel})`;
 }
+
+/**
+ * Auto-capture's generated outcome summary lives in its own marked container
+ * inside the Encounter page's body, so a re-fired capture can replace just
+ * that block instead of the whole body.
+ *
+ * Why it needs to: hooks/auto-capture.mjs's mergeEncounter() runs when the
+ * same combat's end fires twice (the encounterPagesByCombatId re-fire path).
+ * It merges the actor roster additively, but it used to overwrite
+ * `text.content` outright with a freshly generated summary - so a GM who had
+ * written the encounter up in the meantime lost every word of it.
+ *
+ * Regex rather than DOM parsing, for the same reason logic/secret-blocks.mjs
+ * is: this module is pure and Foundry-free so vitest can load it. The
+ * non-greedy close-tag match is safe here because the block's contents are
+ * only ever this module's own <p> elements - never a nested <div>.
+ */
+export const OUTCOME_MARKER = "mej-cc-outcome";
+
+const OUTCOME_RE = new RegExp(`<div data-${OUTCOME_MARKER}="1">[\\s\\S]*?<\\/div>`, "i");
+
+/** Wrap generated summary html in the marked container. Empty summary -> no block at all. */
+export function wrapOutcomeHtml(inner) {
+  return inner ? `<div data-${OUTCOME_MARKER}="1">${inner}</div>` : "";
+}
+
+/**
+ * Fold a freshly generated summary into an existing page body, replacing only
+ * the previously generated block and leaving everything a GM wrote intact.
+ * A body with no block yet (an Encounter created before this existed) gets one
+ * appended rather than having its content touched.
+ */
+export function mergeOutcomeHtml(existingHtml, outcomeHtml) {
+  const existing = typeof existingHtml === "string" ? existingHtml : "";
+  const block = wrapOutcomeHtml(outcomeHtml);
+  // Function replacement, not a string: the summary is built from actor names,
+  // and String#replace would expand `$&`/`$'` in them as replacement patterns.
+  if (OUTCOME_RE.test(existing)) return existing.replace(OUTCOME_RE, () => block);
+  if (!block) return existing;
+  return `${existing}${block}`;
+}

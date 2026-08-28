@@ -843,14 +843,23 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * lookups). Returns null if the entry has no MEJ page, the body is empty,
    * or the section id can no longer be found (deleted between render and
    * click) - callers fall back to the tracker row's stored preview text.
+   *
+   * Parsed with DOMParser, never createContextualFragment (S1): the latter
+   * parses in the LIVE document's context, so markup in the body can act -
+   * an `<img src=x onerror=...>` fires while we are only trying to read a
+   * section back out. The body is authored by whoever can edit the page, not
+   * necessarily by the GM whose client runs this (a shared entry, or any
+   * session page once playersWriteSessions is on), and this runs GM-side.
+   * DOMParser builds an inert document instead. Same reason
+   * apps/import-upload.mjs and apps/import-wizard.mjs already use it.
    */
   static #secretSectionHtml(entry, secretId) {
     if (!secretId) return null;
     const page = entry.pages?.contents?.find((p) => mejType(p));
     const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
     if (!body) return null;
-    const fragment = document.createRange().createContextualFragment(`<div>${body}</div>`);
-    const section = fragment.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
+    const parsed = new DOMParser().parseFromString(body, "text/html");
+    const section = parsed.body.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
     return section ? section.innerHTML : null;
   }
 
@@ -1146,9 +1155,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** GM-only, Unfiled-scope-only: file a single index row into a chosen campaign (spec §6). */
+  /**
+   * GM-only, Unfiled-scope-only: file a single index row into a chosen
+   * campaign (spec §6).
+   *
+   * The scope re-check is not redundant with the template only rendering this
+   * control in Unfiled scope - Foundry wires every data-action handler
+   * regardless of what rendered, and this file's own convention is that an
+   * action re-checks its precondition rather than trusting the markup (see
+   * onOpenImportWizard/onOpenExportDialog). Cheap here; load-bearing in
+   * onFileAllShown below, which does this in bulk.
+   */
   static async onFileIntoCampaign(event, target) {
     if (!game.user.isGM) return;
+    if (!this.#scope().unfiled) return;
     const uuid = target.closest("[data-uuid]")?.dataset.uuid;
     const entry = uuid ? await fromUuid(uuid) : null;
     const campaign = entry ? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.hub.fileInto`)) : null;
@@ -1157,9 +1177,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row into a chosen campaign (spec §6). */
+  /**
+   * GM-only, Unfiled-scope-only: file every currently-filtered Unfiled row
+   * into a chosen campaign (spec §6).
+   *
+   * The Unfiled re-check is load-bearing, not defensive tidiness. #scopedEntries()
+   * returns EVERY campaign's members plus unfiled entries in All scope, and
+   * this method bulk-writes `folder` across all of them - so running it
+   * outside Unfiled would silently collapse every campaign in the world into
+   * one, with no confirmation step and nothing but hand-refiling to undo it.
+   * The control only renders in Unfiled scope, but Foundry wires data-action
+   * handlers regardless of what rendered, so the markup is not the guard.
+   */
   static async onFileAllShown() {
     if (!game.user.isGM) return;
+    if (!this.#scope().unfiled) return;
     // The currently-filtered Unfiled rows: recompute exactly what the pane shows.
     const entries = this.#scopedEntries();
     const source = buildIndexSource(entries, game.user, mejType, this.#typeIcon.bind(this));

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   MAX_RELAY_FILE_BYTES, RELAY_CHUNK_SIZE, MAX_RELAY_CHUNKS, DEFAULT_MAX_RELAY_BUFFERS,
   base64ByteLength, chunkBase64, isRelayableImageType, chunkProblem, createRelayAssembler,
-  enforcedImageName
+  enforcedImageName, isSafeRelayPath
 } from "../scripts/logic/media-relay.mjs";
 
 describe("base64ByteLength", () => {
@@ -154,5 +154,69 @@ describe("createRelayAssembler", () => {
   });
   it("uses DEFAULT_MAX_RELAY_BUFFERS as the default cap", () => {
     expect(DEFAULT_MAX_RELAY_BUFFERS).toBe(16);
+  });
+
+  // S4: the buffer's sender/name/type come from the FIRST chunk of a request
+  // id and used to be trusted for every chunk after it, so a client that
+  // learned an in-flight request id could contribute bytes to someone else's
+  // upload. Only `total` was ever cross-checked.
+  it("rejects a chunk whose sender disagrees with the open buffer", () => {
+    const a = createRelayAssembler();
+    a.accept(chunk({ seq: 0, total: 2, data: "A" }), 1000);
+    expect(a.accept(chunk({ seq: 1, total: 2, data: "B", senderId: "intruder" }), 1001))
+      .toEqual({ status: "invalid", reason: "bad-chunk" });
+    expect(a.size()).toBe(0);
+  });
+  it("rejects a chunk whose name or type disagrees with the open buffer", () => {
+    const byName = createRelayAssembler();
+    byName.accept(chunk({ seq: 0, total: 2, data: "A" }), 1000);
+    expect(byName.accept(chunk({ seq: 1, total: 2, data: "B", name: "other.png" }), 1001))
+      .toEqual({ status: "invalid", reason: "bad-chunk" });
+
+    const byType = createRelayAssembler();
+    byType.accept(chunk({ seq: 0, total: 2, data: "A" }), 1000);
+    expect(byType.accept(chunk({ seq: 1, total: 2, data: "B", type: "image/jpeg" }), 1001))
+      .toEqual({ status: "invalid", reason: "bad-chunk" });
+  });
+  it("still completes when every chunk agrees", () => {
+    const a = createRelayAssembler();
+    a.accept(chunk({ seq: 0, total: 2, data: "A" }), 1000);
+    const out = a.accept(chunk({ seq: 1, total: 2, data: "B" }), 1001);
+    expect(out.status).toBe("complete");
+    expect(out.request.base64).toBe("AB");
+  });
+});
+
+// S3: handleUploadResult's guard exists to stop a forged reply pointing a
+// requester at a path outside the relay's own upload directory. A bare
+// startsWith() check accepts traversal segments that walk straight back out
+// of it, so the decision is extracted here and checked directly.
+describe("isSafeRelayPath", () => {
+  const DIR = "worlds/w1/mej-campaign-companion/uploads";
+
+  it("accepts a plain file inside the relay directory", () => {
+    expect(isSafeRelayPath(`${DIR}/123-abc-map.png`, DIR)).toBe(true);
+  });
+  it("accepts a nested file inside the relay directory", () => {
+    expect(isSafeRelayPath(`${DIR}/sub/123-abc-map.png`, DIR)).toBe(true);
+  });
+  it("rejects traversal back out of the relay directory", () => {
+    expect(isSafeRelayPath(`${DIR}/../../../secret.png`, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}/sub/../../escape.png`, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}/..`, DIR)).toBe(false);
+  });
+  it("rejects backslash traversal and empty or dot segments", () => {
+    expect(isSafeRelayPath(`${DIR}/..\\..\\escape.png`, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}/./map.png`, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}//map.png`, DIR)).toBe(false);
+  });
+  it("rejects paths outside the directory, the bare directory, and junk", () => {
+    expect(isSafeRelayPath("worlds/w1/elsewhere/map.png", DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}-sibling/map.png`, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}/`, DIR)).toBe(false);
+    expect(isSafeRelayPath(DIR, DIR)).toBe(false);
+    expect(isSafeRelayPath("", DIR)).toBe(false);
+    expect(isSafeRelayPath(null, DIR)).toBe(false);
+    expect(isSafeRelayPath(`${DIR}/map.png`, "")).toBe(false);
   });
 });

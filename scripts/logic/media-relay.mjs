@@ -71,6 +71,24 @@ export function enforcedImageName(name, mime) {
 }
 
 /**
+ * Is `path` a plain file genuinely inside `dir`? The GM-side reply to a relay
+ * upload claims a stored path, and hooks/media-relay.mjs's handleUploadResult
+ * refuses anything outside the relay's own upload directory - but a bare
+ * `startsWith(dir + "/")` test accepts traversal segments that walk straight
+ * back out of it (`<dir>/../../../elsewhere.png` passes it). Check every
+ * segment instead, splitting on both separators so a backslash can't smuggle
+ * one past a posix-only split.
+ */
+export function isSafeRelayPath(path, dir) {
+  if (typeof path !== "string" || !path) return false;
+  if (typeof dir !== "string" || !dir) return false;
+  if (!path.startsWith(`${dir}/`)) return false;
+  const rest = path.slice(dir.length + 1);
+  if (!rest) return false;
+  return !rest.split(/[/\\]/).some((segment) => segment === "" || segment === "." || segment === "..");
+}
+
+/**
  * Chunk reassembly for the GM side. `now` is injected so tests control time;
  * buffers untouched for staleMs are evicted on the next accept().
  */
@@ -97,6 +115,18 @@ export function createRelayAssembler({
       if (payload.total !== buf.total) {
         buffers.delete(payload.requestId);
         return { status: "invalid", reason: "bad-seq" };
+      }
+      // The buffer's sender/name/type are taken from this request id's FIRST
+      // chunk and travel into the completed request the GM then acts on, so
+      // every later chunk has to agree with them: a client that learns an
+      // in-flight requestId could otherwise contribute bytes to another
+      // user's upload (request ids are randomID()s, so this bounds a narrow
+      // window rather than closing an open door - but the check is free).
+      // Drop the whole buffer on disagreement rather than ignoring the odd
+      // chunk: the two claims can't both be honest, so neither is trusted.
+      if (payload.senderId !== buf.senderId || payload.name !== buf.name || payload.type !== buf.type) {
+        buffers.delete(payload.requestId);
+        return { status: "invalid", reason: "bad-chunk" };
       }
       if (buf.parts[payload.seq] === null) {
         buf.parts[payload.seq] = payload.data;

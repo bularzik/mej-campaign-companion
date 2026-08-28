@@ -486,7 +486,13 @@ export class SessionSheet extends EnhancedJournalSheet {
     const submitData = this._prepareSubmitData(event, form, formData, {});
     const recapHtml = foundry.utils.getProperty(submitData, myRecapFlag(game.user.id));
     if (recapHtml !== undefined) {
-      savePlayerRecap(this.document, recapHtml)
+      // Awaited, not fire-and-forget (C4). On the relay path savePlayerRecap
+      // only emits a socket and resolves immediately, so awaiting costs
+      // nothing - but on the OWNER path it issues a document.update() of its
+      // own, and super.onSubmit below updates the same document. Leaving both
+      // in flight at once raced two writes against one document. The catch
+      // stays so a failed recap save still can't block the rest of the form.
+      await savePlayerRecap(this.document, recapHtml)
         .catch((err) => console.error(`${MODULE_ID} | saving player recap failed`, err));
     }
     if (this.isEditable) return super.onSubmit(event, form, formData);

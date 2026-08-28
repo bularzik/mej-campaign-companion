@@ -633,6 +633,15 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
           results.failed.push(page.name);
         }
       }
+    } catch (error) {
+      // Defence in depth for the failure mode C3 fixed at its source: this
+      // block used to carry only a `finally`, so anything thrown outside the
+      // per-row try above (the inline-image pass was the real case) escaped
+      // #onCreate entirely - skipping this.close() and #showResult below, so
+      // the GM saw no error and no result at all while documents had already
+      // been created. Report what did happen rather than vanishing.
+      console.error(`${MODULE_ID} | import aborted partway through`, error);
+      plan.warnings.push(game.i18n.localize(`${I18N}.import.abortedPartway`));
     } finally {
       target.disabled = false;
     }

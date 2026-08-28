@@ -133,6 +133,23 @@ async function renderKnownConnectionLi(r) {
     <div class="item-relationship">${esc(r.label)}${secret}</div></li>`;
 }
 
+/**
+ * Parse module-owned markup into a fragment without a live-context parse (S1).
+ *
+ * renderKnownConnectionLi escapes every value it interpolates, so what reaches
+ * here is already safe - but createContextualFragment parses in the LIVE
+ * document, where markup can act rather than merely be read, and leaving one
+ * such call in the module is an invitation to copy it to a site whose input
+ * is not escaped. DOMParser's document is inert; append() adopts the nodes
+ * into the live one, listeners bound afterwards included.
+ */
+function fragmentFrom(html) {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const frag = document.createDocumentFragment();
+  frag.append(...parsed.body.childNodes);
+  return frag;
+}
+
 function bindKnownConnectionOpen(frag) {
   frag.querySelectorAll("[data-cc-open]").forEach((a) => a.addEventListener("click", (event) => {
     event.preventDefault();
@@ -207,14 +224,14 @@ async function injectPlayer(sheet, element) {
 
   if (newRows.length) {
     const host = mejList ?? ensureKnownConnectionsHost();
-    const frag = document.createRange().createContextualFragment((await Promise.all(newRows.map(renderKnownConnectionLi))).join(""));
+    const frag = fragmentFrom((await Promise.all(newRows.map(renderKnownConnectionLi))).join(""));
     bindKnownConnectionOpen(frag);
     host.appendChild(frag);
   }
 
   if (fallbackExtras.length) {
     const host = ensureKnownConnectionsHost();
-    const frag = document.createRange().createContextualFragment((await Promise.all(fallbackExtras.map(renderKnownConnectionLi))).join(""));
+    const frag = fragmentFrom((await Promise.all(fallbackExtras.map(renderKnownConnectionLi))).join(""));
     bindKnownConnectionOpen(frag);
     host.appendChild(frag);
   }

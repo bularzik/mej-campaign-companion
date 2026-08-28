@@ -142,8 +142,16 @@ async function injectPlayerSecrets(sheet, element) {
   const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
     page.text?.content ?? "", { relativeTo: page, secrets: true, async: true }
   );
-  const fragment = document.createRange().createContextualFragment(`<div>${enriched}</div>`);
-  const root = fragment.firstElementChild;
+  // DOMParser, never createContextualFragment (S1). Two reasons here. The
+  // enriched body is authored markup and createContextualFragment parses it in
+  // the LIVE document's context, where it can act rather than just be read.
+  // And this parse deliberately contains EVERY secret section (enrichHTML ran
+  // with secrets:true) including the ones this viewer is not cleared for,
+  // which the loop below then removes - so parsing it live would let a secret
+  // this player must not see start fetching its own images first. DOMParser's
+  // document is inert; only what survives the filter reaches the live DOM
+  // (replaceChildren adopts the nodes across documents).
+  const root = new DOMParser().parseFromString(enriched, "text/html").body;
   const allowed = new Set(mine);
   for (const section of root.querySelectorAll("section.secret")) {
     if (section.classList.contains("revealed")) continue;

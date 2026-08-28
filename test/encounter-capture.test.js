@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName
+  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName,
+  OUTCOME_MARKER, wrapOutcomeHtml, mergeOutcomeHtml
 } from "../scripts/logic/encounter-capture.mjs";
 
 describe("buildEncounterActorRows", () => {
@@ -144,5 +145,63 @@ describe("buildEncounterName", () => {
   it("omits the scene segment when there is no scene", () => {
     expect(buildEncounterName(null, "8/16/2026")).toBe("Encounter (8/16/2026)");
     expect(buildEncounterName("", "8/16/2026")).toBe("Encounter (8/16/2026)");
+  });
+});
+
+// C2: mergeEncounter is documented as an additive merge, and the actor
+// roster genuinely is merged - but it replaced text.content wholesale with a
+// regenerated summary, so a GM who wrote up an encounter lost that prose the
+// next time the same combat's end fired (the re-fire path the
+// encounterPagesByCombatId map exists to serve). The generated summary now
+// lives in its own marked container so everything around it survives.
+describe("wrapOutcomeHtml", () => {
+  it("wraps generated summary html in the marked container", () => {
+    expect(wrapOutcomeHtml("<p>No casualties.</p>"))
+      .toBe(`<div data-${OUTCOME_MARKER}="1"><p>No casualties.</p></div>`);
+  });
+  it("produces nothing for an empty summary", () => {
+    expect(wrapOutcomeHtml("")).toBe("");
+    expect(wrapOutcomeHtml(null)).toBe("");
+  });
+});
+
+describe("mergeOutcomeHtml", () => {
+  const wrapped = (s) => `<div data-${OUTCOME_MARKER}="1">${s}</div>`;
+
+  it("replaces only the generated block, preserving the GM's prose around it", () => {
+    const existing = `<p>The party was ambushed.</p>${wrapped("<p>Old.</p>")}<p>They fled north.</p>`;
+    expect(mergeOutcomeHtml(existing, "<p>New.</p>"))
+      .toBe(`<p>The party was ambushed.</p>${wrapped("<p>New.</p>")}<p>They fled north.</p>`);
+  });
+
+  it("appends the block when the page has none yet (entries predating this fix)", () => {
+    expect(mergeOutcomeHtml("<p>Hand-written notes.</p>", "<p>New.</p>"))
+      .toBe(`<p>Hand-written notes.</p>${wrapped("<p>New.</p>")}`);
+  });
+
+  it("never loses GM prose even when the new summary is empty", () => {
+    expect(mergeOutcomeHtml("<p>Hand-written notes.</p>", "")).toBe("<p>Hand-written notes.</p>");
+    expect(mergeOutcomeHtml(`<p>Notes.</p>${wrapped("<p>Old.</p>")}`, "")).toBe("<p>Notes.</p>");
+  });
+
+  it("handles an empty or missing existing body", () => {
+    expect(mergeOutcomeHtml("", "<p>New.</p>")).toBe(wrapped("<p>New.</p>"));
+    expect(mergeOutcomeHtml(null, "<p>New.</p>")).toBe(wrapped("<p>New.</p>"));
+    expect(mergeOutcomeHtml(undefined, "")).toBe("");
+  });
+
+  it("treats $-sequences in the summary as literal text, not replacement patterns", () => {
+    // String.replace would expand `$&` into the whole match; the summary is
+    // built from actor names, which a GM controls.
+    const existing = wrapped("<p>Old.</p>");
+    expect(mergeOutcomeHtml(existing, "<p>Cost $5 &amp; $&amp; $` $'</p>"))
+      .toBe(wrapped("<p>Cost $5 &amp; $&amp; $` $'</p>"));
+  });
+
+  it("is idempotent across repeated merges rather than nesting blocks", () => {
+    let html = mergeOutcomeHtml("<p>Notes.</p>", "<p>A.</p>");
+    html = mergeOutcomeHtml(html, "<p>B.</p>");
+    html = mergeOutcomeHtml(html, "<p>C.</p>");
+    expect(html).toBe(`<p>Notes.</p>${wrapped("<p>C.</p>")}`);
   });
 });

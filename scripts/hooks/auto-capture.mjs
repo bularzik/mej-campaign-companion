@@ -52,7 +52,8 @@ import {
   resolveSharedMediaShare, installShareImageWrap
 } from "../logic/auto-capture.mjs";
 import {
-  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName
+  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName,
+  wrapOutcomeHtml, mergeOutcomeHtml
 } from "../logic/encounter-capture.mjs";
 
 /** Live combatants as raw {actorUuid, name} entries. */
@@ -168,7 +169,9 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
     return null;
   }
   const name = buildEncounterName(sceneName, new Date().toLocaleDateString());
-  const page = await createMejEntry(MEJ_ENCOUNTER_TYPE, name, buildDescriptionHtml(outcome, unlinkedNames), {
+  // Wrapped in the outcome marker from the start so a later mergeEncounter()
+  // can replace just this block instead of the GM's whole page body.
+  const page = await createMejEntry(MEJ_ENCOUNTER_TYPE, name, wrapOutcomeHtml(buildDescriptionHtml(outcome, unlinkedNames)), {
     actors: buildEncounterActorRows(participants)
   }, campaign ? { default: baselineOwnership(campaign) } : null, campaign?.id ?? null);
   encounterPagesByCombatId.set(combat.id, page.uuid);
@@ -179,13 +182,20 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
 /**
  * Additively merge a fresh roster + outcome into an already-linked Encounter
  * page (the merge-on-re-end path described in createEncounter's doc comment).
+ *
+ * "Additively" has to hold for the BODY as well as the roster: this used to
+ * overwrite `text.content` outright, so a GM who wrote the encounter up
+ * between the two firings lost all of it. mergeOutcomeHtml replaces only this
+ * module's own generated block (logic/encounter-capture.mjs) and leaves
+ * everything around it alone; a page created before that marker existed just
+ * gains the block at the end rather than having its content replaced.
  */
 async function mergeEncounter(page, participants, outcome, unlinkedNames) {
   const existing = rowsFromEncounterActors(page.getFlag("monks-enhanced-journal", "actors"));
   const merged = mergeParticipants(existing, participants);
   await page.update({
     "flags.monks-enhanced-journal.actors": buildEncounterActorRows(merged),
-    "text.content": buildDescriptionHtml(outcome, unlinkedNames)
+    "text.content": mergeOutcomeHtml(page.text?.content ?? "", buildDescriptionHtml(outcome, unlinkedNames))
   });
 }
 
