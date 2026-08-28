@@ -735,15 +735,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         ...row,
         icon: this.#typeIcon(row.entryType),
         audienceLabel: audienceLabel(row),
-        // Block rows on a session-type page are recap-sourced (session
-        // pages carry body text in system.recap, not text.content) - the
-        // player re-enrichment path (injectPlayerSecrets in
-        // hooks/secrets-ui.mjs) only re-enriches
-        // .editor-display[data-key="text.content"], so a reveal on one of
-        // these never actually displays to the player it was granted to
-        // (I1b, recap re-enrichment unsupported this release). Don't offer
-        // a reveal control the tracker can't make good on.
-        canAudience: row.kind !== "block" || (!!row.secretId && row.entryType !== "session")
+        // Session-type block rows used to be excluded here: recap secrets had
+        // no player re-enrichment path, so a reveal on one could never display
+        // to the player it was granted to. injectPlayerSecrets now works from
+        // the page's actual body region, so the control can be honoured.
+        canAudience: row.kind !== "block" || !!row.secretId
       })),
       types: [...new Set(rows.map((r) => r.entryType))].sort().map((t) => ({ value: t, label: this.#typeLabel(t), selected: t === this.state.secretsType })),
       state: this.state.secretsState,

@@ -46,7 +46,12 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   if (!entry) return;
   const groups = groupsSetting();
   const reveals = revealsOf(entry);
-  const sections = element.querySelectorAll('.editor-display[data-key="text.content"] section.secret');
+  // A session page renders its body into data-key="system.recap"; everything
+  // else into text.content. Pinning text.content meant recap secrets got no
+  // audience button at all, so they could be seen in the tracker and never
+  // revealed to anyone.
+  const { key } = bodyRegion(page);
+  const sections = element.querySelectorAll(`.editor-display[data-key="${key}"] section.secret`);
   for (const section of sections) {
     if (section.querySelector(":scope > .mej-cc-secret-audience")) continue;
     const id = section.id ?? "";
@@ -166,10 +171,11 @@ async function injectPlayerSecrets(sheet, element) {
   const groups = groupsSetting();
   const mine = Object.entries(reveals).filter(([, aud]) => canSee(aud, game.user.id, groups)).map(([id]) => id);
   if (!mine.length) return;
-  const container = element.querySelector('.editor-display[data-key="text.content"]');
+  const { key, content } = bodyRegion(page);
+  const container = element.querySelector(`.editor-display[data-key="${key}"]`);
   if (!container) return;
   const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
-    page.text?.content ?? "", { relativeTo: page, secrets: true, async: true }
+    content, { relativeTo: page, secrets: true, async: true }
   );
   // DOMParser, never createContextualFragment (S1). Two reasons here. The
   // enriched body is authored markup and createContextualFragment parses it in
