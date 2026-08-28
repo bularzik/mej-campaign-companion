@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.12.1 (2026-08-28)
+## 0.13.1 (2026-08-28)
 
 Bugfix and hardening round. No new features; nothing is migrated.
 
@@ -32,6 +32,12 @@ Bugfix and hardening round. No new features; nothing is migrated.
 - The bundled third-party libraries now carry a provenance file and a
   checksum check that runs in CI, so a change to them can't pass
   unnoticed.
+## 0.13.0 (2026-08-28)
+
+- New: **Relationship graph nodes show the entity's picture**, clipped
+  into the node circle — a person's portrait, a place's illustration, or
+  Monk's Enhanced Journal's per-type icon when no picture is set. Nodes
+  are slightly larger to make the pictures legible.
 
 ## 0.12.0 (2026-08-28)
 

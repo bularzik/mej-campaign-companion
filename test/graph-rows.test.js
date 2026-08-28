@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { graphRowsFor, combineLabel } from "../scripts/logic/graph-rows.mjs";
+import { graphRowsFor, combineLabel, nodeImage } from "../scripts/logic/graph-rows.mjs";
 import { buildGraph } from "../scripts/logic/graph-data.mjs";
 
 function page(type, relationships = []) {
@@ -25,6 +25,29 @@ describe("combineLabel", () => {
   });
 });
 
+describe("nodeImage", () => {
+  const assetTypes = new Set(["person", "place"]);
+  const assetPath = "modules/monks-enhanced-journal/assets";
+
+  it("src wins over the placeholder", () => {
+    expect(nodeImage("worlds/x/a.png", "person", assetTypes, assetPath)).toBe("worlds/x/a.png");
+  });
+
+  it("empty/undefined src with a placeholder-bearing type falls back to the placeholder path", () => {
+    expect(nodeImage("", "person", assetTypes, assetPath)).toBe(`${assetPath}/person.png`);
+    expect(nodeImage(undefined, "place", assetTypes, assetPath)).toBe(`${assetPath}/place.png`);
+  });
+
+  it("empty src with type \"session\" returns null (no placeholder ships for it)", () => {
+    expect(nodeImage("", "session", assetTypes, assetPath)).toBeNull();
+  });
+
+  it("empty/undefined src with type \"picture\" returns null (no placeholder ships for it)", () => {
+    expect(nodeImage("", "picture", assetTypes, assetPath)).toBeNull();
+    expect(nodeImage(undefined, "picture", assetTypes, assetPath)).toBeNull();
+  });
+});
+
 describe("graphRowsFor", () => {
   it("emits one row per MEJ-typed entry, first typed page wins", () => {
     const rows = graphRowsFor([
@@ -32,13 +55,32 @@ describe("graphRowsFor", () => {
       entry("J.b", "B", [page("quest")])
     ], ctx());
     expect(rows).toEqual([
-      { uuid: "J.a", name: "A", type: "person", relationships: [] },
-      { uuid: "J.b", name: "B", type: "quest", relationships: [] }
+      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [] },
+      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [] }
     ]);
   });
 
   it("skips untyped entries entirely", () => {
     expect(graphRowsFor([entry("J.x", "X", [page(null)])], ctx())).toEqual([]);
+  });
+
+  it("carries img from imageOf, called with the winning typed page and its type", () => {
+    const calls = [];
+    const rows = graphRowsFor(
+      [entry("J.a", "A", [page(null), page("person"), page("place")])],
+      ctx({ imageOf: (p, type) => { calls.push([p, type]); return "worlds/x/a.png"; } })
+    );
+    expect(rows[0].img).toBe("worlds/x/a.png");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0].__type).toBe("person");
+    expect(calls[0][1]).toBe("person");
+  });
+
+  it("img is null when imageOf is absent or returns nothing", () => {
+    const es = [entry("J.a", "A", [page("person")])];
+    expect(graphRowsFor(es, ctx()).map((r) => r.img)).toEqual([null]);
+    expect(graphRowsFor(es, ctx({ imageOf: () => undefined })).map((r) => r.img)).toEqual([null]);
+    expect(graphRowsFor(es, ctx({ imageOf: () => "" })).map((r) => r.img)).toEqual([null]);
   });
 
   it("gates non-observable entries for players but not for the GM", () => {
