@@ -843,14 +843,23 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * lookups). Returns null if the entry has no MEJ page, the body is empty,
    * or the section id can no longer be found (deleted between render and
    * click) - callers fall back to the tracker row's stored preview text.
+   *
+   * Parsed with DOMParser, never createContextualFragment (S1): the latter
+   * parses in the LIVE document's context, so markup in the body can act -
+   * an `<img src=x onerror=...>` fires while we are only trying to read a
+   * section back out. The body is authored by whoever can edit the page, not
+   * necessarily by the GM whose client runs this (a shared entry, or any
+   * session page once playersWriteSessions is on), and this runs GM-side.
+   * DOMParser builds an inert document instead. Same reason
+   * apps/import-upload.mjs and apps/import-wizard.mjs already use it.
    */
   static #secretSectionHtml(entry, secretId) {
     if (!secretId) return null;
     const page = entry.pages?.contents?.find((p) => mejType(p));
     const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
     if (!body) return null;
-    const fragment = document.createRange().createContextualFragment(`<div>${body}</div>`);
-    const section = fragment.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
+    const parsed = new DOMParser().parseFromString(body, "text/html");
+    const section = parsed.body.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
     return section ? section.innerHTML : null;
   }
 

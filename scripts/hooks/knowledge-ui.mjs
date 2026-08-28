@@ -86,7 +86,13 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
     { pageUuid: page.uuid, canEdit, tags: getTags(page), attributes, backlinks }
   );
-  const panel = document.createRange().createContextualFragment(html).firstElementChild;
+  // DOMParser rather than createContextualFragment (S1). This html is our own
+  // Handlebars output, so it is escaped and the exposure is far smaller than
+  // at the two sites that parse page bodies - but keeping one parser across
+  // the module leaves no live-context parse for the next reader to copy. The
+  // panel is plain markup (no custom elements to upgrade), and appendChild
+  // adopts it into the live document along with the listeners bound below.
+  const panel = new DOMParser().parseFromString(html, "text/html").body.firstElementChild;
   bindPanel(panel, page, sheet, shellHosted);
   element.appendChild(panel);
 }
