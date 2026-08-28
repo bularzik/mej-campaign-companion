@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.0 (2026-08-28)
+
+- New: **PDF and video pages open inside the Enhanced Journal.** A
+  campaign's reference PDFs and session recordings now render in the
+  journal's own window, with its chrome and the tags/attributes/mentions
+  panel, instead of opening in a separate Foundry window.
+- New: **PDFs and recordings get their own Hub index rows** — their own
+  icons and "Document" / "Recording" filter chips, instead of being
+  lumped in with plain journal entries.
+- Video pages honor their own settings: start timestamp, volume, loop,
+  autoplay, controls, and an explicit width/height. YouTube links render
+  as a proper embed rather than a broken player.
+- Nothing is converted and nothing is migrated: these stay ordinary
+  Foundry pdf/video pages. Disabling the module restores Foundry's stock
+  behavior for them exactly.
+
 ## 0.11.0 (2026-08-24)
 
 - New: **a campaign can hold several named timelines.** Keep world
