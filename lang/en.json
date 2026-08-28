@@ -280,6 +280,8 @@
       "someFailed": "Some sections could not be imported:",
       "imagesDropped": "Some images could not be uploaded and were left out.",
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
+      "imageCorrupt": "Skipped a damaged \"{type}\" image that could not be decoded.",
+      "abortedPartway": "The import stopped early because of an unexpected error — anything listed above was still created. See the console for details.",
       "nothingToImport": "Every section is set to skip — nothing to import.",
       "dateOutOfRange": "The date for \"{label}\" is outside the active calendar and was stored without a campaign date.",
       "audience": "Audience",

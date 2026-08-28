@@ -14,11 +14,26 @@ import { IMPORT_MEDIA_DIR } from "../constants.mjs";
  * Build an upload File from an image data-URI. Renderable types upload as-is;
  * unknown-but-decodable types transcode to PNG; undecodable types (EMF/WMF)
  * return { skipped: subtype }.
+ *
+ * Total by contract - it reports a skip, it never throws. parseImageDataUri
+ * accepts any `(.*)` as the payload, so a docx carrying a corrupt inline
+ * image reaches atob() with a body it cannot decode. That throw used to
+ * escape uploadInlineImages' per-image try (which wraps only the upload
+ * call itself) and propagate out of the import wizard's #onCreate past its
+ * `finally` - so the wizard never closed, never showed its result dialog,
+ * and told the GM nothing at all, with some documents already created.
  */
 export async function dataUriToFile(uri, basename) {
   const parsed = parseImageDataUri(uri);
   if (!parsed) return { skipped: "unknown" };
-  const bytes = Uint8Array.from(atob(parsed.base64), (c) => c.charCodeAt(0));
+  let bytes;
+  try {
+    bytes = Uint8Array.from(atob(parsed.base64), (c) => c.charCodeAt(0));
+  } catch (error) {
+    // `corrupt` distinguishes "this image is broken" from "this image type
+    // isn't supported", so the caller can report which actually happened.
+    return { skipped: parsed.subtype, corrupt: true };
+  }
   const ext = imageExtension(parsed.subtype);
   if (ext) return { file: new File([bytes], `${basename}.${ext}`, { type: parsed.mime }) };
   // Not directly renderable — best-effort transcode to PNG (EMF/WMF will throw).
@@ -92,7 +107,9 @@ export async function uploadInlineImages(html, warnings, uploadedByUri) {
       const result = await dataUriToFile(uri, `import-${Date.now()}-${++n}`);
       let path = null;
       if (result.skipped) {
-        warnings.push(game.i18n.format("MEJCampaignCompanion.import.imageTypeUnsupported", { type: result.skipped }));
+        warnings.push(result.corrupt
+          ? game.i18n.format("MEJCampaignCompanion.import.imageCorrupt", { type: result.skipped })
+          : game.i18n.format("MEJCampaignCompanion.import.imageTypeUnsupported", { type: result.skipped }));
       } else {
         try {
           path = await uploadImportFile(result.file);

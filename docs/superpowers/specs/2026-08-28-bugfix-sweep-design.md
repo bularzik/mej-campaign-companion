@@ -19,10 +19,18 @@ it changes a persisted data contract and gets its own spec.
 
 Measured on `main` @ `731e715` before any change:
 
-- `npm test` — **1204 passing**, 0 failing.
+- `npm test` — **602 passing**, 0 failing.
 - `npm audit` — **0 vulnerabilities** (with and without dev dependencies).
 - Open GitHub issues — none.
 - 52 unit-test files; 19 Playwright e2e spec files.
+
+> **Correction.** This section first recorded 1204 passing. That number was
+> wrong, and the reason it was wrong is itself finding **C15** below: `npm test`
+> run in a checkout that contains git worktrees collects *their* test files too,
+> so the figure was this checkout double-counted with the `media-routing`
+> worktree nested inside it. The real per-checkout suite is 602. Round 1 fixes
+> the collection bug first, so every later round's verification measures the
+> checkout it was started from.
 
 Nothing below is a regression. Every item is either a defect that has always
 been present, or a known issue previously parked by an earlier round.
@@ -243,6 +251,20 @@ their `sheet`/`element` fields are `WeakRef`), pruned solely inside
 `refreshTrackedPanels`; and `trackPanel` scans the whole set on every
 injection.
 
+**C15 — `npm test` collects other worktrees' tests (Medium, found during Round 1).**
+`vitest.config.mjs:12` excludes `node_modules` and `tests/e2e/**`. A git
+worktree is a complete second checkout living at `.claude/worktrees/<name>/`,
+so vitest's default include glob collects its `test/` files too — and the
+`tests/e2e/**` exclude is checkout-relative, so it does not match
+`.claude/worktrees/<name>/tests/e2e/**` and those Playwright specs get
+collected as vitest tests and fail. Measured in the main checkout while it
+held two worktrees: **196 test files, 38 failing, 1832 tests**, against a real
+suite of 602. A run can therefore report a green number measured partly against
+a branch you are not on — which is exactly how this document's original "1204
+passing" baseline came to be wrong.
+*Fix:* add `**/.claude/worktrees/**` to the exclude list. Done first in Round 1,
+because every other round's verification depends on the number being real.
+
 **C14 — Empty `data-position` inserts a timepoint at the head (Low).**
 `apps/CampaignHubPage.mjs:1401-1402`. `Number("")` is `0`, which is an
 integer, and `"" != null` is true — so an empty attribute yields position 0
@@ -286,7 +308,8 @@ are bounded work against flows that already exist — no plan document. Round 3
 gets the full ceremony.
 
 **Round 1 — Security and data integrity.**
-S1, S2, S3, S4, S5, C1, C2, C3, C4.
+C15 (first — it makes the other verifications trustworthy), then S1, S2, S3,
+S4, S5, C1, C2, C3, C4.
 Rationale: every item is contained and independently testable, and this round
 carries the two findings that cause real harm without anyone noticing — S2
 (a player-visible attribute that the GM believes is hidden) and C1 (silent
