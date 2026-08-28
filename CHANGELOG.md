@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.12.1 (2026-08-28)
+
+Bugfix and hardening round. No new features; nothing is migrated.
+
+- **Fixed: a person attribute you mark "player hidden" is now actually
+  hidden from player searches straight away.** Previously the change only
+  took effect after a world reload — until then the value stayed
+  findable in every player's search while the GM had every reason to
+  believe it was hidden.
+- **Fixed: "File all shown" can no longer refile entries outside the
+  Unfiled view.** The button is only offered there, but the action behind
+  it could still be reached, and in the "All" view it would have swept
+  every campaign's entries into a single campaign with no confirmation.
+- **Fixed: auto-captured Encounter write-ups are no longer overwritten.**
+  If the same combat's end was captured twice, anything the GM had
+  written on that Encounter page was replaced by a regenerated summary.
+  The generated summary now updates in place and leaves your own text
+  alone.
+- **Fixed: a damaged image inside an imported .docx no longer kills the
+  import silently.** The import used to stop with no error and no result
+  dialog, after some entries had already been created. Damaged images are
+  now reported and skipped, and an unexpected failure still shows what
+  was created.
+- **Fixed: a player recap saved at the same moment as the rest of the
+  session form no longer races it.**
+- Security hardening: journal content is parsed with an inert parser
+  everywhere, so markup inside a page can't act while it is merely being
+  read; the media-upload relay now rejects reply paths that point outside
+  its own upload folder, and rejects mismatched chunks within one upload.
+- The bundled third-party libraries now carry a provenance file and a
+  checksum check that runs in CI, so a change to them can't pass
+  unnoticed.
+
 ## 0.12.0 (2026-08-28)
 
 - New: **PDF and video pages open inside the Enhanced Journal.** A
