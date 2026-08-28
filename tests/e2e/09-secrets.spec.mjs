@@ -174,9 +174,21 @@ test.describe("09 secrets", () => {
   });
 
   // setSectionRevealed reimplements what core's
-  // HTMLSecretBlockElement#toggleRevealed does to a stored body. A pure
-  // reimplementation can drift silently as Foundry changes, so assert the two
-  // agree on real markup, in the live client, rather than trusting them to.
+  // HTMLSecretBlockElement#toggleRevealed does to a stored body, but only
+  // agrees with it on the canonical single-section shape ProseMirror actually
+  // produces (one <section class="secret" id="..."> per body, no extra
+  // classes/attributes). Core's toggleRevealed REBUILDS the section's open
+  // tag from scratch, discarding any other classes/attributes on it — ours
+  // deliberately PRESERVES them (see Task 1's tests pinning a fancy class and
+  // a data-* attribute surviving a toggle), so we do not assert equivalence
+  // there; that is intentional divergence, not drift. Core's replacement
+  // regex is also `<section[^i]+id="..."[^>]*>`, which cannot span any
+  // attribute containing the letter "i" — including a *preceding* section's
+  // own id="..." — so core silently fails to toggle the second of two
+  // sections in one body; ours handles that case correctly and is not
+  // expected to match core there either. This test exists purely as a guard
+  // against silent drift on the shape that matters: assert the two agree on
+  // real markup, in the live client, rather than trusting them to.
   test("setSectionRevealed agrees with Foundry's own toggleRevealed", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
@@ -185,8 +197,7 @@ test.describe("09 secrets", () => {
       const { setSectionRevealed } = await import("/modules/mej-campaign-companion/scripts/logic/secret-blocks.mjs");
       const bodies = [
         '<p>A</p><section class="secret" id="secret-a">Hidden.</section>',
-        '<section class="secret revealed" id="secret-a">Shown.</section>',
-        '<section class="secret" id="secret-a">A</section><section class="secret" id="secret-b">B</section>'
+        '<section class="secret revealed" id="secret-a">Shown.</section>'
       ];
       const out = [];
       for (const body of bodies) {
@@ -194,7 +205,12 @@ test.describe("09 secrets", () => {
         host.innerHTML = body;
         for (const section of host.querySelectorAll("section.secret")) {
           const el = document.createElement("secret-block");
-          el.secret = section;
+          // `secret` is a getter on HTMLSecretBlockElement
+          // (`:scope > .secret`) — the section must be a real DOM child, not
+          // an assigned property, or the getter returns null. Do NOT append
+          // el to the document: connectedCallback would inject a reveal
+          // button into the section.
+          el.append(section);
           const want = !section.classList.contains("revealed");
           const ours = setSectionRevealed(body, section.id, want);
           const theirs = el.toggleRevealed(body);

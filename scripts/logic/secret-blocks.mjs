@@ -75,6 +75,15 @@ function withClasses(openTag, classes) {
  * Total: returns the input unchanged for an empty body, a falsy id, a section
  * that isn't there, a non-secret section, or a state that already matches - so
  * a caller can always write back whatever it gets.
+ *
+ * Deliberately diverges from core's HTMLSecretBlockElement#toggleRevealed,
+ * confirmed live (tests/e2e/09-secrets.spec.mjs): core rebuilds the section's
+ * open tag from scratch on toggle, discarding any other classes/attributes it
+ * carries - this function preserves them instead. Do not "fix" that to match
+ * core; it would start destroying user content. (Core's replacement regex
+ * also can't span an attribute containing the letter "i", so it silently
+ * fails to toggle a body's second secret section - another divergence this
+ * function does not reproduce.)
  */
 export function setSectionRevealed(html, sectionId, revealed) {
   const src = String(html ?? "");
