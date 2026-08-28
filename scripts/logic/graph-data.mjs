@@ -52,7 +52,7 @@ export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = nul
     }
   }
 
-  let nodes = rows.map(({ uuid, name, type }) => ({ uuid, name, type }));
+  let nodes = rows.map(({ uuid, name, type, img }) => ({ uuid, name, type, img: img ?? null }));
 
   if (mode === "ego" && centerUuid) {
     const keep = new Set([centerUuid]);
