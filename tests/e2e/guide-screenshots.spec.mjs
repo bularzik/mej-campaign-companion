@@ -230,7 +230,7 @@ async function assertNodeOnscreen(graphApp, nodeLocator) {
     nodeBox.x + nodeBox.width <= appBox.x + appBox.width &&
     nodeBox.y + nodeBox.height <= appBox.y + appBox.height;
   expect(within, `node outside graph frame: node=${JSON.stringify(nodeBox)} app=${JSON.stringify(appBox)}`).toBe(true);
-  const opacity = await nodeLocator.locator("circle").evaluate((el) => Number(getComputedStyle(el).opacity));
+  const opacity = await nodeLocator.locator("circle").first().evaluate((el) => Number(getComputedStyle(el).opacity));
   expect(opacity, "node circle has zero opacity").toBeGreaterThan(0);
 }
 

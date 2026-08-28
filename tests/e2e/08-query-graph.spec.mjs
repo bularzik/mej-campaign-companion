@@ -218,6 +218,12 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
 
     const nodeA = graphApp.locator(".mej-cc-graph-node", { hasText: nameA });
     await expect(nodeA).toHaveCount(1);
+    // Every typed node draws its picture clipped into the ring; a person
+    // created without a src gets MEJ's per-type placeholder.
+    await expect(nodeA.locator("image")).toHaveCount(1);
+    await expect(nodeA.locator("image")).toHaveAttribute("href", /modules\/monks-enhanced-journal\/assets\/person\.png$/);
+    await expect(nodeA.locator("image")).toHaveAttribute("clip-path", /^url\(#mej-cc-clip-/);
+    await expect(nodeA.locator("circle").first()).toHaveAttribute("r", "14");
     // The d3-force simulation keeps repositioning nodes (charge/collide
     // forces from every other visible entry in the world, not just this
     // spec's 2) until its alpha decays, well past the initial render - a
