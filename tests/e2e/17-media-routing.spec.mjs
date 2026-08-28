@@ -315,6 +315,17 @@ test.describe.serial("17 media routing", () => {
       await expect(shell.locator(".mej-cc-media-page p.notes")).toHaveCount(0);
       await expect(shell.locator("video.mej-cc-media-video")).toHaveCount(0);
 
+      // Sized to the pane, not collapsed to the unstyled iframe default
+      // (300x150) - the regression this owned CSS (styles/campaign-companion.css)
+      // fixed: nothing analogous to core's `.journal-entry-page.pdf iframe`
+      // rule reaches a standalone/popped-out mount, so this must hold on our
+      // own class alone. Floors are generous (well under the CSS's own
+      // min-height:620px and the shell's ~1025px default width), not
+      // pixel-exact.
+      const pdfSize = await iframe.evaluate((el) => ({ width: el.clientWidth, height: el.clientHeight }));
+      expect(pdfSize.width).toBeGreaterThan(400);
+      expect(pdfSize.height).toBeGreaterThan(400);
+
       // ...and it is genuinely OUR sheet that produced it (see
       // mountedMediaPage's header for why this is read one level down from
       // the shell subsheet, not off `ej.subsheet`).
@@ -362,6 +373,12 @@ test.describe.serial("17 media routing", () => {
       expect(await video.getAttribute("disabled")).toBeNull();
       await expect(shell.locator("iframe.mej-cc-media-youtube")).toHaveCount(0);
       await expect(shell.locator(".mej-cc-media-page p.notes")).toHaveCount(0);
+
+      // Sized to the pane via the figure.flex-ratio aspect box (owned CSS),
+      // not the ~300x150 postage stamp an unstyled <video> collapses to.
+      const videoSize = await video.evaluate((el) => ({ width: el.clientWidth, height: el.clientHeight }));
+      expect(videoSize.width).toBeGreaterThan(400);
+      expect(videoSize.height).toBeGreaterThan(200);
 
       expect(mounted.error).toBeNull();
       expect(mounted.registeredClass).toBe("MediaPageSheet");

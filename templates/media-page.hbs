@@ -3,13 +3,17 @@
     {{#if isPdf}}
     <iframe class="mej-cc-media-pdf" src="{{viewerSrc}}" title="{{name}}"></iframe>
     {{else}}
-    {{#if isYouTube}}
-    <iframe class="mej-cc-media-youtube" src="{{youtubeSrc}}" title="{{name}}"
-             allowfullscreen frameborder="0"></iframe>
-    {{else}}
-    <video class="mej-cc-media-video" src="{{src}}" controls preload="metadata"
-           {{#if loop}}loop{{/if}} {{#if autoplay}}autoplay{{/if}}></video>
-    {{/if}}
+    <figure class="{{#if flexRatio}}flex-ratio{{/if}}">
+        {{#if isYouTube}}
+        <iframe class="mej-cc-media-youtube" src="{{youtubeSrc}}" title="{{name}}"
+                 allowfullscreen frameborder="0"
+                 {{#if width}}width="{{width}}" {{/if}}{{#if height}}height="{{height}}"{{/if}}></iframe>
+        {{else}}
+        <video class="mej-cc-media-video" src="{{src}}" preload="metadata"
+               {{#if controls}}controls{{/if}} {{#if loop}}loop{{/if}} {{#if autoplay}}autoplay{{/if}}
+               {{#if width}}width="{{width}}" {{/if}}{{#if height}}height="{{height}}"{{/if}}></video>
+        {{/if}}
+    </figure>
     {{/if}}
     <a class="mej-cc-media-external" href="{{src}}" target="_blank" rel="noopener">
         <i class="fa-solid fa-arrow-up-right-from-square"></i> {{localize "MEJCampaignCompanion.media.openExternal"}}

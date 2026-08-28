@@ -16,6 +16,9 @@ export class MediaPageSheet extends EnhancedJournalSheet {
   /** The native types this sheet serves. */
   static MEDIA_TYPES = MEDIA_PAGE_TYPES;
 
+  /** Per-type window icon; DEFAULT_OPTIONS.window.icon below is only the pre-mediaType fallback. */
+  static WINDOW_ICONS = { pdf: "fa-solid fa-file-pdf", video: "fa-solid fa-film" };
+
   static DEFAULT_OPTIONS = {
     classes: ["mej-campaign-companion", "mej-cc-media-sheet"],
     window: { icon: "fa-solid fa-file-pdf" }
@@ -27,6 +30,20 @@ export class MediaPageSheet extends EnhancedJournalSheet {
 
   static get type() {
     return "mediapage";
+  }
+
+  /**
+   * DEFAULT_OPTIONS.window.icon above is a static pdf-shaped fallback for
+   * before this instance's document is known; swap it for the real media
+   * type's icon here so a popped-out video page doesn't carry a pdf icon.
+   * Called by ApplicationV2's own render flow on first render, and again
+   * explicitly by MEJ's renderSubSheet for a shell-hosted mount
+   * (enhanced-journal.js:589) - covers both hosting paths.
+   */
+  _configureRenderOptions(options) {
+    const icon = MediaPageSheet.WINDOW_ICONS[this.mediaType];
+    if (icon) this.options.window.icon = icon;
+    super._configureRenderOptions(options);
   }
 
   /**
@@ -138,8 +155,15 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     // iframe instead of a <video> element - a bare <video src="youtube-url">
     // renders broken. Mirror that branch here.
     const video = page?.video ?? {};
+    context.controls = video.controls !== false;
     context.loop = video.loop === true;
     context.autoplay = video.autoplay === true;
+    // width/height are the page's own explicit sizing override; when neither
+    // is set, core (and we) fall back to an aspect-ratio box instead - see
+    // flexRatio below and media-page.hbs's figure wrapper.
+    context.width = video.width || null;
+    context.height = video.height || null;
+    context.flexRatio = !video.width && !video.height;
     context.isYouTube = kind === "video" && !!src && !!game.video?.isYouTubeURL(src);
     context.youtubeSrc = "";
     if (context.isYouTube) {
@@ -149,5 +173,25 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     }
 
     return context;
+  }
+
+  /**
+   * volume and currentTime are DOM properties, not HTML attributes - Foundry
+   * core sets them the same way, on the native <video> element's
+   * "loadedmetadata" event (JournalEntryPageVideoSheet#_onRender, core
+   * journal-entry-page-video-sheet.mjs:88-92). Mirrored here, but from
+   * activateListeners() per this file's header note: MEJ's shell never calls
+   * _onRender() for a hosted subsheet, so an _onRender()-based listener would
+   * silently never bind in shell mode. Does not apply to the YouTube branch -
+   * that one is driven entirely by embed URL vars (see _prepareBodyContext).
+   */
+  async activateListeners(html) {
+    await super.activateListeners(html);
+    const video = this.document?.video ?? {};
+    const el = $(".mej-cc-media-video", html)[0];
+    el?.addEventListener("loadedmetadata", () => {
+      el.volume = video.volume;
+      if (video.timestamp) el.currentTime = video.timestamp;
+    });
   }
 }

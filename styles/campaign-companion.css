@@ -448,6 +448,60 @@
   overflow-y: auto;
 }
 
+/* Media viewer (MediaPageSheet.mjs, templates/media-page.hbs): native pdf/
+   video pages routed into our own viewer. Owned rules only - none of
+   Foundry core's own sizing CSS reaches us reliably. Core's PDF sizing
+   (`.journal-entry-page.pdf iframe`) only applies when MEJ's page-view
+   wrapper happens to carry that type class, which it does for a
+   shell-hosted mount but not a standalone/popped-out one; core's video
+   sizing additionally needs a `figure.flex-ratio` wrapper core's own
+   template emits and ours didn't. Scoped to our own classes so sizing is
+   identical in every hosting mode, not an accident of an ancestor class we
+   don't control. No colors here, so nothing theme-specific to split out. */
+.mej-cc-media-page {
+  flex: 1;
+  min-height: 0;
+}
+
+.mej-cc-media-pdf {
+  flex: 1;
+  width: 100%;
+  min-height: 620px;
+  border: none;
+}
+
+/* Video/YouTube: mirrors core's own figure.flex-ratio technique (core
+   templates/journal/pages/video/view.hbs, foundry2.css) - a 16:9
+   padding-bottom box that the embedded element fills via absolute
+   positioning, so sizing depends only on the pane's width, never on an
+   ancestor's height. Only applied when the page has no explicit
+   width/height of its own (flexRatio context flag); an explicit
+   width/height instead sizes the element directly via its own attributes,
+   same as core. */
+.mej-cc-media-page figure {
+  margin: 0;
+  width: 100%;
+}
+
+.mej-cc-media-page figure.flex-ratio {
+  position: relative;
+}
+
+.mej-cc-media-page figure.flex-ratio::before {
+  content: "";
+  display: block;
+  padding-bottom: calc(9 / 16 * 100%);
+}
+
+.mej-cc-media-page figure.flex-ratio .mej-cc-media-video,
+.mej-cc-media-page figure.flex-ratio .mej-cc-media-youtube {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
 /* Knowledge panel: tags/attributes/Mentioned-in, appended to the bottom of
    every MEJ-typed sheet (scripts/hooks/knowledge-ui.mjs). */
 .mej-cc-knowledge {

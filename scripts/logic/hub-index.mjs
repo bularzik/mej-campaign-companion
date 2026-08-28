@@ -52,7 +52,7 @@ export function buildIndexSource(entries, user, getMEJType, getIcon) {
     const type = getMEJType(entry) || nativeRowType(entry);
     rows.push({
       uuid: entry.uuid, name: entry.name, type,
-      icon: SYNTHETIC_ICONS[type] ?? getIcon(type)
+      icon: Object.hasOwn(SYNTHETIC_ICONS, type) ? SYNTHETIC_ICONS[type] : getIcon(type)
     });
   }
   return rows;
