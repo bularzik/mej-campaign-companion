@@ -35,9 +35,18 @@ const CAMPAIGN_STORE_MOD = "/modules/mej-campaign-companion/scripts/data/campaig
 
 // PDF.js runs inside the viewer iframe this feature deliberately mounts, and
 // its own console output reaches Playwright's page-level console listener.
-// Scoped to that one served path (matched against msg.location().url by
-// trackConsoleErrors) so genuine companion/MEJ errors still fail the test.
-const KNOWN_PDFJS_VIEWER_NOISE = /\/scripts\/pdfjs\//;
+// trackConsoleErrors tests every ignore pattern against BOTH msg.text() and
+// msg.location().url, so a bare "/scripts/pdfjs/" substring would also
+// swallow a genuine companion error whose TEXT merely happens to mention
+// that path (e.g. a malformed viewerSrc value logged inside an error
+// message) even though its location() points at our own code, not PDF.js's.
+// Anchored so the path only counts when it forms an actual URL - at the very
+// start of the string, or right after a "://host" - which is exactly the
+// shape msg.location().url always has for PDF.js's own console output
+// (every PDF.js script is served from under that path), so genuine
+// PDF.js-origin noise is still caught while a message that just quotes the
+// path inside a sentence is not.
+const KNOWN_PDFJS_VIEWER_NOISE = /^\/?scripts\/pdfjs\/|:\/\/[^/\s]*\/scripts\/pdfjs\//;
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404, KNOWN_PDFJS_VIEWER_NOISE];
 
 // Real files served by this Foundry install (verified 200 on both):
@@ -512,7 +521,16 @@ test.describe.serial("17 media routing", () => {
       // _toggleDisabled(true) sweep DID run across this page view.
       expect(mounted.shellEditable).toBe(false);
 
-      // The viewer and its external-open link are NOT frozen for the non-owner.
+      // Forward guard, not proof that MediaPageSheet's _toggleDisabled
+      // no-op override is load-bearing here: MEJ's sweep is invoked on the
+      // SHELL subsheet (MEJ's own JournalEntrySheet for these entries, see
+      // that override's comment), and media-page.hbs has no
+      // input/select/textarea/button for the sweep to reach in the first
+      // place, while knowledge-panel.hbs already gates every input on
+      // canEdit for a non-owner - so disabledInsideMediaMount() returns []
+      // regardless of whether our override exists. What this actually
+      // guards is a future regression: sweepable markup added to the media
+      // mount, or a change to the knowledge panel's non-owner gating.
       const external = pageView.locator("a.mej-cc-media-external");
       await expect(external).toHaveCount(1);
       expect(await external.getAttribute("disabled")).toBeNull();

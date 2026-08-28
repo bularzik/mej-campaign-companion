@@ -65,6 +65,12 @@ export class MediaPageSheet extends EnhancedJournalSheet {
    * silently grants the viewing user OBSERVER, and MEJ has already
    * permission-filtered which pages render here (JournalEntrySheet's
    * _preparePageData / isPageVisible).
+   *
+   * This whole override is a workaround for the upstream defect described
+   * above, not a design choice of ours - if MEJ's EnhancedJournalSheet.render()
+   * is ever fixed to properly await its own super.render(), this bypass
+   * should be removed rather than left in place, so we don't keep silently
+   * skipping whatever MEJ's render() later grows.
    */
   async render(options = {}, _options = {}) {
     if (this.enhancedjournal) return super.render(options, _options);
@@ -73,13 +79,16 @@ export class MediaPageSheet extends EnhancedJournalSheet {
   }
 
   /**
-   * MEJ's shell calls subsheet._toggleDisabled(true) for any mount whose
-   * document isn't owner-editable (enhanced-journal.js's renderSubSheet) -
-   * correct for editable content sheets, wrong for a read-only VIEWER: it
-   * would disable the video element's own controls and the external-open
-   * link for every non-owner. This sheet has no editable inputs at all, so
-   * there is nothing for the blanket disable to protect. Same override, same
-   * reason, as CampaignHubPage's.
+   * MEJ's shell calls subsheet._toggleDisabled(true) on the SHELL subsheet
+   * for a document that isn't owner-editable (enhanced-journal.js:646,
+   * renderSubSheet) - correct for editable content sheets, wrong for a
+   * read-only VIEWER: it would disable the video element's own controls and
+   * the external-open link for every non-owner. NOT load-bearing on the
+   * current mount path: a native pdf/video page's shell subsheet is MEJ's
+   * own JournalEntrySheet, not this sheet, so _toggleDisabled is never
+   * actually invoked on us there. Kept as a no-op guard in case MEJ ever
+   * mounts this sheet directly as a shell subsheet - correct then, harmless
+   * now. Same override, same reason, as CampaignHubPage's.
    */
   _toggleDisabled(_disabled) {}
 
