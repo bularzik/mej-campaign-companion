@@ -40,6 +40,7 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { mejType, openHub } from "../integrations/mej-adapter.mjs";
+import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
@@ -680,7 +681,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const entry = fromUuidSync(rec.uuid);
       const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
       for (const s of rec.secrets) {
-        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: s.revealedAll });
+        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: s.revealedAll || normalizeAudience(reveals[s.id]).all });
       }
     }
     // 2. Session checklist items + 3. hidden/secret relationships - walk
@@ -914,7 +915,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const previous = normalizeAudience((entry.getFlag(MODULE_ID, "secretReveals") ?? {})[secretId]);
       const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
       if (!audience) return;
-      await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: audience });
+      // The tracker can act with no sheet open, so there is no <secret-block>
+      // element here to call core's toggleRevealed on - applyBlockReveal works
+      // from the body string instead, which is why it is shared with the
+      // sheet-side path rather than each surface doing its own thing.
+      const page = entry.pages?.contents?.find((p) => mejType(p));
+      const stored = await applyBlockReveal(page, secretId, audience);
+      await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
       // Whisper the secret's actual content, not the 140-char index preview
       // (M5) - chat enrichment happens at render time, so the raw inner
       // HTML pulled straight off the page's body is fine unenriched. Falls

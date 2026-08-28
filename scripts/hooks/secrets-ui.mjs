@@ -7,7 +7,8 @@ import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, canSee, pruneReveals } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
-import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
+import { extractSecretBlocks, setSectionRevealed } from "../logic/secret-blocks.mjs";
+import { bodyRegion } from "../logic/field-extractors.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REVEALS_FLAG = "secretReveals";
@@ -71,6 +72,33 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   await pruneOrphans(entry, page);
 }
 
+/**
+ * Apply an audience to one block secret.
+ *
+ * "Everyone" is Foundry's own `revealed` class in the page body, not a flag of
+ * ours - that is what core sheets, viewers without this module, and the
+ * player-safe docx export all honour. So this writes the class and stores the
+ * audience with `all` forced false; `audience.all` is never written true again
+ * (readers still honour a legacy true forever - see the sweep spec).
+ *
+ * The body is re-read here rather than taken from a render-time snapshot: a
+ * co-GM or another window may have edited it while the dialog was open, and
+ * writing back a stale body would revert their edit. Same discipline
+ * SessionSheet.onSecretAudience already applies to the secrets array.
+ *
+ * Returns the audience to persist. Throws only if the body update itself
+ * fails, so the caller can skip the flag write and leave the two halves from
+ * disagreeing.
+ */
+export async function applyBlockReveal(page, sectionId, audience) {
+  const stored = { ...normalizeAudience(audience), all: false };
+  if (!page) return stored;
+  const { key, content } = bodyRegion(page);
+  const next = setSectionRevealed(content, sectionId, audience?.all === true);
+  if (next !== content) await page.update({ [key]: next });
+  return stored;
+}
+
 async function editAudience(entry, page, sectionId, section, sheet, shellHosted) {
   if (!game.user.isGM) return;
   const groups = groupsSetting();
@@ -79,7 +107,8 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
     title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups
   });
   if (!audience) return;
-  await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: audience });
+  const stored = await applyBlockReveal(page, sectionId, audience);
+  await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
   // Whisper the section's content (already enriched in the GM's DOM) minus our own button.
   const clone = section.cloneNode(true);
   clone.querySelector(":scope > .mej-cc-secret-audience")?.remove();
