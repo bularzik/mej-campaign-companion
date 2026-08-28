@@ -165,6 +165,44 @@ async function injectPlayerSecrets(sheet, element) {
   container.replaceChildren(...root.childNodes);
 }
 
+/**
+ * Sheets showing a JournalEntryPage that are NOT the shell's mounted
+ * subsheet - i.e. popped-out windows. Feature-detected against Foundry's
+ * ApplicationV2 instance registry; an empty list is a safe degradation (the
+ * shell still refreshes), never an error.
+ */
+function poppedOutPageSheets() {
+  const registry = foundry.applications?.instances;
+  if (!registry?.values) return [];
+  const shellSubsheet = game.MonksEnhancedJournal?.journal?.subsheet ?? null;
+  return [...registry.values()].filter((app) =>
+    app && app !== shellSubsheet && app.rendered && app.document instanceof JournalEntryPage);
+}
+
+/**
+ * Re-render everything that could be displaying a reveal for `entry`.
+ *
+ * The shell reload alone was not enough: a popped-out sheet is its own
+ * Application and MEJ's shell knows nothing about it, so a player watching a
+ * secret in a popped-out window saw nothing change when the GM revealed it -
+ * they had to close and reopen. `entry` may be null (a settings change, where
+ * no single entry is implicated), in which case every popped-out page sheet
+ * is refreshed rather than trying to guess which ones carry reveals.
+ */
+function refreshRevealViews(entry) {
+  const shell = game.MonksEnhancedJournal?.journal;
+  if (shell?.rendered) {
+    const shown = shell.document?.parent ?? shell.document;
+    if (!entry || shown?.uuid === entry.uuid || shell.document?.uuid === entry.uuid) {
+      shell.render({ tempOwnership: shell.tempOwnership, reload: true });
+    }
+  }
+  for (const app of poppedOutPageSheets()) {
+    if (entry && app.document?.parent?.uuid !== entry.uuid) continue;
+    app.render?.();
+  }
+}
+
 export function registerSecretsUi() {
   const inject = (sheet, html, shellHosted) => {
     const element = asElement(html);
@@ -181,11 +219,7 @@ export function registerSecretsUi() {
   Hooks.on("updateJournalEntry", (entry, changes) => {
     const flags = changes?.flags?.[MODULE_ID];
     if (flags?.[REVEALS_FLAG] === undefined && flags?.relReveals === undefined) return;
-    const shell = game.MonksEnhancedJournal?.journal;
-    if (!shell?.rendered) return;
-    const shown = shell.document?.parent ?? shell.document;
-    if (shown?.uuid !== entry.uuid && shell.document?.uuid !== entry.uuid) return;
-    shell.render({ tempOwnership: shell.tempOwnership, reload: true });
+    refreshRevealViews(entry);
   });
 
   // Checklist audience reveals (spec §5/§7) are written as a page-level flag
@@ -194,16 +228,27 @@ export function registerSecretsUi() {
   // updateJournalEntryPage handling ignores foreign flag namespaces in its
   // re-render allowlist (same gap as knowledge-ui.mjs's entry-level comment
   // above), so a checklist reveal never live-updates another client's
-  // shell-hosted Session sheet without this (I3). Reload the shell the same
-  // way, only when it's currently showing this page's parent entry.
+  // shell-hosted Session sheet without this (I3). Refreshed the same way as
+  // the entry-level reveal above.
   Hooks.on("updateJournalEntryPage", (page, changes) => {
     if (changes?.flags?.[MODULE_ID]?.session?.secrets === undefined) return;
-    const shell = game.MonksEnhancedJournal?.journal;
-    if (!shell?.rendered) return;
     const entry = page.parent;
     if (!entry) return;
-    const shown = shell.document?.parent ?? shell.document;
-    if (shown?.uuid !== entry.uuid && shell.document?.uuid !== entry.uuid) return;
-    shell.render({ tempOwnership: shell.tempOwnership, reload: true });
+    // No `shell.rendered` precondition here any more: it used to sit in front
+    // of this and return early, which meant a popped-out sheet got no refresh
+    // whenever the shell happened to be closed - exactly the case the
+    // popped-out path exists to serve. refreshRevealViews checks the shell
+    // itself.
+    refreshRevealViews(entry);
+  });
+
+  // Group membership is resolved LIVE at render time (logic/reveal-state.mjs's
+  // canSee), so moving a player into or out of a group changes what they may
+  // see - but nothing re-rendered on that write, so the change only took
+  // effect the next time something else happened to trigger a render. No
+  // single entry is implicated, so every open view is refreshed.
+  Hooks.on("updateSetting", (setting) => {
+    if (setting?.key !== `${MODULE_ID}.${PLAYER_GROUPS_SETTING}`) return;
+    refreshRevealViews(null);
   });
 }

@@ -211,7 +211,10 @@ async function captureCombatEnd(combat) {
   // more than one GM is online.
   if (game.user !== game.users.activeGM) return;
 
-  const scene = game.scenes?.current ?? combat.scene ?? null;
+  // C8: the combat's OWN scene first. game.scenes.current is whatever this
+  // GM happens to be viewing, so ending a combat while looking elsewhere
+  // used to name the Encounter after the wrong place.
+  const scene = combat.scene ?? game.scenes?.current ?? null;
   const participants = collapseParticipants(combatParticipants(combat));
   const outcome = buildOutcome(combat);
   const unlinkedNames = describeUnlinkedParticipants(participants);

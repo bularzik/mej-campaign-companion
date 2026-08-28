@@ -258,6 +258,24 @@ their `sheet`/`element` fields are `WeakRef`), pruned solely inside
 `refreshTrackedPanels`; and `trackPanel` scans the whole set on every
 injection.
 
+**C16 — The dashboard "bad query" validation is unreachable (Low, found during Round 2).**
+`#promptDashboard` rejects a blank name-or-query first, then tries
+`parseQuery(query)` in a try/catch. But `parseQuery` is permissive: it throws
+only `"empty-query"`, for input that is empty or all whitespace — which the
+preceding `!typed.query` check has already caught. So the `badQuery` branch,
+and the `MEJCampaignCompanion.hub.dashboards.badQuery` string it shows, can
+never fire from this dialog. Verified directly against the grammar:
+`attr:=:=broken`, `attr:`, `((`, and `"unclosed` all parse successfully.
+*Consequence:* a GM can save a dashboard whose query is meaningless — it
+simply matches nothing, with no feedback that it was misunderstood.
+*Fix (not done):* either tighten the grammar so malformed tokens are real
+errors, or drop the dead branch and stop promising validation that does not
+happen. Left for a round that can decide which, since it is a grammar
+question, not a bug in the dialog. The branch is kept in place meanwhile so a
+stricter grammar stays covered.
+*Found by:* writing the C5 regression test, which initially asserted against
+a "bad" query that turned out to parse fine.
+
 **C15 — `npm test` collects other worktrees' tests (Medium, found during Round 1).**
 `vitest.config.mjs:12` excludes `node_modules` and `tests/e2e/**`. A git
 worktree is a complete second checkout living at `.claude/worktrees/<name>/`,
@@ -394,3 +412,19 @@ Known residue, deliberately not closed here:
   round-trip e2e run against it.
 - C3's unit test proves `dataUriToFile` is total; that the resulting warning
   actually surfaces in the wizard's result dialog is not asserted.
+
+## Round 2 outcome (complete)
+
+Landed on `fix/sweep-round2`, cut from `main` @ 0.13.1: C5, C8, C9, C10, C11,
+C12, C14, plus three carried items (relReveals orphan pruning, group-membership
+live refresh, popped-out sheets refreshing on reveal).
+
+- **Carried item closed by someone else:** "graph windows share a fixed DOM id"
+  was already fixed by 0.13.0's graph-portraits work, which added a per-draw
+  `clipNonce` for exactly that reason. Verified by reading, not assumed.
+- **C16 found and recorded** (above) while writing the C5 regression test.
+- C5's regression test was **vacuity-checked**: reverted to the
+  discard-and-close behaviour, test failed; restored, it passes.
+
+Round 2 fixes are all Foundry-glue, so they carry e2e rather than unit
+coverage; the unit suite is unchanged at 635.

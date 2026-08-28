@@ -92,6 +92,13 @@ export function baselineOwnership(campaign) {
  * count.
  */
 export async function applyBaselineToMembers(campaign) {
+  // C12: createCampaign/ensureCampaignPortal in this file both self-check
+  // isGM, and CampaignHubPage documents that convention as the reason its
+  // actions are safe to leave wired regardless of seat - but the two
+  // OWNERSHIP writers, this and setEntryHidden, had no such check. Foundry
+  // would reject the write server-side either way; the point is that the
+  // invariant this module advertises should actually hold in it.
+  if (!game.user.isGM || !campaign) return 0;
   const level = baselineOwnership(campaign);
   const portal = campaignPortal(campaign);
   const targets = [...campaignEntries(campaign, { user: game.user }), ...(portal ? [portal] : [])];
@@ -104,6 +111,7 @@ export async function applyBaselineToMembers(campaign) {
 
 /** Spec §5 hide/reveal: hide -> NONE; reveal -> the entry's campaign baseline (OBSERVER when unfiled). */
 export async function setEntryHidden(entry, hidden) {
+  if (!game.user.isGM || !entry) return;   // C12, see applyBaselineToMembers
   const level = hidden
     ? CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
     : baselineOwnership(campaignOf(entry));
