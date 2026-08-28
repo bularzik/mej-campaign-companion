@@ -2,7 +2,7 @@
   "id": "mej-campaign-companion",
   "title": "Campaign Companion for Monk's Enhanced Journal",
   "description": "Session journal, campaign timeline, hub, search, docx import/export and auto-capture on top of Monk's Enhanced Journal.",
-  "version": "0.14.0",
+  "version": "0.13.3",
   "authors": [
     {
       "name": "Dan Bularzik"

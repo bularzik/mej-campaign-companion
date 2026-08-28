@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.14.0 (2026-08-28)
+## 0.13.3 (2026-08-28)
 
 Secrets round. **This release runs a one-time conversion when your world
 loads: it rewrites the secret markup in journal pages that had secrets
