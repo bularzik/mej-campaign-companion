@@ -18,7 +18,7 @@ distinguished only by their labels.
 | Question | Decision |
 |---|---|
 | Which picture | The typed page's `src` — the same field MEJ itself uses for the entity image (`EnhancedJournalSheet.js:938`, which also mirrors it to the entry's `flags.monks-enhanced-journal.img`). |
-| No picture set | **Show MEJ's generic per-type placeholder** (`modules/monks-enhanced-journal/assets/<type>.png`) — user-selected after initially preferring the plain circle. Every typed node therefore carries an image; the plain colored circle is now only the failure fallback. |
+| No picture set | **Show MEJ's generic per-type placeholder** (`modules/monks-enhanced-journal/assets/<type>.png`) — user-selected after initially preferring the plain circle. This applies only to MEJ's built-in types that actually ship an asset PNG (`person place poi quest encounter event organization shop loot list slideshow journalentry`); other types `mejType()` can return — `session` (this module's own type), `picture`, and externally registered types — have no placeholder to synthesize and keep the plain colored circle instead. The plain circle is also the failure fallback for the types that do have a placeholder. |
 | Shape | Clip the image to the node circle ("cover" fit: fill the circle and crop, never squash). |
 | Radius | All nodes go from r=10 to **r=14** so portraits are legible. Uniform, not mixed — mixed radii read as a meaning that isn't there. `forceCollide(26)` already leaves room; unchanged. |
 | Ring | The existing `<circle>` stays underneath the image as the ring: type-hued fill (visible only if the image fails), 1px border stroke, 3px orange stroke for the ego center. CSS selectors are unchanged. |
@@ -45,8 +45,13 @@ distinguished only by their labels.
 - Supplies:
 
   ```js
-  imageOf: (page, type) => page.src || `modules/monks-enhanced-journal/assets/${type}.png`
+  imageOf: (page, type) => nodeImage(page.src, type, MEJ_ASSET_TYPES, MEJ_ASSET_PATH)
   ```
+
+  where `nodeImage` (a pure helper in `graph-rows.mjs`) returns `page.src`
+  when set, else the per-type placeholder path when `type` is in
+  `MEJ_ASSET_TYPES` (MEJ's built-in types that ship an asset PNG), else
+  `null`.
 - `page.src` is trusted as-is (it is whatever MEJ / the file picker stored;
   the graph only *displays* it, the same as MEJ's own sheet). No new write
   surface, no new permission surface — rows are already permission-filtered

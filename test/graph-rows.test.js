@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { graphRowsFor, combineLabel } from "../scripts/logic/graph-rows.mjs";
+import { graphRowsFor, combineLabel, nodeImage } from "../scripts/logic/graph-rows.mjs";
 import { buildGraph } from "../scripts/logic/graph-data.mjs";
 
 function page(type, relationships = []) {
@@ -22,6 +22,29 @@ describe("combineLabel", () => {
     expect(combineLabel("ally", "owes a debt")).toBe("ally / owes a debt");
     expect(combineLabel("ally", null)).toBe("ally");
     expect(combineLabel("", null)).toBe("");
+  });
+});
+
+describe("nodeImage", () => {
+  const assetTypes = new Set(["person", "place"]);
+  const assetPath = "modules/monks-enhanced-journal/assets";
+
+  it("src wins over the placeholder", () => {
+    expect(nodeImage("worlds/x/a.png", "person", assetTypes, assetPath)).toBe("worlds/x/a.png");
+  });
+
+  it("empty/undefined src with a placeholder-bearing type falls back to the placeholder path", () => {
+    expect(nodeImage("", "person", assetTypes, assetPath)).toBe(`${assetPath}/person.png`);
+    expect(nodeImage(undefined, "place", assetTypes, assetPath)).toBe(`${assetPath}/place.png`);
+  });
+
+  it("empty src with type \"session\" returns null (no placeholder ships for it)", () => {
+    expect(nodeImage("", "session", assetTypes, assetPath)).toBeNull();
+  });
+
+  it("empty/undefined src with type \"picture\" returns null (no placeholder ships for it)", () => {
+    expect(nodeImage("", "picture", assetTypes, assetPath)).toBeNull();
+    expect(nodeImage(undefined, "picture", assetTypes, assetPath)).toBeNull();
   });
 });
 

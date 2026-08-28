@@ -5,6 +5,12 @@
 // exactly what logic/graph-data.mjs's buildGraph consumes.
 import { visibleRelRows } from "./rel-reveals.mjs";
 
+/** Image for a graph node: the page's own src, else MEJ's per-type placeholder when one exists, else null. */
+export function nodeImage(src, type, assetTypes, assetPath) {
+  if (typeof src === "string" && src.length) return src;
+  return assetTypes.has(type) ? `${assetPath}/${type}.png` : null;
+}
+
 /**
  * Edge label text: the free-text relationship label plus the secret label
  * when one is visible to the current viewer. `secretText` is null when
