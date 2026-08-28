@@ -444,4 +444,72 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     }
     assertNoConsoleErrors(errors);
   });
+
+  // C6. The Hub re-renders its whole `main` part for reasons that have nothing
+  // to do with the graph - most visibly, once per debounced keystroke in the
+  // index filter. The <svg> is in the template unconditionally, so each of
+  // those used to tear the pane down and stop and rebuild the d3 force
+  // simulation, while the graph tab was not even showing.
+  //
+  // Both halves are asserted here because they are the two ways this can go
+  // wrong: doing the work while hidden (the defect) and NOT doing it once
+  // shown (the regression the deferral risks, since a tab switch is CSS-only
+  // and does not re-render).
+  test("the graph is not built while its tab is hidden, and survives an unrelated re-render", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const nameA = `${TT_PREFIX}Defer-A`;
+    const nameB = `${TT_PREFIX}Defer-B`;
+    const idA = await createPerson(page, nameA);
+    const idB = await createPerson(page, nameB);
+    try {
+      const uuidB = await entryUuid(page, idB);
+      await page.evaluate(async ({ pid, relId, targetUuid }) => {
+        const p = game.journal.get(pid).pages.contents[0];
+        await p.setFlag("monks-enhanced-journal", "relationships", {
+          [relId]: { id: relId, uuid: targetUuid, hidden: false }
+        });
+      }, { pid: idA, relId: "TT-rel-defer", targetUuid: uuidB });
+
+      const shell = await openHub(page);
+      await settle(page, 400);
+      const svg = shell.locator(".mej-cc-graph-svg");
+
+      // On the index tab the pane exists but must be empty...
+      await expect(shell.locator('nav.sheet-tabs [data-tab="index"]')).toHaveClass(/active/);
+      await expect(svg).toHaveCount(1);
+      expect(await svg.locator(".mej-cc-graph-node").count()).toBe(0);
+
+      // ...and stays empty across the re-renders a filter keystroke causes.
+      await page.evaluate(async () => {
+        const sub = game.MonksEnhancedJournal.journal.subsheet;
+        for (let i = 0; i < 5; i++) await sub.render({ parts: ["main"] });
+      });
+      await settle(page, 400);
+      expect(await shell.locator(".mej-cc-graph-svg .mej-cc-graph-node").count()).toBe(0);
+
+      // Showing the tab draws it.
+      await shell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+      await settle(page, 700);
+      await expect
+        .poll(() => shell.locator(".mej-cc-graph-svg .mej-cc-graph-node").count())
+        .toBeGreaterThanOrEqual(2);
+
+      // And an unrelated re-render while the graph IS showing must not blank
+      // it - the deferral has to keep drawing once the tab is active.
+      await page.evaluate(async () => {
+        await game.MonksEnhancedJournal.journal.subsheet.render({ parts: ["main"] });
+      });
+      await settle(page, 700);
+      await expect
+        .poll(() => shell.locator(".mej-cc-graph-svg .mej-cc-graph-node").count())
+        .toBeGreaterThanOrEqual(2);
+    } finally {
+      await page.evaluate(async (ids) => {
+        await JournalEntry.implementation.deleteDocuments(ids);
+      }, [idA, idB]);
+    }
+    assertNoConsoleErrors(errors);
+  });
 });

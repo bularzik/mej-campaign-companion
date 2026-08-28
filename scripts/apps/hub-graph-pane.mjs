@@ -7,6 +7,7 @@
 import { MODULE_ID, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
 import { graphRowsFor, nodeImage } from "../logic/graph-rows.mjs";
+import { graphSignature } from "../logic/graph-signature.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
@@ -30,6 +31,11 @@ let activeSim = null;
 // window-level listeners that outlive the node they started on, so a redraw
 // arriving mid-drag has to release them - see drawGraphPane's first line.
 let releaseDrag = null;
+// Fingerprint of what is currently drawn in each pane, so an unrelated
+// re-render can skip the teardown-and-restart (C6). Keyed by the SVG element
+// itself: a re-render that builds a NEW element gets no entry and therefore
+// always draws, which is exactly right.
+const drawnSignature = new WeakMap();
 
 /** Compute the scoped graph + the template context for the pane. */
 export function prepareGraphContext(entries, state) {
@@ -72,12 +78,21 @@ function typeHue(type) {
 /** Draw the graph into `svg` (replacing its contents), wiring drag/zoom/click. */
 export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   if (!svg) return;
+  const width = svg.clientWidth || 800;
+  const height = svg.clientHeight || 540;
+
+  // Nothing the pane draws has changed, so leave the running simulation
+  // alone (C6). Measured BEFORE replaceChildren, which is safe - an SVG's
+  // layout box comes from CSS, not from its children - and necessary:
+  // bailing out after the teardown would leave an empty pane.
+  const signature = graphSignature(graph, { centerUuid, width, height });
+  if (signature !== null && drawnSignature.get(svg) === signature) return;
+  drawnSignature.set(svg, signature);
+
   // A drag in flight belongs to the graph we are about to discard: end it
   // before its node elements are detached (C9).
   releaseDrag?.();
   svg.replaceChildren();
-  const width = svg.clientWidth || 800;
-  const height = svg.clientHeight || 540;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
   // Reuse the popup's single dragged flag: only one node can be dragged at
