@@ -152,4 +152,91 @@ test.describe("03 search", () => {
     await page.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, personId.entryId);
     assertNoConsoleErrors(errors);
   });
+
+  // S2 regression. live-index's recordFor() routes a person attribute into
+  // the GM-only token set when MEJ's "sheet-settings" world setting marks its
+  // key playerHidden - but that split is computed at INDEX time, and nothing
+  // re-indexed when the setting itself changed. So a GM who marked an
+  // attribute hidden left its value sitting in the PUBLIC token set, findable
+  // by any player's search, until a world reload: the GM believes it is
+  // hidden, and it is not.
+  //
+  // The assertion that matters is the one AFTER the flip, on the player's own
+  // client - it is the player's index that has to rebuild, driven by the GM's
+  // write replicating as an updateSetting hook. The pre-flip baseline and the
+  // positive control are both here deliberately: without them this would pass
+  // just as well against a search that silently returned nothing at all.
+  test("marking a person attribute playerHidden re-indexes, so a player stops finding it", async ({ browser }) => {
+    const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+    const gmPage = await gmContext.newPage();
+    await login(gmPage, "Gamemaster");
+
+    const name = `${TT_PREFIX}Search Hidden Attr`;
+    const settingBefore = await gmPage.evaluate(() =>
+      foundry.utils.duplicate(game.settings.get("monks-enhanced-journal", "sheet-settings") ?? {}));
+
+    let entryId = null;
+    let playerContext = null;
+    try {
+      entryId = await gmPage.evaluate(async (n) => {
+        const entry = await JournalEntry.create({
+          name: n,
+          pages: [{
+            name: n,
+            type: "monks-enhanced-journal.person",
+            flags: {
+              "monks-enhanced-journal": {
+                type: "person",
+                // Flat key -> string map (field-extractors.mjs). One attribute
+                // gets hidden below; the other stays public as the control.
+                attributes: { ttvaultcode: "zephyrquartz", ttrole: "cartographerslodge" }
+              }
+            },
+            text: { content: "An unremarkable innkeeper." }
+          }],
+          ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
+        });
+        return entry.id;
+      }, name);
+
+      playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+      const playerPage = await playerContext.newPage();
+      const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
+      await login(playerPage, "User 1");
+      const playerShell = await openHubSearch(playerPage);
+
+      // Baseline: not hidden yet, so the player CAN find it. This also builds
+      // the player's index, which the rebuild below depends on already existing.
+      await search(playerShell, playerPage, "zephyrquartz");
+      await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
+
+      // The GM marks that one attribute key playerHidden.
+      await gmPage.evaluate(async (before) => {
+        const next = foundry.utils.duplicate(before);
+        foundry.utils.setProperty(next, "person.attributes.ttvaultcode.playerHidden", true);
+        await game.settings.set("monks-enhanced-journal", "sheet-settings", next);
+      }, settingBefore);
+      await settle(playerPage, 800);
+
+      // The player's client must have re-indexed off the replicated setting
+      // write - without the updateSetting hook this still returns the row.
+      await search(playerShell, playerPage, "zephyrquartz");
+      await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(0);
+
+      // Positive control: the un-hidden attribute is still findable, so the
+      // absence above means this attribute got hidden - not that the index is
+      // empty or the search pane broke.
+      await search(playerShell, playerPage, "cartographerslodge");
+      await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await gmPage.evaluate(async ({ before, id }) => {
+        await game.settings.set("monks-enhanced-journal", "sheet-settings", before);
+        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+      }, { before: settingBefore, id: entryId });
+      if (playerContext) await playerContext.close();
+      await gmContext.close();
+    }
+  });
 });

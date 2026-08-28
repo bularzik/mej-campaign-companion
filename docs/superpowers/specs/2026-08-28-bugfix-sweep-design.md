@@ -103,6 +103,13 @@ relevant when `playersWriteSessions` is on, or on any shared entry. The
 player-side site additionally starts image fetches for secret sections that
 viewer is not cleared for, before line 155 removes them.
 *Fix:* `DOMParser().parseFromString(html, "text/html")` at both sites.
+*Round 1 note:* implemented across **five** sites, not two. A sweep after
+fixing the two exposed ones found three more (`knowledge-ui.mjs:89` and
+`relationships-ui.mjs:210,217`). Those interpolate only escaped, module-owned
+markup and were not themselves exposed, but leaving any live-context parse in
+the module invites copying it to a site whose input is not escaped, so the
+invariant is now "`createRange().createContextualFragment` appears nowhere in
+`scripts/`" — which is checkable, where "the risky ones are fixed" is not.
 
 **S2 — Search index goes stale across a confidentiality-relevant setting (Medium).**
 `search/live-index.mjs:82-90` splits a person's attributes into public
@@ -360,3 +367,30 @@ Round 1 additionally needs:
 - A regression test proving C1 refuses to act outside Unfiled scope.
 - A test proving C3 reports a malformed inline image rather than aborting the
   import.
+
+## Round 1 outcome (complete)
+
+Landed on `fix/bugfix-sweep`: C15, S1, S2, S3, S4, S5, C1, C2, C3, C4.
+
+Verification actually run:
+
+- Unit suite **602 → 628** (26 new tests), green.
+- `npm audit` clean; `npm run check:links` green; new `npm run check:vendor`
+  green, and verified to exit non-zero against a deliberately tampered bundle.
+- E2E against the live Foundry v14 world: **33/33** across `01-session`,
+  `03-search`, `04-auto-capture`, `07-knowledge`, `09-secrets`, `14-campaigns`.
+- All three required regression tests written. S2 and C1 are e2e (neither
+  reaches a unit-testable seam); C3's is a unit test on `dataUriToFile`.
+- **Vacuity-checked.** Both new e2e tests were re-run with their fix
+  deliberately disabled and both failed; restored, both pass. This is the
+  check the 0.12.0 round skipped, when presence-only assertions survived four
+  green runs against a viewer that had no CSS at all.
+
+Known residue, deliberately not closed here:
+
+- The vendored libraries' **versions remain unidentified** (S5). The integrity
+  check and provenance file are in; identifying or re-vendoring them changes
+  docx import/export behavior and belongs in its own change with the
+  round-trip e2e run against it.
+- C3's unit test proves `dataUriToFile` is total; that the resulting warning
+  actually surfaces in the wizard's result dialog is not asserted.

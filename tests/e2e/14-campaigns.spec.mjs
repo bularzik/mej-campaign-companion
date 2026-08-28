@@ -863,4 +863,80 @@ test.describe.serial("14 campaigns", () => {
     await expect(menu.locator('button[data-action="openHelp"]')).toHaveCount(1);
     await context.close();
   });
+
+  // C1 regression. onFileAllShown is documented Unfiled-scope-only but used
+  // to guard on isGM alone. In All scope #scopedEntries() returns EVERY
+  // campaign's members plus unfiled entries, and the handler bulk-writes
+  // `folder` across all of them - so a stray invocation outside Unfiled would
+  // silently collapse every campaign in the world into one, with no
+  // confirmation step and nothing but hand-refiling to undo it.
+  //
+  // Invoked programmatically ON PURPOSE. The button is not rendered outside
+  // Unfiled scope, so a UI click cannot reach it - and that was precisely the
+  // problem: the markup was the only thing standing in the way, while Foundry
+  // wires data-action handlers regardless of what rendered. A test that only
+  // clicked the button could never have failed on this bug. Without the guard
+  // the call below opens promptCampaignChoice's dialog and then moves
+  // documents; with it, it returns before either.
+  test("12. fileAllShown refuses to act outside Unfiled scope (never bulk-refolders the world)", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    let campaignId = null;
+    let looseId = null;
+    try {
+      const seeded = await page.evaluate(async (prefix) => {
+        const { createCampaign } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+        const campaign = await createCampaign(`${prefix}GuardHome`, { ownershipDefault: "observer" });
+        // A member of that campaign plus a loose entry outside it: if the
+        // guard fails, All scope sweeps up both.
+        const member = await JournalEntry.create({
+          name: `${prefix}GuardMember`, folder: campaign.id,
+          pages: [{ name: `${prefix}GuardMember`, text: { content: "member" } }]
+        });
+        const loose = await JournalEntry.create({
+          name: `${prefix}GuardLoose`, pages: [{ name: `${prefix}GuardLoose`, text: { content: "loose" } }]
+        });
+        return { campaignId: campaign.id, memberId: member.id, looseId: loose.id };
+      }, TT_PREFIX);
+      campaignId = seeded.campaignId;
+      looseId = seeded.looseId;
+
+      const shell = await openHub(page);
+      await scopeHub(shell, page, "");           // All scope - deliberately not Unfiled
+      // Precondition: the control genuinely isn't offered here, so the only
+      // way in is the programmatic one below.
+      await expect(shell.locator("button.mej-cc-file-all")).toHaveCount(0);
+
+      await page.evaluate(async () => {
+        const { CampaignHubPage } = await import("/modules/mej-campaign-companion/scripts/apps/CampaignHubPage.mjs");
+        await CampaignHubPage.onFileAllShown.call(game.MonksEnhancedJournal.journal.subsheet);
+      });
+      await settle(page, 500);
+
+      // The guard returns before promptCampaignChoice, so no picker opens.
+      await expect(page.locator("dialog.application select[name='campaign']")).toHaveCount(0);
+
+      // And nothing moved: the member stays in its campaign, the loose entry
+      // stays loose.
+      const after = await page.evaluate(({ memberId, looseId }) => ({
+        member: game.journal.get(memberId)?.folder?.id ?? null,
+        loose: game.journal.get(looseId)?.folder?.id ?? null
+      }), { memberId: seeded.memberId, looseId: seeded.looseId });
+      expect(after.member).toBe(campaignId);
+      expect(after.loose).toBeNull();
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async ({ campaignId, looseId }) => {
+        if (campaignId) {
+          const folder = game.folders.get(campaignId);
+          if (folder) await folder.delete({ deleteSubfolders: true, deleteContents: true });
+        }
+        if (looseId && game.journal.get(looseId)) {
+          await JournalEntry.implementation.deleteDocuments([looseId]);
+        }
+      }, { campaignId, looseId });
+    }
+  });
 });
