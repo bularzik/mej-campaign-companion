@@ -134,7 +134,7 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     context.isYouTube = kind === "video" && !!src && !!game.video?.isYouTubeURL(src);
     context.youtubeSrc = "";
     if (context.isYouTube) {
-      const vars = { playsinline: 1, modestbranding: 1, controls: 1, autoplay: context.autoplay ? 1 : 0, loop: context.loop ? 1 : 0 };
+      const vars = { playsinline: 1, modestbranding: 1, controls: video.controls !== false ? 1 : 0, autoplay: context.autoplay ? 1 : 0, loop: context.loop ? 1 : 0 };
       if (video.timestamp) vars.start = video.timestamp;
       context.youtubeSrc = game.video.getYouTubeEmbedURL(src, vars);
     }

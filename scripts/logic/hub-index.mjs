@@ -8,17 +8,18 @@ export function isVisibleToUser(entry, user) {
 }
 
 /**
- * Row type for an entry carrying no MEJ type, derived from its FIRST page's
- * native Foundry type (spec E §2). Single-page convention, the same one
- * graph-rows.mjs and the Hub's other consumers use. Anything not in the
- * table - text, or a type a future Foundry adds - stays "journal", so this
- * can only refine the untyped bucket, never break it.
+ * Row type for an entry carrying no MEJ type, derived from its native Foundry
+ * page type (spec E §2) at strict index [0] - unlike graph-rows.mjs's
+ * graphRowsFor, which skips untyped pages to find the first *typed* one, this
+ * always looks at the entry's literal first page, typed or not. Anything not
+ * in the table - text, or a type a future Foundry adds - stays "journal", so
+ * this can only refine the untyped bucket, never break it.
  */
 const NATIVE_ROW_TYPES = { pdf: "pdf", video: "video", image: "image" };
 
 export function nativeRowType(entry) {
   const first = entry?.pages?.contents?.[0]?.type;
-  return NATIVE_ROW_TYPES[first] ?? "journal";
+  return Object.hasOwn(NATIVE_ROW_TYPES, first) ? NATIVE_ROW_TYPES[first] : "journal";
 }
 
 /** Icon per synthetic row type (those MEJ's own getIcon map doesn't know). */

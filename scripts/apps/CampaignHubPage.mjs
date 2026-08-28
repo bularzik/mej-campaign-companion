@@ -362,7 +362,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       video: `${I18N}.hub.videoType`,
       image: `${I18N}.hub.imageType`
     };
-    if (synthetic[type]) return game.i18n.localize(synthetic[type]);
+    if (Object.hasOwn(synthetic, type)) return game.i18n.localize(synthetic[type]);
     const labels = game.MonksEnhancedJournal.getTypeLabels();
     return labels[type] ? game.i18n.localize(labels[type]) : type;
   }
@@ -370,7 +370,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   #typeIcon(type) {
     // The synthetic row types (hub-index.mjs's nativeRowType) have no entry
     // in MEJ's own type-icon map, so getIcon() would render "fas undefined".
-    if (SYNTHETIC_ICONS[type]) return SYNTHETIC_ICONS[type];
+    if (Object.hasOwn(SYNTHETIC_ICONS, type)) return SYNTHETIC_ICONS[type];
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 

@@ -51,9 +51,10 @@ export function missingSheetRegistrations(sheetClasses, sessionType, hubType, ca
     session: !has(sessionType),
     hub: !has(hubType),
     campaign: !has(campaignType),
-    // Media covers TWO native types; report missing unless OUR OWN
-    // registration is present on BOTH, so a partial repair still re-runs and
-    // core's co-registration for the untouched type never masks a dropped one.
+    // Media covers however many native types mediaTypes lists (today pdf and
+    // video); report missing if OUR OWN registration is absent from ANY of
+    // them, so a partial repair still re-runs and core's co-registration for
+    // an untouched type never masks a dropped one.
     media: (mediaTypes ?? []).some((t) => !hasOurs(t))
   };
 }
