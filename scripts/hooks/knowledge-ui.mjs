@@ -8,7 +8,7 @@
 //    chain render hook, fired when an MEJ sheet renders standalone
 //    (popped out) - the shell path never calls _onRender, so these two
 //    hooks are disjoint in practice; the injector is idempotent anyway.
-import { MODULE_ID, I18N } from "../constants.mjs";
+import { MODULE_ID, I18N, MEDIA_PAGE_TYPES } from "../constants.mjs";
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -19,11 +19,13 @@ function asElement(html) {
   return html[0] instanceof HTMLElement ? html[0] : null; // jQuery
 }
 
-/** The page this sheet fronts, only if it's a real MEJ-typed JournalEntryPage. */
+/** The page this sheet fronts, if the companion owns its presentation: an MEJ-typed page, or a native media page the companion mounts (spec E §1). */
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
-  return mejType(doc) ? doc : null;
+  if (mejType(doc)) return doc;
+  const bare = String(doc.type ?? "").split(".").pop();
+  return MEDIA_PAGE_TYPES.includes(bare) ? doc : null;
 }
 
 // --- Live "Mentioned in" refresh -------------------------------------------
