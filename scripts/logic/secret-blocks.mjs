@@ -55,3 +55,41 @@ export function stripSecretSections(html, { includeAll = false } = {}) {
     isSecret(block) && !classesOf(block).includes("revealed") ? "" : block
   );
 }
+
+/** Replace an open tag's class attribute value, preserving its quote style. */
+function withClasses(openTag, classes) {
+  return openTag.replace(/(\sclass\s*=\s*)(["'])(.*?)\2/i, (match, prefix, quote) => `${prefix}${quote}${classes}${quote}`);
+}
+
+/**
+ * Add or remove Foundry's native `revealed` class on ONE secret section.
+ *
+ * Native reveal state lives as a class inside the stored page HTML - it is
+ * what `.secret:not(.revealed)` strips, what core sheets honour, and what the
+ * player-safe export keys on (stripSecretSections above). This is the single
+ * place that edits it, so both reveal surfaces (the per-block sheet button and
+ * the Hub tracker, which may act with no sheet open and therefore no
+ * <secret-block> element to call core's toggleRevealed on) share one
+ * implementation.
+ *
+ * Total: returns the input unchanged for an empty body, a falsy id, a section
+ * that isn't there, a non-secret section, or a state that already matches - so
+ * a caller can always write back whatever it gets.
+ */
+export function setSectionRevealed(html, sectionId, revealed) {
+  const src = String(html ?? "");
+  if (!src || typeof sectionId !== "string" || !sectionId) return src;
+  const want = revealed === true;
+  // Function replacement, never a string: bodies are GM prose and String#replace
+  // would expand `$&`/`$'` inside them as replacement patterns.
+  return src.replace(SECTION_RE, (block) => {
+    if (!isSecret(block)) return block;
+    const close = block.indexOf(">") + 1;
+    const openTag = block.slice(0, close);
+    if (attr(openTag, "id") !== sectionId) return block;
+    const classes = classesOf(block);
+    if (classes.includes("revealed") === want) return block;
+    const next = want ? [...classes, "revealed"] : classes.filter((c) => c !== "revealed");
+    return withClasses(openTag, next.join(" ")) + block.slice(close);
+  });
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractSecretBlocks, stripSecretSections } from "../scripts/logic/secret-blocks.mjs";
+import { extractSecretBlocks, stripSecretSections, setSectionRevealed } from "../scripts/logic/secret-blocks.mjs";
 
 const HTML = [
   "<p>Intro prose.</p>",
@@ -75,5 +75,62 @@ describe("stripSecretSections", () => {
     const out = stripSecretSections(decoy);
     expect(out).toContain("OK.");
     expect(out).not.toContain("Exposed!");
+  });
+});
+
+describe("setSectionRevealed", () => {
+  const plain = '<p>Intro.</p><section class="secret" id="secret-a">Hidden.</section><p>Outro.</p>';
+  const revealed = '<p>Intro.</p><section class="secret revealed" id="secret-a">Hidden.</section><p>Outro.</p>';
+
+  it("adds the revealed class", () => {
+    expect(setSectionRevealed(plain, "secret-a", true)).toBe(revealed);
+  });
+
+  it("removes the revealed class", () => {
+    expect(setSectionRevealed(revealed, "secret-a", false)).toBe(plain);
+  });
+
+  it("is idempotent in both directions", () => {
+    expect(setSectionRevealed(revealed, "secret-a", true)).toBe(revealed);
+    expect(setSectionRevealed(plain, "secret-a", false)).toBe(plain);
+  });
+
+  it("leaves other sections alone", () => {
+    const two = '<section class="secret" id="secret-a">A</section><section class="secret" id="secret-b">B</section>';
+    expect(setSectionRevealed(two, "secret-a", true)).toBe(
+      '<section class="secret revealed" id="secret-a">A</section><section class="secret" id="secret-b">B</section>'
+    );
+  });
+
+  it("preserves other classes and attributes on the section", () => {
+    const rich = '<section id="secret-a" class="secret fancy" data-x="1">A</section>';
+    expect(setSectionRevealed(rich, "secret-a", true)).toBe(
+      '<section id="secret-a" class="secret fancy revealed" data-x="1">A</section>'
+    );
+  });
+
+  it("handles single-quoted attributes", () => {
+    const sq = "<section class='secret' id='secret-a'>A</section>";
+    expect(setSectionRevealed(sq, "secret-a", true)).toBe("<section class='secret revealed' id='secret-a'>A</section>");
+  });
+
+  it("ignores non-secret sections with a matching id", () => {
+    const notSecret = '<section class="note" id="secret-a">A</section>';
+    expect(setSectionRevealed(notSecret, "secret-a", true)).toBe(notSecret);
+  });
+
+  it("returns the input unchanged for a missing id, empty body, or junk", () => {
+    expect(setSectionRevealed(plain, "secret-zzz", true)).toBe(plain);
+    expect(setSectionRevealed("", "secret-a", true)).toBe("");
+    expect(setSectionRevealed(null, "secret-a", true)).toBe("");
+    expect(setSectionRevealed(plain, "", true)).toBe(plain);
+    expect(setSectionRevealed(plain, null, true)).toBe(plain);
+  });
+
+  it("does not treat $-sequences in the body as replacement patterns", () => {
+    const dollars = '<section class="secret" id="secret-a">Cost $5 &amp; $&amp; $` $\'</section>';
+    expect(setSectionRevealed(dollars, "secret-a", true)).toBe(
+      '<section class="secret revealed" id="secret-a">Cost $5 &amp; $&amp; $` $\'</section>'
+    );
   });
 });
