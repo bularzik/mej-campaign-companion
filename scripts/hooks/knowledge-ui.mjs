@@ -53,10 +53,21 @@ const panelRecords = new WeakMap();
 const trackedElements = new Set();
 
 function trackPanel(sheet, element, shellHosted) {
-  // Re-injecting into an element we already track just refreshes its record:
-  // no scan, and no duplicate entry in the iteration set.
-  if (!panelRecords.has(element)) trackedElements.add(new WeakRef(element));
-  panelRecords.set(element, { sheet: new WeakRef(sheet), shellHosted });
+  // Re-injecting MOVES the element to the end of the iteration order, which
+  // the old delete-then-add on a Set did as a side effect and which
+  // refreshTrackedPanels depends on: injectPanel clears the first
+  // `.mej-cc-knowledge` INSIDE the element it is given, so when one tracked
+  // element is nested in another (a page container inside the shell root),
+  // refreshing them oldest-first has the outer pass strip the inner pass's
+  // freshly-built panel, and the next refresh then leaves BOTH populated -
+  // two panels on screen. Keeping the most recently injected element last
+  // preserves the old, correct ordering; the ref is stored on the record so
+  // this stays O(1) instead of the scan it replaced.
+  const prev = panelRecords.get(element);
+  if (prev) trackedElements.delete(prev.ref);
+  const ref = new WeakRef(element);
+  trackedElements.add(ref);
+  panelRecords.set(element, { ref, sheet: new WeakRef(sheet), shellHosted });
 }
 
 function refreshTrackedPanels() {
@@ -66,6 +77,9 @@ function refreshTrackedPanels() {
     const sheet = item?.sheet.deref();
     if (!sheet || !element?.isConnected) {
       trackedElements.delete(ref);
+      // Drop the record too, or a later re-injection into this same element
+      // would find a stale entry and skip re-adding it to the iteration set.
+      if (element) panelRecords.delete(element);
       continue;
     }
     // Never yank the DOM out from under a panel the user is typing in (tag
