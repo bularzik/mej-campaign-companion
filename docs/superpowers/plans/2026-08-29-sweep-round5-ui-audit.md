@@ -460,7 +460,7 @@ Toured as **User 1**. Differences from the GM seat, all observed:
 | Index row buttons | hide/reveal eye + (Unfiled) File into campaign… | **none** |
 | Index toolbar | type filter, sort, name filter, (Unfiled) File all shown into… | type filter, sort, name filter only |
 | Timeline picker | includes **➕ New timeline…** | excludes it |
-| Timeline management (rename/delete/make default) | rename/delete present; **make default** never rendered on the world timeline this audit could reach — now observed on a campaign-owned, non-default timeline (see Supplement) | **absent** |
+| Timeline management (rename/delete/make default) | rename/delete present; **make default** never rendered on the world timeline this audit could reach — now observed on a campaign-owned, non-default timeline (see Supplement) | rename/delete **absent**; **make default** likewise absent, but observed on the player seat only against the world timeline this audit could reach — not re-checked against a campaign-owned, non-default timeline, which is the only state that renders it for a GM |
 | Add Timepoint | present | **absent** |
 | Timeline order buttons | Manual / Date Added / Campaign Date | **same three, present and clickable** |
 | Graph controls | Focus · Whole campaign · Show mention links | **identical** |
