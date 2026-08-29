@@ -264,13 +264,18 @@ async function processBurst(queued) {
   try {
     const mode = game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING);
     // Sweep-queued entries keep their flag until here, so an interrupted
-    // login leaves the backlog retryable (see the sweep's call site).
-    for (const item of queued) {
-      if (!item.needsClear) continue;
+    // login leaves the backlog retryable (see the sweep's call site). Cleared
+    // in ONE batched update, not one round trip each: a large backlog is
+    // exactly the case this path exists for, and serial updates would
+    // reintroduce the per-entry round trips this round set out to remove.
+    const needClear = queued.filter((q) => q.needsClear).map((q) => q.entry);
+    if (needClear.length) {
       try {
-        await item.entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG);
+        await JournalEntry.implementation.updateDocuments(needClear.map((e) => ({
+          _id: e.id, [`flags.${MODULE_ID}.-=${RETRO_LINK_PENDING_FLAG}`]: null
+        })));
       } catch (err) {
-        console.error(`${MODULE_ID} | retro-link flag clear failed for "${item.entry?.name}"`, err);
+        console.error(`${MODULE_ID} | retro-link flag clear failed for the sweep backlog`, err);
       }
     }
     if (mode === "off") return;
@@ -289,9 +294,17 @@ async function processBurst(queued) {
       // page. Re-plan against the survivors instead of writing a dead link.
       const survivors = live.filter(stillExists);
       if (survivors.length !== live.length) {
-        if (!survivors.length) return;
+        // Re-plan only over entities the GM actually APPROVED, never merely
+        // the survivors. Deleting an entity can un-twin its same-named
+        // partner, and a bare re-plan would then promote that partner from
+        // "ambiguous - not written" (which is how the dialog described it) to
+        // written, putting a link in the page the GM was told they would not
+        // get. Restricting the entity set makes that impossible: nothing can
+        // enter the plan that was not already in it.
         const keep = new Set(chosen.map((r) => r.pageUuid));
-        live = survivors;
+        const approved = new Set(chosen.flatMap((r) => r.matches.map((m) => m.entityUuid)));
+        live = survivors.filter((e) => approved.has(e.uuid));
+        if (!live.length) return;
         ({ rows } = planForBurst(live));
         chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(r.pageUuid));
       }
