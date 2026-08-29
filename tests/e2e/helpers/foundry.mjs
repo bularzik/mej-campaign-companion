@@ -421,8 +421,9 @@ export async function worldTimelineJournalId(page, { timeout = 15_000 } = {}) {
     const seen = await page.evaluate(() => ({
       setting: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       named: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id)
-    }));
-    throw new Error(`no world timeline journal after ${timeout}ms: ${JSON.stringify(seen)}`);
+    })).catch(() => null);
+    const detail = seen ? JSON.stringify(seen) : "(diagnosis evaluate also failed)";
+    throw new Error(`no world timeline journal after ${timeout}ms: ${detail}`);
   }
 }
 
@@ -452,6 +453,10 @@ export async function clickWithHitDiagnostics(locator, page, { timeout = 15_000 
   } catch (err) {
     const handle = await locator.elementHandle({ timeout: 1_000 }).catch(() => null);
     if (!handle) throw err;
+    // Derived from the locator actually passed in, not a hardcoded selector -
+    // an earlier version of this helper counted `.mej-cc-secret-audience`
+    // unconditionally, which would misreport for any other caller.
+    const matches = await locator.count().catch(() => null);
     const diag = await page.evaluate((el) => {
       const describe = (n) => n ? `<${n.tagName.toLowerCase()} class="${n.className}">` : "null";
       const r = el.getBoundingClientRect();
@@ -469,11 +474,10 @@ export async function clickWithHitDiagnostics(locator, page, { timeout = 15_000 
         ownTabPane: pane ? `${pane.dataset.tab} class="${pane.className}"` : null,
         scroller: scroller ? `${describe(scroller)} scrollTop=${scroller.scrollTop} clientH=${scroller.clientHeight} scrollH=${scroller.scrollHeight}` : null,
         topmost: describe(top),
-        topmostChain: chain,
-        matches: document.querySelectorAll(".mej-cc-secret-audience").length
+        topmostChain: chain
       };
     }, handle).catch((e) => ({ diagnosisFailed: e.message }));
-    throw new Error(`${err.message}\n  hit diagnosis: ${JSON.stringify(diag)}`);
+    throw new Error(`${err.message}\n  hit diagnosis: ${JSON.stringify({ ...diag, matches })}`);
   }
 }
 

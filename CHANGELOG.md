@@ -7,11 +7,12 @@
   the player portal, multiple timelines, portraits, and Foundry-native
   "Everyone" reveals are all documented and illustrated as they work
   today. The previous guides still described the pre-0.9.0 toolbar.
-- **Fixed three end-to-end test flakes at their roots** — a stale
-  data-version literal, name-keyed timeline lookups, and a Foundry login
-  race the harness now waits out at the real ready condition. This
-  changes nothing for users of the module; it only makes the test
-  harness reliable.
+- **Fixed four end-to-end test issues at their roots** — a migration test
+  that polled a stale data-version literal (never actually a flake, just
+  broken by an unrelated version bump), a name-keyed timeline lookup, a
+  name-keyed cleanup step, and a Foundry login race the harness now waits
+  out at the real ready condition. This changes nothing for users of the
+  module; it only makes the test harness reliable.
 
 ## 0.13.4 (2026-08-29)
 

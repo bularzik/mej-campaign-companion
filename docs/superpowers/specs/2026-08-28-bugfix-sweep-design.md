@@ -634,7 +634,7 @@ runs paired with `01-session` after the fix: all green.
 round 1), root-caused to an MEJ layout state, not fixed here.** The round's own
 rule is that one failure in five full runs is a reproduction, so this is not
 closed as unreproduced. Six targeted runs (3 alone, 3 paired with `08`) were
-green, but a diagnosing wrapper added round the click caught it twice more in
+green, but a diagnosing wrapper added round the click caught it once more in
 the pairing runs, with the state it had been failing in:
 
 ```
@@ -713,10 +713,11 @@ repeats it: `POST /join` with the saved cookie and the right userId answers
 two navigations; the same POST without a userId answers 401
 `JOIN.ErrorUserDoesNotExist` and unbinds the session outright.
 
-**Residual — the symptom is reduced, not eliminated.** After the fix it still
-appeared once in the 20 pairing runs (against 2 in 6 before it) and once in a
-full-suite run, both times on the first evaluate after `login()` in a
-`09-secrets` test. A second path therefore exists, and the best-supported
+**Residual — the symptom is reduced, not eliminated.** After the fix it
+appeared once in a full-suite run, on the first evaluate after `login()` in a
+`09-secrets` test; the 16 pairing runs itemized in the round's own report for
+the `09-secrets:83` fix work (verdict 4) contain no GC failure in any bucket.
+A second path therefore may still exist, and the best-supported
 hypothesis is structural to the harness rather than to `getData`: every
 Gamemaster login replays ONE saved session cookie
 (`tests/e2e/.auth/gm.json`), so a context that Playwright has closed but whose
@@ -785,3 +786,13 @@ guard, a unit test and its own release.
    the pre-existing ids, but the primary key is still a name in the user's real
    world. An id-tracked rewrite means every caller registering the journals it
    creates; not attempted in this round.
+11. **Harness: nine pre-existing spec-side `page.goto('/game')`/`reload()`
+   calls still wait on a bare `game.ready`, not `SESSION_BOUND`.** They carry
+   the same login-race hazard verdict 6 fixed inside `login()`:
+   `01-session.spec.mjs:141`, `02-hub-timeline.spec.mjs:70`,
+   `00-mej-api.spec.mjs:139`, `12-native-mode.spec.mjs:13` and `:106`,
+   `13-stock-smoke.spec.mjs:62`, `14-campaigns.spec.mjs:336` and `:694`,
+   `15-campaign-portal.spec.mjs:354`. Carried, not fixed this round, because
+   each follows a `login()` call that now returns only on a session-bound
+   document, so the race window these sites' own reloads reopen is narrower
+   than the one `login()` closed.
