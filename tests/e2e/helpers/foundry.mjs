@@ -304,20 +304,30 @@ export async function deleteScenesByPrefix(page, prefix = TT_PREFIX) {
  * content - never deleted, never has the world setting touched; only its
  * own TT_PREFIX timepoints (if any got added) are stripped back out.
  *
- * `excludeId` (optional): never delete/strip this specific journal id,
- * regardless of what its timepoints look like. For a caller that snapshot
- * a pre-test `timelineJournalId` and must restore to it exactly (e.g.
- * 14-campaigns.spec.mjs's adoption test) - that pre-existing journal is
- * "found" state even if it happens to currently be empty (itself just
- * unmanaged churn from an earlier run's Hub-open side effect, not this
- * caller's business to judge or clean up). Without this, a caller cleaning
- * up ITS OWN side-effect journals could unwittingly delete the very
- * journal it's about to "restore" the setting to point back at, leaving
- * the setting dangling on a since-deleted id.
+ * `excludeIds` (optional): never delete/strip these journal ids, regardless
+ * of what their timepoints look like. For a caller that snapshot the
+ * world's pre-test "Campaign Timeline" journals and must leave them exactly
+ * as found (e.g. 14-campaigns.spec.mjs's adoption test) - a journal that
+ * already existed at that caller's start is "found" state even if it
+ * happens to currently be empty (itself just unmanaged churn from an
+ * earlier run's Hub-open side effect, not this caller's business to judge
+ * or clean up). Without this, a caller cleaning up ITS OWN side-effect
+ * journals could unwittingly delete the very journal it's about to
+ * "restore" the setting to point back at, leaving the setting dangling on
+ * a since-deleted id.
+ *
+ * It is a LIST, not a single id, because a world can hold more than one
+ * journal named "Campaign Timeline": ensureTimelineJournal() creates one
+ * whenever a GM Hub renders with an empty `timelineJournalId`, and the
+ * create-then-set-the-setting window means two renders in flight (or a
+ * second GM client) leave a second, orphaned, empty copy behind that the
+ * setting does not point at. Excluding only the setting's own id deleted
+ * that orphan and broke the caller's "left exactly as found" count - the
+ * round-5 flake baseline's run-2 failure of 14-campaigns.
  */
-export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, excludeId = null } = {}) {
-  await page.evaluate(async ({ TT, excludeId }) => {
-    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline" && e.id !== excludeId);
+export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, excludeIds = [] } = {}) {
+  await page.evaluate(async ({ TT, excludeIds }) => {
+    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline" && !excludeIds.includes(e.id));
     for (const j of candidates) {
       const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
       const real = tps.filter((t) => !t.label?.startsWith(TT));
@@ -330,7 +340,35 @@ export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, exclude
         await j.setFlag("mej-campaign-companion", "timeline", { timepoints: real });
       }
     }
-  }, { TT: prefix, excludeId });
+  }, { TT: prefix, excludeIds });
+}
+
+/**
+ * The id of the world timeline journal, resolved the way the module itself
+ * resolves it - through the `timelineJournalId` world setting (see
+ * data/timeline-journal.mjs's getTimelineJournal), never by the "Campaign
+ * Timeline" NAME.
+ *
+ * Name lookup is not safe here: a world can hold several journals with that
+ * exact name (see cleanupTimelineJournal's note on ensureTimelineJournal's
+ * create-then-set window), and `game.journal.find(name)` then returns
+ * whichever of them the collection happens to iterate first - i.e. whichever
+ * random document id sorts first, not the one the module writes timepoints
+ * to. That is precisely how run 3 of the round-5 flake baseline failed: the
+ * find() returned an empty orphan, so `timeline.timepoints[0]` was undefined
+ * ("Cannot set properties of undefined (setting 'links')").
+ *
+ * Throws rather than returning null, so a caller can never go on to assert
+ * against a silently missing journal.
+ */
+export async function worldTimelineJournalId(page) {
+  return page.evaluate(() => {
+    const id = game.settings.get("mej-campaign-companion", "timelineJournalId");
+    if (!id || !game.journal.get(id)) {
+      throw new Error(`no world timeline journal: timelineJournalId=${JSON.stringify(id)}`);
+    }
+    return id;
+  });
 }
 
 /** Delete any leftover combats (crashed-run artifacts from auto-capture specs). */
