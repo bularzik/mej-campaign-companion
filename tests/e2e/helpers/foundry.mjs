@@ -102,6 +102,44 @@ export async function ensureTestWorld() {
 }
 
 /**
+ * The condition a logged-in page must satisfy before login() hands it back.
+ *
+ * `game.ready` alone is NOT enough, and the difference is a real race that
+ * cost the round-5 flake triage two failures of 09-secrets:357
+ * ("page.evaluate: Resulting promise was garbage collected" on the FIRST
+ * evaluate after login). Foundry core, client/game.mjs Game.getData:
+ *
+ *     if ( !socket.session.userId ) {
+ *       socket.disconnect();
+ *       window.location.href = getRoute("join");
+ *     }
+ *     return new Promise(resolve => socket.emit("world", resolve));
+ *
+ * Note the missing `return` before the redirect: a document whose socket
+ * session has no bound userId navigates itself to /join AND carries on
+ * booting the world, so it can reach `game.ready === true` moments before
+ * the navigation commits. /join with a live session bounces straight back
+ * to /game, which is the second `/game` navigation (and the second "Vended
+ * World data to User" line in the server log) that a cookie fast-path login
+ * produces every single time - measured: nav 2 lands ~250ms before the
+ * ready wait resolves. Whenever `game.ready` is observed on that doomed
+ * FIRST document, login() returns onto a page that is about to be replaced
+ * and the caller's next evaluate dies with its execution context.
+ *
+ * `game.socket.session.userId` is precisely the flag core tests: a document
+ * that has it is a document core will not redirect. Waiting on it is
+ * waiting for the real condition, not for time.
+ *
+ * Binding the session BEFORE the first /game navigation was tried first and
+ * does not work at this seam: `POST /join` with the saved cookie answers
+ * `{"status":"success","redirect":"/game"}` and the very next /game load
+ * still makes two navigations; the same POST without a userId answers 401
+ * `JOIN.ErrorUserDoesNotExist` and unbinds the session outright.
+ */
+const SESSION_BOUND = () =>
+  globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId;
+
+/**
  * Try to authenticate `page` as `userName` from a saved storageState cookie
  * (written by the "setup" Playwright project) instead of the interactive
  * /join flow. Returns true on success (page is left on /game, ready).
@@ -113,7 +151,8 @@ async function loginFromSavedState(page, userName) {
     const state = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.context().addCookies(state.cookies ?? []);
     await page.goto(`${BASE_URL}/game`);
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 10_000 });
+    // SESSION_BOUND, not a bare game.ready - see its comment above.
+    await page.waitForFunction(SESSION_BOUND, null, { timeout: 15_000 });
     const actualUser = await page.evaluate(() => game.user?.name);
     if (actualUser !== userName) {
       throw new Error(`landed as "${actualUser}", expected "${userName}"`);
@@ -162,7 +201,7 @@ export async function login(page, userName) {
       if (attempt === 1) throw error;
     }
   }
-  await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+  await page.waitForFunction(SESSION_BOUND, null, { timeout: 60_000 });
 }
 
 /**
@@ -233,7 +272,9 @@ export async function ensureModuleEnabled(page, moduleId = MODULE_ID) {
     await game.settings.set("core", "moduleConfiguration", cfg);
   }, moduleId);
   await page.goto(`${BASE_URL}/game`);
-  await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+  // SESSION_BOUND, not a bare game.ready: this is a fresh /game document and
+  // carries the same self-redirect hazard login() documents.
+  await page.waitForFunction(SESSION_BOUND, null, { timeout: 60_000 });
   const nowActive = await page.evaluate((id) => game.modules.get(id)?.active === true, moduleId);
   if (!nowActive) throw new Error(`module "${moduleId}" could not be enabled in the test world`);
 }
@@ -248,7 +289,9 @@ export async function ensureModuleDisabled(page, moduleId = MODULE_ID) {
     await game.settings.set("core", "moduleConfiguration", cfg);
   }, moduleId);
   await page.goto(`${BASE_URL}/game`);
-  await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+  // SESSION_BOUND, not a bare game.ready: this is a fresh /game document and
+  // carries the same self-redirect hazard login() documents.
+  await page.waitForFunction(SESSION_BOUND, null, { timeout: 60_000 });
   const nowActive = await page.evaluate((id) => game.modules.get(id)?.active === true, moduleId);
   if (nowActive) throw new Error(`module "${moduleId}" could not be disabled in the test world`);
 }
@@ -361,14 +404,77 @@ export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, exclude
  * Throws rather than returning null, so a caller can never go on to assert
  * against a silently missing journal.
  */
-export async function worldTimelineJournalId(page) {
-  return page.evaluate(() => {
-    const id = game.settings.get("mej-campaign-companion", "timelineJournalId");
-    if (!id || !game.journal.get(id)) {
-      throw new Error(`no world timeline journal: timelineJournalId=${JSON.stringify(id)}`);
-    }
-    return id;
-  });
+export async function worldTimelineJournalId(page, { timeout = 15_000 } = {}) {
+  // Polled, not read once: ensureTimelineJournal() creates the journal and
+  // only THEN writes the setting, so a caller arriving right behind a GM Hub
+  // render can land inside that window and read "" from a world that is about
+  // to have one. Waiting for the setting to resolve is waiting for the same
+  // window this helper's comment describes; the throw below still fires if it
+  // never closes, so a genuinely missing journal stays loud.
+  try {
+    const handle = await page.waitForFunction(() => {
+      const id = game.settings.get("mej-campaign-companion", "timelineJournalId");
+      return id && game.journal.get(id) ? id : false;
+    }, null, { timeout });
+    return await handle.jsonValue();
+  } catch {
+    const seen = await page.evaluate(() => ({
+      setting: game.settings.get("mej-campaign-companion", "timelineJournalId"),
+      named: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id)
+    }));
+    throw new Error(`no world timeline journal after ${timeout}ms: ${JSON.stringify(seen)}`);
+  }
+}
+
+/**
+ * Click a locator exactly as `locator.click()` does - same actionability
+ * checks, same auto-scroll, same retry loop - but, if it times out, add a
+ * live diagnosis of WHAT was covering the target.
+ *
+ * Round 5's 09-secrets:83 failure (baseline run 5) is a mute version of this:
+ * 15s of retries on `.mej-cc-secret-audience`, the element "visible, enabled
+ * and stable" every time, with `div.sheet-container`, `section.place` and
+ * `nav.sheet-tabs a[data-tab="notes"]` taking the pointer events in turn -
+ * MEJ sheet chrome over the button. Playwright's own log names the
+ * intercepting element but nothing about the target's own state (is it inside
+ * a scrolled-away editor? on an inactive tab? visibility:hidden?), which is
+ * what the next occurrence needs.
+ *
+ * Deliberately NOT a pre-click gate. A gate that scrolls once and then polls
+ * `document.elementFromPoint` is strictly weaker than Playwright's click,
+ * which re-resolves and re-scrolls on every retry: an earlier draft of this
+ * helper did exactly that and turned a healthy transient into a hard failure
+ * of a test that had never flaked (09-secrets:438). Diagnose, never gate.
+ */
+export async function clickWithHitDiagnostics(locator, page, { timeout = 15_000 } = {}) {
+  try {
+    await locator.click({ timeout });
+  } catch (err) {
+    const handle = await locator.elementHandle({ timeout: 1_000 }).catch(() => null);
+    if (!handle) throw err;
+    const diag = await page.evaluate((el) => {
+      const describe = (n) => n ? `<${n.tagName.toLowerCase()} class="${n.className}">` : "null";
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const chain = [];
+      for (let n = top; n && chain.length < 4; n = n.parentElement) chain.push(describe(n));
+      const cs = getComputedStyle(el);
+      const pane = el.closest("[data-tab]");
+      const scroller = el.closest(".scrollable, .editor-display, .content");
+      return {
+        target: describe(el),
+        box: `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`,
+        connected: el.isConnected,
+        visibility: cs.visibility, display: cs.display, pointerEvents: cs.pointerEvents,
+        ownTabPane: pane ? `${pane.dataset.tab} class="${pane.className}"` : null,
+        scroller: scroller ? `${describe(scroller)} scrollTop=${scroller.scrollTop} clientH=${scroller.clientHeight} scrollH=${scroller.scrollHeight}` : null,
+        topmost: describe(top),
+        topmostChain: chain,
+        matches: document.querySelectorAll(".mej-cc-secret-audience").length
+      };
+    }, handle).catch((e) => ({ diagnosisFailed: e.message }));
+    throw new Error(`${err.message}\n  hit diagnosis: ${JSON.stringify(diag)}`);
+  }
 }
 
 /** Delete any leftover combats (crashed-run artifacts from auto-capture specs). */

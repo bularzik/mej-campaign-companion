@@ -630,12 +630,43 @@ was a latent instance of the identical defect). The same site also gained a
 replacing reliance on the fixed `settle(400)` before it. 3 alone runs and 3
 runs paired with `01-session` after the fix: all green.
 
-**4. `09-secrets:83` — UNREPRODUCED (0/6 targeted).** 3 runs alone and 3
-paired with `08-query-graph`, all green. Baseline evidence kept for the next
-person: `locator.click` on `.mej-cc-secret-audience` retried for the full 15s
-with the click point covered, alternately, by `div.sheet-container`,
-`section.place` and `nav.sheet-tabs a[data-tab="notes"]` — i.e. the sheet's
-own chrome over the button, not a missing element. Closed as unreproduced.
+**4. `09-secrets:83` — REPRODUCED (1/5 baseline, and twice again live in fix
+round 1), root-caused to an MEJ layout state, not fixed here.** The round's own
+rule is that one failure in five full runs is a reproduction, so this is not
+closed as unreproduced. Six targeted runs (3 alone, 3 paired with `08`) were
+green, but a diagnosing wrapper added round the click caught it twice more in
+the pairing runs, with the state it had been failing in:
+
+```
+target=<button class="mej-cc-secret-audience">  box=795,422 116x26
+visibility=visible  pointerEvents=auto  connected=true
+scroller=<div class="editor editor-display wrapper scrollable">
+         scrollTop=62  clientH=0  scrollH=73
+topmost=<a> inside <nav class="sheet-tabs tabs">
+```
+
+MEJ lays the enriched preview wrapper out at **clientHeight 0** while it holds
+~73px of content (measured: preview 715×0 inside a 723×211 sheet container,
+and it stays 0 after a forced `setPosition` + `resize` re-flow). That is the
+normal state of this sheet and is harmless while `scrollTop` is 0: the element
+painted at the button's box is then the wrapper itself, an ancestor, which
+Playwright's hit check accepts. But a zero-height container can still scroll,
+and a click's own scroll-into-view always tries (a target can never be "in
+view" in a 0px viewport) — once it does, every child's box shifts up by
+`scrollTop` and the button's rectangle lands over the tab strip above the
+content, where it is neither painted nor clickable. No retry recovers, because
+the scroll position does not come back; hence 15s of interception by
+`nav.sheet-tabs`, `section.place` and `div.sheet-container` in turn.
+
+The fix is MEJ-side (the preview must be laid out with real height) and MEJ is
+out of scope for this round, so what landed is `clickWithHitDiagnostics()` —
+identical click semantics, Playwright's own retry and scroll, plus this
+diagnosis when it times out. **An earlier attempt to gate the click on the
+target being topmost, and a second on the wrapper having non-zero height, both
+made things worse and were reverted**: the gate scrolled once where Playwright
+re-scrolls every retry, and the height condition is false in the *healthy*
+state too (it failed a test that had never flaked, and then two runs in a row).
+Recorded as a carried MEJ defect below.
 
 **5. The other three tracked items — UNREPRODUCED (0/5).**
 `06-player-collab` (all three tests), `07-knowledge` "playerHidden" and
@@ -643,19 +674,61 @@ own chrome over the button, not a missing element. Closed as unreproduced.
 name-based timeline lookups were hardened anyway (see verdict 3), since they
 carry the same latent defect that broke `02`.
 
-**6. NEW, found while triaging: `09-secrets:357` "reveal to Everyone
-round-trips" is a real flake after all — 2/6 when paired with
-`08-query-graph`** (0/5 in the baseline full runs). It fails as
-`page.evaluate: Resulting promise was garbage collected` on the *first*
-evaluate after `login()` — the page's execution context is destroyed while the
-`JournalEntry.create` promise is in flight. Measured: a cookie fast-path
-`login()` produces **two** main-frame navigations to `/game`, the second
-~250 ms before `login()` returns; when that second navigation slips past the
-`game.ready` wait the caller's first evaluate dies. This is a harness/Foundry
-session-handoff race, not a product defect, and **it is not fixed** — every
-remedy considered (re-checking readiness, marker documents, retrying the
-evaluate) either pads with a timeout or guesses at the trigger. Recorded here
-rather than papered over.
+**6. `09-secrets:357` "reveal to Everyone round-trips" — a real flake (2/6
+paired with `08-query-graph`; 0/5 in the baselines), root-caused in core and
+mitigated.** It fails as `page.evaluate: Resulting promise was garbage
+collected` on the FIRST evaluate after `login()`: the page's execution context
+is destroyed while the call is in flight. Foundry core, `client/game.mjs`
+`Game.getData`:
+
+```js
+if ( !socket.session.userId ) {
+  socket.disconnect();
+  window.location.href = getRoute("join");
+}
+return new Promise(resolve => socket.emit("world", resolve));
+```
+
+There is no `return` before the redirect, so a document whose socket session
+has no bound userId navigates itself to `/join` *and* carries on booting the
+world — it can reach `game.ready === true` moments before the navigation
+commits. `/join` with a live session bounces straight back to `/game`, which is
+the second `/game` navigation (and the second "Vended World data to User" line
+in the server log) that every cookie fast-path login produces. Whenever
+`game.ready` was observed on that doomed first document, `login()` returned
+onto a page about to be replaced.
+
+**Fixed at the harness seam**: `login()` (both paths) and the module
+enable/disable reloads now wait for `SESSION_BOUND` —
+`game.ready === true && game.socket.session.userId` — which is exactly the flag
+core tests before redirecting. Measured after the change: 8/8 fresh logins
+returned with both navigations already done (`navsAtLoginReturn=2`,
+`navsAfter=2`) and a deliberate 3-second evaluate straight after login survived
+8/8.
+
+Binding the session *before* the first `/game` navigation (the first remedy
+tried) does not work at this seam and the evidence is recorded so nobody
+repeats it: `POST /join` with the saved cookie and the right userId answers
+`{"status":"success","redirect":"/game"}` and the next `/game` load still makes
+two navigations; the same POST without a userId answers 401
+`JOIN.ErrorUserDoesNotExist` and unbinds the session outright.
+
+**Residual — the symptom is reduced, not eliminated.** After the fix it still
+appeared once in the 20 pairing runs (against 2 in 6 before it) and once in a
+full-suite run, both times on the first evaluate after `login()` in a
+`09-secrets` test. A second path therefore exists, and the best-supported
+hypothesis is structural to the harness rather than to `getData`: every
+Gamemaster login replays ONE saved session cookie
+(`tests/e2e/.auth/gm.json`), so a context that Playwright has closed but whose
+socket the server has not yet reaped shares a session with the context that
+just logged in. When the server finally processes that close it unbinds the
+shared session, and the live client's next `getData` — on any reconnect — takes
+the same `/join` redirect, after `login()` has long returned.
+`Game.connect`'s `session` handler calling `utils.debouncedReload()` on a
+session event with no `sessionId` is a second way into the same navigation.
+The obvious remedy (one Foundry session per browser context) collides with
+`login()`'s own "user is already connected" guard, since several specs run two
+GM clients at once, so it is not a small change. Recorded, not fixed.
 
 **7. NEW product defect, recorded not fixed: duplicate empty `Campaign
 Timeline` journals.** `ensureTimelineJournal()` (`scripts/data/timeline-journal.mjs`)
@@ -673,6 +746,10 @@ guard, a unit test and its own release.
 - Unit: **679 passing** (56 files) — unchanged; no `scripts/` edit.
 - e2e full suite after the fixes: **93 passed, 0 failed, 12 skipped** (10.1 m),
   against baselines of 92/1, 91/2, 91/2, 92/1, 91/2.
+- e2e full suite after fix round 1 (the login change touches every spec): two
+  runs, **92/1 then 93/0**. The single failure was the residual described in
+  verdict 6 — `09-secrets:167`, `Resulting promise was garbage collected` on
+  the first evaluate after `login()` — not a new break.
 - Guide harness re-run once (`GUIDE_SHOTS=1`): **7 passed**; no `guideDemo`
   documents left, `tests/e2e/.guide-shots-snapshot.json` absent.
 
@@ -694,3 +771,17 @@ guard, a unit test and its own release.
    `promptCampaignChoice()` zero-campaign short-circuit surfacing as dead UI
    (Task 1). Task 1 also logged a cosmetic string bug: the import review
    screen renders "1 sections detected as sessions" (no singular form).
+
+### Carried — found during fix round 1
+
+9. **MEJ lays the enriched preview wrapper out at `clientHeight` 0** while it
+   holds real content, and does not recover from a forced re-flow. Harmless
+   until something scrolls that zero-height container, at which point every
+   child's bounding box shifts out from under itself — the mechanism behind
+   verdict 4. MEJ-side; out of scope for a companion round.
+10. **Harness: `cleanupTimelineJournal()` still deletes by NAME on World A.**
+   Its content guard is strong (it only removes a `Campaign Timeline` journal
+   whose timepoints are all `TT-`-labelled, or empty) and callers now exclude
+   the pre-existing ids, but the primary key is still a name in the user's real
+   world. An id-tracked rewrite means every caller registering the journals it
+   creates; not attempted in this round.
