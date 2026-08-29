@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm, cleanupTimelineJournal,
+  login, TT_PREFIX, cleanupAsGm, cleanupTimelineJournal, worldTimelineJournalId,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -190,11 +190,14 @@ test.describe("02 hub + timeline", () => {
     if (await confirmBtn.count()) await confirmBtn.click();
     await settle(page, 400);
 
-    const links = await page.evaluate(async () => {
-      const j = game.journal.find((e) => e.name === "Campaign Timeline");
+    // By id (the timelineJournalId setting), never by the "Campaign
+    // Timeline" name - see worldTimelineJournalId's doc comment.
+    const timelineId = await worldTimelineJournalId(page);
+    const links = await page.evaluate((id) => {
+      const j = game.journal.get(id);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.[0];
       return tp?.links ?? [];
-    });
+    }, timelineId);
     // Both drops above landed on the same timepoint (the person entry, then
     // the image) - a >= 1 assertion here would pass even if the second drop
     // (the image) silently failed to attach, so require both links present.
@@ -250,15 +253,24 @@ test.describe("02 hub + timeline", () => {
     await dialog.locator('input[name="label"]').fill(`${TT_PREFIX}Player View Point`);
     await dialog.locator('button[data-action="ok"]').click();
     await settle(gmPage, 400);
-    await gmPage.evaluate(async () => {
-      const j = game.journal.find((e) => e.name === "Campaign Timeline");
+    // By id, never by name (see worldTimelineJournalId), AND only once the
+    // dialog's own write has actually landed: the settle() above just waits
+    // out a fixed window, and this evaluate throws "Cannot set properties of
+    // undefined (setting 'links')" if it runs while timepoints is still empty.
+    const gmTimelineId = await worldTimelineJournalId(gmPage);
+    await gmPage.waitForFunction(
+      (id) => (game.journal.get(id)?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.length ?? 0) > 0,
+      gmTimelineId, { timeout: 15_000 }
+    );
+    await gmPage.evaluate(async (id) => {
+      const j = game.journal.get(id);
       const timeline = foundry.utils.duplicate(j.getFlag("mej-campaign-companion", "timeline"));
       timeline.timepoints[0].links = [
         { id: foundry.utils.randomID(), src: "icons/svg/hazard.svg", name: "GM-only", showPlayers: false },
         { id: foundry.utils.randomID(), src: "icons/svg/mystery-man.svg", name: "Visible-to-players", showPlayers: true }
       ];
       await j.setFlag("mej-campaign-companion", "timeline", timeline);
-    });
+    }, gmTimelineId);
 
     const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const playerPage = await playerContext.newPage();

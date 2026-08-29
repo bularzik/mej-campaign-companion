@@ -521,3 +521,278 @@ load-bearing at all.
 **Method note worth keeping:** the targeted tests for each item passed while
 three specs that pass on `main` failed. Diffing a broad sweep against the
 base commit is what surfaced them; a green targeted suite proved nothing.
+
+## Round 5 scope (reconciled 2026-08-29)
+
+Re-checked the four carried items against `main` @ 0.13.4 before starting.
+Two are already closed and are dropped from the round with the evidence:
+
+| Carried item | Finding |
+|---|---|
+| In-repo `module.json` `download` points at 0.3.0 | Fixed in 0.12.0 (`731e715`); both `manifest` and `download` point at `releases/latest/download/`. **Obsolete.** |
+| `14-campaigns` "world unchanged" flip-flop | The suite now snapshots the `Campaign Timeline` journal count alongside the settings and restores both; 12/12 in both Round 4 full sweeps. **Obsolete.** |
+
+The remaining two become two workstreams, approved at full scope:
+
+**Workstream A — guides to 0.13.x.** The staleness is wider than "the
+pre-0.9.0 toolbar": neither guide mentions any post-0.9.0 feature (header bar
+and Tools menu, Campaigns pane and picker, Unfiled filing, portal,
+multi-timeline, portraits, or 0.13.3's native "revealed" semantics), the Hub
+now has six panes (Graph is a pane, not a toolbar icon), and all 23 images
+date from 2026-08-20. Method: (1) a read-only live-UI audit as GM and as
+player is the source of truth — never the changelog; (2) both guides are
+rewritten section by section on the existing heading skeleton, with new
+sections for Campaigns and the Portal, keeping existing image filenames
+stable; (3) `guide-screenshots.spec.mjs` seeding is extended to create a
+campaign so the new panes have content, and every image is recaptured under
+`GUIDE_SHOTS=1`. Reviewer gate: each image is checked against the prose that
+cites it; `npm run check:links` green.
+
+**Workstream B — flakes: root-cause or quarantine.** `06-player-collab` (not
+in any Round 4 sweep, so unverified) plus the three one-offs recorded in
+Round 4: `09-secrets` "reveal to Everyone round-trips", `07-knowledge`
+"playerHidden", `04-auto-capture`. Bar: run the full 18-spec suite at least
+five times, logging every failure with its run position. A reproducing
+failure gets systematic debugging, a fix, and a vacuity check. One that
+does not reproduce across ≥5 full runs is closed as *unreproduced* with the
+run log recorded here. Never a blanket retry.
+
+**Release rule for this round.** Documentation alone does not cut a release;
+0.13.5 is cut only if Workstream B lands a product fix.
+
+## Round 5 outcome
+
+Workstream B (flake triage) run on `fix/sweep-round5`, base `main` @ `c93d2a8`
+(0.13.4). Five full-suite baseline runs (`run-1.log` … `run-5.log` in
+`.superpowers/sdd/2026-08-29-sweep-round5/`), then targeted repro runs per
+item. **No `scripts/` change landed — the fixes are all in `tests/e2e/`, so by
+this round's own release rule 0.13.5 is NOT cut.**
+
+### Failures by run (105 tests: 93 run, 12 skipped — `13-stock-smoke` needs `STOCK_PHASE`)
+
+| Test | R1 | R2 | R3 | R4 | R5 | Rate |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| `15-campaign-portal.spec.mjs:331` — 6. migration backfills a portal for a legacy campaign | ✗ | ✗ | ✗ | ✗ | ✗ | **5/5** |
+| `14-campaigns.spec.mjs:68` — adoption: banner pre-adoption … full restoration | ✓ | ✗ | ✓ | ✓ | ✓ | 1/5 |
+| `02-hub-timeline.spec.mjs:207` — index row click opens the entry in MEJ … | ✓ | ✓ | ✗ | ✓ | ✓ | 1/5 |
+| `09-secrets.spec.mjs:83` — GM reveals a block to User 1 … | ✓ | ✓ | ✓ | ✓ | ✗ | 1/5 |
+| `06-player-collab.spec.mjs` (all three) | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `09-secrets.spec.mjs:357` — reveal to Everyone round-trips … | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `07-knowledge.spec.mjs:185` — attributes: playerHidden … | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `04-auto-capture.spec.mjs` (both) | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+
+Run totals: R1 92 passed / 1 failed, R2 91/2, R3 91/2, R4 92/1, R5 91/2.
+
+### Verdicts
+
+**1. `15-campaign-portal:331` — REPRODUCED 5/5, and it was never a flake.**
+Bisect: the same failure on this branch's HEAD *and* on `main` @ `c93d2a8`
+(the branch touches no `scripts/`), so it is pre-existing, not introduced
+here. Root cause: commit `14d87f2` raised `CURRENT_DATA_VERSION` 2 → 3 (the
+native-reveal migration) and the test still polled for the literal `2`, so
+`page.waitForFunction` could never be satisfied and timed out at 30s. The
+product was fine throughout — the portal backfill it guards ran correctly
+every time. **Fixed in the test**: the target version is read from the served
+`scripts/constants.mjs` instead of hard-coded. *Vacuity check*: with the
+backfill loop stubbed out (`missingPortalPlan(...)` → `[]`), the test fails at
+`expect(after.portal).toBeTruthy()` — `Received: null` — so it still gates the
+behaviour it claims to.
+
+**2. `14-campaigns:68` — REPRODUCED deterministically, root-caused, fixed.**
+Not order-dependent and not a flake: it is world-state dependent. The test
+snapshots the number of journals named `Campaign Timeline`, and its final
+`cleanupTimelineJournal()` deleted every empty one except the single id named
+by `timelineJournalId` — so a *pre-existing* second empty copy (found state)
+was deleted and the "left exactly as found" count went 2 → 1. Live proof: a
+world probe found exactly that second copy present; the spec then failed on
+run 1 alone and passed on runs 2 and 3, because run 1's own cleanup had eaten
+the orphan. **Fixed in the test**: the snapshot records the *ids* of every
+pre-existing `Campaign Timeline` journal and the cleanup excludes all of them
+(`excludeIds`, replacing `excludeId`). *Regression proof*: with an orphan
+re-seeded, the fixed spec passes 16/16 **and leaves the orphan in place**
+(verified by id afterwards).
+
+**3. `02-hub-timeline:207` — root-caused and fixed at the root; not
+reproducible on demand.** Failure was `page.evaluate: TypeError: Cannot set
+properties of undefined (setting 'links')` — i.e.
+`timeline.timepoints[0]` was undefined on the journal the test had just added
+a timepoint to. The test found that journal by NAME
+(`game.journal.find((e) => e.name === "Campaign Timeline")`), and a world can
+hold more than one journal with that name. Demonstrated live: with an older
+orphan present and the setting pointing at a newer journal, name lookup
+returned the **empty orphan** (0 timepoints) while the id lookup returned the
+real one (1 timepoint) — `diverges: true`, exactly the crash shape. **Fixed in
+the test**: a new `worldTimelineJournalId(page)` helper resolves the journal
+the way the module does (through `timelineJournalId`, throwing rather than
+returning null), used at all four name-lookup sites (`02` ×2, `04` ×2 — `04`
+was a latent instance of the identical defect). The same site also gained a
+`waitForFunction` for the Add-Timepoint dialog's write actually landing,
+replacing reliance on the fixed `settle(400)` before it. 3 alone runs and 3
+runs paired with `01-session` after the fix: all green.
+
+**4. `09-secrets:83` — REPRODUCED (1/5 baseline, and twice again live in fix
+round 1), root-caused to an MEJ layout state, not fixed here.** The round's own
+rule is that one failure in five full runs is a reproduction, so this is not
+closed as unreproduced. Six targeted runs (3 alone, 3 paired with `08`) were
+green, but a diagnosing wrapper added round the click caught it once more in
+the pairing runs, with the state it had been failing in:
+
+```
+target=<button class="mej-cc-secret-audience">  box=795,422 116x26
+visibility=visible  pointerEvents=auto  connected=true
+scroller=<div class="editor editor-display wrapper scrollable">
+         scrollTop=62  clientH=0  scrollH=73
+topmost=<a> inside <nav class="sheet-tabs tabs">
+```
+
+MEJ lays the enriched preview wrapper out at **clientHeight 0** while it holds
+~73px of content (measured: preview 715×0 inside a 723×211 sheet container,
+and it stays 0 after a forced `setPosition` + `resize` re-flow). That is the
+normal state of this sheet and is harmless while `scrollTop` is 0: the element
+painted at the button's box is then the wrapper itself, an ancestor, which
+Playwright's hit check accepts. But a zero-height container can still scroll,
+and a click's own scroll-into-view always tries (a target can never be "in
+view" in a 0px viewport) — once it does, every child's box shifts up by
+`scrollTop` and the button's rectangle lands over the tab strip above the
+content, where it is neither painted nor clickable. No retry recovers, because
+the scroll position does not come back; hence 15s of interception by
+`nav.sheet-tabs`, `section.place` and `div.sheet-container` in turn.
+
+The fix is MEJ-side (the preview must be laid out with real height) and MEJ is
+out of scope for this round, so what landed is `clickWithHitDiagnostics()` —
+identical click semantics, Playwright's own retry and scroll, plus this
+diagnosis when it times out. **An earlier attempt to gate the click on the
+target being topmost, and a second on the wrapper having non-zero height, both
+made things worse and were reverted**: the gate scrolled once where Playwright
+re-scrolls every retry, and the height condition is false in the *healthy*
+state too (it failed a test that had never flaked, and then two runs in a row).
+Recorded as a carried MEJ defect below.
+
+**5. The other three tracked items — UNREPRODUCED (0/5).**
+`06-player-collab` (all three tests), `07-knowledge` "playerHidden" and
+`04-auto-capture` (both tests) passed in all five full runs. `04`'s two
+name-based timeline lookups were hardened anyway (see verdict 3), since they
+carry the same latent defect that broke `02`.
+
+**6. `09-secrets:357` "reveal to Everyone round-trips" — a real flake (2/6
+paired with `08-query-graph`; 0/5 in the baselines), root-caused in core and
+mitigated.** It fails as `page.evaluate: Resulting promise was garbage
+collected` on the FIRST evaluate after `login()`: the page's execution context
+is destroyed while the call is in flight. Foundry core, `client/game.mjs`
+`Game.getData`:
+
+```js
+if ( !socket.session.userId ) {
+  socket.disconnect();
+  window.location.href = getRoute("join");
+}
+return new Promise(resolve => socket.emit("world", resolve));
+```
+
+There is no `return` before the redirect, so a document whose socket session
+has no bound userId navigates itself to `/join` *and* carries on booting the
+world — it can reach `game.ready === true` moments before the navigation
+commits. `/join` with a live session bounces straight back to `/game`, which is
+the second `/game` navigation (and the second "Vended World data to User" line
+in the server log) that every cookie fast-path login produces. Whenever
+`game.ready` was observed on that doomed first document, `login()` returned
+onto a page about to be replaced.
+
+**Fixed at the harness seam**: `login()` (both paths) and the module
+enable/disable reloads now wait for `SESSION_BOUND` —
+`game.ready === true && game.socket.session.userId` — which is exactly the flag
+core tests before redirecting. Measured after the change: 8/8 fresh logins
+returned with both navigations already done (`navsAtLoginReturn=2`,
+`navsAfter=2`) and a deliberate 3-second evaluate straight after login survived
+8/8.
+
+Binding the session *before* the first `/game` navigation (the first remedy
+tried) does not work at this seam and the evidence is recorded so nobody
+repeats it: `POST /join` with the saved cookie and the right userId answers
+`{"status":"success","redirect":"/game"}` and the next `/game` load still makes
+two navigations; the same POST without a userId answers 401
+`JOIN.ErrorUserDoesNotExist` and unbinds the session outright.
+
+**Residual — the symptom is reduced, not eliminated.** After the fix it
+appeared once in a full-suite run, on the first evaluate after `login()` in a
+`09-secrets` test; the 16 pairing runs itemized in the round's own report for
+the `09-secrets:83` fix work (verdict 4) contain no GC failure in any bucket.
+A second path therefore may still exist, and the best-supported
+hypothesis is structural to the harness rather than to `getData`: every
+Gamemaster login replays ONE saved session cookie
+(`tests/e2e/.auth/gm.json`), so a context that Playwright has closed but whose
+socket the server has not yet reaped shares a session with the context that
+just logged in. When the server finally processes that close it unbinds the
+shared session, and the live client's next `getData` — on any reconnect — takes
+the same `/join` redirect, after `login()` has long returned.
+`Game.connect`'s `session` handler calling `utils.debouncedReload()` on a
+session event with no `sessionId` is a second way into the same navigation.
+The obvious remedy (one Foundry session per browser context) collides with
+`login()`'s own "user is already connected" guard, since several specs run two
+GM clients at once, so it is not a small change. Recorded, not fixed.
+
+**7. NEW product defect, recorded not fixed: duplicate empty `Campaign
+Timeline` journals.** `ensureTimelineJournal()` (`scripts/data/timeline-journal.mjs`)
+creates the journal and *then* writes `timelineJournalId`; two GM renders in
+flight (or a second GM client) both pass the empty-setting check and create
+one each, leaving an orphaned empty journal the setting does not point at.
+This is the state behind verdicts 2 and 3, it was already documented as a
+"confirmed live" race in `14-campaigns.spec.mjs`'s own comments, and it is
+visible to a user as a stray empty journal. Out of scope for a flake-triage
+task (the failing assertions were all test-side); a fix wants a single-writer
+guard, a unit test and its own release.
+
+### Counts
+
+- Unit: **679 passing** (56 files) — unchanged; no `scripts/` edit.
+- e2e full suite after the fixes: **93 passed, 0 failed, 12 skipped** (10.1 m),
+  against baselines of 92/1, 91/2, 91/2, 92/1, 91/2.
+- e2e full suite after fix round 1 (the login change touches every spec): two
+  runs, **92/1 then 93/0**. The single failure was the residual described in
+  verdict 6 — `09-secrets:167`, `Resulting promise was garbage collected` on
+  the first evaluate after `login()` — not a new break.
+- Guide harness re-run once (`GUIDE_SHOTS=1`): **7 passed**; no `guideDemo`
+  documents left, `tests/e2e/.guide-shots-snapshot.json` absent.
+
+### Carried — product defects recorded by Tasks 1 and 5, not fixed in this round
+
+1. `.mej-cc-timeline-controls` has no CSS rule, so the picker spans the pane
+   and Make default / rename / delete each drop onto their own line.
+2. Prep-board attendees render with no names.
+3. The GM's Player Recaps block reads empty on the Session sheet even when a
+   player's recap exists and renders on that player's own sheet.
+4. Search snippets show raw enricher markup (`@UUID[…]{…}` bleeds through).
+5. A natively-revealed ("Everyone") secret renders core Foundry's own Hide
+   toggle on a player's screen; a group-revealed one does not.
+6. The campaign portal page also renders the Knowledge panel below the Hub.
+7. MEJ's shared detailed-header partial fills ~250 px of every Session sheet
+   with a broken image placeholder and five empty generic fields (MEJ-side).
+8. With zero campaigns, "File all shown into…", "File into campaign…" and
+   "Auto-capture campaign" render, are clickable, and do nothing — the
+   `promptCampaignChoice()` zero-campaign short-circuit surfacing as dead UI
+   (Task 1). Task 1 also logged a cosmetic string bug: the import review
+   screen renders "1 sections detected as sessions" (no singular form).
+
+### Carried — found during fix round 1
+
+9. **MEJ lays the enriched preview wrapper out at `clientHeight` 0** while it
+   holds real content, and does not recover from a forced re-flow. Harmless
+   until something scrolls that zero-height container, at which point every
+   child's bounding box shifts out from under itself — the mechanism behind
+   verdict 4. MEJ-side; out of scope for a companion round.
+10. **Harness: `cleanupTimelineJournal()` still deletes by NAME on World A.**
+   Its content guard is strong (it only removes a `Campaign Timeline` journal
+   whose timepoints are all `TT-`-labelled, or empty) and callers now exclude
+   the pre-existing ids, but the primary key is still a name in the user's real
+   world. An id-tracked rewrite means every caller registering the journals it
+   creates; not attempted in this round.
+11. **Harness: nine pre-existing spec-side `page.goto('/game')`/`reload()`
+   calls still wait on a bare `game.ready`, not `SESSION_BOUND`.** They carry
+   the same login-race hazard verdict 6 fixed inside `login()`:
+   `01-session.spec.mjs:141`, `02-hub-timeline.spec.mjs:70`,
+   `00-mej-api.spec.mjs:139`, `12-native-mode.spec.mjs:13` and `:106`,
+   `13-stock-smoke.spec.mjs:62`, `14-campaigns.spec.mjs:336` and `:694`,
+   `15-campaign-portal.spec.mjs:354`. Carried, not fixed this round, because
+   each follows a `login()` call that now returns only on a session-bound
+   document, so the race window these sites' own reloads reopen is narrower
+   than the one `login()` closed.

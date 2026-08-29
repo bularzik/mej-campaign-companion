@@ -83,6 +83,12 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       // comment below) - this suite opens the Hub as GM three times, so the
       // true "left exactly as found" bar is this count matching at the end
       // too, not just the setting value.
+      // Ids as well as the count: the cleanup at the end of this test has to
+      // tell "already existed when I started" (found state - hands off,
+      // however empty it looks) from "created by my own Hub opens", and
+      // comparing ids makes "left exactly as found" mean the same journals,
+      // not merely the same number of them.
+      campaignTimelineIds: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id).sort(),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
 
@@ -202,6 +208,7 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
       captureCampaign: game.settings.get("mej-campaign-companion", "autoCaptureCampaign"),
+      campaignTimelineIds: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id).sort(),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
     expect(after).toEqual(prior);
@@ -221,17 +228,20 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
     await page.evaluate(() => game.MonksEnhancedJournal?.journal?.close?.());
     await settle(page, 300);
 
-    // excludeId: prior.timelineId - the journal (if any) that already
-    // existed at THIS test's own start is "found" state, full stop, even
-    // if it happens to be currently empty (that emptiness is unmanaged
-    // churn from some earlier, unrelated run's own Hub-open side effect,
-    // not this test's business to judge or clean up). Without excluding
-    // it, cleanupTimelineJournal's normal "empty -> safe to delete"
-    // heuristic would delete THAT journal too, and the explicit restore
-    // right below would then point timelineJournalId at an id that no
-    // longer resolves to anything - confirmed live: this is exactly what
-    // happened on the first version of this fix.
-    await cleanupTimelineJournal(page, { excludeId: prior.timelineId || null });
+    // excludeIds: EVERY "Campaign Timeline" journal that already existed at
+    // THIS test's own start is "found" state, full stop, even if it happens
+    // to be currently empty (that emptiness is unmanaged churn from some
+    // earlier, unrelated run's own Hub-open side effect, not this test's
+    // business to judge or clean up). Without excluding them,
+    // cleanupTimelineJournal's normal "empty -> safe to delete" heuristic
+    // would delete them too: excluding nothing left the setting dangling on
+    // a deleted id (confirmed live on the first version of this fix), and
+    // excluding only prior.timelineId still deleted a second, ORPHANED copy
+    // that the setting does not point at - exactly how run 2 of the round-5
+    // flake baseline failed here, campaignTimelineCount 2 -> 1. (Orphans
+    // exist because ensureTimelineJournal() creates the journal before it
+    // writes the setting; see cleanupTimelineJournal's doc comment.)
+    await cleanupTimelineJournal(page, { excludeIds: prior.campaignTimelineIds });
     await page.evaluate(async (prior) => {
       await game.settings.set("mej-campaign-companion", "timelineJournalId", prior.timelineId ?? "");
       await game.settings.set("mej-campaign-companion", "adoptionPrompted", prior.prompted ?? false);
@@ -242,6 +252,7 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       timelineId: game.settings.get("mej-campaign-companion", "timelineJournalId"),
       prompted: game.settings.get("mej-campaign-companion", "adoptionPrompted"),
       captureCampaign: game.settings.get("mej-campaign-companion", "autoCaptureCampaign"),
+      campaignTimelineIds: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id).sort(),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
     expect(final).toEqual(prior);

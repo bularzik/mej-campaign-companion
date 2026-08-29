@@ -45,12 +45,60 @@ const DOCX_PATH = "tests/e2e/fixtures/guide-demo-import.docx";
 // 11-auto-link-scope.spec.mjs's own comment on this).
 const OBSERVER_OWNERSHIP = { default: 2 };
 
+/**
+ * Clear Foundry's "GAME PAUSED" overlay if it is up. `broadcast: true` is
+ * load-bearing, not decoration: togglePause()'s default only patches the
+ * CALLING client's in-memory game.data.paused, so a fresh client connecting
+ * later (this file logs in fresh per test) would still read paused:true.
+ *
+ * Called defensively at the top of every capture test, not just once in
+ * beforeAll against a snapshot: the overlay reappeared in prep-board.png on a
+ * run whose beforeAll had recorded the world as UNpaused, i.e. the pause
+ * arrived DURING the run. Whatever set it, a shot of the module's own UI must
+ * not carry it. The pre-run pause state is still what afterAll restores.
+ */
+async function unpause(page) {
+  await page.evaluate(() => {
+    if (game.paused) game.togglePause(false, { broadcast: true });
+  });
+}
+
 /** Screenshot a Locator (preferred: the app window element) or a Page. */
 async function shot(target, name) {
   await target.screenshot({ path: `${IMG_DIR}/${name}.png` });
 }
 
-/** Delete every guideDemo-flagged JournalEntry and Actor (idempotent). */
+/**
+ * Screenshot a padded rectangle around one element. A single graph node is a
+ * ~40px <g>; a bare locator.screenshot() of it is unreadably small, and the
+ * alternative (mutating the DOM to blow it up) would publish something the
+ * product never renders. A page-level clip around the node's REAL geometry
+ * is the honest close-up: same pixels the user sees, just cropped.
+ */
+async function shotAround(page, box, name, { pad = 70, padBottom = null, within = null } = {}) {
+  let x1 = box.x - pad;
+  let y1 = box.y - pad;
+  let x2 = box.x + box.width + pad;
+  let y2 = box.y + box.height + (padBottom ?? pad);
+  // Clamped to the containing element when one is given, so a node that
+  // settled near the edge of the graph pane can't drag the surrounding
+  // window chrome (or the desktop behind it) into a shot that is meant to
+  // show one node.
+  if (within) {
+    x1 = Math.max(x1, within.x);
+    y1 = Math.max(y1, within.y);
+    x2 = Math.min(x2, within.x + within.width);
+    y2 = Math.min(y2, within.y + within.height);
+  }
+  x1 = Math.max(0, x1);
+  y1 = Math.max(0, y1);
+  await page.screenshot({
+    path: `${IMG_DIR}/${name}.png`,
+    clip: { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
+  });
+}
+
+/** Delete every guideDemo-flagged JournalEntry, Actor and Folder (idempotent). */
 async function sweepGuideDemo(page) {
   await page.evaluate(async (id) => {
     const doomedEntries = game.journal.filter((e) => e.getFlag(id, "guideDemo"));
@@ -60,6 +108,14 @@ async function sweepGuideDemo(page) {
     // guideDemo-flag sweep or they'd survive every cleanup pass.
     const doomedActors = game.actors.filter((a) => a.getFlag(id, "guideDemo"));
     for (const a of doomedActors) await a.delete();
+    // Task 5 seeds a real campaign Folder (createCampaign) — a third
+    // document family neither sweep above touches. deleteSubfolders/
+    // deleteContents makes the cascade reclaim anything still filed inside
+    // it (the portal entry, the campaign's timeline journals) even if one
+    // of their own flag writes never landed. Matched by FLAG only, never by
+    // name — this world holds real, unrelated content.
+    const doomedFolders = game.folders.filter((f) => f.getFlag(id, "guideDemo"));
+    for (const f of doomedFolders) await f.delete({ deleteSubfolders: true, deleteContents: true });
   }, MODULE_ID);
 }
 
@@ -235,6 +291,121 @@ async function assertNodeOnscreen(graphApp, nodeLocator) {
   expect(opacity, "node circle has zero opacity").toBeGreaterThan(0);
 }
 
+/**
+ * Open the Hub's Graph tab at a large size and wait for a draw in which every
+ * name in `names` is genuinely PAINTED inside the pane (assertNodeOnscreen,
+ * not just toBeVisible). Returns the settled `.mej-cc-graph-pane` locator.
+ *
+ * Extracted from the player capture below so the GM's own Graph-tab shots
+ * get the identical treatment; its full live-investigation notes stay at
+ * that call site. The short version, both of which are properties of the
+ * embedded pane rather than the retired standalone popup: the graph SVG
+ * derives its viewBox AND d3-force's forceCenter() target from its own
+ * clientWidth/clientHeight at draw time, so (1) enlarging the MEJ SHELL is
+ * what grows the frame, and (2) the tab's <div> only reports a non-zero
+ * clientWidth once it is the ACTIVE tab — changeTab() is a plain class
+ * toggle with no re-render — so drawGraphPane() has to be re-triggered by an
+ * explicit subsheet render AFTER the tab is active and the shell enlarged.
+ */
+async function settleGraphPane(page, shell, names) {
+  await page.evaluate(() => {
+    // 1060 wide, not the viewport's full 1440: Foundry's own right-hand
+    // sidebar starts at x=1092 in this viewport, and the MEJ shell's window
+    // frame has translucent margins, so a wider shell shows the sidebar's
+    // buttons faintly THROUGH its own edge in a whole-shell shot. This is
+    // still far larger than the pane's 800x540 fallback frame, which is what
+    // the draw reliability below actually depends on.
+    game.MonksEnhancedJournal.journal?.setPosition({ left: 20, top: 20, width: 1060, height: 840 });
+  });
+  await settle(page, 300);
+  await shell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+  await settle(page, 200);
+  // Whole-campaign mode, explicitly. The graph's mode/center live on the
+  // module-level HUB_STATE, not on a fresh instance per render, so a
+  // showGraphFor() call earlier in the SAME browser page (graph-gm.png's
+  // ego/Focus shot) leaves the pane centered on that one entity — ego mode
+  // filters to the center plus its direct neighbours, which is why a
+  // later whole-campaign shot in the same page could otherwise be missing
+  // most of the cast. Confirmed live: this is exactly what made the first
+  // run's hub-graph shot drop "Mira Thornwood".
+  await shell.locator('button[data-action="setGraphMode"][data-mode="all"]').click();
+  await settle(page, 300);
+  await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
+  await settle(page, 300);
+
+  let graphApp = shell.locator(".mej-cc-graph-pane");
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    graphApp = shell.locator(".mej-cc-graph-pane");
+    await expect(graphApp).toHaveCount(1);
+    await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
+    await settle(page, 2500); // let the simulation's alpha decay toward rest
+    try {
+      for (const name of names) {
+        await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: name }));
+      }
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      // Tab already active and shell already enlarged, so a plain re-render
+      // of the Hub's "main" part is enough for a fresh, independently-
+      // randomized simulation on the next try.
+      await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
+      await settle(page, 300);
+    }
+  }
+  if (lastError) throw lastError;
+  return graphApp;
+}
+
+/**
+ * Open the header bar's Tools menu, idempotently.
+ *
+ * toggleToolsMenu is a plain flip of HUB_STATE.toolsMenuOpen, and HUB_STATE is
+ * module-level in the browser page rather than per-instance — so the menu is
+ * still open after an action taken FROM it (opening the import wizard leaves
+ * it open), and a second blind click on the summary would close it again
+ * instead of opening it. Confirmed live: that is what made this file's export
+ * capture, which follows the import capture in the same page, time out
+ * waiting for a menu item that was never re-rendered. Drive off the button's
+ * own aria-expanded, which the template renders from that same state.
+ */
+async function openToolsMenu(shell, page) {
+  const summary = shell.locator(".mej-cc-tools-summary");
+  if ((await summary.getAttribute("aria-expanded")) !== "true") {
+    await summary.click();
+    await settle(page, 300);
+  }
+  await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(1);
+  return shell.locator(".mej-cc-tools-menu");
+}
+
+/** Select a value in the Hub's campaign picker and wait for the re-render. */
+async function scopeHub(shell, page, value) {
+  await shell.locator('select[name="campaign-scope"]').selectOption(value);
+  await settle(page, 500);
+}
+
+/**
+ * Create a timeline through the picker's own "➕ New timeline…" action-option
+ * (the exact route the GM guide teaches), flag the created journal, and
+ * return its id. The change handler sets HUB_TIMELINE_SELECTION_SETTING to
+ * the new timeline's id, which is how the id comes back out.
+ */
+async function newTimelineViaPicker(shell, page, name) {
+  await shell.locator('select[name="timeline-select"]').selectOption("__newtl");
+  const dialog = page.locator("dialog.application").last();
+  await dialog.locator('input[name="name"]').fill(name);
+  await dialog.locator('button[data-action="ok"]').click();
+  await settle(page, 700);
+  return page.evaluate(async (id) => {
+    const tlId = game.settings.get("mej-campaign-companion", "hubTimelineSelection");
+    if (tlId) await game.journal.get(tlId)?.setFlag(id, "guideDemo", true);
+    return tlId;
+  }, MODULE_ID);
+}
+
 /** The attributes <details> renders collapsed by default (07-knowledge.spec.mjs). */
 async function ensureAttrsExpanded(panel) {
   const details = panel.locator(".mej-cc-knowledge-attrs");
@@ -281,14 +452,29 @@ async function addTimepoint(shell, page, label, date) {
 
 // World settings the demo run mutates; snapshotted in beforeAll, restored in
 // afterAll. timelineJournalId is reset to "" at start (02-hub-timeline's
-// pattern, see its file-header comment) so the Hub creates a FRESH timeline
-// journal for the shots; that fresh journal is deleted before restore.
+// pattern, see its file-header comment): every timeline this run seeds is
+// campaign-owned, so unregistering the world's legacy singleton for the
+// duration is simply a guarantee that no Hub path can write a timepoint onto
+// the real world timeline. Any journal the setting does end up naming is
+// deleted before the restore.
 const SETTINGS_TO_RESTORE = [
   "timelineJournalId",
   "savedQueries",
   "playerGroups",
   "retroLinkMode",
-  "autoLink"
+  "autoLink",
+  // Task 5: createCampaign() seeds the auto-capture target when it creates
+  // the world's FIRST campaign (data/campaign-store.mjs's own RULING), and
+  // World A has none — so this run always writes it. Same snapshot/restore
+  // discipline 14-campaigns.spec.mjs applies to it.
+  "autoCaptureCampaign",
+  // Client settings the campaign picker and the timeline picker persist on
+  // every selection (spec §2 / D §3). This file drives both, so both are
+  // world state this run changes. Restored for the GM seat here; the player
+  // test snapshots and restores User 1's own copies itself, since a client
+  // setting is per-user and a GM-side restore never touches theirs.
+  "hubCampaignScope",
+  "hubTimelineSelection"
 ];
 let settingsSnapshot = {};
 // Cross-module world state, snapshotted/restored alongside settingsSnapshot
@@ -308,6 +494,23 @@ let pausedSnapshot = false;
 // across tests in this file regardless of each test's own fresh
 // page/context, since only browser-side state resets between tests).
 const demo = {};
+
+// The Hub's two picker settings are CLIENT settings — stored per user, so
+// the GM-side snapshot/restore in before/afterAll never touches User 1's
+// copies. Opening the campaign portal as a player writes hubCampaignScope
+// for that seat (CampaignHubPage scopes itself to the portal's campaign),
+// which would otherwise be left pointing at a folder this run then deletes.
+// Captured right after the player logs in, restored in the test's finally.
+let playerPickerSnapshot = null;
+
+async function restorePlayerPickers(page) {
+  if (!playerPickerSnapshot) return;
+  const snapshot = playerPickerSnapshot;
+  playerPickerSnapshot = null;
+  await page.evaluate(async (snap) => {
+    for (const [k, v] of Object.entries(snap)) await game.settings.set("mej-campaign-companion", k, v);
+  }, snapshot);
+}
 
 guideDescribe("guide screenshots", () => {
   test.beforeAll(async ({ browser }) => {
@@ -363,7 +566,7 @@ guideDescribe("guide screenshots", () => {
     // client connecting seconds later (this file's every subsequent test
     // logs in fresh) still read paused:true, because the unpause was never
     // actually sent to the server for it to hand to new connections.
-    if (pausedSnapshot) await page.evaluate(() => game.togglePause(false, { broadcast: true }));
+    await unpause(page);
     await context.close();
   });
 
@@ -386,6 +589,16 @@ guideDescribe("guide screenshots", () => {
       },
       { collapsed: mejStartCollapsedSnapshot, paused: pausedSnapshot }
     );
+    // Defensive, for a run recovering from a snapshot file written before
+    // autoCaptureCampaign joined SETTINGS_TO_RESTORE: never leave the
+    // auto-capture target pointing at the demo campaign folder the sweep
+    // above just deleted.
+    await page.evaluate(async () => {
+      const id = game.settings.get("mej-campaign-companion", "autoCaptureCampaign");
+      if (id && !game.folders.get(id)) {
+        await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", "");
+      }
+    });
     await context.close();
     // Only delete the snapshot file once the restore above has actually run
     // to completion — its presence is exactly what lets a crash between
@@ -403,6 +616,7 @@ guideDescribe("guide screenshots", () => {
     // not just a console message — clear it so it doesn't sit across the
     // top of every screenshot this test takes.
     await page.evaluate(() => ui.notifications.clear());
+    await unpause(page);
 
     // Defensive baseline regardless of whatever a prior spec run left behind
     // (11-auto-link-scope.spec.mjs's own afterEach, for one, restores
@@ -412,6 +626,14 @@ guideDescribe("guide screenshots", () => {
     await page.evaluate(async () => {
       await game.settings.set("mej-campaign-companion", "autoLink", false);
       await game.settings.set("mej-campaign-companion", "retroLinkMode", "off");
+      // The Hub's two picker client settings persist across sessions, so a
+      // previous run (or a manual browse) can leave this run's first Hub
+      // render scoped to something other than "All campaigns"/"All timelines
+      // in scope" — which changes which stack the Add-Timepoint helper below
+      // finds. Both are in SETTINGS_TO_RESTORE, so this reset is undone at
+      // afterAll like every other mutation here.
+      await game.settings.set("mej-campaign-companion", "hubCampaignScope", "");
+      await game.settings.set("mej-campaign-companion", "hubTimelineSelection", "");
     });
 
     // --- Place, Quest, Persons -------------------------------------------
@@ -466,6 +688,20 @@ guideDescribe("guide screenshots", () => {
       text: "<p>Serena of the Vale is a traveling scholar cataloguing the old trade roads through the region. She arrived in town only days before the caravan vanished, and she's been asking a lot of very specific questions ever since.</p>",
       ownership: OBSERVER_OWNERSHIP
     });
+
+    // Real portraits on two of the Persons. A graph node's <image href> is
+    // the PAGE's own `src` (logic/graph-rows.mjs nodeImage()), falling back
+    // to MEJ's per-type placeholder asset when it is empty — the live UI
+    // audit only ever saw that fallback, because no entity in this world has
+    // a picture. portrait-node.png is the shot of the first branch, so the
+    // demo cast needs genuine images: Foundry core's own bundled people
+    // icons, present on every install and safe to publish.
+    await page.evaluate(async (pairs) => {
+      for (const [id, src] of pairs) await game.journal.get(id).pages.contents[0].update({ src });
+    }, [
+      [miraId, "icons/environment/people/commoner.webp"],
+      [aldricId, "icons/environment/people/infantry-armored.webp"]
+    ]);
 
     // Relationship edges for the graph (flag shape from 08-query-graph.spec.mjs:200-205,
     // set on the PAGE, MEJ's own "relationships" flag namespace).
@@ -595,44 +831,96 @@ guideDescribe("guide screenshots", () => {
     });
     await settle(page, 300);
 
+    // --- Campaign container -------------------------------------------------
+    // Created BEFORE the Hub is ever opened, and that ordering is
+    // load-bearing rather than stylistic. In a ZERO-campaign world the Hub's
+    // All scope calls ensureTimelineJournal() with no campaign, which files a
+    // BRAND NEW world timeline named "Campaign Timeline" — and World A
+    // already owns a real, empty journal of exactly that name, so the Hub
+    // then stacks two identically-titled timelines in one pane (confirmed
+    // live; it shipped in a first pass of this shot). Creating the campaign
+    // first means every timeline this run seeds is campaign-owned, the world
+    // timeline is left alone, and the pane a reader sees is unambiguous.
+    const campaign = await page.evaluate(async ({ id, name }) => {
+      const { createCampaign, campaignPortal } =
+        await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+      const folder = await createCampaign(name, { ownershipDefault: "observer" });
+      await folder.setFlag(id, "guideDemo", true);
+      // createCampaign also creates the campaign's portal entry (spec C §1).
+      // sweepGuideDemo()'s folder cascade would reclaim it either way; the
+      // explicit flag makes it individually recoverable too.
+      const portal = campaignPortal(folder);
+      if (portal) await portal.setFlag(id, "guideDemo", true);
+      return { campaignId: folder.id, portalId: portal?.id ?? null };
+    }, { id: MODULE_ID, name: "The Vale Chronicles" });
+    expect(campaign.campaignId).toBeTruthy();
+    expect(campaign.portalId).toBeTruthy();
+
+    // File the demo cast into it with the same production write the Hub's own
+    // filing controls perform (CampaignHubPage.onFileAllShown ->
+    // JournalEntry.updateDocuments with the chosen folder id; 14-campaigns
+    // .spec.mjs:748-770 drives that button end-to-end). "Serena of the Vale"
+    // is deliberately left out, so the Unfiled scope has a row of its own.
+    await page.evaluate(async ({ ids, folder }) => {
+      await JournalEntry.updateDocuments(ids.map((_id) => ({ _id, folder })));
+    }, { ids: [flagonId, caravanId, miraId, aldricId, sessionId], folder: campaign.campaignId });
+
     // --- Hub: timeline, dashboards (saved query), secrets (player group) --
-    const timelineShell = await openHubTab(page, "timeline");
+    // Scoped to the campaign: with no explicit timeline pick that branch
+    // calls ensureTimelineJournal(campaign), which files the campaign's own
+    // "<name> — Timeline" on the spot and renders it as the pane's single
+    // stack — so the Add-Timepoint helper below is unambiguous.
+    let timelineShell = await openHubTab(page, "timeline");
+    await scopeHub(timelineShell, page, campaign.campaignId);
+    timelineShell = await openHubTab(page, "timeline");
+    const defaultTimelineId = await page.evaluate(async ({ id, campaignId }) => {
+      const { defaultTimeline } =
+        await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+      const tl = defaultTimeline(game.folders.get(campaignId));
+      // Flagged the moment it exists, not just at afterAll: if this run
+      // crashes before then, the next run's start-of-run sweep only ever
+      // finds guideDemo-FLAGGED documents, so without this the orphaned
+      // timeline would survive every subsequent sweep forever.
+      if (tl) await tl.setFlag(id, "guideDemo", true);
+      return tl?.id ?? null;
+    }, { id: MODULE_ID, campaignId: campaign.campaignId });
+    expect(defaultTimelineId).toBeTruthy();
+
     await addTimepoint(timelineShell, page, "The Caravan Departs");
-    // Stamp guideDemo on the FRESH "Campaign Timeline" journal the Hub just
-    // filed (beforeAll reset timelineJournalId to "" so this run gets a new
-    // one) right after it's created, not just at afterAll's explicit
-    // delete-by-setting-comparison. If this run crashes before afterAll
-    // runs, a future run's start-of-run sweepGuideDemo() sweep — which only
-    // ever finds guideDemo-FLAGGED entries — needs this flag already in
-    // place to reclaim the orphaned journal; without it, the crashed run's
-    // timeline journal survives every subsequent sweep forever.
-    await page.evaluate(async (id) => {
-      const timelineId = game.settings.get("mej-campaign-companion", "timelineJournalId");
-      if (timelineId) await game.journal.get(timelineId)?.setFlag(id, "guideDemo", true);
-    }, MODULE_ID);
     await addTimepoint(timelineShell, page, "Mira's Warning");
     await addTimepoint(timelineShell, page, "The Ambush (staged)");
     await addTimepoint(timelineShell, page, "Session 12 Convenes", { year: "1497", month: "5", day: "14", time: "19:00" });
 
     // Attach the Quest entry to the first timepoint (same synthetic-drop
-    // technique as 02-hub-timeline.spec.mjs).
-    // Look the timeline journal up by the world SETTING's current id, not by
-    // name: beforeAll only resets the *setting* to "" (so the Hub files a
-    // fresh timeline journal for this run) — it doesn't touch whatever
-    // pre-existing journal is already named "Campaign Timeline" in this
-    // world. Two documents can carry that exact name at once, and
-    // `game.journal.find(name === ...)` picks whichever the collection
-    // happens to order first — not necessarily the one this run's
-    // timelineJournalId setting (and thus the Hub UI itself) is using.
-    const firstTimepointId = await page.evaluate(() => {
-      const id = game.settings.get("mej-campaign-companion", "timelineJournalId");
-      const j = game.journal.get(id);
-      const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints
+    // technique as 02-hub-timeline.spec.mjs). Looked up by the campaign's
+    // DEFAULT timeline document rather than by name: this world can hold
+    // more than one journal with a given timeline name at once, and
+    // `game.journal.find(name === …)` picks whichever the collection
+    // happens to order first, not necessarily the one the pane is showing.
+    const firstTimepointId = await page.evaluate((timelineId) => {
+      const tp = game.journal.get(timelineId)
+        ?.getFlag("mej-campaign-companion", "timeline")?.timepoints
         ?.find((t) => t.label === "The Caravan Departs");
       return tp?.id;
-    });
+    }, defaultTimelineId);
     await dropDocumentOnto(page, `li.mej-cc-timepoint[data-timepoint-id="${firstTimepointId}"]`, { type: "JournalEntry", uuid: caravanUuid });
     await settle(page, 500);
+
+    // A SECOND campaign-owned timeline, so timeline-selector.png carries a
+    // real ★ default AND a non-default selection — the only state in which
+    // "Make default" renders at all (hub.hbs suppresses it for the default
+    // and for world timelines, which is exactly why the live audit never
+    // saw it).
+    const sideTimelineId = await newTimelineViaPicker(timelineShell, page, "Side Quests");
+    expect(sideTimelineId).toBeTruthy();
+    await addTimepoint(timelineShell, page, "Rumours at the Docks");
+
+    // Back to a neutral Hub for everything after this — driven through the
+    // two pickers themselves, so the in-page state and the persisted client
+    // settings agree (a bare settings write would leave HUB_STATE stale).
+    await timelineShell.locator('select[name="timeline-select"]').selectOption("");
+    await settle(page, 400);
+    await scopeHub(timelineShell, page, "");
 
     const dashboardsShell = await openHubTab(page, "dashboards");
     await dashboardsShell.locator('button[data-action="addDashboard"]').click();
@@ -651,7 +939,9 @@ guideDescribe("guide screenshots", () => {
     await settle(page, 500);
 
     Object.assign(demo, {
-      flagonId, caravanId, miraId, aldricId, serenaId, sessionId
+      flagonId, caravanId, miraId, aldricId, serenaId, sessionId,
+      campaignId: campaign.campaignId, portalId: campaign.portalId,
+      defaultTimelineId, sideTimelineId
     });
   });
 
@@ -659,9 +949,17 @@ guideDescribe("guide screenshots", () => {
     test.setTimeout(120_000);
     await login(page, "Gamemaster");
     await page.evaluate(() => ui.notifications.clear());
+    await unpause(page);
 
     const indexShell = await openHub(page);
     await settle(page, 300);
+    // The header bar (.mej-cc-hub-header — it sits ABOVE the tab nav, inside
+    // the Hub subsheet), shot in its default "All campaigns" state: picker,
+    // New Session, Tools. The campaign-settings gear is deliberately absent
+    // here — the template only renders it while the picker is scoped to a
+    // campaign, and campaign-picker.png below is where that state is shown.
+    await shot(indexShell.locator(".mej-cc-hub-header"), "hub-header");
+
     // This is the GUIDE'S LEAD IMAGE (reused again further down for the
     // mention-badge callout on "The Gilded Flagon"/"The Missing Caravan"),
     // so it needs demo rows leading the frame, not this world's other
@@ -682,9 +980,6 @@ guideDescribe("guide screenshots", () => {
     await shot(indexShell, "hub-index");
     await indexShell.locator('input[name="index-filter"]').fill("");
     await settle(page, 300);
-
-    const timelineShell = await openHubTab(page, "timeline");
-    await shot(timelineShell, "hub-timeline");
 
     const searchShell = await openHubTab(page, "search");
     await searchShell.locator(".mej-cc-search-input").fill("caravan");
@@ -741,6 +1036,103 @@ guideDescribe("guide screenshots", () => {
     await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" }));
     await shot(graphApp, "graph-gm");
 
+    // --- Campaign scope: picker, Unfiled, timeline picker, Graph tab -------
+    // Everything from here to the scope reset below runs with the Hub scoped
+    // to "The Vale Chronicles". Besides being the subject of three of these
+    // shots, campaign scope is also what makes the Graph-tab shots reliable
+    // and publishable: #scopedEntries() narrows the pane to that campaign's
+    // members, so the graph draws this run's own five-document demo cast
+    // instead of every T-/TT- fixture other spec files have left in this
+    // shared, never-wiped world.
+    const campaignShell = await openHubTab(page, "index");
+    await scopeHub(campaignShell, page, demo.campaignId);
+    await expect(campaignShell.locator("button.mej-cc-edit-campaign")).toHaveCount(1);
+    await expect(campaignShell.locator(".mej-cc-index-row", { hasText: "The Gilded Flagon" })).toBeVisible();
+    await shot(campaignShell, "campaign-picker");
+
+    // The Timeline pane, campaign-scoped and with no explicit timeline pick:
+    // one stack (this campaign's default timeline), so the shot shows the
+    // order buttons, the timepoints, an attached entry chip and Add
+    // Timepoint without the reader having to work out which of several
+    // stacks is which. All scope stacks every campaign's default plus every
+    // world timeline, which in THIS world means the demo timeline beside
+    // World A's own unrelated, empty one.
+    const timelineShell = await openHubTab(page, "timeline");
+    await expect(timelineShell.locator("li.mej-cc-timepoint")).toHaveCount(4);
+    await shot(timelineShell, "hub-timeline");
+
+    // Unfiled scope. The name filter is the same control hub-index.png above
+    // uses, and for the same reason: this world's other fixtures are unfiled
+    // too, and "Serena" is the one demo entry deliberately left out of the
+    // campaign, so filtering to her leaves exactly the row this shot is
+    // about — with its GM-only "File into campaign…" button and the
+    // toolbar's Unfiled-only "File all shown into…" beside it.
+    const unfiledShell = await openHubTab(page, "index");
+    await scopeHub(unfiledShell, page, "unfiled");
+    await unfiledShell.locator('input[name="index-filter"]').fill("Serena");
+    await settle(page, 400);
+    await expect(unfiledShell.locator(".mej-cc-index-row")).toHaveCount(1);
+    await expect(unfiledShell.locator("button.mej-cc-file-all")).toHaveCount(1);
+    await expect(unfiledShell.locator("button.mej-cc-row-file")).toHaveCount(1);
+    await shot(unfiledShell, "campaign-unfiled");
+    await unfiledShell.locator('input[name="index-filter"]').fill("");
+    await settle(page, 300);
+
+    // Timeline picker, with "Side Quests" (the campaign's NON-default
+    // timeline) selected: the only state that renders the full management
+    // trio, Make default included.
+    await scopeHub(unfiledShell, page, demo.campaignId);
+    const tlShell = await openHubTab(page, "timeline");
+    await tlShell.locator('select[name="timeline-select"]').selectOption(demo.sideTimelineId);
+    await settle(page, 600);
+    await expect(tlShell.locator("button.mej-cc-timeline-default")).toHaveCount(1);
+    await expect(tlShell.locator("button.mej-cc-timeline-rename")).toHaveCount(1);
+    await expect(tlShell.locator("button.mej-cc-timeline-delete")).toHaveCount(1);
+    // Cropped to the controls row itself, not the whole pane. The pane is a
+    // full-height tab body and this campaign's non-default timeline carries
+    // one timepoint, so a pane-sized shot was ~75% empty black frame (review
+    // finding). `.mej-cc-timeline-controls` is exactly the picker plus the
+    // management trio — the stacks are its siblings, not its children — so
+    // its own box padded by 8px is the tight crop. Clamped to the pane so the
+    // 8px can never reach past the tab body into the shell's chrome.
+    const tlPane = tlShell.locator(".mej-cc-timeline");
+    const tlControls = tlPane.locator(".mej-cc-timeline-controls");
+    const tlControlsBox = await tlControls.boundingBox();
+    expect(tlControlsBox, "timeline controls have no bounding box").toBeTruthy();
+    // padBottom 4, not 8: the next sibling (the stack's order-button row)
+    // begins 5px below the controls box, and a symmetric 8px would clip a
+    // 3px sliver of its top edge into the frame.
+    await shotAround(page, tlControlsBox, "timeline-selector", {
+      pad: 8,
+      padBottom: 4,
+      within: await tlPane.boundingBox()
+    });
+    // Back to the scope's stacked default view before the Graph shots.
+    await tlShell.locator('select[name="timeline-select"]').selectOption("");
+    await settle(page, 400);
+
+    // The Graph TAB in context (nav + header + pane) — the guide's "the graph
+    // is its own pane" image. graph-gm.png above is the pane on its own, in
+    // Focus mode; this is the whole Hub in Whole-campaign mode.
+    const paneShell = await openHub(page);
+    const campaignGraph = await settleGraphPane(page, paneShell, ["Mira Thornwood", "Captain Aldric Vane"]);
+    await shot(paneShell, "hub-graph");
+
+    // A single node, close up, with its real portrait — the seed set
+    // Mira's page `src`, so nodeImage()'s first branch (the page's own
+    // image) is what draws here, not MEJ's per-type placeholder. Asserted,
+    // not assumed: the whole point of this shot is that it is NOT the
+    // fallback the live UI audit was stuck with.
+    const miraNode = campaignGraph.locator(".mej-cc-graph-node", { hasText: "Mira Thornwood" });
+    await expect(miraNode.locator("image")).toHaveAttribute("href", "icons/environment/people/commoner.webp");
+    const miraBox = await miraNode.boundingBox();
+    expect(miraBox, "Mira's graph node has no bounding box").toBeTruthy();
+    await shotAround(page, miraBox, "portrait-node", { within: await campaignGraph.boundingBox() });
+
+    // Neutral scope again for the tests that follow (and for the world this
+    // run borrows) — afterAll restores the setting outright either way.
+    await scopeHub(paneShell, page, "");
+
     const sessionShell = await openEntry(page, demo.sessionId);
     await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
     await settle(page, 300);
@@ -768,6 +1160,7 @@ guideDescribe("guide screenshots", () => {
     test.setTimeout(120_000);
     await login(page, "Gamemaster");
     await page.evaluate(() => ui.notifications.clear());
+    await unpause(page);
 
     // Settings window's module section — must show genuine defaults, not
     // whatever the seed test last left retroLinkMode/autoLink at (the seed
@@ -835,8 +1228,8 @@ guideDescribe("guide screenshots", () => {
     // opened and populated, but never actually imported (Escape-closed
     // afterward) so it doesn't add extra, unmanaged demo content.
     const importShell = await openHub(page);
-    await importShell.locator(".mej-cc-tools-summary").click();
-    await importShell.locator('.mej-cc-tools-menu button[data-action="openImportWizard"]').click();
+    const importMenu = await openToolsMenu(importShell, page);
+    await importMenu.locator('button[data-action="openImportWizard"]').click();
     await settle(page, 300);
     const wizard = page.locator(".mej-cc-import-wizard-app");
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
@@ -852,8 +1245,8 @@ guideDescribe("guide screenshots", () => {
     // Export dialog, with "Include GM Content" visible — Escape-closed
     // rather than triggering a real download.
     const exportShell = await openHub(page);
-    await exportShell.locator(".mej-cc-tools-summary").click();
-    await exportShell.locator('.mej-cc-tools-menu button[data-action="openExportDialog"]').click();
+    const exportMenu = await openToolsMenu(exportShell, page);
+    await exportMenu.locator('button[data-action="openExportDialog"]').click();
     const exportDialog = page.locator("dialog.application").last();
     await expect(exportDialog).toBeVisible();
     await expect(exportDialog.locator('input[name="includeGM"]')).toHaveCount(1);
@@ -935,6 +1328,7 @@ guideDescribe("guide screenshots", () => {
     try {
       await capturePlayerShots(page);
     } finally {
+      await restorePlayerPickers(page);
       await gmContext.close();
     }
   });
@@ -948,6 +1342,24 @@ guideDescribe("guide screenshots", () => {
 async function capturePlayerShots(page) {
   await login(page, "User 1");
   await page.evaluate(() => ui.notifications.clear());
+  await unpause(page);
+  playerPickerSnapshot = await page.evaluate(() => ({
+    hubCampaignScope: game.settings.get("mej-campaign-companion", "hubCampaignScope"),
+    hubTimelineSelection: game.settings.get("mej-campaign-companion", "hubTimelineSelection")
+  }));
+
+  // The campaign portal entry, opened the way a player actually meets it —
+  // as an ordinary journal entry. Its page carries the module-declared
+  // subtype mej-campaign-companion.campaign, whose registered sheet IS the
+  // Hub (integrations/mej-adapter.mjs), and CampaignHubPage's own
+  // isCampaignPage branch then scopes the Hub to the portal's campaign. So
+  // this shot is both "the portal" and "what opening it does". Taken FIRST,
+  // before the recap edit below leaves a permanently-dirty ProseMirror on
+  // the shared MEJ shell (see the unsaved-changes note further down).
+  const portalShell = await openEntry(page, demo.portalId);
+  await expect(portalShell.locator(".mej-cc-hub-container")).toHaveCount(1);
+  await expect(portalShell.locator('select[name="campaign-scope"]')).toHaveValue(demo.campaignId);
+  await shot(portalShell, "portal");
 
   // Session sheet, description tab, as User 1 sees it. No extra filtering
   // needed to keep GM notes out of frame: templates/session.hbs gates its
@@ -1074,62 +1486,14 @@ async function capturePlayerShots(page) {
   // mode. assertNodeOnscreen() (defined above, shared with the GM
   // capture) is still used as a belt-and-suspenders check on the two
   // named nodes.
+  // Sparser still since Task 5: opening the portal above scoped this seat's
+  // Hub to "The Vale Chronicles", so the pane draws that campaign's members
+  // rather than every visible entry in the world.
   //
-  // Live investigation (carried over from the graph's original standalone-
-  // popup incarnation, still true now that it's embedded as a Hub tab):
-  // this environment's accumulated fixture set (this persistent world is
-  // shared and never wiped across spec files or sessions) can put ~10
-  // nodes in this viewer's whole-campaign graph, spread far larger than
-  // the pane's default frame — hub-graph-pane.mjs's drawGraphPane() uses
-  // fixed, frame-size-independent d3-force repulsion/link forces, while
-  // the SVG's viewBox AND forceCenter() target are both derived from its
-  // OWN clientWidth/clientHeight at draw time. A small/hidden frame can't
-  // contain that spread around its center, so d3-force's unseeded initial
-  // layout can randomly decide which nodes land inside vs. outside it.
-  //
-  // Two things matter for a large, reliable draw here, both different
-  // from the old standalone popup: (1) the graph pane has no window of
-  // its own anymore — it's embedded in the MEJ shell, so enlarging the
-  // SHELL is what grows the SVG's real clientWidth/clientHeight; (2) the
-  // Graph tab's own <div> only reports a non-zero clientWidth once it is
-  // the ACTIVE (visible) tab — switching tabs (changeTab()) is a plain
-  // DOM class-toggle with no re-render of its own (confirmed against
-  // Foundry's ApplicationV2#changeTab), so drawGraphPane() must be
-  // re-triggered via an explicit subsheet render AFTER the tab is already
-  // active and the shell already enlarged, or it draws against a stale/
-  // hidden (0-width, falls back to a fixed 800×540) frame instead.
+  // The enlarge-then-redraw-then-verify mechanics this shot needs live in
+  // settleGraphPane() above (shared with the GM's own Graph-tab shots);
+  // its doc comment carries the full live-investigation record.
   const graphShell = await openHub(page);
-  await page.evaluate(() => {
-    game.MonksEnhancedJournal.journal?.setPosition({ left: 20, top: 20, width: 1400, height: 840 });
-  });
-  await settle(page, 300);
-  await graphShell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
-  await settle(page, 200);
-  await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
-  await settle(page, 300);
-  let graphApp = graphShell.locator(".mej-cc-graph-pane");
-  await expect(graphApp).toHaveCount(1);
-
-  let lastError;
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    graphApp = graphShell.locator(".mej-cc-graph-pane");
-    await expect(graphApp).toHaveCount(1);
-    await expect.poll(() => graphApp.locator(".mej-cc-graph-node").count()).toBeGreaterThanOrEqual(2);
-    await settle(page, 2500); // let the simulation's alpha decay toward rest
-    try {
-      await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "Captain Aldric Vane" }));
-      await assertNodeOnscreen(graphApp, graphApp.locator(".mej-cc-graph-node", { hasText: "The Missing Caravan" }));
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
-      // The tab is already active and the shell already enlarged, so a
-      // plain re-render of the Hub's "main" part is enough to get a
-      // fresh, independently-randomized simulation for the next try.
-      await page.evaluate(() => game.MonksEnhancedJournal.journal?.subsheet?.render({ parts: ["main"] }));
-      await settle(page, 300);
-    }
-  }
-  if (lastError) throw lastError;
+  const graphApp = await settleGraphPane(page, graphShell, ["Captain Aldric Vane", "The Missing Caravan"]);
   await shot(graphApp, "graph-player");
 }

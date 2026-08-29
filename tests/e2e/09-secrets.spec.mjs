@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
-  settle, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
+  settle, clickWithHitDiagnostics, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
@@ -102,8 +102,31 @@ test.describe("09 secrets", () => {
     // asserted below. Kept as a sanity baseline for the "before" state.
     await expect(contentPreview(p1Shell)).not.toContainText(SECRET_TEXT);
 
-    // GM reveals to User 1.
-    await btn.click();
+    // GM reveals to User 1. clickWithHitDiagnostics, not a bare click(): this
+    // exact click is what failed in baseline run 5 - 15s of retries with MEJ
+    // sheet chrome taking the pointer events while the button itself stayed
+    // "visible, enabled and stable". Same click semantics; the wrapper only
+    // adds a diagnosis when it times out.
+    //
+    // What that diagnosis caught live during round-5 fix round 1:
+    //   box=795,422 116x26  visibility=visible  pointerEvents=auto
+    //   scroller=<div class="editor editor-display wrapper scrollable">
+    //            scrollTop=62 clientH=0 scrollH=73
+    //   topmost=<a> inside <nav class="sheet-tabs tabs">
+    // MEJ lays this enriched preview wrapper out at clientHeight 0 while it
+    // still holds ~73px of content - the normal state here, and harmless as
+    // long as scrollTop stays 0, because the element painted at the button's
+    // box is then the wrapper itself (an ancestor, which Playwright's hit
+    // check accepts). Once anything scrolls that zero-height container (a
+    // click's own scroll-into-view will, since the target can never be "in
+    // view" in a 0px viewport), every child's box shifts up by scrollTop and
+    // the button's rect lands over the tab strip ABOVE the content, where it
+    // is neither painted nor clickable - and no retry recovers, because the
+    // scroll position does not come back. A forced re-flow does not fix the
+    // height either (measured: preview 715x0 inside a 723x211 container, even
+    // after setPosition + a resize event), so the real fix is MEJ-side; see
+    // the Round 5 outcome section of the bugfix-sweep spec.
+    await clickWithHitDiagnostics(btn, page);
     await settle(page, 300);
     const dialog = page.locator("dialog.application").last();
     await expect(dialog).toBeVisible();
@@ -379,7 +402,7 @@ test.describe("09 secrets", () => {
       await expect(btn).toHaveCount(1);
 
       // 1. Reveal to Everyone through the button.
-      await btn.click();
+      await clickWithHitDiagnostics(btn, page);
       await settle(page, 300);
       const dialog = page.locator("dialog.application").last();
       await expect(dialog).toBeVisible();
@@ -392,7 +415,7 @@ test.describe("09 secrets", () => {
       expect(afterFirst).toContain("secret revealed");
 
       // 2. Reopen the dialog: it must SEE that native reveal.
-      await btn.click();
+      await clickWithHitDiagnostics(btn, page);
       await settle(page, 300);
       const reopened = page.locator("dialog.application").last();
       await expect(reopened).toBeVisible();
@@ -468,7 +491,7 @@ test.describe("09 secrets", () => {
 
       // Drive a real reveal through it.
       const u1Id = await page.evaluate(() => game.users.getName("User 1").id);
-      await btn.click();
+      await clickWithHitDiagnostics(btn, page);
       await settle(page, 300);
       const dialog = page.locator("dialog.application").last();
       await expect(dialog).toBeVisible();

@@ -355,10 +355,18 @@ test.describe("15 campaign portal", () => {
       await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
       // The ready hook's migration runs async after game.ready flips - poll
       // for dataVersion to actually reach CURRENT_DATA_VERSION rather than
-      // racing a fixed settle().
+      // racing a fixed settle(). The target is READ FROM the served module
+      // instead of hard-coded: this poll was pinned to the literal 2 and went
+      // permanently red the moment CURRENT_DATA_VERSION became 3 (the
+      // native-reveal migration, commit 14d87f2), even though the v2 portal
+      // backfill under test still ran correctly.
+      const currentVersion = await page.evaluate(async () => {
+        const { CURRENT_DATA_VERSION } = await import("/modules/mej-campaign-companion/scripts/constants.mjs");
+        return CURRENT_DATA_VERSION;
+      });
       await page.waitForFunction(
-        () => game.settings.get("mej-campaign-companion", "dataVersion") === 2,
-        null, { timeout: 30_000 }
+        (target) => game.settings.get("mej-campaign-companion", "dataVersion") === target,
+        currentVersion, { timeout: 30_000 }
       );
 
       const after = await page.evaluate(async (id) => {
@@ -368,13 +376,14 @@ test.describe("15 campaign portal", () => {
           portal: campaignPortal(game.folders.get(id))
         };
       }, folderId);
-      expect(after.dataVersion).toBe(2);
+      expect(after.dataVersion).toBe(currentVersion);
       expect(after.portal).toBeTruthy();
       expect(after.portal.name).toBe(NAME);
 
       assertNoConsoleErrors(errors);
     } finally {
-      // Restore: delete fixtures; dataVersion stays 2 (the real steady state).
+      // Restore: delete fixtures; dataVersion stays at CURRENT_DATA_VERSION
+      // (the real steady state).
       await deleteCampaignFolder(page, folderId);
       await resetScope(page);
     }

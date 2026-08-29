@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupTimelineJournal,
+  login, TT_PREFIX, cleanupTimelineJournal, worldTimelineJournalId,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -129,11 +129,13 @@ test.describe("04 auto-capture", () => {
 
     // Timepoint link: the newest timepoint gained a link pointing at the
     // Encounter page.
-    const links = await page.evaluate((timepointId) => {
-      const j = game.journal.find((e) => e.name === "Campaign Timeline");
+    // By id (the timelineJournalId setting), never by the "Campaign
+    // Timeline" name - see worldTimelineJournalId's doc comment.
+    const links = await page.evaluate(({ timepointId, timelineId }) => {
+      const j = game.journal.get(timelineId);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.find((t) => t.id === timepointId);
       return tp?.links ?? [];
-    }, timepointId);
+    }, { timepointId, timelineId: await worldTimelineJournalId(page) });
     expect(links.some((l) => l.type === "JournalEntryPage")).toBe(true);
 
     assertNoConsoleErrors(errors);
@@ -155,11 +157,13 @@ test.describe("04 auto-capture", () => {
     });
     await settle(page, 500);
 
-    const links = await page.evaluate((timepointId) => {
-      const j = game.journal.find((e) => e.name === "Campaign Timeline");
+    // By id (the timelineJournalId setting), never by the "Campaign
+    // Timeline" name - see worldTimelineJournalId's doc comment.
+    const links = await page.evaluate(({ timepointId, timelineId }) => {
+      const j = game.journal.get(timelineId);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.find((t) => t.id === timepointId);
       return tp?.links ?? [];
-    }, timepointId);
+    }, { timepointId, timelineId: await worldTimelineJournalId(page) });
     expect(links.some((l) => l.src === "icons/svg/mystery-man.svg")).toBe(true);
     expect(conflictWarnings).toEqual([]);
 
