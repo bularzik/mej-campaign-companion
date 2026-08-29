@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.5 (2026-08-29)
 
 - **User guides and screenshots rewritten for the 0.13.x Hub.** The header
   bar and Tools menu, all six panes, campaigns and the campaign picker,
