@@ -22,7 +22,11 @@ Your own recap is the block under **Player Recaps**. Click the pencil beside it 
 
 ![The player recap open for editing, with the full formatting toolbar sitting directly under the tab strip and the recap text below it](images/recap-editing.png)
 
-Click the pencil again to close the editor once you're done — that's the reliable way to close out. Your recap commits as soon as the editor loses focus (clicking elsewhere or navigating away both count), so if you navigate away instead, Foundry may still pop up a "You have unsaved changes" dialog. Don't let that worry you: by the time that dialog can appear your text has already been written. It's Foundry's editor being unable to tell that a saved field isn't dirty any more — its dirty flag latches on at your first keystroke and is never cleared. It's safe to answer "discard" if you see it.
+**Click the pencil again to close the editor when you're done, before you go anywhere else.** That is what commits your recap: closing the editor takes focus off it, and the editor writes what you typed on its way out. Make it a habit — it's the one route this guide can promise saves your text.
+
+After you've closed the editor that way, Foundry may still pop up a "You have unsaved changes" dialog the next time you open another entry. That one is a false alarm and you can dismiss it either way: Foundry's editor latches a "dirty" flag at your first keystroke and never clears it, so it keeps warning about a field that was already written.
+
+If you get that dialog while the editor is *still open* — you tabbed away, hit Escape, or clicked straight through to another entry without closing it first — don't assume it's the same false alarm. Answer it by keeping or saving your changes, not by discarding them, then go back and close the editor with the pencil.
 
 If there's no pencil at all, your GM hasn't given you edit access to that session — the **Players Write Sessions** setting and per-entry ownership are both theirs to set, so ask them. One thing worth knowing if you don't own the entry outright: your recap is written through an online GM's client, so if no GM is logged in, the editor stays inactive until one is.
 
@@ -34,7 +38,7 @@ Once your campaign has more than a few sessions, you won't always remember which
 - the **Campaign Hub** tool in the **Journal Notes** group of Foundry's scene controls;
 - opening a campaign's portal entry from the journal sidebar — see [The campaign portal](#the-campaign-portal) below.
 
-A **header bar** runs across the top of the Hub. From your seat it holds two things: a **campaign picker** and a **Tools** button. The picker scopes every pane below it — it offers **All campaigns**, **Unfiled**, and each campaign you're allowed to see, but not the GM-only option for creating one. **Tools** holds a single item for you, **Open the user guide**, which opens this document in a new browser tab. Your GM's header bar has more on it: a settings gear and a **New Session** button that aren't rendered for you.
+A **header bar** runs across the top of the Hub. From your seat it holds two things: a **campaign picker** and a **Tools** button. The picker scopes every pane below it — it offers **All campaigns**, each campaign you're allowed to see, and **Unfiled** when there are any unfiled entries you can see, but not the GM-only option for creating one. **Tools** holds a single item for you, **Open the user guide**, which opens this document in a new browser tab. Your GM's header bar has more on it: a settings gear and a **New Session** button that aren't rendered for you.
 
 Below the header bar are the panes. **You see five** — **Index**, **Timeline**, **Graph**, **Search** and **Dashboards**. Your GM sees a sixth, **Secrets**, which isn't rendered for a non-GM at all.
 
@@ -46,7 +50,7 @@ The **Search** pane is faster than scrolling the index once you know roughly wha
 
 (That shot was taken from the GM's own seat — you can tell by the six tabs and the **New Session** button. It includes a **Secrets:** match line under Session 12 that a player's results would never turn up. Your own search only ever reaches what your permissions allow, the same rule that governs everything else in this guide.) One cosmetic wrinkle you may notice: snippets are taken from the raw page text, so a link can show through as `@UUID[...]` markup mid-sentence. It's only the preview that looks like that; the entry itself reads normally.
 
-Every entry also has a **Mentioned in (N)** panel at the foot of its sheet, listing which other entries link to it with a ×N count each — handy for tracing how two people or places you've heard of connect. It sits alongside **Tags** and **Attributes** in the same panel; from your seat all three are read-only, and an entry with no tags reads "No tags".
+Your GM's typed entries — Persons, Places, Quests and the rest — also carry a knowledge panel at the foot of the sheet, and its **Mentioned in (N)** section lists which other entries link to it with a ×N count each — handy for tracing how two people or places you've heard of connect. It sits alongside **Tags** and **Attributes** in the same panel; from your seat all three are read-only, and an entry with no tags reads "No tags".
 
 The **Dashboards** pane holds saved searches your GM has built. You'll see the ones they marked **Visible to players**, with their live results listed underneath — a ready-made search, filtered the same way as everything else. There are no controls on it from your seat, and an empty pane reads "No dashboards yet."
 
@@ -106,13 +110,15 @@ The Hub's **Timeline** pane lays out your campaign's key moments in order — a 
 
 ![The Hub's Timeline pane with the picker set to "All timelines in scope", the Manual / Date Added / Campaign Date order buttons, and four timepoints: "The Caravan Departs" carrying an attached link to The Missing Caravan, "Mira's Warning", "The Ambush (staged)" and "Session 12 Convenes"](images/hub-timeline.png)
 
+(That shot is from the GM's seat. **+ Add Timepoint** at the bottom isn't rendered for you, and the pen and trash on each row are your GM's editing controls. What you get is the same timeline, read-only: the labels, the order, and anything attached to each point.)
+
 The pane leads with a **timeline picker**, because a world can hold more than one. Its options are **All timelines in scope** (where it starts), a greyed-out **— World timelines —** separator, and then the timelines themselves; a **★** before a name marks the campaign's default. Your GM's picker also has a **➕ New timeline…** option and rename/delete controls beside it — yours has neither.
 
 Three buttons below the picker change how the list is ordered, and all three work from your seat: **Manual** (the order your GM arranged them in), **Date Added** (when each one was created), and **Campaign Date** (the in-world date, for the timepoints that have one). A timepoint can also carry an attached entry, shown as a chip on its row — "The Caravan Departs" above links straight through to The Missing Caravan.
 
 Attachments follow the same permission rule as everything else, with one extra twist. A linked entry only shows on your row if you're allowed to open it. An attached *image* is stricter still: it stays off a player's timeline entirely unless your GM has explicitly ticked it as shown to players, so a picture your GM has staged for a later reveal won't appear on your row before then.
 
-(The shot above is from the GM's seat. **+ Add Timepoint** at the bottom isn't rendered for you, and the pen and trash on each row are your GM's editing controls. What you get is the same timeline, read-only: the labels, the order, and anything attached to each point.) Two empty states are worth recognising: a timeline that exists but holds nothing reads "No timepoints yet.", while a scope with no timeline at all reads "No timeline in this scope."
+Two empty states are worth recognising: a timeline that exists but holds nothing reads "No timepoints yet.", while a scope with no timeline at all reads "No timeline in this scope."
 
 ## Quick answers
 
