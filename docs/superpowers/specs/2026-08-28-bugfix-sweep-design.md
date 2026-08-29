@@ -521,3 +521,41 @@ load-bearing at all.
 **Method note worth keeping:** the targeted tests for each item passed while
 three specs that pass on `main` failed. Diffing a broad sweep against the
 base commit is what surfaced them; a green targeted suite proved nothing.
+
+## Round 5 scope (reconciled 2026-08-29)
+
+Re-checked the four carried items against `main` @ 0.13.4 before starting.
+Two are already closed and are dropped from the round with the evidence:
+
+| Carried item | Finding |
+|---|---|
+| In-repo `module.json` `download` points at 0.3.0 | Fixed in 0.12.0 (`731e715`); both `manifest` and `download` point at `releases/latest/download/`. **Obsolete.** |
+| `14-campaigns` "world unchanged" flip-flop | The suite now snapshots the `Campaign Timeline` journal count alongside the settings and restores both; 12/12 in both Round 4 full sweeps. **Obsolete.** |
+
+The remaining two become two workstreams, approved at full scope:
+
+**Workstream A — guides to 0.13.x.** The staleness is wider than "the
+pre-0.9.0 toolbar": neither guide mentions any post-0.9.0 feature (header bar
+and Tools menu, Campaigns pane and picker, Unfiled filing, portal,
+multi-timeline, portraits, or 0.13.3's native "revealed" semantics), the Hub
+now has six panes (Graph is a pane, not a toolbar icon), and all 23 images
+date from 2026-08-20. Method: (1) a read-only live-UI audit as GM and as
+player is the source of truth — never the changelog; (2) both guides are
+rewritten section by section on the existing heading skeleton, with new
+sections for Campaigns and the Portal, keeping existing image filenames
+stable; (3) `guide-screenshots.spec.mjs` seeding is extended to create a
+campaign so the new panes have content, and every image is recaptured under
+`GUIDE_SHOTS=1`. Reviewer gate: each image is checked against the prose that
+cites it; `npm run check:links` green.
+
+**Workstream B — flakes: root-cause or quarantine.** `06-player-collab` (not
+in any Round 4 sweep, so unverified) plus the three one-offs recorded in
+Round 4: `09-secrets` "reveal to Everyone round-trips", `07-knowledge`
+"playerHidden", `04-auto-capture`. Bar: run the full 18-spec suite at least
+five times, logging every failure with its run position. A reproducing
+failure gets systematic debugging, a fix, and a vacuity check. One that
+does not reproduce across ≥5 full runs is closed as *unreproduced* with the
+run log recorded here. Never a blanket retry.
+
+**Release rule for this round.** Documentation alone does not cut a release;
+0.13.5 is cut only if Workstream B lands a product fix.
