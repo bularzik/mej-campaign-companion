@@ -471,3 +471,53 @@ recording because neither was visible to a green suite:
   control" failed once in a full 14-test run, then passed in an isolated run,
   a paired run, and two further full runs. Not order-dependent as far as those
   runs show. Recorded rather than dismissed; belongs with Round 5's flake work.
+
+## Round 4 outcome (complete)
+
+Landed on `fix/sweep-round4`, cut from `main` @ 0.13.3. Released as **0.13.4**
+(PR #20, merge `4b4f6e9`). C6, C7 and C13 all closed. Unit 679; broad e2e
+50/50 across 8 specs on two consecutive runs.
+
+**The spec's own C7 fix was unsafe and was not used.** It proposed hoisting
+the page/viewer snapshot out of the per-entity pass; `hooks/retro-link.mjs`
+already documented why that breaks — passes are serialized precisely so each
+re-reads page content after the previous one's writes land, or the second
+write clobbers the first's links. The round batched the burst into one plan
+instead, which removes the hazard rather than managing it, and collapses a
+50-section import's 50 confirm dialogs into one.
+
+**C6 turned out bigger than the spec assumed.** The spec's "skip the rebuild
+when the graph data is unchanged" cannot work on its own: measured live, the
+`<svg>` element is REPLACED on every `main` re-render, so an element-keyed
+cache never hits. The graph is drawn on tab activation instead (tab switches
+are CSS-only and do not re-render), which is what makes the signature cache
+load-bearing at all.
+
+### Six defects found by the gates, four of them mine, two concealed by green tests
+
+- **Critical: batch candidates were not sorted longest-name-first.**
+  `autoLinkAdded` documents that precondition (each match claims its words).
+  It was vacuous for the old one-entity-per-call planner and became
+  load-bearing under batching. An import creating "Elara" before "Elara
+  Moonwhisper" linked the WRONG entity into the page and left the correctly
+  named one unlinked. **The new unit test passed it by luck** — it built the
+  burst only in the already-sorted order. It now asserts both orders.
+- **Important: the 200ms burst window did not survive the real importer**,
+  which awaits a server round trip per section; on a slower install every
+  section closed its own burst, silently reverting to the old behaviour
+  while the changelog promised one dialog.
+- Two Minor: the login sweep cleared every pending flag up front (one
+  interruption dropped the whole backlog); a deleted entry could still get a
+  dead link written, and the mid-dialog re-plan could promote an entity from
+  "ambiguous — not written" to written.
+- Caught by the broad e2e sweep BEFORE review, both regressions I introduced:
+  deferring the burst also deferred a flag-clearing write that MEJ's
+  `fixType` normalization rides on (fresh entries read as
+  `mej-campaign-companion.session` instead of `session`); and the C13
+  refactor dropped a JS `Set` ordering guarantee — re-adding moves an item to
+  the end, which kept the nested-element refresh from rendering the
+  "Mentioned in" panel twice.
+
+**Method note worth keeping:** the targeted tests for each item passed while
+three specs that pass on `main` failed. Diffing a broad sweep against the
+base commit is what surfaced them; a green targeted suite proved nothing.
