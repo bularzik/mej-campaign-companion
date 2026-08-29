@@ -75,11 +75,11 @@ async function shot(target, name) {
  * product never renders. A page-level clip around the node's REAL geometry
  * is the honest close-up: same pixels the user sees, just cropped.
  */
-async function shotAround(page, box, name, { pad = 70, within = null } = {}) {
+async function shotAround(page, box, name, { pad = 70, padBottom = null, within = null } = {}) {
   let x1 = box.x - pad;
   let y1 = box.y - pad;
   let x2 = box.x + box.width + pad;
-  let y2 = box.y + box.height + pad;
+  let y2 = box.y + box.height + (padBottom ?? pad);
   // Clamped to the containing element when one is given, so a node that
   // settled near the edge of the graph pane can't drag the surrounding
   // window chrome (or the desktop behind it) into a shot that is meant to
@@ -1088,7 +1088,25 @@ guideDescribe("guide screenshots", () => {
     await expect(tlShell.locator("button.mej-cc-timeline-default")).toHaveCount(1);
     await expect(tlShell.locator("button.mej-cc-timeline-rename")).toHaveCount(1);
     await expect(tlShell.locator("button.mej-cc-timeline-delete")).toHaveCount(1);
-    await shot(tlShell.locator(".mej-cc-timeline"), "timeline-selector");
+    // Cropped to the controls row itself, not the whole pane. The pane is a
+    // full-height tab body and this campaign's non-default timeline carries
+    // one timepoint, so a pane-sized shot was ~75% empty black frame (review
+    // finding). `.mej-cc-timeline-controls` is exactly the picker plus the
+    // management trio — the stacks are its siblings, not its children — so
+    // its own box padded by 8px is the tight crop. Clamped to the pane so the
+    // 8px can never reach past the tab body into the shell's chrome.
+    const tlPane = tlShell.locator(".mej-cc-timeline");
+    const tlControls = tlPane.locator(".mej-cc-timeline-controls");
+    const tlControlsBox = await tlControls.boundingBox();
+    expect(tlControlsBox, "timeline controls have no bounding box").toBeTruthy();
+    // padBottom 4, not 8: the next sibling (the stack's order-button row)
+    // begins 5px below the controls box, and a symmetric 8px would clip a
+    // 3px sliver of its top edge into the frame.
+    await shotAround(page, tlControlsBox, "timeline-selector", {
+      pad: 8,
+      padBottom: 4,
+      within: await tlPane.boundingBox()
+    });
     // Back to the scope's stacked default view before the Graph shots.
     await tlShell.locator('select[name="timeline-select"]').selectOption("");
     await settle(page, 400);
