@@ -559,3 +559,138 @@ run log recorded here. Never a blanket retry.
 
 **Release rule for this round.** Documentation alone does not cut a release;
 0.13.5 is cut only if Workstream B lands a product fix.
+
+## Round 5 outcome
+
+Workstream B (flake triage) run on `fix/sweep-round5`, base `main` @ `c93d2a8`
+(0.13.4). Five full-suite baseline runs (`run-1.log` … `run-5.log` in
+`.superpowers/sdd/2026-08-29-sweep-round5/`), then targeted repro runs per
+item. **No `scripts/` change landed — the fixes are all in `tests/e2e/`, so by
+this round's own release rule 0.13.5 is NOT cut.**
+
+### Failures by run (105 tests: 93 run, 12 skipped — `13-stock-smoke` needs `STOCK_PHASE`)
+
+| Test | R1 | R2 | R3 | R4 | R5 | Rate |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| `15-campaign-portal.spec.mjs:331` — 6. migration backfills a portal for a legacy campaign | ✗ | ✗ | ✗ | ✗ | ✗ | **5/5** |
+| `14-campaigns.spec.mjs:68` — adoption: banner pre-adoption … full restoration | ✓ | ✗ | ✓ | ✓ | ✓ | 1/5 |
+| `02-hub-timeline.spec.mjs:207` — index row click opens the entry in MEJ … | ✓ | ✓ | ✗ | ✓ | ✓ | 1/5 |
+| `09-secrets.spec.mjs:83` — GM reveals a block to User 1 … | ✓ | ✓ | ✓ | ✓ | ✗ | 1/5 |
+| `06-player-collab.spec.mjs` (all three) | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `09-secrets.spec.mjs:357` — reveal to Everyone round-trips … | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `07-knowledge.spec.mjs:185` — attributes: playerHidden … | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+| `04-auto-capture.spec.mjs` (both) | ✓ | ✓ | ✓ | ✓ | ✓ | 0/5 |
+
+Run totals: R1 92 passed / 1 failed, R2 91/2, R3 91/2, R4 92/1, R5 91/2.
+
+### Verdicts
+
+**1. `15-campaign-portal:331` — REPRODUCED 5/5, and it was never a flake.**
+Bisect: the same failure on this branch's HEAD *and* on `main` @ `c93d2a8`
+(the branch touches no `scripts/`), so it is pre-existing, not introduced
+here. Root cause: commit `14d87f2` raised `CURRENT_DATA_VERSION` 2 → 3 (the
+native-reveal migration) and the test still polled for the literal `2`, so
+`page.waitForFunction` could never be satisfied and timed out at 30s. The
+product was fine throughout — the portal backfill it guards ran correctly
+every time. **Fixed in the test**: the target version is read from the served
+`scripts/constants.mjs` instead of hard-coded. *Vacuity check*: with the
+backfill loop stubbed out (`missingPortalPlan(...)` → `[]`), the test fails at
+`expect(after.portal).toBeTruthy()` — `Received: null` — so it still gates the
+behaviour it claims to.
+
+**2. `14-campaigns:68` — REPRODUCED deterministically, root-caused, fixed.**
+Not order-dependent and not a flake: it is world-state dependent. The test
+snapshots the number of journals named `Campaign Timeline`, and its final
+`cleanupTimelineJournal()` deleted every empty one except the single id named
+by `timelineJournalId` — so a *pre-existing* second empty copy (found state)
+was deleted and the "left exactly as found" count went 2 → 1. Live proof: a
+world probe found exactly that second copy present; the spec then failed on
+run 1 alone and passed on runs 2 and 3, because run 1's own cleanup had eaten
+the orphan. **Fixed in the test**: the snapshot records the *ids* of every
+pre-existing `Campaign Timeline` journal and the cleanup excludes all of them
+(`excludeIds`, replacing `excludeId`). *Regression proof*: with an orphan
+re-seeded, the fixed spec passes 16/16 **and leaves the orphan in place**
+(verified by id afterwards).
+
+**3. `02-hub-timeline:207` — root-caused and fixed at the root; not
+reproducible on demand.** Failure was `page.evaluate: TypeError: Cannot set
+properties of undefined (setting 'links')` — i.e.
+`timeline.timepoints[0]` was undefined on the journal the test had just added
+a timepoint to. The test found that journal by NAME
+(`game.journal.find((e) => e.name === "Campaign Timeline")`), and a world can
+hold more than one journal with that name. Demonstrated live: with an older
+orphan present and the setting pointing at a newer journal, name lookup
+returned the **empty orphan** (0 timepoints) while the id lookup returned the
+real one (1 timepoint) — `diverges: true`, exactly the crash shape. **Fixed in
+the test**: a new `worldTimelineJournalId(page)` helper resolves the journal
+the way the module does (through `timelineJournalId`, throwing rather than
+returning null), used at all four name-lookup sites (`02` ×2, `04` ×2 — `04`
+was a latent instance of the identical defect). The same site also gained a
+`waitForFunction` for the Add-Timepoint dialog's write actually landing,
+replacing reliance on the fixed `settle(400)` before it. 3 alone runs and 3
+runs paired with `01-session` after the fix: all green.
+
+**4. `09-secrets:83` — UNREPRODUCED (0/6 targeted).** 3 runs alone and 3
+paired with `08-query-graph`, all green. Baseline evidence kept for the next
+person: `locator.click` on `.mej-cc-secret-audience` retried for the full 15s
+with the click point covered, alternately, by `div.sheet-container`,
+`section.place` and `nav.sheet-tabs a[data-tab="notes"]` — i.e. the sheet's
+own chrome over the button, not a missing element. Closed as unreproduced.
+
+**5. The other three tracked items — UNREPRODUCED (0/5).**
+`06-player-collab` (all three tests), `07-knowledge` "playerHidden" and
+`04-auto-capture` (both tests) passed in all five full runs. `04`'s two
+name-based timeline lookups were hardened anyway (see verdict 3), since they
+carry the same latent defect that broke `02`.
+
+**6. NEW, found while triaging: `09-secrets:357` "reveal to Everyone
+round-trips" is a real flake after all — 2/6 when paired with
+`08-query-graph`** (0/5 in the baseline full runs). It fails as
+`page.evaluate: Resulting promise was garbage collected` on the *first*
+evaluate after `login()` — the page's execution context is destroyed while the
+`JournalEntry.create` promise is in flight. Measured: a cookie fast-path
+`login()` produces **two** main-frame navigations to `/game`, the second
+~250 ms before `login()` returns; when that second navigation slips past the
+`game.ready` wait the caller's first evaluate dies. This is a harness/Foundry
+session-handoff race, not a product defect, and **it is not fixed** — every
+remedy considered (re-checking readiness, marker documents, retrying the
+evaluate) either pads with a timeout or guesses at the trigger. Recorded here
+rather than papered over.
+
+**7. NEW product defect, recorded not fixed: duplicate empty `Campaign
+Timeline` journals.** `ensureTimelineJournal()` (`scripts/data/timeline-journal.mjs`)
+creates the journal and *then* writes `timelineJournalId`; two GM renders in
+flight (or a second GM client) both pass the empty-setting check and create
+one each, leaving an orphaned empty journal the setting does not point at.
+This is the state behind verdicts 2 and 3, it was already documented as a
+"confirmed live" race in `14-campaigns.spec.mjs`'s own comments, and it is
+visible to a user as a stray empty journal. Out of scope for a flake-triage
+task (the failing assertions were all test-side); a fix wants a single-writer
+guard, a unit test and its own release.
+
+### Counts
+
+- Unit: **679 passing** (56 files) — unchanged; no `scripts/` edit.
+- e2e full suite after the fixes: **93 passed, 0 failed, 12 skipped** (10.1 m),
+  against baselines of 92/1, 91/2, 91/2, 92/1, 91/2.
+- Guide harness re-run once (`GUIDE_SHOTS=1`): **7 passed**; no `guideDemo`
+  documents left, `tests/e2e/.guide-shots-snapshot.json` absent.
+
+### Carried — product defects recorded by Tasks 1 and 5, not fixed in this round
+
+1. `.mej-cc-timeline-controls` has no CSS rule, so the picker spans the pane
+   and Make default / rename / delete each drop onto their own line.
+2. Prep-board attendees render with no names.
+3. The GM's Player Recaps block reads empty on the Session sheet even when a
+   player's recap exists and renders on that player's own sheet.
+4. Search snippets show raw enricher markup (`@UUID[…]{…}` bleeds through).
+5. A natively-revealed ("Everyone") secret renders core Foundry's own Hide
+   toggle on a player's screen; a group-revealed one does not.
+6. The campaign portal page also renders the Knowledge panel below the Hub.
+7. MEJ's shared detailed-header partial fills ~250 px of every Session sheet
+   with a broken image placeholder and five empty generic fields (MEJ-side).
+8. With zero campaigns, "File all shown into…", "File into campaign…" and
+   "Auto-capture campaign" render, are clickable, and do nothing — the
+   `promptCampaignChoice()` zero-campaign short-circuit surfacing as dead UI
+   (Task 1). Task 1 also logged a cosmetic string bug: the import review
+   screen renders "1 sections detected as sessions" (no singular form).
