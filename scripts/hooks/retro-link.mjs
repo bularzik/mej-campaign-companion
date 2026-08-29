@@ -188,6 +188,17 @@ const BURST_IDLE_MS = 200;
 
 function enqueueRetro(entry) {
   pendingBurst.set(entry.uuid, entry);
+  // Clear the pending flag NOW, not when the burst is planned. Two reasons.
+  // A reload while the burst is still waiting (or mid-dialog) must not replay
+  // the pass forever - the original rationale, which deferring the clear
+  // weakened by exactly the length of the idle gap. And the clear is a
+  // document update that MEJ's own fixType normalization rides on to coerce a
+  // new entry's in-memory `type` to its bare key; holding it back left a
+  // freshly-created entry reading as "mej-campaign-companion.session" instead
+  // of "session" for as long as the burst waited, which 01-session's New
+  // Entry test caught.
+  entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG).catch((err) =>
+    console.error(`${MODULE_ID} | retro-link flag clear failed for "${entry?.name}"`, err));
   if (burstTimer) clearTimeout(burstTimer);
   burstTimer = setTimeout(closeBurst, BURST_IDLE_MS);
   return retroChain;
@@ -214,14 +225,8 @@ function flushBurst() {
 
 async function processBurst(entries) {
   try {
-    // Clear first: a reload mid-dialog must not replay the pass forever.
-    for (const entry of entries) {
-      try {
-        await entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG);
-      } catch (err) {
-        console.error(`${MODULE_ID} | retro-link flag clear failed for "${entry?.name}"`, err);
-      }
-    }
+    // The pending flag was already cleared as each entry was enqueued - see
+    // enqueueRetro for why it happens there rather than here.
     const mode = game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING);
     if (mode === "off") return;
     const live = entries.filter((e) => e?.name);
