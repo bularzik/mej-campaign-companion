@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.13.4 (2026-08-29)
+
+Performance round. Nothing is migrated, and no data changes.
+
+- **Importing a document no longer asks you the same question over and
+  over.** Bringing in a 50-section file used to pop the auto-link review
+  dialog fifty times, one after another, and search the whole journal from
+  scratch before each one. The batch is now reviewed in a single dialog
+  listing every new entry, and the journal is searched once. The same
+  applies when you log in to a backlog of entries created while no GM was
+  connected.
+- **Typing in the Hub's filter box no longer restarts the relationship
+  graph.** Every keystroke used to tear the graph down and start its layout
+  physics again from scratch — even while you were on a different tab and
+  couldn't see it. The graph is now built when you open its tab, and left
+  alone otherwise.
+- **Fixed a slow leak in the "Mentioned in" panel.** Every journal sheet
+  ever opened stayed held in memory for the rest of the session, so long
+  sessions with many sheets got gradually heavier.
+
 ## 0.13.3 (2026-08-28)
 
 Secrets round. **This release runs a one-time conversion when your world
