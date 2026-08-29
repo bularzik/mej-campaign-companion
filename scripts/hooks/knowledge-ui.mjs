@@ -38,21 +38,48 @@ function mejPageOf(sheet) {
 // debounce both coalesces multi-page bursts (imports, retro-link passes)
 // into one pass and guarantees the pass runs after live-index's handlers for
 // the same hooks, regardless of Hooks registration order.
-const trackedPanels = new Set();
+// Two collections, because the job needs both identity lookup and iteration
+// (C13). The previous single Set held a wrapper object per panel STRONGLY -
+// only the fields inside it were weak - so every element ever injected stayed
+// reachable until refreshTrackedPanels happened to prune it, and trackPanel
+// scanned the whole set on every injection to de-duplicate. A long session
+// with many sheet renders grew the set without bound and paid an O(n) scan
+// on each injection.
+//
+// Now the record hangs off the element itself, so it becomes collectable with
+// the element and lookup is O(1); the Set holds only weak references, purely
+// for iteration, and is pruned as it is walked.
+const panelRecords = new WeakMap();
+const trackedElements = new Set();
 
 function trackPanel(sheet, element, shellHosted) {
-  for (const item of trackedPanels) {
-    if (item.element.deref() === element) trackedPanels.delete(item);
-  }
-  trackedPanels.add({ sheet: new WeakRef(sheet), element: new WeakRef(element), shellHosted });
+  // Re-injecting MOVES the element to the end of the iteration order, which
+  // the old delete-then-add on a Set did as a side effect and which
+  // refreshTrackedPanels depends on: injectPanel clears the first
+  // `.mej-cc-knowledge` INSIDE the element it is given, so when one tracked
+  // element is nested in another (a page container inside the shell root),
+  // refreshing them oldest-first has the outer pass strip the inner pass's
+  // freshly-built panel, and the next refresh then leaves BOTH populated -
+  // two panels on screen. Keeping the most recently injected element last
+  // preserves the old, correct ordering; the ref is stored on the record so
+  // this stays O(1) instead of the scan it replaced.
+  const prev = panelRecords.get(element);
+  if (prev) trackedElements.delete(prev.ref);
+  const ref = new WeakRef(element);
+  trackedElements.add(ref);
+  panelRecords.set(element, { ref, sheet: new WeakRef(sheet), shellHosted });
 }
 
 function refreshTrackedPanels() {
-  for (const item of [...trackedPanels]) {
-    const sheet = item.sheet.deref();
-    const element = item.element.deref();
+  for (const ref of [...trackedElements]) {
+    const element = ref.deref();
+    const item = element ? panelRecords.get(element) : null;
+    const sheet = item?.sheet.deref();
     if (!sheet || !element?.isConnected) {
-      trackedPanels.delete(item);
+      trackedElements.delete(ref);
+      // Drop the record too, or a later re-injection into this same element
+      // would find a stale entry and skip re-adding it to the iteration set.
+      if (element) panelRecords.delete(element);
       continue;
     }
     // Never yank the DOM out from under a panel the user is typing in (tag

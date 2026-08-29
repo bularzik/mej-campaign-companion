@@ -29,7 +29,11 @@
         "silent": "Silent (whisper summary)"
       }
     },
-    "sheettype": { "session": "Session", "campaign": "Campaign", "media": "Media (Enhanced Journal)" },
+    "sheettype": {
+      "session": "Session",
+      "campaign": "Campaign",
+      "media": "Media (Enhanced Journal)"
+    },
     "autoCapture": {
       "died": "Died",
       "injured": "Injured",
@@ -37,7 +41,9 @@
       "noCasualties": "All combatants unharmed.",
       "unlinked": "No linked actor: {names}"
     },
-    "placeholder": { "session": "New Session" },
+    "placeholder": {
+      "session": "New Session"
+    },
     "tabs": {
       "description": "Recap",
       "session": "Session",
@@ -85,12 +91,21 @@
         "dashboards": "Dashboards",
         "secrets": "Secrets"
       },
-      "scope": { "label": "Campaign", "all": "All campaigns", "unfiled": "Unfiled", "newCampaign": "➕ New Campaign…" },
+      "scope": {
+        "label": "Campaign",
+        "all": "All campaigns",
+        "unfiled": "Unfiled",
+        "newCampaign": "➕ New Campaign…"
+      },
       "tools": "Tools",
       "newCampaign": "New Campaign",
       "newCampaignName": "Name",
       "newCampaignBaseline": "Player access",
-      "baseline": { "none": "GM only", "observer": "Players can view", "owner": "Players can edit" },
+      "baseline": {
+        "none": "GM only",
+        "observer": "Players can view",
+        "owner": "Players can edit"
+      },
       "editCampaign": "Campaign settings",
       "restorePortal": "Restore campaign entry",
       "applyBaselineNow": "Apply to all current members now",
@@ -343,7 +358,10 @@
       "apply": "Link Checked",
       "skip": "Skip",
       "ambiguous": "Skipped as ambiguous (another entity shares this name):",
-      "summary": "Auto-linked \"{name}\" in {count} page(s)."
+      "summary": "Auto-linked \"{name}\" in {count} page(s).",
+      "titleMany": "Auto-Link New Entries",
+      "introMany": "{count} new entries are mentioned in the pages below. Link the checked pages?",
+      "summaryMany": "Auto-linked {entities} new entries in {count} page(s)."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",

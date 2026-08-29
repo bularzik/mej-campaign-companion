@@ -1807,8 +1807,24 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         this.render({ parts: ["main"] });
       });
     }
+    // Graph drawing is DEFERRED until its tab is actually showing (C6).
+    //
+    // The template renders the <svg> unconditionally, so before this the pane
+    // was torn down and its d3 force simulation stopped and rebuilt on EVERY
+    // render of `main` - and `main` re-renders on every debounced keystroke in
+    // the index filter, while the graph tab is typically not even visible.
+    // Typing a filter therefore restarted the physics once per keystroke.
+    //
+    // A tab switch is CSS-only here (the panes are all in the DOM; clicking a
+    // tab toggles `.active` and does NOT re-render), so deferring on its own
+    // would mean the graph never drew at all. The nav click below is what
+    // makes activation the trigger instead. Because no re-render happens on
+    // that click, the <svg> element persists across it - which is exactly what
+    // lets drawGraphPane's element-keyed signature cache suppress redundant
+    // redraws when the user flips back and forth between tabs.
     const graphSvg = html.querySelector(".mej-cc-graph-svg");
-    if (graphSvg && this.#graphData) {
+    const drawGraph = () => {
+      if (!graphSvg || !this.#graphData) return;
       drawGraphPane(graphSvg, this.#graphData, {
         centerUuid: this.state.graphCenterUuid,
         onOpen: async (uuid) => {
@@ -1816,6 +1832,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
         }
       });
+    };
+    if (this.tabGroups?.primary === "graph") drawGraph();
+    const graphTabLink = html.querySelector('nav.sheet-tabs a[data-tab="graph"]');
+    if (graphTabLink && !graphTabLink.dataset.ccBound) {
+      graphTabLink.dataset.ccBound = "1";
+      // After the click, not during: the pane only gains a real layout box
+      // once it is `.active`, and drawGraphPane sizes the viewBox from that
+      // box (falling back to 800x540 when there is none). Drawing in the same
+      // tick would lay the graph out against the fallback size.
+      graphTabLink.addEventListener("click", () => setTimeout(drawGraph, 0));
     }
     // pendingTab (showGraphFor) used to be consumed here via
     // `this.changeTab.call(this.enhancedjournal || this, tab, "primary")` -

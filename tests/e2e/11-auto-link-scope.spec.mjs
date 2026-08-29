@@ -15,6 +15,10 @@ const N = {
   hero: `TTRetroHero${RUN}`,
   silentPage: `TTSilentPage${RUN}`,
   villain: `TTSilentVillain${RUN}`,
+  burstPage: `TTBurstPage${RUN}`,
+  burstA: `TTBurstAlpha${RUN}`,
+  burstB: `TTBurstBravo${RUN}`,
+  burstC: `TTBurstCharlie${RUN}`,
   gmSecret: `TTGmSecret${RUN}`,
   pubAlly: `TTPubAlly${RUN}`,
   typedPage: `TTTypedPage${RUN}`
@@ -95,6 +99,56 @@ test.describe("11 auto-link scoping", () => {
 
     expect(await pageContent(page, gmDoc.id)).toContain(`@UUID[JournalEntry.${hero.id}]`);
     expect(await pageContent(page, playerDoc.id)).not.toContain("@UUID[");
+    assertNoConsoleErrors(errors);
+  });
+
+  // C7. A burst of creations (a multi-section docx import is the real case)
+  // used to run one full-world walk AND one confirm dialog per entry: 50
+  // sections meant 50 walks and 50 dialogs stacked in front of the GM. The
+  // burst is now planned together - one dialog naming every entity, and one
+  // write per page carrying all of their links at once.
+  test("a burst of new entries is planned together: one dialog, one write per page", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    await setSettings(page, { autoLink: false, retroLinkMode: "off" });
+    const mention = await createMejPlace(page, N.burstPage,
+      `<p>${N.burstA} and ${N.burstB} and ${N.burstC} were all here.</p>`, 0);
+
+    await setSettings(page, { retroLinkMode: "confirm" });
+    // Created back-to-back with no await between them, the way an import
+    // creates its sections - this is what has to coalesce.
+    const ids = await page.evaluate(async (names) => {
+      const made = [];
+      for (const n of names) {
+        made.push((await JournalEntry.create({
+          name: n, ownership: { default: 0 },
+          pages: [{
+            name: n, type: "text",
+            flags: { "monks-enhanced-journal": { type: "place" } },
+            text: { content: "<p>One of a burst.</p>" }
+          }]
+        })).id);
+      }
+      return made;
+    }, [N.burstA, N.burstB, N.burstC]);
+
+    const dialog = page.locator(".mej-cc-retro-link-dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    // ONE dialog, naming all three entities and the single page they share.
+    await expect(page.locator(".mej-cc-retro-link-dialog")).toHaveCount(1);
+    await expect(dialog).toContainText(N.burstPage);
+    for (const name of [N.burstA, N.burstB, N.burstC]) await expect(dialog).toContainText(name);
+    await dialog.locator('button[data-action="apply"]').click();
+    await settle(page, 800);
+
+    // One write carried every entity's link into that page.
+    const content = await pageContent(page, mention.id);
+    for (const id of ids) expect(content).toContain(`@UUID[JournalEntry.${id}]`);
+    // And no second dialog followed the first.
+    await expect(page.locator(".mej-cc-retro-link-dialog")).toHaveCount(0);
+
     assertNoConsoleErrors(errors);
   });
 

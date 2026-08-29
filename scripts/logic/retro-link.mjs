@@ -20,37 +20,94 @@ export function countEntityLinks(html, uuid) {
 }
 
 /**
+ * Plan the retroactive pass for a WHOLE BURST of new entities at once (C7).
+ *
+ * One row per page, carrying every entity that links into it, so the caller
+ * issues ONE write per page no matter how many entities matched. This is what
+ * lets the caller walk the world once for a 50-section import instead of once
+ * per created entity.
+ *
+ * Batching is also more correct than looping this planner per entity, which is
+ * why it replaced that loop rather than wrapping it. autoLinkAdded claims words
+ * across ALL candidates using one shared claim array, so overlapping names
+ * ("Elara" inside "Elara Moonwhisper") resolve against each other in a single
+ * pass; run separately, each pass would be blind to what the others claimed,
+ * and every pass after the first would have to be planned against the previous
+ * one's output or silently clobber it.
+ *
+ * Eligibility stays per entity per page - audience containment, the page's own
+ * entity, and the same-named-twin ambiguity check are all decided for each
+ * (entity, page) pair, exactly as before.
+ *
  * @param {object} args
- * @param {{uuid:string, name:string, viewerIds:string[]}} args.entity  the new entity
+ * @param {{uuid:string, name:string, viewerIds:string[]}[]} args.entities  the new entities
  * @param {{uuid:string, name:string, content:string, viewerIds:string[],
- *          noAutoLink:boolean, isOwn:boolean}[]} args.pages  every text page
- *          (viewerIds = the page's PARENT ENTRY viewer set)
- * @param {{viewerIds:string[]}[]} args.otherSameNamed  other entities whose
- *          trimmed, lowercased name equals the entity's
+ *          noAutoLink:boolean, entryUuid:string}[]} args.pages  every text page
+ *          (viewerIds = the page's PARENT ENTRY viewer set; entryUuid = that
+ *          entry's uuid, used to skip an entity's own pages)
+ * @param {Record<string, {viewerIds:string[]}[]>} [args.otherSameNamed]  keyed
+ *          by entity uuid: other entities sharing that entity's trimmed,
+ *          lowercased name
  * @param {number} [args.minLength=3]
- * @returns {{rows: {pageUuid:string, pageName:string, matchCount:number,
- *            newHtml:string|null, ambiguous:boolean}[]}}
+ * @returns {{rows: {pageUuid:string, pageName:string, newHtml:string|null,
+ *            matches:{entityUuid:string, entityName:string, count:number}[],
+ *            ambiguous:{entityUuid:string, entityName:string, count:number}[]}[]}}
  */
-export function buildRetroPlan({ entity, pages, otherSameNamed, minLength = 3 }) {
+export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minLength = 3 }) {
   const rows = [];
-  if ((entity.name?.trim().length ?? 0) < minLength) return { rows };
-  const candidate = [{ name: entity.name, uuid: entity.uuid }];
+  // LONGEST NAME FIRST - autoLinkAdded's documented precondition, and the one
+  // thing batching makes load-bearing that the old one-entity-per-call planner
+  // did not. Candidates claim words in order, so with "Elara" ahead of "Elara
+  // Moonwhisper" the short name claims the first word and the long name then
+  // matches nothing: the page is linked to the WRONG entity, and the entity
+  // actually named in the prose gets no link at all. Burst order is creation
+  // order, which for a docx import is section order - alphabetical section
+  // order produces exactly that pair. The other two callers
+  // (auto-link-candidates.mjs:18, import-wizard.mjs:322) sort for this reason.
+  const named = (entities ?? [])
+    .filter((e) => (e?.name?.trim().length ?? 0) >= minLength)
+    .sort((a, b) => b.name.trim().length - a.name.trim().length);
+  if (!named.length) return { rows };
+
   for (const page of pages ?? []) {
-    if (page.isOwn || page.noAutoLink) continue;
+    if (page.noAutoLink) continue;
     if (typeof page.content !== "string" || !page.content) continue;
-    if (!audienceContains(page.viewerIds, entity.viewerIds)) continue;
-    const linked = autoLinkAdded("", page.content, candidate);
-    if (linked === page.content) continue;
-    const matchCount =
-      countEntityLinks(linked, entity.uuid) - countEntityLinks(page.content, entity.uuid);
-    const ambiguous = (otherSameNamed ?? []).some((o) =>
-      audienceContains(page.viewerIds, o.viewerIds)
-    );
+
+    const forPage = named.filter((e) =>
+      page.entryUuid !== e.uuid && audienceContains(page.viewerIds, e.viewerIds));
+    if (!forPage.length) continue;
+
+    const twinned = (e) =>
+      (otherSameNamed[e.uuid] ?? []).some((o) => audienceContains(page.viewerIds, o.viewerIds));
+    const writable = forPage.filter((e) => !twinned(e));
+
+    const linked = writable.length
+      ? autoLinkAdded("", page.content, writable.map((e) => ({ name: e.name, uuid: e.uuid })))
+      : page.content;
+    const gained = (html, uuid) => countEntityLinks(html, uuid) - countEntityLinks(page.content, uuid);
+
+    const matches = writable
+      .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: gained(linked, e.uuid) }))
+      .filter((m) => m.count > 0);
+
+    // An ambiguous entity is reported but never written, so it is planned on
+    // its own against the ORIGINAL content purely to find out whether it would
+    // have matched at all - a twin that matches nothing here is not worth
+    // telling the GM about.
+    const ambiguous = forPage.filter(twinned)
+      .map((e) => ({
+        entityUuid: e.uuid,
+        entityName: e.name,
+        count: gained(autoLinkAdded("", page.content, [{ name: e.name, uuid: e.uuid }]), e.uuid)
+      }))
+      .filter((m) => m.count > 0);
+
+    if (!matches.length && !ambiguous.length) continue;
     rows.push({
       pageUuid: page.uuid,
       pageName: page.name,
-      matchCount,
-      newHtml: ambiguous ? null : linked,
+      newHtml: matches.length ? linked : null,
+      matches,
       ambiguous
     });
   }

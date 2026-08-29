@@ -30,6 +30,7 @@ import { validateCampaignComponents } from "../logic/campaign-date.mjs";
 import { calendarBounds } from "../logic/campaign-calendar.mjs";
 import { autoLinkAdded } from "../logic/auto-link.mjs";
 import { countEntityLinks } from "../logic/retro-link.mjs";
+import { suspendRetroBursts, resumeRetroBursts } from "../hooks/retro-link.mjs";
 import { dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceViewerIdsForImport, filterCandidatesForAudience } from "../logic/link-audience.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
@@ -596,6 +597,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const dates = this.#datesForPlanPages(rows);
     const results = { created: 0, timepoints: 0, failed: [] };
+    let retroSuspended = false;
     try {
       // Upload inline images once each (deduped across the whole document).
       const uploadedByUri = new Map();
@@ -605,6 +607,15 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       }
 
       let timeline = null;
+      // Hold the retroactive auto-link pass open across the WHOLE import
+      // (C7). It coalesces creations on a short idle gap, and each section
+      // below costs at least one server round trip - more when it carries a
+      // timepoint - so on a slower install every section would close its own
+      // burst: a full world walk and a separate confirm dialog each, which is
+      // exactly what batching exists to remove. Released in the `finally`
+      // below, which then plans the whole import at once.
+      suspendRetroBursts();
+      retroSuspended = true;
       for (let i = 0; i < plan.pages.length; i++) {
         const page = plan.pages[i];
         const campaignDate = safeCampaignDate(dates[i], page.name, plan.warnings);
@@ -644,6 +655,9 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       console.error(`${MODULE_ID} | import aborted partway through`, error);
       plan.warnings.push(game.i18n.localize(`${I18N}.import.abortedPartway`));
     } finally {
+      // Only if we actually took one: an error thrown before the loop (the
+      // inline-image pass) must not decrement a suspension we never acquired.
+      if (retroSuspended) resumeRetroBursts();
       target.disabled = false;
     }
 
