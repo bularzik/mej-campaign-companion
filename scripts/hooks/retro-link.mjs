@@ -186,58 +186,115 @@ const pendingBurst = new Map();
 let burstTimer = null;
 const BURST_IDLE_MS = 200;
 
-function enqueueRetro(entry) {
-  pendingBurst.set(entry.uuid, entry);
-  // Clear the pending flag NOW, not when the burst is planned. Two reasons.
-  // A reload while the burst is still waiting (or mid-dialog) must not replay
-  // the pass forever - the original rationale, which deferring the clear
-  // weakened by exactly the length of the idle gap. And the clear is a
-  // document update that MEJ's own fixType normalization rides on to coerce a
-  // new entry's in-memory `type` to its bare key; holding it back left a
-  // freshly-created entry reading as "mej-campaign-companion.session" instead
-  // of "session" for as long as the burst waited, which 01-session's New
-  // Entry test caught.
-  entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG).catch((err) =>
-    console.error(`${MODULE_ID} | retro-link flag clear failed for "${entry?.name}"`, err));
+let burstsSuspended = 0;
+
+/**
+ * Hold the burst open across a long, known-multi-creation operation (the docx
+ * importer). The idle gap alone cannot do this: the importer awaits a server
+ * round trip per section - more when a section carries a timepoint - so on any
+ * install slower than the gap EVERY section would close its own burst and the
+ * round's headline improvement (one walk, one dialog) would silently revert to
+ * the old behaviour. Callers must pair this with resumeRetroBursts in a
+ * `finally`.
+ */
+export function suspendRetroBursts() {
+  burstsSuspended++;
+  if (burstTimer) { clearTimeout(burstTimer); burstTimer = null; }
+}
+
+/** Release a suspend and, on the last one, plan whatever accumulated. */
+export function resumeRetroBursts() {
+  burstsSuspended = Math.max(0, burstsSuspended - 1);
+  if (burstsSuspended) return retroChain;
+  return flushBurst();
+}
+
+function armBurst() {
+  if (burstsSuspended) return;
   if (burstTimer) clearTimeout(burstTimer);
   burstTimer = setTimeout(closeBurst, BURST_IDLE_MS);
+}
+
+/**
+ * @param {boolean} clearNow  clear the pending flag immediately rather than
+ *   when the burst is planned. True for live creations, false for the login
+ *   sweep - see the call sites for why they differ.
+ */
+function enqueueRetro(entry, { clearNow = true } = {}) {
+  pendingBurst.set(entry.uuid, { entry, needsClear: !clearNow });
+  if (clearNow) {
+    // A reload while the burst is still waiting (or mid-dialog) must not
+    // replay the pass forever - the flag's original rationale, which
+    // deferring the clear weakened by exactly the length of the idle gap.
+    // And the clear is a document update that MEJ's own fixType normalization
+    // rides on to coerce a new entry's in-memory `type` to its bare key;
+    // holding it back left a freshly-created entry reading as
+    // "mej-campaign-companion.session" instead of "session" for as long as
+    // the burst waited, which 01-session's New Entry test caught.
+    entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG).catch((err) =>
+      console.error(`${MODULE_ID} | retro-link flag clear failed for "${entry?.name}"`, err));
+  }
+  armBurst();
   return retroChain;
 }
 
 function closeBurst() {
   burstTimer = null;
-  const entries = [...pendingBurst.values()];
+  const queued = [...pendingBurst.values()];
   pendingBurst.clear();
-  if (!entries.length) return;
+  if (!queued.length) return null;
   // Still serialized: a burst that lands while an earlier one is mid-dialog
   // must wait, or the second plan plans against pages the first has not
   // written yet and its write would clobber theirs.
-  retroChain = retroChain.then(() => processBurst(entries)).catch((err) =>
+  retroChain = retroChain.then(() => processBurst(queued)).catch((err) =>
     console.error(`${MODULE_ID} | retro-link queue failed`, err));
   return retroChain;
 }
 
 /** Drain whatever is queued right now, without waiting out the idle gap. */
 function flushBurst() {
-  if (burstTimer) clearTimeout(burstTimer);
+  if (burstTimer) { clearTimeout(burstTimer); burstTimer = null; }
   return closeBurst() ?? retroChain;
 }
 
-async function processBurst(entries) {
+/** Still in the world - not deleted since the burst was queued. */
+const stillExists = (e) => !!e?.name && !!game.journal.get(e.id);
+
+async function processBurst(queued) {
   try {
-    // The pending flag was already cleared as each entry was enqueued - see
-    // enqueueRetro for why it happens there rather than here.
     const mode = game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING);
+    // Sweep-queued entries keep their flag until here, so an interrupted
+    // login leaves the backlog retryable (see the sweep's call site).
+    for (const item of queued) {
+      if (!item.needsClear) continue;
+      try {
+        await item.entry.unsetFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG);
+      } catch (err) {
+        console.error(`${MODULE_ID} | retro-link flag clear failed for "${item.entry?.name}"`, err);
+      }
+    }
     if (mode === "off") return;
-    const live = entries.filter((e) => e?.name);
+    let live = queued.map((q) => q.entry).filter(stillExists);
     if (!live.length) return;
-    const { rows } = planForBurst(live);
+    let { rows } = planForBurst(live);
     if (!rows.length) return;
 
     let chosen = rows.filter((r) => r.newHtml && r.matches.length);
     if (mode === "confirm") {
       chosen = await confirmDialog(live, rows);
       if (!chosen) return;
+      // The dialog is now burst-wide, so it stays open long enough for one of
+      // these entries to be deleted while the GM reads it. Writing the plan
+      // as-is would bake a link to a document that no longer exists into the
+      // page. Re-plan against the survivors instead of writing a dead link.
+      const survivors = live.filter(stillExists);
+      if (survivors.length !== live.length) {
+        if (!survivors.length) return;
+        const keep = new Set(chosen.map((r) => r.pageUuid));
+        live = survivors;
+        ({ rows } = planForBurst(live));
+        chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(r.pageUuid));
+      }
     }
     // One write per page, carrying every entity that matched it - the reason
     // the burst can share a single plan without passes clobbering each other.
@@ -255,6 +312,11 @@ async function processBurst(entries) {
     if (mode === "silent") await whisperSummary(live, applied, rows);
   } catch (err) {
     console.error(`${MODULE_ID} | retro-link burst failed`, err);
+  } finally {
+    // Anything that arrived while this burst was planning or waiting on the
+    // dialog is a burst of its own - drain it rather than leaving it parked
+    // until the next unrelated creation happens to re-arm the timer.
+    if (pendingBurst.size && !burstsSuspended) armBurst();
   }
 }
 
@@ -300,7 +362,17 @@ export function registerRetroLink() {
     let queued = 0;
     for (const entry of game.journal.contents) {
       try {
-        if (entry.getFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG)) { enqueueRetro(entry); queued++; }
+        if (!entry.getFlag(MODULE_ID, RETRO_LINK_PENDING_FLAG)) continue;
+        // clearNow:false, unlike a live creation. A backlog can be large, and
+        // clearing every flag up front would mean one interruption - a closed
+        // tab, a reload - silently drops the WHOLE backlog with no flag left
+        // to retry from. Deferring the clear into processBurst keeps them
+        // pending until the pass actually starts, and avoids firing N
+        // concurrent document updates in a performance round. (A reload
+        // *during* the dialog still loses the burst; that is inherent to one
+        // dialog covering many entries, and is the trade this round took.)
+        enqueueRetro(entry, { clearNow: false });
+        queued++;
       } catch (err) {
         console.error(`${MODULE_ID} | retro-link sweep failed for "${entry?.name}"`, err);
       }

@@ -55,7 +55,18 @@ export function countEntityLinks(html, uuid) {
  */
 export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minLength = 3 }) {
   const rows = [];
-  const named = (entities ?? []).filter((e) => (e?.name?.trim().length ?? 0) >= minLength);
+  // LONGEST NAME FIRST - autoLinkAdded's documented precondition, and the one
+  // thing batching makes load-bearing that the old one-entity-per-call planner
+  // did not. Candidates claim words in order, so with "Elara" ahead of "Elara
+  // Moonwhisper" the short name claims the first word and the long name then
+  // matches nothing: the page is linked to the WRONG entity, and the entity
+  // actually named in the prose gets no link at all. Burst order is creation
+  // order, which for a docx import is section order - alphabetical section
+  // order produces exactly that pair. The other two callers
+  // (auto-link-candidates.mjs:18, import-wizard.mjs:322) sort for this reason.
+  const named = (entities ?? [])
+    .filter((e) => (e?.name?.trim().length ?? 0) >= minLength)
+    .sort((a, b) => b.name.trim().length - a.name.trim().length);
   if (!named.length) return { rows };
 
   for (const page of pages ?? []) {

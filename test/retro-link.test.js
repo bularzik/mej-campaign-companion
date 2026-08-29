@@ -145,16 +145,29 @@ describe("buildRetroPlanBatch", () => {
   // Overlapping names are the reason batching is more correct than looping:
   // one shared claim array means the longer name wins the words it covers
   // instead of both passes linking the same text independently.
-  it("resolves overlapping names against each other in one pass", () => {
-    const long = { uuid: "JournalEntry.long", name: "Elara Moonwhisper", viewerIds: [] };
-    const short = { uuid: "JournalEntry.short", name: "Elara", viewerIds: [] };
-    const { rows } = buildRetroPlanBatch({
-      entities: [long, short],
-      pages: [page("p1", "<p>Elara Moonwhisper spoke.</p>")]
+  //
+  // BOTH burst orders are asserted deliberately. autoLinkAdded requires its
+  // candidates pre-sorted longest-first and they claim words in order, so a
+  // test that only passes the already-sorted order passes whether or not the
+  // planner sorts - while a burst arriving shortest-first silently links the
+  // WRONG entity. Burst order is creation order, which a docx import takes
+  // from section order, so shortest-first is not hypothetical.
+  const LONG = { uuid: "JournalEntry.long", name: "Elara Moonwhisper", viewerIds: [] };
+  const SHORT = { uuid: "JournalEntry.short", name: "Elara", viewerIds: [] };
+
+  for (const [label, entities] of [
+    ["longest first", [LONG, SHORT]],
+    ["shortest first", [SHORT, LONG]]
+  ]) {
+    it(`resolves overlapping names against each other in one pass (${label})`, () => {
+      const { rows } = buildRetroPlanBatch({
+        entities, pages: [page("p1", "<p>Elara Moonwhisper spoke.</p>")]
+      });
+      expect(rows[0].matches).toEqual([
+        { entityUuid: LONG.uuid, entityName: "Elara Moonwhisper", count: 1 }
+      ]);
+      expect(rows[0].newHtml).toContain("@UUID[JournalEntry.long]{Elara Moonwhisper}");
+      expect(rows[0].newHtml).not.toContain("@UUID[JournalEntry.short]");
     });
-    expect(rows[0].matches).toEqual([
-      { entityUuid: long.uuid, entityName: "Elara Moonwhisper", count: 1 }
-    ]);
-    expect(rows[0].newHtml).not.toContain("@UUID[JournalEntry.short]");
-  });
+  }
 });
