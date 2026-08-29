@@ -37,7 +37,7 @@ Create a Session entry the same way you'd create any other MEJ entry:
 1. Open the Journal sidebar tab.
 2. Click the button that creates a new entry (MEJ's own "Create Entry" control).
 3. In the dialog, give it a name — for example, "Session 12 — Shadows over Daggerford".
-4. From the **Type** dropdown, choose **Session**. (The same dropdown also lists **Campaign**, which creates a campaign portal page — see [Campaigns](#campaigns) below for the easier route to one.)
+4. From the **Type** dropdown, choose **Session**. (The same dropdown also lists **Campaign**, MEJ's name for the companion's campaign page type — but make campaigns from the Hub's own picker instead, as [Campaigns](#campaigns) below describes.)
 5. Confirm the dialog. MEJ opens the new Session entry.
 
 The Hub's **New Session** button, in its header bar, does the same thing without leaving the Hub. If you're running a stock MEJ install without the extension API, **New Session** is the only route — see [Running on stock MEJ (native mode)](#running-on-stock-mej-native-mode) below.
@@ -121,7 +121,7 @@ The **Timeline** pane leads with a timeline picker, because a world can hold mor
 
 Timelines come in two flavours. **World timelines** belong to no campaign and are listed under that separator. **Campaign timelines** live inside a campaign's folder: the first time you scope the Hub to a campaign without picking a timeline explicitly, the Hub creates that campaign's timeline on the spot, named `<campaign name> — Timeline`. That first one is the campaign's default, and the picker marks a default with a **★** before its name. In **All campaigns** scope the pane stacks each campaign's default timeline under a heading bearing the campaign's name, then every world timeline under its own name.
 
-Selecting a real timeline (rather than "All timelines in scope") brings up the GM-only management controls beside the picker — **★ Make default** on a campaign timeline that isn't already the default, a pen for **Rename timeline**, and a trash for **Delete timeline**:
+Selecting a real timeline (rather than "All timelines in scope") brings up the GM-only management controls — **★ Make default** on a campaign timeline that isn't already the default, a pen for **Rename timeline**, and a trash for **Delete timeline**. In the current build they stack one per line under the picker rather than sitting in a row beside it:
 
 ![The Timeline pane with the non-default campaign timeline "Side Quests" selected, showing Make default, rename and delete beneath the picker](images/timeline-selector.png)
 
@@ -133,7 +133,9 @@ Click **Add Timepoint** at the bottom — GM only — to create one. The dialog 
 
 ![The Add Timepoint dialog with Label, Year, Month, Day, and a free-text Time filled in for "Session 12 Convenes"](images/campaign-date-picker.png)
 
-A timepoint can carry attached entries, shown as a chip on its row with an ✕ to detach it — "The Caravan Departs" above carries "The Missing Caravan". Each row also has a pen and a trash of its own.
+**Attaching things to a timepoint.** Drag a document onto the timepoint's row — a journal entry from the sidebar, or anything else with a UUID — and it attaches as a chip labelled with its name. This is GM-only, and the document has to belong to the same campaign as the timeline, or you get "Entries can only attach to timepoints in their own campaign." Dragging raw files off your desktop isn't supported; upload them to a journal entry first.
+
+Dropping an **image** onto a row asks first, with a **Show Image to Players?** prompt reading `Show "<filename>" to players immediately?` Answer no and the image still attaches, but stays hidden: an attached image is invisible to players unless it's explicitly marked as shown. That's different from a document chip, whose visibility simply follows the document's own permissions. You can flip an image's visibility at any time from the eye / eye-slash toggle on its chip (tooltip **Toggle Player Visibility**), which only image chips have; the ✕ beside it removes the link. "The Caravan Departs" above carries "The Missing Caravan" as a document chip. Each timepoint row also has a pen and a trash of its own.
 
 Two empty states are worth recognising. A timeline that exists but holds nothing reads **"No timepoints yet."** A scope with no timeline at all reads **"No timeline in this scope."** — and in that state the order buttons and **Add Timepoint** disappear entirely, leaving only the picker.
 
@@ -157,9 +159,13 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 - **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
 - **Show mention links**, a checkbox, layers `@UUID` backlinks on top of the relationship edges. It's off by default.
 
+The graph is capped at the **200 most-connected** entries, for performance — additional nodes, and the links to them, are left out of the view. When that happens it says so above the canvas: "Too many entries to draw — filter to reduce (showing the most-connected 200)." Scope the Hub to a single campaign to get back under the cap.
+
 ![The Graph pane in Whole campaign mode, with two Persons drawing their own portraits, a Quest and a Place drawing their type icons, and an unconnected Session node](images/hub-graph.png)
 
 ![The relationship graph in Focus mode, centred on Captain Aldric Vane and showing his one relationship, to "The Missing Caravan"](images/graph-gm.png)
+
+**Revealing individual relationships.** Which relationships a player can see is set on the entry's own **Relationships** panel, not on the graph. Every row there carries a GM-only audience button: **Reveal relationship** controls the row itself, and **Reveal secret relationship** controls a secret label attached to it — a hidden row that also carries a secret label gets both buttons, revealable independently. They open the same audience dialog as a secret, with the same Everyone / players / groups choices, and send the same whisper. A hidden relationship stays out of a player's relationships list *and* off their graph until you reveal it to them or to a group they're in, so a player's graph draws only the edges they've been granted.
 
 **Portraits on graph nodes.** Each node draws the entry page's own image inside its coloured ring. Give a Person a picture on their MEJ page and that portrait is what appears on their node; an entry with no picture of its own falls back to MEJ's per-type icon, and a Session node draws a plain coloured disc with no image at all. Both branches are visible side by side in the shot above — the two Persons carry portraits, the Quest and the Place carry type icons.
 
@@ -208,6 +214,8 @@ Campaign Companion gives you two related but distinct ways to keep things hidden
 
 **Session checklist secrets** are the short clues you tick off at the table, added from the **Secrets** block on a Session's Session tab — described above under [Running your first session](#running-your-first-session).
 
+**Recap secrets.** A secret written into a Session's **Recap** behaves the same way: the recap gets its own audience control, the secret appears in the Hub Secrets tab with a **Reveal to…** control, and a player it's revealed to sees it on their own copy of the sheet with the companion's orange rule.
+
 Click a block secret's audience control and the **Reveal secret** dialog opens. It offers a single **Everyone** checkbox at the top, then a **Players** fieldset with one checkbox per non-GM user, then a **Groups** fieldset with one per player group. **✓ Apply** commits your choice:
 
 ![The Reveal secret dialog, with the Everyone checkbox above a Players fieldset and a Groups fieldset](images/secret-audience-dialog.png)
@@ -220,7 +228,7 @@ Either way, every player you reveal to gets a private whisper naming the entry t
 
 ![The private chat whisper a player receives when a secret is revealed to them, naming the source entry](images/reveal-whisper.png)
 
-**The Hub Secrets tab** is your one list of every secret across the campaign — both block secrets and Session checklist secrets. It's GM-only: the tab isn't rendered for a player at all. A filter row runs across the top with one button per entry type that actually has secrets (here **Quest** and **Session**), then the state filters **All** / **Revealed** / **Unrevealed**, then one button per player. That last group answers "what does player X know" at a glance. Each row shows the source entry, a preview of the secret, its audience — **Hidden from players** while it's still unrevealed — and its own **Reveal to…** control, so you can reveal from here without hunting down the entry. Rows reveal one at a time; the tab's advantage is that everything is already in one list, not that it reveals in bulk. Empty, it reads "No secrets tracked yet."
+**The Hub Secrets tab** is your one list of every secret across the campaign — block secrets, recap secrets and Session checklist secrets alike. It's GM-only: the tab isn't rendered for a player at all. A filter row runs across the top with one button per entry type that actually has secrets (here **Quest** and **Session**), then the state filters **All** / **Revealed** / **Unrevealed**, then one button per player. That last group answers "what does player X know" at a glance. Each row shows the source entry, a preview of the secret, its audience — **Hidden from players** while it's still unrevealed — and its own **Reveal to…** control, so you can reveal from here without hunting down the entry. Rows reveal one at a time; the tab's advantage is that everything is already in one list, not that it reveals in bulk. Empty, it reads "No secrets tracked yet."
 
 ![The Hub Secrets tab, with type, state and per-player filter buttons above three unrevealed secrets, and the Player groups block below](images/hub-secrets-tab.png)
 
