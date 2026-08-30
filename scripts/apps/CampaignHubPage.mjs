@@ -342,6 +342,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     const scopeContext = this.#campaignScopeContext();
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
+    context.hasCampaigns = scopeContext.hasCampaigns;
     context.index = this.#indexContext();
     context.timeline = { stacks, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
@@ -1297,7 +1298,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    */
   static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
     const campaigns = getCampaigns();
-    if (!campaigns.length) return null;
+    if (!campaigns.length) {
+      // Two different outcomes used to share one silent `null`: "the GM
+      // cancelled" and "there was no dialog to show". Every caller returns on
+      // null, so filing/capture controls did nothing at all in a world with no
+      // campaigns yet. Say so.
+      ui.notifications.warn(game.i18n.localize(`${I18N}.hub.noCampaignsYet`));
+      return null;
+    }
     if (campaigns.length === 1 && !alwaysPrompt) return campaigns[0];
     const esc = foundry.utils.escapeHTML;
     // Pre-select the Hub's currently scoped campaign (the client setting the

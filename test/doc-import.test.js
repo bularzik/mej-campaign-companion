@@ -5,7 +5,7 @@
 // "person" (see doc-import.mjs's LEGACY_TYPE_ALIASES). Everything else is
 // unchanged.
 import { describe, it, expect } from "vitest";
-import { cleanTitle, detectSessionHeader, parseSectionDate } from "../scripts/logic/doc-import.mjs";
+import { cleanTitle, detectSessionHeader, parseSectionDate, sessionsDetectedHint } from "../scripts/logic/doc-import.mjs";
 
 describe("cleanTitle", () => {
   it("strips stray bold markers and trailing colons", () => {
@@ -307,5 +307,15 @@ describe("splitSectionAt", () => {
     expect(after[1].title).toBe("Session Zero 10/6/2024");
     expect(after[1].isSession).toBe(true);
     expect(after[1].date).toBe("2024-10-06");
+  });
+});
+
+describe("sessionsDetectedHint", () => {
+  it("selects the singular string for exactly one detected session", () => {
+    expect(sessionsDetectedHint(1)).toEqual({ sessionsDetected: 1, sessionsDetectedOne: true });
+  });
+  it("selects the plural string for zero and for many", () => {
+    expect(sessionsDetectedHint(0)).toEqual({ sessionsDetected: 0, sessionsDetectedOne: false });
+    expect(sessionsDetectedHint(4)).toEqual({ sessionsDetected: 4, sessionsDetectedOne: false });
   });
 });

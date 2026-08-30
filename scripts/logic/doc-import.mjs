@@ -289,3 +289,12 @@ export function buildImportPlan(sections, rows, recordTypes) {
   });
   return { pages, warnings };
 }
+
+/**
+ * Foundry's i18n does plain {token} substitution with no plural selection, so a
+ * single detected section rendered "1 sections detected as sessions". Pick the
+ * string in the context instead of in the template's format call.
+ */
+export function sessionsDetectedHint(count) {
+  return { sessionsDetected: count, sessionsDetectedOne: count === 1 };
+}

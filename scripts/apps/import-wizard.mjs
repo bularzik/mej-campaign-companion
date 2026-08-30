@@ -17,7 +17,7 @@ import {
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
 import { campaignOfFolder, destinationFolderOptions, resolveDestinationId } from "../logic/campaigns.mjs";
-import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt } from "../logic/doc-import.mjs";
+import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { uploadInlineImages } from "./import-upload.mjs";
@@ -141,7 +141,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     context.destinationOptions = this.#destinationOptions(this.state.destination);
     context.subfolder = this.state.subfolder;
     context.audienceOptions = this.#audienceOptions(this.state.audience);
-    context.sessionsDetected = this.state.sections.filter((s) => s.isSession).length;
+    Object.assign(context, sessionsDetectedHint(this.state.sections.filter((s) => s.isSession).length));
     context.rows = this.state.rows.map((row, index) => ({
       ...row, index,
       canMergeUp: index > 0,

@@ -259,6 +259,50 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
 
     assertNoConsoleErrors(errors);
   });
+
+  // T4 (spec Group T): this describe is the suite's only zero-campaign window -
+  // it runs before any campaign exists. The three GM controls that need a
+  // campaign to do anything used to render enabled and do nothing at all when
+  // clicked (promptCampaignChoice returned null for "no campaigns" exactly as
+  // it does for "cancelled", and every caller returns silently on null).
+  test("zero-campaign world: the filing and capture controls are disabled, and say why", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const campaignCount = await page.evaluate(async () => {
+      const { getCampaigns } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+      return getCampaigns().length;
+    });
+    expect(campaignCount, "this test only means anything in a zero-campaign world").toBe(0);
+    // Task 6 migrates this pair to timelineJournalIds()/cleanupTimelineJournals().
+    const preexisting = await page.evaluate(() => game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id));
+
+    const shell = await openHub(page);
+    await scopeHub(shell, page, "unfiled");
+    const hint = "No campaigns yet";
+
+    const fileAll = shell.locator("button.mej-cc-file-all");
+    await expect(fileAll).toBeDisabled();
+    await expect(fileAll).toHaveAttribute("data-tooltip", new RegExp(hint));
+
+    const rowFile = shell.locator("li.mej-cc-index-row button.mej-cc-row-file").first();
+    await expect(rowFile).toBeDisabled();
+    await expect(rowFile).toHaveAttribute("data-tooltip", new RegExp(hint));
+
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await settle(page, 200);
+    const capture = shell.locator('.mej-cc-tools-menu button[data-action="setCaptureCampaign"]');
+    await expect(capture).toBeDisabled();
+    await expect(capture).toHaveAttribute("data-tooltip", new RegExp(hint));
+
+    await page.evaluate(() => game.MonksEnhancedJournal?.journal?.close?.());
+    await settle(page, 300);
+    await cleanupTimelineJournal(page, { excludeIds: preexisting });
+    // The file has no scope-reset helper of its own; HUB_CAMPAIGN_SCOPE_SETTING
+    // is client-scoped (this context's localStorage) so it cannot leak into
+    // another test, but leave it clean anyway.
+    await page.evaluate(() => game.settings.set("mej-campaign-companion", "hubCampaignScope", ""));
+    assertNoConsoleErrors(errors);
+  });
 });
 
 // ---------------------------------------------------------------------------

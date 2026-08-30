@@ -56,7 +56,8 @@
                             {{/if}}
                             {{#if isGM}}
                             {{#if index.isUnfiledScope}}
-                            <button type="button" class="mej-cc-file-all" data-action="fileAllShown">
+                            <button type="button" class="mej-cc-file-all" data-action="fileAllShown"
+                                    {{#unless hasCampaigns}}disabled data-tooltip="{{localize 'MEJCampaignCompanion.hub.noCampaignsYet'}}"{{/unless}}>
                                 <i class="fa-solid fa-folder-open"></i> {{localize "MEJCampaignCompanion.hub.fileAllShown"}}
                             </button>
                             {{/if}}
@@ -77,7 +78,7 @@
                                 </button>
                                 {{#if @root.index.isUnfiledScope}}
                                 <button type="button" class="mej-cc-row-file" data-action="fileIntoCampaign"
-                                        data-tooltip="{{localize 'MEJCampaignCompanion.hub.fileInto'}}">
+                                        {{#if @root.hasCampaigns}}data-tooltip="{{localize 'MEJCampaignCompanion.hub.fileInto'}}"{{else}}disabled data-tooltip="{{localize 'MEJCampaignCompanion.hub.noCampaignsYet'}}"{{/if}}>
                                     <i class="fa-solid fa-folder-open"></i>
                                 </button>
                                 {{/if}}
