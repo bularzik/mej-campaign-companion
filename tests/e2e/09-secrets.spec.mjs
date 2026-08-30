@@ -124,8 +124,32 @@ test.describe("09 secrets", () => {
     // is neither painted nor clickable - and no retry recovers, because the
     // scroll position does not come back. A forced re-flow does not fix the
     // height either (measured: preview 715x0 inside a 723x211 container, even
-    // after setPosition + a resize event), so the real fix is MEJ-side; see
-    // the Round 5 outcome section of the bugfix-sweep spec.
+    // after setPosition + a resize event).
+    //
+    // The zero-height wrapper is fixed as of spec Group L / L3 (see
+    // styles/campaign-companion.css) and is asserted directly below, so THAT
+    // half is no longer MEJ-side. A residual intercept on this click survives
+    // it and is NOT this mechanism - captured live with the wrapper measured
+    // healthy (scrollTop=0 clientH=73 scrollH=73) at the moment of failure.
+    // Walking the ancestry at that moment found the real cause, and it is ours:
+    //   sheet-container.place-container = 211   <- squeezed
+    //   section.mej-cc-knowledge        = 130
+    //   section.mej-cc-knowledge        = 130   <- injected TWICE
+    // Two Knowledge panels take 260 of the sheet's 523px, leaving the
+    // .sheet-container 211px; its own header (166) + tab nav (38) then leave
+    // section.sheet-body at clientHeight 0, so this button - correctly sized and
+    // positioned - is simply not painted. Same duplicate-injection hazard
+    // knowledge-ui.mjs trackPanel()'s header comment describes and the same one
+    // behind 07-knowledge's intermittent "2 panels". Fixing that is a
+    // knowledge-ui change, not a layout one; do NOT paper over it with waits.
+    // L3 (spec Group L): the diagnostic capture recorded in the comment above
+    // measured this wrapper at clientHeight 0 / scrollHeight 73 - scrollable at
+    // zero height, so a click's own scroll-into-view shifted every child's rect
+    // up and the audience button landed over the tab strip. A box with no
+    // scrollable overflow cannot mis-scroll.
+    const scroller = gmShell.locator('.editor-display[data-key="text.content"]');
+    expect(await scroller.evaluate((el) => el.clientHeight)).toBeGreaterThan(0);
+    expect(await scroller.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0);
     await clickWithHitDiagnostics(btn, page);
     await settle(page, 300);
     const dialog = page.locator("dialog.application").last();

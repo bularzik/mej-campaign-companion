@@ -137,6 +137,21 @@ test.describe("06 player collaboration", () => {
     }, { id: entryId, userId: p2UserId });
     expect(p2FlagAbsent).toBe(true);
 
+    // L2 (spec Group L): the GM's own recap editor is empty, and MEJ's
+    // .editor-parent {flex:1; height:100%} let it claim the whole
+    // .player-recaps-section, pushing ol.other-recaps-list past the bottom of a
+    // .sheet-body that clips its overflow. The row was in the DOM (this file
+    // already proved that for a player) but off-screen for the GM.
+    const gmShell = await openSession(gmPage, entryId);
+    const gmOther = gmShell.locator(".other-recap");
+    await expect(gmOther).toHaveCount(1);
+    await expect(gmOther).toBeVisible();
+    const otherBox = await gmOther.boundingBox();
+    const bodyBox = await gmShell.locator(".session-container .sheet-body").boundingBox();
+    expect(otherBox.height).toBeGreaterThan(0);
+    expect(otherBox.y).toBeGreaterThanOrEqual(bodyBox.y);
+    expect(otherBox.y + otherBox.height).toBeLessThanOrEqual(bodyBox.y + bodyBox.height + 1);
+
     assertNoConsoleErrors(p1Errors);
     assertNoConsoleErrors(p2Errors);
     await p1Context.close();

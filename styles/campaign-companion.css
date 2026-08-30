@@ -17,6 +17,75 @@
   position: relative;
 }
 
+/* L2. MEJ's .editor-parent is `flex:1; height:100%` (css/monks-journal-sheet.css
+   :606-610) - correct when it is the only editor in a tab. The Session
+   description tab has two plus a sibling list. .player-recaps-section sits
+   inside .tab-inner.flexcol, so ITS height is definite (flex-resolved) and
+   `height:100%` on the (for a GM, empty) self-recap editor resolved to the
+   whole section, pushing ol.other-recaps-list past a .sheet-body that clips its
+   overflow. Pin the self-recap to content size; the list then follows it in
+   normal flow, inside the body.
+
+   The leading `.monks-journal-sheet` is load-bearing, not decoration: MEJ's
+   rule is `.monks-journal-sheet.sheet .editor-parent` (0,3,0), a plain
+   `.session-container .player-recap-self.editor-parent` ties it at (0,3,0), and
+   Foundry loads monks-enhanced-journal's CSS AFTER mej-campaign-companion's
+   (module ids sort "mej-" < "monks-"), so on a tie MEJ wins and the override is
+   silently inert. Measured here: `height:auto` written at the tying specificity
+   changed nothing at all - the parent still resolved to the full section and
+   the e2e bound still failed by the same 110px. Same reason the L3 block below
+   carries `.sheet` as well. */
+.monks-journal-sheet .session-container .player-recap-self.editor-parent {
+  height: auto;
+}
+
+/* MEJ pairs the parent's height:100% with `min-height:100%` on the display
+   wrapper; once the parent is auto that percentage is indefinite, so an empty
+   recap (the GM's, normally) collapses to 0 and takes the absolutely-positioned
+   "Edit My Recap" pencil down with it, on top of the "Edit Recap" pencil the
+   rule at the top of this file exists to separate. A floor keeps the read state
+   clickable and the two pencils apart. */
+.monks-journal-sheet .session-container .player-recap-self .editor.editor-display {
+  height: auto;
+  min-height: 4.5em;
+}
+
+/* L3. The same height:100% chain (.editor-parent, then .editor.editor-display
+   at :612-619) resolves against a container that is not definite in these tab
+   layouts, so the wrapper lays out at clientHeight 0 while still holding
+   content - and MEJ's `overflow-y:auto` keeps a 0px box scrollable. A click's
+   own scroll-into-view then shifts every child's rect up by scrollTop (the
+   target can never be "in view" in a 0px viewport) and the audience button
+   lands over the tab strip, where it is neither painted nor clickable; no retry
+   recovers, because the scroll position does not come back.
+
+   The wrapper's `flex:0 0 auto` is the load-bearing half and is deliberately
+   not `1 1 auto`: shrink-to-zero is precisely what a shrinkable item with
+   min-height 0 permits, and measured here, `1 1 auto` on the wrapper still
+   produced the old `scrollTop=37 clientH=0 scrollH=73` triple under a
+   collapsed ancestor. Content-sized, scrollHeight can never exceed clientHeight,
+   so MEJ's own overflow-y:auto has nothing to scroll and the mechanism is gone
+   structurally rather than by a larger number. (An intermediate pass also moved
+   the scrolling up to .editor-parent with `overflow-y:auto`; that recreated the
+   identical zero-height scroller one level up - captured live as .editor-parent
+   clientH=0 scrollH=73 scrollTop=37 - so the parent's overflow is left as MEJ
+   sets it.)
+
+   Scoped by :has() to wrappers that actually hold a companion-injected control,
+   so no MEJ sheet without companion content changes layout at all - and
+   `.sheet` is present purely to clear MEJ's own specificity (see L2 above). */
+.monks-journal-sheet.sheet .editor-parent:has(.mej-cc-secret-audience) {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.monks-journal-sheet.sheet .editor.editor-display:has(.mej-cc-secret-audience) {
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
 /* Compact stand-in for MEJ's detailed header on an image-less Session (spec
    amendment, review of Task 3). MEJ's header is a ~250px flexrow block; this
    is deliberately one line — the rename input, an add-image button, and the
