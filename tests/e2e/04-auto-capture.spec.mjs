@@ -100,11 +100,17 @@ const createdCampaignIds = new Set();
 
 async function cleanupAll(page) {
   await page.evaluate(async () => {
-    // Auto-captured Encounter entries are named "Encounter: <scene> (<date>)"
-    // / "Encounter (<date>)", not TT- prefixed — but every scene/actor this
-    // spec creates for them is, so matching on that substring anywhere in
-    // the name (not just startsWith) catches them too.
-    const ids = game.journal.filter((j) => j.name?.includes("TT-") || j.name?.startsWith("Encounter")).map((j) => j.id);
+    // THE RULE: this file never selects or deletes a journal by a name it did
+    // not itself write. Auto-captured Encounter entries are named
+    // "Encounter: <scene> (<date>)" / "Encounter (<date>)" — a name a user's
+    // own journal can carry just as easily — so they are NOT matched here.
+    // They do not need to be: createEncounter() files them into the capture
+    // campaign's folder (createMejEntry(..., campaign.id)), and this file's
+    // capture target is a TT- campaign it created itself, so the folder
+    // delete below (deleteContents: true) reclaims them by id-rooted cascade.
+    // Only the TT- prefix — which this spec stamps on everything it makes —
+    // is safe to match on.
+    const ids = game.journal.filter((j) => j.name?.includes("TT-")).map((j) => j.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
     const actorIds = game.actors.filter((a) => a.name?.startsWith("TT-")).map((a) => a.id);
     if (actorIds.length) await Actor.implementation.deleteDocuments(actorIds);
@@ -167,7 +173,7 @@ test.describe("04 auto-capture", () => {
     const target = await installCaptureTarget(page);
     expect(target.timepointId).toBeTruthy();
 
-    const result = await page.evaluate(async (prefix) => {
+    const result = await page.evaluate(async ({ prefix, timelineId, timepointId }) => {
       const goblin = await Actor.create({ name: `${prefix}Goblin`, type: "npc" });
       const wolf = await Actor.create({ name: `${prefix}Wolf`, type: "npc" });
       const scene = await Scene.create({ name: `${prefix}Ambush Scene`, width: 1000, height: 1000 });
@@ -192,10 +198,26 @@ test.describe("04 auto-capture", () => {
       const combatId = combat.id;
       // "End Combat": deleteCombat is what auto-capture listens for.
       await combat.delete();
-      await new Promise((r) => setTimeout(r, 600));
 
-      const entry = game.journal.find((j) => j.name?.startsWith("Encounter"));
-      const page0 = entry?.pages?.contents?.[0];
+      // Resolve the Encounter by IDENTITY, never by name. Any journal in the
+      // world can be called "Encounter…", including one of the user's own, so
+      // name-matching here could make a real entry the assertion subject (and,
+      // worse, the cleanup victim). auto-capture's own filing is the link:
+      // createEncounter() calls fileOntoNewestTimepoint({uuid: page.uuid,
+      // type: "JournalEntryPage"}) against the timeline installCaptureTarget()
+      // proved this capture resolves to, so the timepoint this spec owns names
+      // the page it just created, by uuid.
+      let page0 = null;
+      for (let i = 0; i < 30 && !page0; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const tp = game.journal.get(timelineId)
+          ?.getFlag("mej-campaign-companion", "timeline")?.timepoints
+          ?.find((t) => t.id === timepointId);
+        const link = (tp?.links ?? []).find((l) => l.type === "JournalEntryPage" && l.uuid);
+        const doc = link ? fromUuidSync(link.uuid) : null;
+        if (doc?.documentName === "JournalEntryPage") page0 = doc;
+      }
+      const entry = page0?.parent ?? null;
       const rows = page0 ? Object.values(page0.getFlag("monks-enhanced-journal", "actors") ?? {}) : [];
       return {
         entryFound: !!entry,
@@ -204,7 +226,7 @@ test.describe("04 auto-capture", () => {
         goblinName: goblin.name,
         combatId
       };
-    }, TT_PREFIX);
+    }, { prefix: TT_PREFIX, timelineId: target.timelineId, timepointId: target.timepointId });
 
     expect(result.entryFound).toBe(true);
     expect(result.entryFlagType).toBe("encounter");

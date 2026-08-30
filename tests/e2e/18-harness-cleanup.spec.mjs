@@ -18,62 +18,75 @@ test.describe("18 harness cleanup", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
-    // Seeded BEFORE the snapshot, deliberately EMPTY: this is what makes
-    // preexistingAllSurvive below pin the id ledger rather than the TT-content
-    // guard. World A's own flagged timeline ("Radiant Citadel — Timeline")
-    // carries 33 real timepoints, so it survives cleanup on content alone -
-    // drop the keepSet clause from cleanupTimelineJournals and that journal
-    // still lives, and the assertion passes vacuously. An empty pre-existing
-    // flagged timeline has nothing but the ledger protecting it, which is
-    // precisely the hazard the old name-keyed helper could not express.
-    const preseededId = await page.evaluate(async (id) => {
-      const j = await JournalEntry.create({
-        name: "TT-Preexisting Empty Timeline",
-        flags: { [id]: { timeline: { timepoints: [] } } }
-      });
-      return j.id;
-    }, MODULE_ID);
-    const preexisting = await timelineJournalIds(page);
-    expect(preexisting).toContain(preseededId);
+    // Every id this test creates, recorded the moment its document exists, so
+    // the finally below can delete exactly those and nothing else. The fixtures
+    // here are named "Campaign Timeline" / "TT-Preexisting Empty Timeline" -
+    // World A holds real journals with names like the first - so an assertion
+    // that throws must NOT be allowed to strand them: teardown is a finally,
+    // keyed by id, never a trailing statement keyed by a name.
+    const createdIds = [];
+    const create = async (spec) => {
+      const id = await page.evaluate(async (s) => (await JournalEntry.create(s)).id, spec);
+      createdIds.push(id);
+      return id;
+    };
 
-    const seeded = await page.evaluate(async ({ id, prefix }) => {
+    try {
+      // Seeded BEFORE the snapshot, deliberately EMPTY: this is what makes
+      // preexistingAllSurvive below pin the id ledger rather than the TT-content
+      // guard. World A's own flagged timeline ("Radiant Citadel — Timeline")
+      // carries 33 real timepoints, so it survives cleanup on content alone -
+      // drop the keepSet clause from cleanupTimelineJournals and that journal
+      // still lives, and the assertion passes vacuously. An empty pre-existing
+      // flagged timeline has nothing but the ledger protecting it, which is
+      // precisely the hazard the old name-keyed helper could not express.
+      const preseededId = await create({
+        name: "TT-Preexisting Empty Timeline",
+        flags: { [MODULE_ID]: { timeline: { timepoints: [] } } }
+      });
+      const preexisting = await timelineJournalIds(page);
+      expect(preexisting).toContain(preseededId);
+
+      // One create per call, each id banked before the next runs: a throw in
+      // the middle of a batched evaluate would leave an unrecorded document
+      // behind, which is the same stranding this try/finally exists to stop.
       // A user document that merely shares the singleton's name - the exact
       // World A hazard. No module flag, so it is not a timeline at all.
-      const lookalike = await JournalEntry.create({ name: "Campaign Timeline" });
+      const lookalikeId = await create({ name: "Campaign Timeline" });
       // A flagged timeline created after the snapshot: fair game.
-      const appeared = await JournalEntry.create({
-        name: `${prefix}Appeared Timeline`,
-        flags: { [id]: { timeline: { timepoints: [{ id: "t1", label: `${prefix}point` }] } } }
+      const appearedId = await create({
+        name: `${TT_PREFIX}Appeared Timeline`,
+        flags: { [MODULE_ID]: { timeline: { timepoints: [{ id: "t1", label: `${TT_PREFIX}point` }] } } }
       });
       // A flagged timeline carrying real content: never deleted, only stripped.
-      const real = await JournalEntry.create({
-        name: `${prefix}Real Timeline`,
-        flags: { [id]: { timeline: { timepoints: [{ id: "t2", label: "Session Zero" }, { id: "t3", label: `${prefix}point` }] } } }
+      const realId = await create({
+        name: `${TT_PREFIX}Real Timeline`,
+        flags: { [MODULE_ID]: { timeline: { timepoints: [{ id: "t2", label: "Session Zero" }, { id: "t3", label: `${TT_PREFIX}point` }] } } }
       });
-      return { lookalikeId: lookalike.id, appearedId: appeared.id, realId: real.id };
-    }, { id: MODULE_ID, prefix: TT_PREFIX });
 
-    await cleanupTimelineJournals(page, preexisting);
+      await cleanupTimelineJournals(page, preexisting);
 
-    const after = await page.evaluate(({ ids, keep, id }) => ({
-      lookalikeSurvives: !!game.journal.get(ids.lookalikeId),
-      appearedGone: !game.journal.get(ids.appearedId),
-      realSurvives: !!game.journal.get(ids.realId),
-      realLabels: (game.journal.get(ids.realId)?.getFlag(id, "timeline")?.timepoints ?? []).map((t) => t.label),
-      preexistingAllSurvive: keep.every((k) => !!game.journal.get(k))
-    }), { ids: seeded, keep: preexisting, id: MODULE_ID });
+      const after = await page.evaluate(({ ids, keep, id }) => ({
+        lookalikeSurvives: !!game.journal.get(ids.lookalikeId),
+        appearedGone: !game.journal.get(ids.appearedId),
+        realSurvives: !!game.journal.get(ids.realId),
+        realLabels: (game.journal.get(ids.realId)?.getFlag(id, "timeline")?.timepoints ?? []).map((t) => t.label),
+        preexistingAllSurvive: keep.every((k) => !!game.journal.get(k))
+      }), { ids: { lookalikeId, appearedId, realId }, keep: preexisting, id: MODULE_ID });
 
-    expect(after.lookalikeSurvives).toBe(true);
-    expect(after.appearedGone).toBe(true);
-    expect(after.realSurvives).toBe(true);
-    expect(after.realLabels).toEqual(["Session Zero"]);
-    expect(after.preexistingAllSurvive).toBe(true);
-
-    // Tear down this test's own fixtures by id, never by name.
-    await page.evaluate(async (ids) => {
-      const doomed = [ids.lookalikeId, ids.realId, ids.preseededId].filter((i) => game.journal.get(i));
-      if (doomed.length) await JournalEntry.implementation.deleteDocuments(doomed);
-    }, { ...seeded, preseededId });
+      expect(after.lookalikeSurvives).toBe(true);
+      expect(after.appearedGone).toBe(true);
+      expect(after.realSurvives).toBe(true);
+      expect(after.realLabels).toEqual(["Session Zero"]);
+      expect(after.preexistingAllSurvive).toBe(true);
+    } finally {
+      // Tear down this test's own fixtures by id, never by name - and whether
+      // or not the assertions above got that far.
+      await page.evaluate(async (ids) => {
+        const doomed = ids.filter((i) => game.journal.get(i));
+        if (doomed.length) await JournalEntry.implementation.deleteDocuments(doomed);
+      }, createdIds);
+    }
     assertNoConsoleErrors(errors);
   });
 
@@ -96,19 +109,29 @@ test.describe("18 harness cleanup", () => {
     }, MODULE_ID);
     const alive = () => page.evaluate((i) => !!game.journal.get(i), strandedId);
 
-    await cleanupTimelineJournals(page, null);
-    expect(await alive()).toBe(true);
+    // The last assertion below is that the sweep DID delete this fixture, so
+    // in the happy path the finally finds nothing left. It exists for the
+    // unhappy one: any assertion here throwing before that point would
+    // otherwise leave "TT-Stranded Empty Timeline" behind in World A.
+    try {
+      await cleanupTimelineJournals(page, null);
+      expect(await alive()).toBe(true);
 
-    // An absent argument is the same case as an explicit null.
-    await cleanupTimelineJournals(page);
-    expect(await alive()).toBe(true);
+      // An absent argument is the same case as an explicit null.
+      await cleanupTimelineJournals(page);
+      expect(await alive()).toBe(true);
 
-    // Control, in the test itself rather than in a reviewer's hand-edit: with a
-    // REAL ledger that happens to be empty ("I snapshotted, there was nothing")
-    // the very same journal IS swept. Without this line the two assertions
-    // above would still pass if cleanup had simply stopped working.
-    await cleanupTimelineJournals(page, []);
-    expect(await alive()).toBe(false);
+      // Control, in the test itself rather than in a reviewer's hand-edit: with a
+      // REAL ledger that happens to be empty ("I snapshotted, there was nothing")
+      // the very same journal IS swept. Without this line the two assertions
+      // above would still pass if cleanup had simply stopped working.
+      await cleanupTimelineJournals(page, []);
+      expect(await alive()).toBe(false);
+    } finally {
+      await page.evaluate(async (i) => {
+        if (game.journal.get(i)) await JournalEntry.implementation.deleteDocuments([i]);
+      }, strandedId);
+    }
 
     assertNoConsoleErrors(errors);
   });

@@ -836,17 +836,16 @@ test.describe("09 secrets", () => {
       // that inside a zero-height sheet body, so a surplus panel is dropped
       // here rather than left to report a layout regression that isn't one.
       // 4b has landed (knowledge-ui.mjs, injectPanel's injection token), so
-      // this is now a no-op and stayed silent across the whole 08+09 pairing;
-      // it is kept as a guard, and is deliberately not silent about firing.
-      const surplusPanels = await page.evaluate(() => {
-        const panels = [...document.querySelectorAll("#MonksEnhancedJournal section.mej-cc-knowledge")];
-        for (const extra of panels.slice(1)) extra.remove();
-        return panels.length - 1;
-      });
-      if (surplusPanels > 0) {
-        console.warn(`09-secrets long-body: dropped ${surplusPanels} duplicate .mej-cc-knowledge panel(s) before measuring - see Task 4b (knowledge-ui.mjs duplicate injection).`);
-        await settle(page, 200);
-      }
+      // the surplus is now ASSERTED away rather than repaired: dropping the
+      // extra panel and warning would let a 4b regression pass here silently,
+      // which is precisely the failure mode this file already paid for once.
+      const knowledgePanels = await page.evaluate(() =>
+        document.querySelectorAll("#MonksEnhancedJournal section.mej-cc-knowledge").length);
+      const surplusPanels = Math.max(0, knowledgePanels - 1);
+      expect(
+        surplusPanels,
+        `Expected at most one .mej-cc-knowledge panel on this sheet, found ${knowledgePanels} - see Task 4b (knowledge-ui.mjs duplicate injection). A surplus panel collapses section.sheet-body to clientHeight 0, which invalidates every scrolling assertion below.`
+      ).toBe(0);
       // Whatever happened above, the sheet body must be a real box before any
       // of the scrolling assertions mean anything.
       expect(await shell.locator("section.sheet-body").evaluate((el) => el.clientHeight)).toBeGreaterThan(0);
