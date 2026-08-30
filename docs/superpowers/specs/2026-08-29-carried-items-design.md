@@ -136,8 +136,10 @@ branch — the `@CampaignQuery` enricher already assumes throwing is
 meaningful. Reject exactly what cannot mean anything: `attr:` with an empty
 key (`attr:=:=broken` today yields key `""` and an always-empty dashboard),
 `type:`/`tag:`/`attr:` with no value. Everything else stays free text.
-Errors carry a reason (`bad-attr`, `bad-type`, `bad-tag`) and `badQuery`
-shows it. Unit tests: the four probe inputs (`attr:=:=broken` rejected;
+Errors carry a reason (`bad-attr`, `bad-type`) and `badQuery` shows it.
+(Plan amendment: no `bad-tag` — the token regex `^(type|tag|attr):(.+)$`
+never matches `tag:` with no value, so that throw would be unreachable,
+recreating the dead branch this item removes.) Unit tests: the four probe inputs (`attr:=:=broken` rejected;
 `attr:`, `((`, `"unclosed` free text) plus every existing grammar test
 unchanged.
 
