@@ -18,14 +18,14 @@
 // itself, cascade-deleted, never a name-matched sweep. Each test also
 // snapshots/restores autoCaptureCampaign (createCampaign seeds it when the
 // world has no campaign yet) and resets both client-scoped Hub settings; the
-// describe-level afterAll additionally runs cleanupTimelineJournal(), since
+// describe-level afterAll additionally runs cleanupTimelineJournals(), since
 // any GM Hub open can lazily create a "Campaign Timeline" journal.
 //
 // Every test seeds its own campaign and opens its own shell, so a single
 // `--grep "17 media routing.*3\."`-style run of one scenario works standalone.
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, cleanupTimelineJournal,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
@@ -262,6 +262,15 @@ async function disabledInsideMediaMount(page) {
 }
 
 test.describe.serial("17 media routing", () => {
+  // Ids of every flagged timeline journal that existed BEFORE this file ran -
+  // snapshotted as a GM before the first Hub open, so afterAll deletes only
+  // the timelines this suite itself induced.
+  let preexistingTimelines = [];
+
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
+
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (page) => {
       await resetHubState(page);
@@ -276,8 +285,9 @@ test.describe.serial("17 media routing", () => {
       }
       // A GM Hub open preps timeline context on every render and can lazily
       // create the legacy singleton "Campaign Timeline"; this only ever
-      // removes an empty/TT-only copy, never World A's real legacy content.
-      await cleanupTimelineJournal(page);
+      // removes an empty/TT-only FLAGGED timeline that appeared after this
+      // file's own snapshot, never World A's real legacy content.
+      await cleanupTimelineJournals(page, preexistingTimelines);
     });
   });
 

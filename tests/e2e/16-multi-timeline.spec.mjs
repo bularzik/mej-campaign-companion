@@ -20,7 +20,7 @@
 // for whatever runs next in the same context).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, cleanupTimelineJournal,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -90,6 +90,16 @@ test.describe.serial("16 multi-timeline", () => {
   // world setting after its own campaign folder is deleted below.
   let captureCampaignPrior;
 
+  // Ids of every flagged timeline journal that existed BEFORE this file ran -
+  // snapshotted as a GM before test 1 opens a Hub, so afterAll deletes only
+  // the timelines this suite itself induced (campaign-owned ones included,
+  // which the old name filter never even saw).
+  let preexistingTimelines = [];
+
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
+
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (page) => {
       await resetHubState(page);
@@ -126,9 +136,10 @@ test.describe.serial("16 multi-timeline", () => {
       // the legacy singleton "Campaign Timeline" journal via
       // ensureTimelineJournal() (see 02-hub-timeline.spec.mjs's and
       // 14-campaigns.spec.mjs's own header comments for the same mechanism).
-      // cleanupTimelineJournal() only ever removes a copy whose timepoints
-      // are empty/TT-prefixed - never World A's real legacy content.
-      await cleanupTimelineJournal(page);
+      // cleanupTimelineJournals() only ever removes a FLAGGED timeline that
+      // appeared after this file's own snapshot and whose timepoints are
+      // empty/TT-prefixed - never World A's real legacy content.
+      await cleanupTimelineJournals(page, preexistingTimelines);
     });
   });
 

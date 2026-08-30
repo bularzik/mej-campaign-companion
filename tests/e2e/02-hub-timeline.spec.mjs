@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm, cleanupTimelineJournal, worldTimelineJournalId,
+  login, TT_PREFIX, cleanupAsGm, withGmPage, timelineJournalIds, cleanupTimelineJournals,
+  worldTimelineJournalId,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -31,7 +32,12 @@ async function openHubViaToolbar(page) {
 // a side effect even in tests that never touch a timepoint. This used to
 // delete *every* matching doc by name unconditionally - unsafe against
 // World A's real, pre-existing legacy timeline (which shares this exact
-// fixed name); see cleanupTimelineJournal's doc comment in helpers/foundry.mjs.
+// fixed name); see cleanupTimelineJournals's doc comment in helpers/foundry.mjs.
+
+// Ids of every flagged timeline journal that existed BEFORE this file ran.
+// Snapshotted as a GM before any Hub opens, so cleanup can delete only what
+// this file's own Hub renders side-effected into existence.
+let preexistingTimelines = [];
 
 test.describe("02 hub + timeline", () => {
   // Tests in this spec mix the default `page` fixture with tests that open
@@ -46,8 +52,12 @@ test.describe("02 hub + timeline", () => {
   // (deletedCount > 0, no thrown error) but the document reliably survived,
   // every time, only in that combination. See cleanupAsGm()'s own doc
   // comment.
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
+
   test.afterEach(async ({ page, browser }) => {
-    await cleanupAsGm(page, browser, (gmPage) => cleanupTimelineJournal(gmPage));
+    await cleanupAsGm(page, browser, (gmPage) => cleanupTimelineJournals(gmPage, preexistingTimelines));
   });
 
   test("opens from the toolbar; reopens cleanly after a reload", async ({ page }) => {

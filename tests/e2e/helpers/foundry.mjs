@@ -320,70 +320,56 @@ export async function deleteScenesByPrefix(page, prefix = TT_PREFIX) {
   }, prefix);
 }
 
+/** Ids of every timeline journal that exists RIGHT NOW. Call in beforeAll/beforeEach. */
+export async function timelineJournalIds(page) {
+  return page.evaluate(
+    (id) => game.journal.filter((e) => !!e.getFlag(id, "timeline")).map((e) => e.id),
+    MODULE_ID
+  );
+}
+
 /**
- * Safely clean up the legacy singleton timeline journal (always named
- * exactly "Campaign Timeline" - data/timeline-journal.mjs's
- * ensureTimelineJournal()), WITHOUT ever destroying real content.
+ * Delete every timeline journal created since `preexisting` was taken, provided
+ * it carries no non-TT timepoints.
  *
- * Several specs used to do `game.journal.find(e => e.name === "Campaign
- * Timeline")` then unconditionally delete whatever that found - safe only
- * in a throwaway world where nothing else could ever carry that exact
- * name. World A is not that world: it carries a real, content-bearing
- * legacy timeline journal that happens to share this fixed name (spec
- * §6's whole "pre-adoption world" premise), and `ensureTimelineJournal()`
- * with no campaign returns that SAME real journal to any spec that calls
- * it in a zero-campaign world rather than creating a fresh one - so a
- * test adding its own TT_PREFIX-labeled timepoints (e.g. 04-auto-capture's
- * ensureTimepoint()) was landing them directly on the real journal, and
- * cleanup was then deleting that real journal outright by name. Confirmed
- * live during task-12: this cost the shared World A environment its real
- * legacy timeline content across more than one regression run before this
- * fix (see task-12-report.md's world-state section).
+ * Identity is the module's own flag, never the name. The old name-keyed helper
+ * was wrong in both directions. It OVER-deleted: "Campaign Timeline" is the
+ * default name of the world singleton AND a perfectly plausible name for a
+ * user's real journal - which is the situation in World A today (a
+ * pre-existing, empty one), and an empty user journal defeats the
+ * "no non-TT timepoints => safe" heuristic that was the only guard. And it
+ * UNDER-deleted: campaign-owned timelines are named "<Campaign> — Timeline"
+ * (data/timeline-journal.mjs:85) and never matched the filter, so every one a
+ * spec induced leaked unless its campaign folder was deleted with deleteContents.
  *
- * Safe behavior: a "Campaign Timeline" journal whose timepoints are ALL
- * TT_PREFIX-labeled (or has none) is entirely this suite's own doing -
- * delete it, and clear the world setting only if it was the one pointed
- * to. A journal that ALSO carries any non-TT_PREFIX timepoint is real
- * content - never deleted, never has the world setting touched; only its
- * own TT_PREFIX timepoints (if any got added) are stripped back out.
+ * Registration cannot happen at creation time inside a spec, because the specs
+ * do not create these - the module does, from a GM Hub render
+ * (ensureTimelineJournal). So invert it: register what already existed, delete
+ * only what appeared. The ledger is Node-side, so it survives page.reload(),
+ * new contexts, and the per-worker restarts Playwright does after a failure.
  *
- * `excludeIds` (optional): never delete/strip these journal ids, regardless
- * of what their timepoints look like. For a caller that snapshot the
- * world's pre-test "Campaign Timeline" journals and must leave them exactly
- * as found (e.g. 14-campaigns.spec.mjs's adoption test) - a journal that
- * already existed at that caller's start is "found" state even if it
- * happens to currently be empty (itself just unmanaged churn from an
- * earlier run's Hub-open side effect, not this caller's business to judge
- * or clean up). Without this, a caller cleaning up ITS OWN side-effect
- * journals could unwittingly delete the very journal it's about to
- * "restore" the setting to point back at, leaving the setting dangling on
- * a since-deleted id.
- *
- * It is a LIST, not a single id, because a world can hold more than one
- * journal named "Campaign Timeline": ensureTimelineJournal() creates one
- * whenever a GM Hub renders with an empty `timelineJournalId`, and the
- * create-then-set-the-setting window means two renders in flight (or a
- * second GM client) leave a second, orphaned, empty copy behind that the
- * setting does not point at. Excluding only the setting's own id deleted
- * that orphan and broke the caller's "left exactly as found" count - the
- * round-5 flake baseline's run-2 failure of 14-campaigns.
+ * Take the snapshot BEFORE anything opens a GM Hub - a snapshot taken after
+ * would bless a journal the run itself created.
  */
-export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, excludeIds = [] } = {}) {
-  await page.evaluate(async ({ TT, excludeIds }) => {
-    const candidates = game.journal.filter((e) => e.name === "Campaign Timeline" && !excludeIds.includes(e.id));
-    for (const j of candidates) {
-      const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
+export async function cleanupTimelineJournals(page, preexisting = [], { prefix = TT_PREFIX } = {}) {
+  await page.evaluate(async ({ id, TT, keep }) => {
+    const keepSet = new Set(keep);
+    const doomed = game.journal.filter((e) => !!e.getFlag(id, "timeline") && !keepSet.has(e.id));
+    for (const j of doomed) {
+      const tps = j.getFlag(id, "timeline")?.timepoints ?? [];
       const real = tps.filter((t) => !t.label?.startsWith(TT));
-      if (real.length === 0) {
-        await JournalEntry.implementation.deleteDocuments([j.id]);
-        if (game.settings.get("mej-campaign-companion", "timelineJournalId") === j.id) {
-          await game.settings.set("mej-campaign-companion", "timelineJournalId", "");
-        }
-      } else if (real.length !== tps.length) {
-        await j.setFlag("mej-campaign-companion", "timeline", { timepoints: real });
+      if (real.length) {
+        if (real.length !== tps.length) await j.setFlag(id, "timeline", { timepoints: real });
+        continue;
       }
+      const deletedId = j.id;
+      await JournalEntry.implementation.deleteDocuments([deletedId]);
+      // Both settings can be left dangling at a deleted id; the old helper
+      // cleared only the first.
+      if (game.settings.get(id, "timelineJournalId") === deletedId) await game.settings.set(id, "timelineJournalId", "");
+      if (game.settings.get(id, "hubTimelineSelection") === deletedId) await game.settings.set(id, "hubTimelineSelection", "");
     }
-  }, { TT: prefix, excludeIds });
+  }, { id: MODULE_ID, TT: prefix, keep: preexisting });
 }
 
 /**
@@ -393,7 +379,7 @@ export async function cleanupTimelineJournal(page, { prefix = TT_PREFIX, exclude
  * Timeline" NAME.
  *
  * Name lookup is not safe here: a world can hold several journals with that
- * exact name (see cleanupTimelineJournal's note on ensureTimelineJournal's
+ * exact name (see cleanupTimelineJournals's note on ensureTimelineJournal's
  * create-then-set window), and `game.journal.find(name)` then returns
  * whichever of them the collection happens to iterate first - i.e. whichever
  * random document id sorts first, not the one the module writes timepoints

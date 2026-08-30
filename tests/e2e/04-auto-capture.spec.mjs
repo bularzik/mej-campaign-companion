@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupTimelineJournal, worldTimelineJournalId,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals, worldTimelineJournalId,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -33,6 +33,11 @@ async function ensureTimepoint(page) {
   });
 }
 
+// Ids of every flagged timeline journal that existed BEFORE this file ran,
+// snapshotted as a GM before any test opens a Hub: cleanup deletes only what
+// this file itself induced.
+let preexistingTimelines = [];
+
 async function cleanupAll(page) {
   await page.evaluate(async () => {
     // Auto-captured Encounter entries are named "Encounter: <scene> (<date>)"
@@ -55,9 +60,10 @@ async function cleanupAll(page) {
   // pre-existing legacy timeline journal (ensureTimelineJournal() returns
   // that SAME real journal in a zero-campaign world, not a fresh one) -
   // unconditionally deleting anything named "Campaign Timeline" here used
-  // to destroy that real content outright. See cleanupTimelineJournal's
-  // doc comment in helpers/foundry.mjs.
-  await cleanupTimelineJournal(page);
+  // to destroy that real content outright. Identity is now the module's own
+  // timeline flag against a pre-run id snapshot, never the name - see
+  // cleanupTimelineJournals's doc comment in helpers/foundry.mjs.
+  await cleanupTimelineJournals(page, preexistingTimelines);
 }
 
 test.describe("04 auto-capture", () => {
@@ -69,6 +75,10 @@ test.describe("04 auto-capture", () => {
   // into this file's ensureTimepoint()'s "reuse existing" behavior when the
   // whole suite runs together; fixed at the source in those files instead
   // of defensively here.)
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
+
   test.afterEach(async ({ page }) => {
     await cleanupAll(page);
   });

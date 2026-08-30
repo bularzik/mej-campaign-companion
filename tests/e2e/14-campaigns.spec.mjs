@@ -13,7 +13,7 @@
 // comment for why real content is never mutated there).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, cleanupTimelineJournal,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   BASE_URL, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
@@ -91,6 +91,11 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       campaignTimelineIds: game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id).sort(),
       campaignTimelineCount: game.journal.filter((e) => e.name === "Campaign Timeline").length
     }));
+    // Cleanup input, distinct from `prior` above: the FLAGGED timeline journals
+    // that exist right now, by id. `prior.campaignTimelineIds` stays name-keyed
+    // on purpose - it is this test's "world left exactly as found" assertion,
+    // not a cleanup ledger.
+    const preexistingTimelines = await timelineJournalIds(page);
 
     // Defensive: clear any TT- campaign folder left over from a previously
     // crashed run of this very suite before trusting the zero-campaign
@@ -105,11 +110,16 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       const { getCampaigns } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
       return getCampaigns().length;
     });
-    // This is the precondition that makes the banner meaningfully testable
-    // here at all, and the same one 03-search's zero-campaign fallback
-    // depends on - fail loudly rather than silently asserting something
-    // false if it doesn't hold.
-    expect(campaignCountBefore).toBe(0);
+    // The precondition that makes the banner meaningfully testable here at
+    // all. It used to be a hard expect(). World A legitimately holds a real
+    // campaign folder now ("Radiant Citadel"), which is not this suite's to
+    // delete, so the hard assertion went permanently red against a world that
+    // is simply doing its job. Skip instead, in the same style the
+    // zero-campaign-controls describe below already uses: adoption is a
+    // one-way, world-scoped transition that only a zero-campaign world can
+    // exercise end to end, and adoptionPlan() itself is covered
+    // unconditionally by test/campaigns.test.js.
+    test.skip(campaignCountBefore > 0, "world has campaigns; adoption path needs a zero-campaign world");
     expect(prior.prompted).toBe(false);
 
     // 1) Banner visibility, against REAL world state - no seeding needed:
@@ -228,20 +238,20 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
     await page.evaluate(() => game.MonksEnhancedJournal?.journal?.close?.());
     await settle(page, 300);
 
-    // excludeIds: EVERY "Campaign Timeline" journal that already existed at
-    // THIS test's own start is "found" state, full stop, even if it happens
-    // to be currently empty (that emptiness is unmanaged churn from some
-    // earlier, unrelated run's own Hub-open side effect, not this test's
-    // business to judge or clean up). Without excluding them,
-    // cleanupTimelineJournal's normal "empty -> safe to delete" heuristic
-    // would delete them too: excluding nothing left the setting dangling on
-    // a deleted id (confirmed live on the first version of this fix), and
-    // excluding only prior.timelineId still deleted a second, ORPHANED copy
-    // that the setting does not point at - exactly how run 2 of the round-5
-    // flake baseline failed here, campaignTimelineCount 2 -> 1. (Orphans
-    // exist because ensureTimelineJournal() creates the journal before it
-    // writes the setting; see cleanupTimelineJournal's doc comment.)
-    await cleanupTimelineJournal(page, { excludeIds: prior.campaignTimelineIds });
+    // preexistingTimelines: EVERY flagged timeline journal that already
+    // existed at THIS test's own start is "found" state, full stop, even if
+    // it happens to be currently empty (that emptiness is unmanaged churn
+    // from some earlier, unrelated run's own Hub-open side effect, not this
+    // test's business to judge or clean up). Without that snapshot,
+    // cleanupTimelineJournals's "empty -> safe to delete" heuristic would
+    // delete them too: keeping nothing left the setting dangling on a deleted
+    // id (confirmed live on the first version of this fix), and keeping only
+    // prior.timelineId still deleted a second, ORPHANED copy that the setting
+    // does not point at - exactly how run 2 of the round-5 flake baseline
+    // failed here, campaignTimelineCount 2 -> 1. (Orphans exist because
+    // ensureTimelineJournal() creates the journal before it writes the
+    // setting; see cleanupTimelineJournals's doc comment.)
+    await cleanupTimelineJournals(page, preexistingTimelines);
     await page.evaluate(async (prior) => {
       await game.settings.set("mej-campaign-companion", "timelineJournalId", prior.timelineId ?? "");
       await game.settings.set("mej-campaign-companion", "adoptionPrompted", prior.prompted ?? false);
@@ -289,8 +299,7 @@ test.describe("14 campaigns - zero-campaign controls (isolated, read-only)", () 
     // campaignControls, and the three buttons' template wiring); this test is
     // the end-to-end proof, and only a clean world can give it.
     test.skip(campaignCount > 0, "world has campaigns; zero-campaign branch covered by unit tests");
-    // Task 6 migrates this pair to timelineJournalIds()/cleanupTimelineJournals().
-    const preexisting = await page.evaluate(() => game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id));
+    const preexisting = await timelineJournalIds(page);
 
     const shell = await openHub(page);
     await scopeHub(shell, page, "unfiled");
@@ -312,7 +321,7 @@ test.describe("14 campaigns - zero-campaign controls (isolated, read-only)", () 
 
     await page.evaluate(() => game.MonksEnhancedJournal?.journal?.close?.());
     await settle(page, 300);
-    await cleanupTimelineJournal(page, { excludeIds: preexisting });
+    await cleanupTimelineJournals(page, preexisting);
     // The file has no scope-reset helper of its own; HUB_CAMPAIGN_SCOPE_SETTING
     // is client-scoped (this context's localStorage) so it cannot leak into
     // another test, but leave it clean anyway.

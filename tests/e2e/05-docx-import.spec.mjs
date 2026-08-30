@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, cleanupAsGm, cleanupTimelineJournal,
+  login, cleanupAsGm, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -44,6 +44,11 @@ async function openImportWizard(page) {
 // fallback names its campaign after) - deleting by that name match would
 // destroy that real content, the same bug class commit 9750e0d eliminated
 // for the legacy singleton timeline journal.
+// Ids of every flagged timeline journal that existed BEFORE this file ran,
+// snapshotted as a GM before the first import: cleanup deletes only what this
+// file itself induced.
+let preexistingTimelines = [];
+
 async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
   await page.evaluate(async ({ names, campaignFolderIds }) => {
     const byName = new Set(names);
@@ -65,9 +70,10 @@ async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
   // Legacy-singleton fallback (older pre-campaign-feature builds, or a
   // world where the import somehow still fell to the legacy path): never
   // unconditionally delete-by-name - World A's own real, pre-existing
-  // legacy timeline shares this exact fixed name. See
-  // cleanupTimelineJournal's doc comment in helpers/foundry.mjs.
-  await cleanupTimelineJournal(page);
+  // legacy timeline shares this exact fixed name. Identity is now the
+  // module's own timeline flag against a pre-run id snapshot; see
+  // cleanupTimelineJournals's doc comment in helpers/foundry.mjs.
+  await cleanupTimelineJournals(page, preexistingTimelines);
 }
 
 test.describe("05 docx import", () => {
@@ -75,6 +81,10 @@ test.describe("05 docx import", () => {
   // see cleanupImported's doc comment.
   let createdTitles = [];
   let createdCampaignFolderIds = [];
+
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
 
   test.afterEach(async ({ page, browser }) => {
     // No .catch(() => {}) here: a cleanup failure must be visible (logged),
