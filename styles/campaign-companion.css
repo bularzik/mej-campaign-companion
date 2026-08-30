@@ -339,14 +339,37 @@
   gap: 0.5em;
   flex: 0 0 auto;
 }
-/* The brief also carried `.mej-cc-timeline-select {flex:1 1 auto; min-width:0}`
-   and `button {flex:0 0 auto}` here. Both were measured against their own
-   absence in 16-multi-timeline (fix round 1) and are inert: a <select> as a
-   flex item already absorbs the row's slack at its default `0 1 auto`, and the
-   buttons are never under enough pressure to shrink. Identical geometry either
-   way - row 709, select 653, buttons 22/20, last button flush at 0px - so they
-   are left out rather than shipped as CSS no test can hold to account. The
-   assertions that measured them stay in the spec as regression guards. */
+/* Defensive, and deliberately kept without a covering assertion - the one place
+   in this file that departs from "every rule has a test", so here is why.
+   Restored in fix round 2 on review: the intent is that the picker absorbs the
+   row's slack (`flex:1 1 auto`), can still shrink when a timeline name is long
+   (`min-width:0`, since a flex item's default `min-width:auto` refuses to go
+   below min-content), and never squeezes the buttons (`flex:0 0 auto`).
+
+   That intent is right, but in this environment all three are currently inert,
+   and the measurement is recorded so nobody re-derives it a third time. The
+   select's own max-content width is 171px yet it renders at 653px in a 709px
+   row, and neutralising all three declarations - separately and together -
+   reproduces 653px and buttons of 22/20px exactly, under default labels, under
+   all-short labels ("TT-A"), and under a ~170-character label, with the row
+   never overflowing (scrollWidth == clientWidth == 709 throughout). Something
+   above these rules already sizes the select to the row; a probe for the
+   responsible rule came back empty because it did not recurse into Foundry's
+   @layer blocks, so which rule it is remains unconfirmed.
+
+   They stay because they cost nothing and state the intent explicitly if that
+   upstream sizing ever changes. A test was NOT added for them: every assertion
+   that could be written passes identically with them removed, and a green test
+   that cannot fail is worse than no test - see the long-body test in
+   09-secrets, whose first draft had exactly that defect. */
+.mej-cc-timeline-controls .mej-cc-timeline-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mej-cc-timeline-controls button {
+  flex: 0 0 auto;
+}
 
 .mej-cc-order-menu {
   display: flex;
