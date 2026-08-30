@@ -1222,6 +1222,25 @@ button's rect over the tab strip. Both scoped to companion markup."
 
 ---
 
+## Task 4b — Duplicate Knowledge-panel injection (added by controller ruling after Task 4)
+
+**Why:** Task 4 fixed L3's zero-height wrapper, but the `09-secrets` audience-button intercept still reproduced 2/6 in the `08+09` pairing. Its failure capture (task-4-report.md, "residual") shows TWO `section.mej-cc-knowledge` panels injected on one sheet (260 px of a 523 px sheet), squeezing `section.sheet-body` to `clientHeight 0`. The same duplicate-panel symptom is the pre-existing `07-knowledge` "2 panels" intermittent seen in batched runs (Task 2b baseline control). This is a companion product bug in `scripts/hooks/knowledge-ui.mjs`.
+
+**Files:**
+- Modify: `scripts/hooks/knowledge-ui.mjs` (`injectPanel`, `trackPanel`, `refreshTrackedPanels`, the render-hook entry)
+- Test: `tests/e2e/07-knowledge.spec.mjs` (regression), `test/knowledge-*.test.js` if a pure seam exists or is extracted
+
+**Interfaces:**
+- Consumes: the `trackPanel`/`panelRecords`/`trackedElements` structure introduced in 0.13.4 (Round 4 C13) — read its comment block; it documents a "two panels on screen" ordering hazard.
+- Produces: at most ONE `.mej-cc-knowledge` per rendered sheet element at any time, across re-renders, shell-hosted subsheet swaps and popped-out sheets.
+
+- [ ] 1. **Root cause first, with evidence.** Reproduce with the `08+09` pairing (`npx playwright test tests/e2e/08-query-graph.spec.mjs tests/e2e/09-secrets.spec.mjs --trace off --reporter=line`, up to 6 runs) and/or the batched `07+10+15` run, instrumenting `injectPanel` temporarily (console.debug of `element` identity, `sheet.id`, hook name, stack) to capture WHICH two code paths inject into the same element and in what order. Write the findings into the report before changing behaviour. Likely candidates: the render hook firing for both the shell and the subsheet with the same container; `refreshTrackedPanels` re-injecting into an element that a concurrent render is also injecting into; `injectPanel`'s stale-panel `remove()` scoped to `:scope` while the duplicate sits in a sibling/ancestor.
+- [ ] 2. **Write the failing regression test** in `tests/e2e/07-knowledge.spec.mjs`: open an entry, trigger the sequence found in step 1 (e.g. open the same entry twice via the shell and a popout, or re-render via a flag update while the shell swaps subsheets), and assert `.mej-cc-knowledge` count is exactly 1 on every visible sheet element. It must fail on HEAD before the fix (run it 3× to show it reproduces; if it needs the exact interleaving, drive it deterministically from the test with `page.evaluate` calling the sheet's `render()` twice concurrently).
+- [ ] 3. **Fix at the root** — the single injection owner: make `injectPanel` idempotent per element (query and remove ALL existing `.mej-cc-knowledge` in that element's sheet container — not just `:scope` — before inserting, or bail if an identical panel is already present for the same page), and make sure the tracking structure never holds two live records for nested elements. No timers, no `waitForTimeout`.
+- [ ] 4. Run the new test 3×, `tests/e2e/07-knowledge.spec.mjs` in full, the batched `07+10+15` run, and the `08+09` pairing ×6 — the spec's L3 bar is 6/6 clean; report each.
+- [ ] 5. Vacuity check: revert the fix by hand-edit, run the new test → fails; restore.
+- [ ] 6. `npm test` ≥ 712; commit with the root cause in the message.
+
 ## Task 5 — Group V: vendor provenance (V1)
 
 Spec item V1 (inv. §9). The bundle is byte-identical to npm `mammoth@1.12.0`; the
