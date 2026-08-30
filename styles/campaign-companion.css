@@ -969,10 +969,31 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   margin-bottom: 8px;
 }
 
+.mej-cc-prep-attendees ul {
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mej-cc-prep-attendees li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 56px;
+}
+
 .mej-cc-prep-attendees img {
   width: 36px;
   height: 36px;
   border-radius: 4px;
+}
+
+.mej-cc-prep-attendee-name {
+  font-size: var(--font-size-11, 11px);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .mej-cc-prep-secrets li.revealed .mej-cc-prep-secret-text {

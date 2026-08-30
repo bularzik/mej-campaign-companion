@@ -112,6 +112,11 @@ test.describe("15 campaign portal", () => {
 
       const shell = await openEntryDirect(page, created.portalId);
       await expect(shell.locator(".mej-cc-hub-header")).toBeVisible();
+      // T3 (spec Group T): the portal page carries MEJ's type flag so search,
+      // the Hub index and export treat it as first-class - but mejPageOf used
+      // that same flag as "does the companion own this page's presentation?",
+      // so Tags/Attributes/Mentioned in were appended under the whole Hub.
+      await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(0);
       await expect(shell.locator('select[name="campaign-scope"]')).toHaveValue(folderId);
 
       // C1 regression: after OPENING the portal, MEJ's fixType() normalizes
@@ -408,6 +413,11 @@ test.describe("15 campaign portal", () => {
         await login(playerPage, "User 1");
         const shell = await openEntryDirect(playerPage, portalId);
         await expect(shell.locator(".mej-cc-hub-header")).toBeVisible();
+        // T3 (spec Group T): the portal page carries MEJ's type flag so search,
+        // the Hub index and export treat it as first-class - but mejPageOf used
+        // that same flag as "does the companion own this page's presentation?",
+        // so Tags/Attributes/Mentioned in were appended under the whole Hub.
+        await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(0);
         await expect(shell.locator('select[name="campaign-scope"]')).toHaveValue(folderId);
 
         // No GM chrome: no edit-campaign pencil, Tools offers only the Guide.

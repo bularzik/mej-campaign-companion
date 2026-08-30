@@ -8,7 +8,7 @@
 //    chain render hook, fired when an MEJ sheet renders standalone
 //    (popped out) - the shell path never calls _onRender, so these two
 //    hooks are disjoint in practice; the injector is idempotent anyway.
-import { MODULE_ID, I18N, MEDIA_PAGE_TYPES } from "../constants.mjs";
+import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYPE, HUB_PAGE_ID } from "../constants.mjs";
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -23,6 +23,16 @@ function asElement(html) {
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
+  // Shell pages (the campaign portal, the synthetic Hub page) are a third kind
+  // this predicate had no notion of: they carry the MEJ type flag on purpose,
+  // so search/index/export treat them as first-class, but their whole body IS
+  // the Hub - there is nothing to tag, no attributes and no "mentioned in".
+  // Guard on the native subtype, never on the MEJ flag, which is load-bearing.
+  // MEJ's fixType() normalizes a mounted page's in-memory `.type` to the bare
+  // key, so accept all three forms (same reasoning as CampaignHubPage's own
+  // isCampaignPage check).
+  if (doc.type === CAMPAIGN_DOCUMENT_TYPE || doc.type === CAMPAIGN_TYPE
+      || doc._source?.type === CAMPAIGN_DOCUMENT_TYPE || doc.id === HUB_PAGE_ID) return null;
   if (mejType(doc)) return doc;
   const bare = String(doc.type ?? "").split(".").pop();
   return MEDIA_PAGE_TYPES.includes(bare) ? doc : null;
