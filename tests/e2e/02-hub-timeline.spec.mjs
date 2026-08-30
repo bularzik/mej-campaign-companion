@@ -21,6 +21,50 @@ async function openHubViaToolbar(page) {
   return shell;
 }
 
+/**
+ * Create (or return) the WORLD timeline through the module's own production
+ * path - data/timeline-journal.mjs's ensureTimelineJournal() with no campaign,
+ * which is also what writes the timelineJournalId world setting.
+ *
+ * This file used to rely on a GM Hub render creating it as a side effect. That
+ * only ever happens in a ZERO-campaign world: CampaignHubPage's
+ * _prepareBodyContext takes its "pre-adoption world: legacy singleton
+ * behavior" branch only when getCampaigns() is empty, and the All-mode branch
+ * for a world WITH campaigns deliberately creates nothing ("creating N
+ * journals on a render would be a side-effect storm"). World A holds real
+ * campaigns now, so the singleton was never created, timelineJournalId stayed
+ * "", and the Hub's timeline pane rendered a CAMPAIGN's timeline instead -
+ * which is how this suite came to write its TT- fixtures into real user data.
+ */
+async function ensureWorldTimeline(page) {
+  return page.evaluate(async () => {
+    const { ensureTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+    const journal = await ensureTimelineJournal();
+    return journal.id;
+  });
+}
+
+/**
+ * Open the Timeline tab pinned to `timelineId`, and REFUSE to go on unless
+ * that is genuinely the pane the Hub is about to write to.
+ *
+ * The id-equality assertion is the entire point of this helper. Every
+ * timepoint control on this tab (add/rename/delete/drop) acts on the rendered
+ * stack, so a mis-scoped Hub silently sends this file's fixtures into whatever
+ * timeline the stack happens to hold - a campaign's real one included. Fail
+ * fast here, before the first write, rather than discovering it afterwards in
+ * someone's campaign data.
+ */
+async function openOwnTimelineTab(shell, page, timelineId) {
+  await shell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
+  await settle(page, 200);
+  await shell.locator('select[name="timeline-select"]').selectOption(timelineId);
+  await settle(page, 300);
+  const stack = shell.locator(".mej-cc-timeline-stack");
+  await expect(stack).toHaveCount(1);
+  await expect(stack).toHaveAttribute("data-journal-id", timelineId);
+}
+
 // The world's singleton timeline journal (Task 6) is tracked by a world
 // setting storing its id (data/timeline-journal.mjs), named "Campaign
 // Timeline" by ensureTimelineJournal() — CampaignHubPage.mjs's
@@ -86,9 +130,9 @@ test.describe("02 hub + timeline", () => {
   test("timepoint CRUD and drag-reorder", async ({ page }) => {
     const errors = trackConsoleErrors(page);
     await login(page, "Gamemaster");
+    const worldTimelineId = await ensureWorldTimeline(page);
     const shell = await openHubViaToolbar(page);
-    await shell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
-    await settle(page, 200);
+    await openOwnTimelineTab(shell, page, worldTimelineId);
 
     // Create two timepoints.
     for (const label of [`${TT_PREFIX}Point A`, `${TT_PREFIX}Point B`]) {
@@ -156,9 +200,9 @@ test.describe("02 hub + timeline", () => {
     }, TT_PREFIX);
     const personUuid = await page.evaluate((id) => game.journal.get(id).uuid, personId);
 
+    const worldTimelineId = await ensureWorldTimeline(page);
     const shell = await openHubViaToolbar(page);
-    await shell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
-    await settle(page, 200);
+    await openOwnTimelineTab(shell, page, worldTimelineId);
     await shell.locator("button.mej-cc-add-timepoint").click();
     const dialog = page.locator("dialog.application").last();
     await dialog.locator('input[name="label"]').fill(`${TT_PREFIX}Drop Target`);
@@ -200,6 +244,8 @@ test.describe("02 hub + timeline", () => {
     // By id (the timelineJournalId setting), never by the "Campaign
     // Timeline" name - see worldTimelineJournalId's doc comment.
     const timelineId = await worldTimelineJournalId(page);
+    // The setting must still resolve to the very journal this test created.
+    expect(timelineId).toBe(worldTimelineId);
     const links = await page.evaluate((id) => {
       const j = game.journal.get(id);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.[0];
@@ -218,6 +264,7 @@ test.describe("02 hub + timeline", () => {
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();
     await login(gmPage, "Gamemaster");
+    const worldTimelineId = await ensureWorldTimeline(gmPage);
 
     const personId = await gmPage.evaluate(async (prefix) => {
       const entry = await JournalEntry.create({
@@ -253,8 +300,7 @@ test.describe("02 hub + timeline", () => {
     // it to correctly *omit* the hidden one and the CRUD controls.
     await gmShell.locator(".nav-button.campaign-hub").click();
     await settle(gmPage, 300);
-    await gmShell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
-    await settle(gmPage, 200);
+    await openOwnTimelineTab(gmShell, gmPage, worldTimelineId);
     await gmShell.locator("button.mej-cc-add-timepoint").click();
     const dialog = gmPage.locator("dialog.application").last();
     await dialog.locator('input[name="label"]').fill(`${TT_PREFIX}Player View Point`);
@@ -265,6 +311,10 @@ test.describe("02 hub + timeline", () => {
     // out a fixed window, and this evaluate throws "Cannot set properties of
     // undefined (setting 'links')" if it runs while timepoints is still empty.
     const gmTimelineId = await worldTimelineJournalId(gmPage);
+    // Must still be the journal this test created - the links written just
+    // below overwrite timepoints[0].links outright, so a wrong id here would
+    // destroy whatever that other timeline's first timepoint was carrying.
+    expect(gmTimelineId).toBe(worldTimelineId);
     await gmPage.waitForFunction(
       (id) => (game.journal.get(id)?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.length ?? 0) > 0,
       gmTimelineId, { timeout: 15_000 }
@@ -291,8 +341,7 @@ test.describe("02 hub + timeline", () => {
     await expect(playerShell.locator('.mej-cc-tools-menu button[data-action="openHelp"]')).toHaveCount(1);
     await playerShell.locator(".mej-cc-tools-summary").click();
     await expect(playerShell.locator(".mej-cc-tools-menu")).toHaveCount(0);
-    await playerShell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
-    await settle(playerPage, 200);
+    await openOwnTimelineTab(playerShell, playerPage, worldTimelineId);
     // Positive control first.
     await expect(playerShell.locator('.mej-cc-link-chip[data-src="icons/svg/mystery-man.svg"]')).toHaveCount(1);
     await expect(playerShell.locator('button.mej-cc-add-timepoint')).toHaveCount(0);
