@@ -142,6 +142,12 @@ test.describe("09 secrets", () => {
     // knowledge-ui.mjs trackPanel()'s header comment describes and the same one
     // behind 07-knowledge's intermittent "2 panels". Fixing that is a
     // knowledge-ui change, not a layout one; do NOT paper over it with waits.
+    // FIXED in Task 4b: injectPanel's stale-panel removal straddled its
+    // template await, so the render hook and the debounced refresh pass could
+    // both see zero panels and both append. It now removes every panel and
+    // appends inside one synchronous block after the await, newest injection
+    // only. Regression test: 07-knowledge.spec.mjs, "injected at most once per
+    // sheet element".
     // L3 (spec Group L): the diagnostic capture recorded in the comment above
     // measured this wrapper at clientHeight 0 / scrollHeight 73 - scrollable at
     // zero height, so a click's own scroll-into-view shifted every child's rect
@@ -815,8 +821,9 @@ test.describe("09 secrets", () => {
       // editor column scrolls, and none of them can say anything at all about
       // that inside a zero-height sheet body, so a surplus panel is dropped
       // here rather than left to report a layout regression that isn't one.
-      // Once 4b lands this is a no-op; it is deliberately not silent about
-      // having fired.
+      // 4b has landed (knowledge-ui.mjs, injectPanel's injection token), so
+      // this is now a no-op and stayed silent across the whole 08+09 pairing;
+      // it is kept as a guard, and is deliberately not silent about firing.
       const surplusPanels = await page.evaluate(() => {
         const panels = [...document.querySelectorAll("#MonksEnhancedJournal section.mej-cc-knowledge")];
         for (const extra of panels.slice(1)) extra.remove();

@@ -335,6 +335,85 @@ test.describe("07 knowledge panel", () => {
     assertNoConsoleErrors(errors);
   });
 
+  // Task 4b regression. Two Knowledge panels used to end up on one sheet, and
+  // once there they never went away: the panel is 130px tall, so two of them
+  // took 260px of a 523px sheet, squeezed `.sheet-container` to 211px and left
+  // `section.sheet-body` at clientHeight 0 - every control below the header
+  // (09-secrets' audience button) present, correctly sized, and simply not
+  // painted. Captured live (task-4b-report.md) with injectPanel instrumented,
+  // on a plain create-then-open of one entry:
+  //
+  //   2925 enter    #1 hook:renderJournalPageSheet eid=1 panels=0
+  //   2929 enter    #2 refreshTrackedPanels        eid=1 panels=0
+  //   2931 rendered #1 hook     eid=1 panels=0
+  //   2932 appended #1 hook     eid=1 panels=1
+  //   2932 rendered #2 refresh  eid=1 panels=1
+  //   2932 appended #2 refresh  eid=1 panels=2
+  //
+  // injectPanel is async - it awaits renderTemplate - and it used to strip the
+  // old panel BEFORE that await and append the new one AFTER it. Two calls for
+  // the same element (the render hook, and the debounced refreshTrackedPanels
+  // that the create fires) therefore both saw zero panels and both appended.
+  // The two assertions below cover both halves of the fix, and both fail
+  // without it:
+  //  (a) overlapping injections into one element leave exactly one panel. The
+  //      hook is dispatched twice in a single tick, which is the same overlap
+  //      the capture shows (both calls enter before either appends) driven
+  //      deterministically instead of waiting for a 4ms coincidence.
+  //  (b) a duplicate already on screen collapses back to one on the next
+  //      injection. The old code removed only the FIRST panel per pass, so a
+  //      pair was self-sustaining - remove one, append one, still two - which
+  //      is why the collapsed sheet in 09-secrets never recovered on re-render.
+  test("the Knowledge panel is injected at most once per sheet element, even when two injections overlap", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const name = `${TT_PREFIX}Dup-Panel-Person`;
+    const entryId = await createPerson(page, name);
+    const { shell } = await openEntry(page, entryId);
+
+    // Dispatching MEJ's own hook is only meaningful if it carries the same
+    // arguments MEJ's renderSubSheet passes (the subsheet, its root element).
+    // Assert that before relying on what the dispatch does, or a shell that
+    // ever stops exposing them would make this test pass by doing nothing.
+    const probe = await page.evaluate(() => {
+      const journal = game.MonksEnhancedJournal.journal;
+      const el = journal?.subsheetElement;
+      const sheet = journal?.subsheet;
+      return {
+        hasElement: el instanceof HTMLElement,
+        isPage: sheet?.document instanceof JournalEntryPage,
+        docName: sheet?.document?.name ?? null
+      };
+    });
+    expect(probe).toEqual({ hasElement: true, isPage: true, docName: name });
+
+    // (a) two injections that overlap across the template await.
+    await page.evaluate(() => {
+      const journal = game.MonksEnhancedJournal.journal;
+      Hooks.callAll("renderJournalPageSheet", journal.subsheet, journal.subsheetElement, {});
+      Hooks.callAll("renderJournalPageSheet", journal.subsheet, journal.subsheetElement, {});
+    });
+    await settle(page, 500);
+    await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(1);
+
+    // (b) a pair already on screen must not survive the next injection.
+    await page.evaluate(() => {
+      const extra = document.createElement("section");
+      extra.className = "mej-cc-knowledge";
+      game.MonksEnhancedJournal.journal.subsheetElement.appendChild(extra);
+    });
+    await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(2);
+    await page.evaluate(() => {
+      const journal = game.MonksEnhancedJournal.journal;
+      Hooks.callAll("renderJournalPageSheet", journal.subsheet, journal.subsheetElement, {});
+    });
+    await settle(page, 500);
+    await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(1);
+
+    assertNoConsoleErrors(errors);
+  });
+
   test("backlink permission leak: a GM-only mentioning entry never appears in a player's Mentioned-in list", async ({ browser }) => {
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();
