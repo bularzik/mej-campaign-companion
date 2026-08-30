@@ -1,11 +1,9 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, withGmPage, timelineJournalIds, cleanupTimelineJournals,
-  worldTimelineJournalId,
+  worldTimelineJournalId, gotoGame,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
-
-const BASE_URL = "http://localhost:30000";
 
 /** Open any journal entry (so the MEJ shell + its toolbar exist), then click
  * the Campaign Hub toolbar button. Returns the shell locator. */
@@ -77,8 +75,7 @@ test.describe("02 hub + timeline", () => {
     await expect(shell.locator(".mej-cc-hub-container")).toHaveCount(1);
     await expect(shell.locator('nav.sheet-tabs a[data-tab="index"]')).toHaveCount(1);
 
-    await page.goto(`${BASE_URL}/game`);
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await gotoGame(page);
     await settle(page, 500);
     const reopened = await openHubViaToolbar(page);
     await expect(reopened.locator(".mej-cc-hub-container")).toHaveCount(1);

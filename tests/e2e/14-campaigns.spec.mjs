@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
-  BASE_URL, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
+  gotoGame, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
 
 const MODULE_ID = "mej-campaign-companion";
@@ -402,8 +402,7 @@ test.describe.serial("14 campaigns", () => {
     // module state) rather than just re-rendering - HUB_CAMPAIGN_SCOPE_SETTING
     // is a "client" setting (localStorage in this same browser context, not
     // the world DB), so reloading the same context is what actually proves it.
-    await page.goto(`${BASE_URL}/game`);
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await gotoGame(page);
     await settle(page, 500);
     const reopened = await openHub(page);
     await expect(reopened.locator('select[name="campaign-scope"]')).toHaveValue(alphaId);
@@ -760,8 +759,7 @@ test.describe.serial("14 campaigns", () => {
     });
 
     // Force a fresh render against live server state.
-    await playerPage.goto(`${BASE_URL}/game`);
-    await playerPage.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await gotoGame(playerPage);
     await settle(playerPage, 500);
     const reopenedPlayerShell = await openHub(playerPage);
     await scopeHub(reopenedPlayerShell, playerPage, alphaId);

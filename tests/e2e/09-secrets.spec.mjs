@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
-  settle, clickWithHitDiagnostics, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
+  settle, reloadGame, clickWithHitDiagnostics, KNOWN_MEJ_SESSION_ICON_404,
+  KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
@@ -620,8 +621,21 @@ test.describe("09 secrets", () => {
       await page.evaluate(async () => {
         await game.settings.set("mej-campaign-companion", "dataVersion", 2);
       });
-      await page.reload();
-      await settle(page, 3000);
+      await reloadGame(page);
+      // The ready hook's migration runs async after the document rebinds -
+      // poll for dataVersion to actually reach CURRENT_DATA_VERSION rather
+      // than racing a fixed settle() (the 3s one this replaces stood in for
+      // BOTH the ready wait and the migration). Same poll as
+      // 15-campaign-portal's, target READ FROM the served module rather than
+      // hard-coded, so a future CURRENT_DATA_VERSION bump does not go red here.
+      const currentVersion = await page.evaluate(async () => {
+        const { CURRENT_DATA_VERSION } = await import("/modules/mej-campaign-companion/scripts/constants.mjs");
+        return CURRENT_DATA_VERSION;
+      });
+      await page.waitForFunction(
+        (target) => game.settings.get("mej-campaign-companion", "dataVersion") === target,
+        currentVersion, { timeout: 30_000 }
+      );
 
       const result = await page.evaluate((id) => {
         const entry = game.journal.get(id);

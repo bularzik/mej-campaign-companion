@@ -139,6 +139,28 @@ export async function ensureTestWorld() {
 const SESSION_BOUND = () =>
   globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId;
 
+async function waitSessionBound(page, timeout) {
+  try {
+    await page.waitForFunction(SESSION_BOUND, null, { timeout });
+  } catch {
+    // A reload that lands on /join (expired session) would otherwise burn the
+    // whole timeout with no clue; name what we actually landed on.
+    throw new Error(`no session-bound /game document after ${timeout}ms (url=${page.url()})`);
+  }
+}
+
+/** Navigate to /game and wait for a session-bound document (never a bare game.ready). */
+export async function gotoGame(page, { timeout = 60_000 } = {}) {
+  await page.goto(`${BASE_URL}/game`);
+  await waitSessionBound(page, timeout);
+}
+
+/** Reload the current /game document and wait for it to rebind. */
+export async function reloadGame(page, { timeout = 60_000 } = {}) {
+  await page.reload();
+  await waitSessionBound(page, timeout);
+}
+
 /**
  * Try to authenticate `page` as `userName` from a saved storageState cookie
  * (written by the "setup" Playwright project) instead of the interactive

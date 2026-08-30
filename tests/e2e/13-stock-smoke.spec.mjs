@@ -30,6 +30,7 @@ import { test, expect } from "@playwright/test";
 import {
   login,
   settle,
+  reloadGame,
   trackConsoleErrors,
   KNOWN_MEJ_SESSION_ICON_404,
   EXPECTED_INVALID_TYPE_WHILE_DISABLED,
@@ -59,8 +60,7 @@ async function bootAsRealUser(page) {
     return forced;
   }, MODULE_ID);
   if (wasForced) {
-    await page.reload();
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await reloadGame(page);
   }
   // Same post-ready settle 12-native-mode uses: sheetClasses and the ready
   // sweeps finish asynchronously after game.ready flips.

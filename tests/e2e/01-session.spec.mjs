@@ -1,13 +1,11 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX,
+  login, TT_PREFIX, gotoGame,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
-
-const BASE_URL = "http://localhost:30000";
 
 /** Open the journal sidebar and MEJ's "Create Entry" dialog, choose type
  * "Session", submit, and return the created entry's id once MEJ has
@@ -142,8 +140,7 @@ test.describe("01 session entries", () => {
       entryId
     );
 
-    await page.goto(`${BASE_URL}/game`);
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await gotoGame(page);
     await settle(page, 300);
 
     const after = await page.evaluate((id) => {

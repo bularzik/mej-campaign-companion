@@ -1,4 +1,4 @@
-// The harness testing itself (spec H1): the two hazards the name-keyed
+// The harness testing itself (spec H1/H2): the two hazards the name-keyed
 // cleanupTimelineJournal could not express. World A really does hold a
 // pre-existing, empty journal named "Campaign Timeline", and campaign-owned
 // timelines are named "<Campaign> — Timeline" and never matched the name filter
@@ -6,7 +6,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, timelineJournalIds, cleanupTimelineJournals,
-  trackConsoleErrors, assertNoConsoleErrors,
+  gotoGame, reloadGame, trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -74,6 +74,18 @@ test.describe("18 harness cleanup", () => {
       const doomed = [ids.lookalikeId, ids.realId, ids.preseededId].filter((i) => game.journal.get(i));
       if (doomed.length) await JournalEntry.implementation.deleteDocuments(doomed);
     }, { ...seeded, preseededId });
+    assertNoConsoleErrors(errors);
+  });
+
+  test("gotoGame and reloadGame return on a session-bound document", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await gotoGame(page);
+    await settle(page, 300);
+    expect(await page.evaluate(() => !!game.socket?.session?.userId)).toBe(true);
+    await reloadGame(page);
+    await settle(page, 300);
+    expect(await page.evaluate(() => !!game.socket?.session?.userId)).toBe(true);
     assertNoConsoleErrors(errors);
   });
 });
