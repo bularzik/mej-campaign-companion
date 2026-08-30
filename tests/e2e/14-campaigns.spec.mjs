@@ -259,12 +259,22 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
 
     assertNoConsoleErrors(errors);
   });
+});
 
-  // T4 (spec Group T): this describe is the suite's only zero-campaign window -
-  // it runs before any campaign exists. The three GM controls that need a
-  // campaign to do anything used to render enabled and do nothing at all when
-  // clicked (promptCampaignChoice returned null for "no campaigns" exactly as
-  // it does for "cancelled", and every caller returns silently on null).
+// ---------------------------------------------------------------------------
+// T4 (spec Group T): the three GM controls that need a campaign to do anything
+// used to render enabled and do nothing at all when clicked
+// (promptCampaignChoice returned null for "no campaigns" exactly as it does for
+// "cancelled", and every caller returns silently on null).
+//
+// Its own describe, deliberately, though it shares the adoption block's
+// zero-campaign window: that block is describe.serial, so a failure of ITS
+// precondition would skip this test as "did not run" rather than let it report
+// its own state, and the two share nothing else. Read-only - it opens the Hub,
+// asserts, and cleans up only journals the Hub's own render side-effected into
+// existence.
+// ---------------------------------------------------------------------------
+test.describe("14 campaigns - zero-campaign controls (isolated, read-only)", () => {
   test("zero-campaign world: the filing and capture controls are disabled, and say why", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
@@ -272,7 +282,13 @@ test.describe.serial("14 campaigns - adoption (isolated, non-destructive)", () =
       const { getCampaigns } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
       return getCampaigns().length;
     });
-    expect(campaignCount, "this test only means anything in a zero-campaign world").toBe(0);
+    // Conditional, never mutating: this world is shared and can legitimately
+    // hold campaigns that are not this suite's to delete (a leaked import
+    // fixture, or the GM's own real content). The branch this test observes is
+    // covered unconditionally by test/campaigns.test.js (campaignChoicePlan,
+    // campaignControls, and the three buttons' template wiring); this test is
+    // the end-to-end proof, and only a clean world can give it.
+    test.skip(campaignCount > 0, "world has campaigns; zero-campaign branch covered by unit tests");
     // Task 6 migrates this pair to timelineJournalIds()/cleanupTimelineJournals().
     const preexisting = await page.evaluate(() => game.journal.filter((e) => e.name === "Campaign Timeline").map((e) => e.id));
 

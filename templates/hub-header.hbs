@@ -26,7 +26,7 @@
             <button type="button" data-action="openImportWizard"><i class="fa-solid fa-file-import"></i> {{localize 'MEJCampaignCompanion.import.button'}}</button>
             <button type="button" data-action="openExportDialog"><i class="fa-solid fa-file-export"></i> {{localize 'MEJCampaignCompanion.export.button'}}</button>
             <button type="button" data-action="setCaptureCampaign"
-                    {{#unless hasCampaigns}}disabled data-tooltip="{{localize 'MEJCampaignCompanion.hub.noCampaignsYet'}}"{{/unless}}><i class="fa-solid fa-crosshairs"></i> {{localize 'MEJCampaignCompanion.hub.captureTarget'}}</button>
+                    {{#if campaignControls.disabled}}disabled data-tooltip="{{localize campaignControls.tooltipKey}}"{{/if}}><i class="fa-solid fa-crosshairs"></i> {{localize 'MEJCampaignCompanion.hub.captureTarget'}}</button>
             {{/if}}
             <button type="button" data-action="openHelp"><i class="fa-solid fa-circle-question"></i> {{localize 'MEJCampaignCompanion.help.open'}}</button>
         </div>

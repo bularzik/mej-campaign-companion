@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_ID } from "../scripts/constants.mjs";
-import { adoptionPlan } from "../scripts/logic/campaigns.mjs";
+import { adoptionPlan, campaignChoicePlan, campaignControls } from "../scripts/logic/campaigns.mjs";
+import { readFileSync } from "node:fs";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
@@ -219,5 +220,85 @@ describe("adoptionPlan (spec §6)", () => {
     ];
     expect(adoptionPlan(entries, getMEJType, "timeline-x")).toEqual(["t1", "timeline-x"]);
     expect(adoptionPlan([], getMEJType, null)).toEqual([]);
+  });
+});
+
+// T4 (spec Group T). The Hub's three campaign-dependent GM controls and
+// promptCampaignChoice's short-circuit both used to be silent in a world with
+// no campaigns yet: the controls rendered enabled and did nothing, because
+// promptCampaignChoice returned the same bare `null` for "no campaigns exist"
+// as for "the GM cancelled" and every caller returns on null. Both decisions
+// now live here, where they can be tested without a Foundry world - the Hub is
+// an ApplicationV2 subclass and is not unit-reachable.
+describe("campaignChoicePlan", () => {
+  const alpha = { id: "a", name: "Alpha" };
+  const beta = { id: "b", name: "Beta" };
+
+  it("refuses with a reason when the world has no campaigns", () => {
+    expect(campaignChoicePlan([])).toEqual({
+      kind: "none", campaign: null, warnKey: "MEJCampaignCompanion.hub.noCampaignsYet"
+    });
+  });
+  it("names a string the module actually ships for that refusal", () => {
+    const lang = JSON.parse(readFileSync(new URL("../lang/en.json", import.meta.url), "utf8"));
+    const { warnKey } = campaignChoicePlan([]);
+    const value = warnKey.split(".").reduce((node, key) => node?.[key], lang);
+    expect(typeof value).toBe("string");
+    expect(value.length).toBeGreaterThan(0);
+  });
+  it("takes the only campaign without a dialog", () => {
+    expect(campaignChoicePlan([alpha])).toEqual({ kind: "single", campaign: alpha, warnKey: null });
+  });
+  it("still prompts on a single campaign when the caller insists", () => {
+    expect(campaignChoicePlan([alpha], { alwaysPrompt: true })).toEqual({ kind: "prompt", campaign: null, warnKey: null });
+  });
+  it("prompts whenever there is a real choice", () => {
+    expect(campaignChoicePlan([alpha, beta])).toEqual({ kind: "prompt", campaign: null, warnKey: null });
+  });
+});
+
+describe("campaignControls", () => {
+  it("disables the filing/capture controls, with the reason as their tooltip, when there are no campaigns", () => {
+    expect(campaignControls([])).toEqual({
+      hasCampaigns: false, disabled: true, tooltipKey: "MEJCampaignCompanion.hub.noCampaignsYet"
+    });
+  });
+  it("leaves them alone as soon as one campaign exists", () => {
+    expect(campaignControls([{ id: "a", name: "Alpha" }])).toEqual({
+      hasCampaigns: true, disabled: false, tooltipKey: null
+    });
+  });
+});
+
+// The three controls are rendered by templates, not by JS, so the wiring
+// itself is asserted against the template sources: each button must consume
+// campaignControls rather than deciding on its own (the e2e in
+// tests/e2e/14-campaigns.spec.mjs proves the rendered result, but only in a
+// zero-campaign world, which the shared test world is not always in).
+describe("hub templates consume campaignControls", () => {
+  const read = (name) => readFileSync(new URL(`../templates/${name}`, import.meta.url), "utf8");
+  const buttonFor = (html, marker) => {
+    const start = html.indexOf(marker);
+    expect(start, `no button matching ${marker}`).toBeGreaterThan(-1);
+    return html.slice(html.lastIndexOf("<button", start), html.indexOf(">", html.indexOf("data-action", start)) + 1);
+  };
+
+  it("disables File all shown", () => {
+    const button = buttonFor(read("hub.hbs"), 'class="mej-cc-file-all"');
+    expect(button).toContain("campaignControls.disabled");
+    expect(button).toContain("disabled");
+    expect(button).toContain("campaignControls.tooltipKey");
+  });
+  it("disables the per-row File into control", () => {
+    const button = buttonFor(read("hub.hbs"), 'class="mej-cc-row-file"');
+    expect(button).toContain("@root.campaignControls.disabled");
+    expect(button).toContain("disabled");
+    expect(button).toContain("@root.campaignControls.tooltipKey");
+  });
+  it("disables the Tools menu's auto-capture target", () => {
+    const button = buttonFor(read("hub-header.hbs"), 'data-action="setCaptureCampaign"');
+    expect(button).toContain("campaignControls.disabled");
+    expect(button).toContain("disabled");
+    expect(button).toContain("campaignControls.tooltipKey");
   });
 });

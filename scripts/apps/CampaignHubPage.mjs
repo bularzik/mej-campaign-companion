@@ -17,7 +17,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls } from "../logic/campaigns.mjs";
 import { orderTimelines, partitionTimelines } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -342,7 +342,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     const scopeContext = this.#campaignScopeContext();
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
-    context.hasCampaigns = scopeContext.hasCampaigns;
+    context.campaignControls = scopeContext.campaignControls;
     context.index = this.#indexContext();
     context.timeline = { stacks, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
@@ -508,7 +508,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (game.user.isGM) {
       options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
     }
-    return { hasCampaigns: campaigns.length > 0, options, isCampaignScope: !!current && current !== "unfiled" };
+    return { hasCampaigns: campaigns.length > 0, campaignControls: campaignControls(campaigns), options, isCampaignScope: !!current && current !== "unfiled" };
   }
 
   #indexContext() {
@@ -1298,15 +1298,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    */
   static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
     const campaigns = getCampaigns();
-    if (!campaigns.length) {
-      // Two different outcomes used to share one silent `null`: "the GM
-      // cancelled" and "there was no dialog to show". Every caller returns on
-      // null, so filing/capture controls did nothing at all in a world with no
-      // campaigns yet. Say so.
-      ui.notifications.warn(game.i18n.localize(`${I18N}.hub.noCampaignsYet`));
+    // Two different outcomes used to share one silent `null`: "the GM
+    // cancelled" and "there was no dialog to show". Every caller returns on
+    // null, so filing/capture controls did nothing at all in a world with no
+    // campaigns yet. Say so. (campaignChoicePlan, tested in test/campaigns.test.js.)
+    const plan = campaignChoicePlan(campaigns, { alwaysPrompt });
+    if (plan.kind === "none") {
+      ui.notifications.warn(game.i18n.localize(plan.warnKey));
       return null;
     }
-    if (campaigns.length === 1 && !alwaysPrompt) return campaigns[0];
+    if (plan.kind === "single") return plan.campaign;
     const esc = foundry.utils.escapeHTML;
     // Pre-select the Hub's currently scoped campaign (the client setting the
     // picker persists) - the GM prompted while working inside a campaign
