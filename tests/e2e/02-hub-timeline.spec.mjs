@@ -37,11 +37,26 @@ async function openHubViaToolbar(page) {
  * which is how this suite came to write its TT- fixtures into real user data.
  */
 async function ensureWorldTimeline(page) {
-  return page.evaluate(async () => {
+  const seen = await page.evaluate(async () => {
     const { ensureTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
     const journal = await ensureTimelineJournal();
-    return journal.id;
+    const tps = journal.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
+    return { id: journal.id, timepointCount: tps.length };
   });
+
+  // ensureTimelineJournal() RESOLVES before it creates: if timelineJournalId
+  // already points at a world timeline, it hands that one back. In a world
+  // where a GM had ever used the pre-campaign singleton that is the user's own
+  // populated timeline - and openOwnTimelineTab() below would then happily
+  // confirm the pane, after which this file adds, renames, deletes and (in the
+  // player-visibility test) OVERWRITES a timepoint's links. So refuse anything
+  // this run did not create: it must be absent from the pre-run id ledger, and
+  // it must still be empty. Together those two make "somebody else's timeline"
+  // unreachable rather than merely unlikely.
+  expect(Array.isArray(preexistingTimelines)).toBe(true);
+  expect(preexistingTimelines).not.toContain(seen.id);
+  expect(seen.timepointCount).toBe(0);
+  return seen.id;
 }
 
 /**
@@ -316,22 +331,36 @@ test.describe("02 hub + timeline", () => {
     // undefined (setting 'links')" if it runs while timepoints is still empty.
     const gmTimelineId = await worldTimelineJournalId(gmPage);
     // Must still be the journal this test created - the links written just
-    // below overwrite timepoints[0].links outright, so a wrong id here would
-    // destroy whatever that other timeline's first timepoint was carrying.
+    // below REPLACE a timepoint's links outright, so a wrong id here would
+    // destroy whatever that other timeline's timepoint was carrying.
     expect(gmTimelineId).toBe(worldTimelineId);
     await gmPage.waitForFunction(
       (id) => (game.journal.get(id)?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.length ?? 0) > 0,
       gmTimelineId, { timeout: 15_000 }
     );
-    await gmPage.evaluate(async (id) => {
+
+    // Resolve the id of the timepoint THIS test just added, and write by that
+    // id. The old code wrote to timepoints[0], which is a position, not an
+    // identity - on any journal this test did not create from scratch that is
+    // somebody else's first timepoint, and the write replaces its links.
+    const ownPointId = await gmPage.evaluate(({ id, label }) => {
+      const tps = game.journal.get(id)?.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
+      const matches = tps.filter((t) => t.label === label);
+      return matches.length === 1 ? matches[0].id : null;
+    }, { id: gmTimelineId, label: `${TT_PREFIX}Player View Point` });
+    expect(ownPointId).toBeTruthy();
+
+    await gmPage.evaluate(async ({ id, tpId }) => {
       const j = game.journal.get(id);
       const timeline = foundry.utils.duplicate(j.getFlag("mej-campaign-companion", "timeline"));
-      timeline.timepoints[0].links = [
+      const tp = timeline.timepoints.find((t) => t.id === tpId);
+      if (!tp) throw new Error(`timepoint ${tpId} is gone; refusing to write links positionally`);
+      tp.links = [
         { id: foundry.utils.randomID(), src: "icons/svg/hazard.svg", name: "GM-only", showPlayers: false },
         { id: foundry.utils.randomID(), src: "icons/svg/mystery-man.svg", name: "Visible-to-players", showPlayers: true }
       ];
       await j.setFlag("mej-campaign-companion", "timeline", timeline);
-    }, gmTimelineId);
+    }, { id: gmTimelineId, tpId: ownPointId });
 
     const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const playerPage = await playerContext.newPage();
