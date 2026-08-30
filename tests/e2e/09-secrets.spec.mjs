@@ -764,4 +764,146 @@ test.describe("09 secrets", () => {
     await p1Ctx.close();
     assertNoConsoleErrors(errors);
   });
+
+  // L3 follow-up (fix round 1). The L3 rules make the enriched preview wrapper
+  // content-sized so it can never be a zero-height scroll container - but that
+  // takes MEJ's own `overflow-y:auto` on the wrapper out of play, and the two
+  // boxes above it clip without scrolling: .editor-parent is `overflow:hidden`
+  // (monks-journal-sheet.css:606-610) and .sheet-body .tab is
+  // `height:100%!important; overflow-y:hidden!important` (:560-563). Every other
+  // fixture in this file has a ~73px body, which fits the pane and so cannot see
+  // this at all; a long body would have been silently unreadable below the fold
+  // with no scroller anywhere. The companion-scoped .editor-parent is therefore
+  // made the scroller, and this is the test that says so.
+  test("a long body stays readable: the editor-parent scrolls, the wrapper does not, and the audience control below the fold is clickable", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    let entryId = null;
+    try {
+      await login(page, "Gamemaster");
+      entryId = await page.evaluate(async (prefix) => {
+        // 45 paragraphs puts the secret and the final marker far below any
+        // plausible pane height at this viewport (the pane measures ~155px on a
+        // place sheet), so "below the fold" is a property of the fixture rather
+        // than of the window size.
+        const filler = Array.from({ length: 45 }, (_, i) => `<p>TT-longbody paragraph ${i + 1}</p>`).join("");
+        const html = `<p>Public intro.</p>${filler}`
+          + `<section class="secret" id="secret-longbody"><p>TT-longbody-secret</p></section>`
+          + `<p>TT-longbody final paragraph</p>`;
+        const entry = await JournalEntry.create({
+          name: `${prefix}LongBody`,
+          ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+          pages: [{ name: `${prefix}LongBody`, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
+        });
+        return entry.id;
+      }, TT_PREFIX);
+
+      const shell = await openEntry(page, entryId);
+      const wrapper = contentPreview(shell);
+      const parent = shell.locator(".editor-parent:has(.mej-cc-secret-audience)");
+      await expect(parent).toHaveCount(1);
+
+      // Precondition, not a workaround for this file's subject. Task 4b owns a
+      // separate bug in knowledge-ui.mjs where the Knowledge panel is injected
+      // twice on some renders (the hazard trackPanel()'s own header comment
+      // describes, and the same one behind 07-knowledge's intermittent "2
+      // panels"). Two 130px panels take 260 of the sheet's 523px, which
+      // squeezes .sheet-container from 367 to 211 and collapses
+      // section.sheet-body to clientHeight 0 - measured live, exactly
+      // correlated: {knowledge:1, sheetContainer:367, sheetBody:155, parent
+      // ch:155} on five runs, {knowledge:2, sheetContainer:211, sheetBody:0,
+      // parent ch:0} on the sixth. Every assertion below is about whether the
+      // editor column scrolls, and none of them can say anything at all about
+      // that inside a zero-height sheet body, so a surplus panel is dropped
+      // here rather than left to report a layout regression that isn't one.
+      // Once 4b lands this is a no-op; it is deliberately not silent about
+      // having fired.
+      const surplusPanels = await page.evaluate(() => {
+        const panels = [...document.querySelectorAll("#MonksEnhancedJournal section.mej-cc-knowledge")];
+        for (const extra of panels.slice(1)) extra.remove();
+        return panels.length - 1;
+      });
+      if (surplusPanels > 0) {
+        console.warn(`09-secrets long-body: dropped ${surplusPanels} duplicate .mej-cc-knowledge panel(s) before measuring - see Task 4b (knowledge-ui.mjs duplicate injection).`);
+        await settle(page, 200);
+      }
+      // Whatever happened above, the sheet body must be a real box before any
+      // of the scrolling assertions mean anything.
+      expect(await shell.locator("section.sheet-body").evaluate((el) => el.clientHeight)).toBeGreaterThan(0);
+
+      // (b) The parent is the scroller, and the wrapper is not. Asserted as a
+      // pair deliberately: either one alone is satisfiable by the broken
+      // arrangement this test exists to prevent (a zero-height wrapper is also
+      // "not overflowing", and a wrapper that scrolls is exactly the L3 bug).
+      const parentMetrics = await parent.evaluate((el) => ({ ch: el.clientHeight, sh: el.scrollHeight }));
+      expect(parentMetrics.ch).toBeGreaterThan(0);
+      expect(parentMetrics.sh).toBeGreaterThan(parentMetrics.ch);
+      const wrapperMetrics = await wrapper.evaluate((el) => ({ ch: el.clientHeight, sh: el.scrollHeight }));
+      expect(wrapperMetrics.ch).toBeGreaterThan(0);
+      expect(wrapperMetrics.sh - wrapperMetrics.ch).toBeLessThanOrEqual(0);
+
+      // (b, second half) The bottom of the body is reachable BY A USER. This is
+      // driven with the mouse wheel on purpose, and it is the assertion that
+      // makes `overflow-y:auto` load-bearing: `overflow:hidden` (what MEJ sets
+      // on this box, and what the wrapper's content-sizing left in charge) still
+      // permits *programmatic* scrolling - el.scrollTop = n moves a hidden box
+      // happily, and so does Playwright's own scroll-into-view before a click.
+      // An earlier draft of this test asserted only scrollHeight > clientHeight
+      // and a programmatic scroll, and passed unchanged with overflow-y removed:
+      // vacuous. Wheel input is what a hidden box actually refuses.
+      const lastPara = wrapper.getByText("TT-longbody final paragraph");
+      await expect(lastPara).toHaveCount(1);
+      const parentBox = await parent.boundingBox();
+      await page.mouse.move(parentBox.x + parentBox.width / 2, parentBox.y + parentBox.height / 2);
+      let scrolled = 0;
+      for (let i = 0; i < 12; i++) {
+        await page.mouse.wheel(0, 400);
+        await settle(page, 80);
+        scrolled = await parent.evaluate((el) => el.scrollTop);
+        if (scrolled >= (await parent.evaluate((el) => el.scrollHeight - el.clientHeight)) - 1) break;
+      }
+      expect(scrolled).toBeGreaterThan(0);
+      const lastBox = await lastPara.boundingBox();
+      expect(lastBox.y).toBeGreaterThanOrEqual(parentBox.y - 1);
+      expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(parentBox.y + parentBox.height + 1);
+
+      // (c) Making the parent a scroller must not push the sheet itself out of
+      // the window - the failure mode of "fixing" clipping by letting content
+      // grow instead.
+      const overflow = await page.evaluate(() => {
+        const sheet = document.querySelector("#MonksEnhancedJournal .monks-journal-sheet.sheet");
+        const r = sheet.getBoundingClientRect();
+        return {
+          sheetBottom: Math.round(r.bottom), sheetTop: Math.round(r.y),
+          winH: window.innerHeight,
+          docScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight
+        };
+      });
+      expect(overflow.sheetTop).toBeGreaterThanOrEqual(0);
+      expect(overflow.sheetBottom).toBeLessThanOrEqual(overflow.winH + 1);
+      expect(overflow.docScroll).toBeLessThanOrEqual(0);
+
+      // (a) The audience control sits below the fold on this body; it must
+      // still be reachable by an ordinary click. clickWithHitDiagnostics rather
+      // than click() for the same reason as the first test in this file: if it
+      // ever times out, its scrollTop/clientH/scrollH triple is the report.
+      await parent.evaluate((el) => { el.scrollTop = 0; });
+      await settle(page, 200);
+      // Deliberately from the top, so the click must find its own way down.
+      const btn = shell.locator(".mej-cc-secret-audience");
+      await expect(btn).toHaveCount(1);
+      await clickWithHitDiagnostics(btn, page);
+      await settle(page, 300);
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog).toBeVisible();
+      await dialog.locator('button[data-action="cancel"], button[data-action="close"]').first().click()
+        .catch(async () => { await page.keyboard.press("Escape"); });
+      await settle(page, 300);
+
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async (id) => {
+        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
+      }, entryId);
+    }
+  });
 });

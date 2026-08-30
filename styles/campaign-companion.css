@@ -78,6 +78,17 @@
   height: auto;
   min-height: 0;
   flex: 1 1 auto;
+  /* The scroller has to live SOMEWHERE, and the wrapper can no longer be it.
+     Above this box, .sheet-body .tab is `height:100%!important;
+     overflow-y:hidden!important` (monks-journal-sheet.css:560-563) and this
+     parent is MEJ's `overflow:hidden` (:606-610) - both clip without scrolling.
+     So a long enriched body (the 73px fixtures elsewhere in 09-secrets cannot
+     show this) would sit below the fold with nothing able to reach it. As a
+     flex item of the tab column this parent does have a definite height, which
+     is exactly what the wrapper lacked, so it is a legitimate scroll container
+     rather than another zero-height one. Covered by 09-secrets' long-body
+     test. */
+  overflow-y: auto;
 }
 
 .monks-journal-sheet.sheet .editor.editor-display:has(.mej-cc-secret-audience) {
@@ -328,15 +339,14 @@
   gap: 0.5em;
   flex: 0 0 auto;
 }
-
-.mej-cc-timeline-controls .mej-cc-timeline-select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.mej-cc-timeline-controls button {
-  flex: 0 0 auto;
-}
+/* The brief also carried `.mej-cc-timeline-select {flex:1 1 auto; min-width:0}`
+   and `button {flex:0 0 auto}` here. Both were measured against their own
+   absence in 16-multi-timeline (fix round 1) and are inert: a <select> as a
+   flex item already absorbs the row's slack at its default `0 1 auto`, and the
+   buttons are never under enough pressure to shrink. Identical geometry either
+   way - row 709, select 653, buttons 22/20, last button flush at 0px - so they
+   are left out rather than shipped as CSS no test can hold to account. The
+   assertions that measured them stay in the spec as regression guards. */
 
 .mej-cc-order-menu {
   display: flex;

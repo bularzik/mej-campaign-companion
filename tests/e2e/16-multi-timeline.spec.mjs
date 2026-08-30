@@ -397,6 +397,29 @@ test.describe.serial("16 multi-timeline", () => {
       const centre = (b) => b.y + b.height / 2;
       expect(Math.abs(centre(selectBox) - centre(renameBox))).toBeLessThan(6);
 
+      // The other two declarations in that block, which the row-centre check
+      // above cannot see. `.mej-cc-timeline-select {flex:1 1 auto; min-width:0}`
+      // is what makes the picker absorb the row's slack: without it the select
+      // is content-width and the buttons stop well short of the row's right
+      // edge. `button {flex:0 0 auto}` is what keeps them from being squeezed
+      // by it - so every button stays on the one row and none is narrower than
+      // its own content.
+      const rowBox = await shell.locator(".mej-cc-timeline-controls").boundingBox();
+      const btnBoxes = await shell.locator(".mej-cc-timeline-controls button").evaluateAll(
+        (els) => els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height, scrollW: el.scrollWidth, clientW: el.clientWidth };
+        }));
+      expect(btnBoxes.length).toBeGreaterThan(1);
+      for (const b of btnBoxes) {
+        expect(Math.abs((b.y + b.h / 2) - centre(selectBox))).toBeLessThan(6);
+        // Not shrunk below its own content (flex-shrink: 0).
+        expect(b.scrollW - b.clientW).toBeLessThanOrEqual(1);
+      }
+      // The last button ends flush with the row: only true when the select grew.
+      const lastBtn = btnBoxes.reduce((a, b) => (b.x + b.w > a.x + a.w ? b : a));
+      expect(rowBox.x + rowBox.width - (lastBtn.x + lastBtn.w)).toBeLessThan(2);
+
       await shell.locator("button.mej-cc-timeline-rename").click();
       const renameDialog = page.locator("dialog.application").last();
       await renameDialog.locator('input[name="name"]').fill(`${TT_PREFIX}Renamed`);
