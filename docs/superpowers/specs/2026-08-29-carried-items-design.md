@@ -127,6 +127,16 @@ array, `showHeader` false with no image, true with one); e2e that the
 header labels are absent on a fresh Session and the sheet body starts at
 the tabs.
 
+*Amendment (review of Task 3):* MEJ's header partial is also the sheet's
+only rename input and its only "add image" control (`data-action="addImage"`,
+handled by MEJ's base sheet). Suppressing it outright would make an
+image-less Session unable to ever gain an image from its own sheet. So when
+`showHeader` is false **and the viewer can edit**, the sheet renders a
+compact companion row (`.mej-cc-session-header-compact`) holding the `name`
+input and an add-image control wired to the same `addImage` action;
+non-editable viewers with no image see nothing. An image-bearing Session
+renders MEJ's header with the image and zero schema rows — covered by e2e.
+
 ### Group Q — query grammar
 
 **Q1. C16 — bad-query validation is unreachable** (M; inv. §8).
