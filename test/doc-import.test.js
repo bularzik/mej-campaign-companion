@@ -5,6 +5,7 @@
 // "person" (see doc-import.mjs's LEGACY_TYPE_ALIASES). Everything else is
 // unchanged.
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { cleanTitle, detectSessionHeader, parseSectionDate, sessionsDetectedHint } from "../scripts/logic/doc-import.mjs";
 
 describe("cleanTitle", () => {
@@ -317,5 +318,27 @@ describe("sessionsDetectedHint", () => {
   it("selects the plural string for zero and for many", () => {
     expect(sessionsDetectedHint(0)).toEqual({ sessionsDetected: 0, sessionsDetectedOne: false });
     expect(sessionsDetectedHint(4)).toEqual({ sessionsDetected: 4, sessionsDetectedOne: false });
+  });
+});
+
+// The hint itself is rendered by a template, so the branch is pinned against
+// the template source: the singular string must be chosen by an {{#if}} on
+// sessionsDetectedOne with the plural in its {{else}}. Deleting the branch, or
+// inverting it, fails here. (Foundry's i18n does plain {token} substitution
+// with no plural selection, which is why the choice is made in the context.)
+describe("import wizard template selects the sessions hint", () => {
+  const template = readFileSync(new URL("../templates/import-wizard.hbs", import.meta.url), "utf8");
+  const lang = JSON.parse(readFileSync(new URL("../lang/en.json", import.meta.url), "utf8"));
+
+  it("branches on sessionsDetectedOne, singular first, plural in the else", () => {
+    expect(template).toMatch(
+      /\{\{#if sessionsDetectedOne\}\}\{\{localize "MEJCampaignCompanion\.import\.sessionsDetectedOne"\}\}\s*\{\{else\}\}\{\{localize "MEJCampaignCompanion\.import\.sessionsDetected" count=sessionsDetected\}\}\{\{\/if\}\}/
+    );
+    expect(template).not.toContain("#unless sessionsDetectedOne");
+  });
+  it("ships a singular string that is actually singular, and a plural one that takes the count", () => {
+    expect(lang.MEJCampaignCompanion.import.sessionsDetectedOne).toMatch(/\b1 section\b/);
+    expect(lang.MEJCampaignCompanion.import.sessionsDetectedOne).not.toMatch(/\bsections\b/);
+    expect(lang.MEJCampaignCompanion.import.sessionsDetected).toContain("{count}");
   });
 });

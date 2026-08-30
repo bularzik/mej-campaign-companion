@@ -249,6 +249,11 @@ describe("campaignChoicePlan", () => {
   it("takes the only campaign without a dialog", () => {
     expect(campaignChoicePlan([alpha])).toEqual({ kind: "single", campaign: alpha, warnKey: null });
   });
+  it("refuses even when the caller insists on a prompt - onNewSession passes alwaysPrompt", () => {
+    expect(campaignChoicePlan([], { alwaysPrompt: true })).toEqual({
+      kind: "none", campaign: null, warnKey: "MEJCampaignCompanion.hub.noCampaignsYet"
+    });
+  });
   it("still prompts on a single campaign when the caller insists", () => {
     expect(campaignChoicePlan([alpha], { alwaysPrompt: true })).toEqual({ kind: "prompt", campaign: null, warnKey: null });
   });
@@ -260,21 +265,25 @@ describe("campaignChoicePlan", () => {
 describe("campaignControls", () => {
   it("disables the filing/capture controls, with the reason as their tooltip, when there are no campaigns", () => {
     expect(campaignControls([])).toEqual({
-      hasCampaigns: false, disabled: true, tooltipKey: "MEJCampaignCompanion.hub.noCampaignsYet"
+      disabled: true, tooltipKey: "MEJCampaignCompanion.hub.noCampaignsYet"
     });
   });
   it("leaves them alone as soon as one campaign exists", () => {
     expect(campaignControls([{ id: "a", name: "Alpha" }])).toEqual({
-      hasCampaigns: true, disabled: false, tooltipKey: null
+      disabled: false, tooltipKey: null
     });
   });
 });
 
 // The three controls are rendered by templates, not by JS, so the wiring
-// itself is asserted against the template sources: each button must consume
-// campaignControls rather than deciding on its own (the e2e in
+// itself is asserted against the template sources: each button must take its
+// disabled state and its tooltip from campaignControls, inside one {{#if}} on
+// campaignControls.disabled. The shape is pinned rather than the substrings -
+// asserting only that the button "contains disabled" is vacuous (so does the
+// word campaignControls.disabled), and asserting only that it mentions the
+// flag is polarity-blind (an inverted {{#unless}} would pass). The e2e in
 // tests/e2e/14-campaigns.spec.mjs proves the rendered result, but only in a
-// zero-campaign world, which the shared test world is not always in).
+// zero-campaign world, which the shared test world is not always in.
 describe("hub templates consume campaignControls", () => {
   const read = (name) => readFileSync(new URL(`../templates/${name}`, import.meta.url), "utf8");
   const buttonFor = (html, marker) => {
@@ -282,23 +291,24 @@ describe("hub templates consume campaignControls", () => {
     expect(start, `no button matching ${marker}`).toBeGreaterThan(-1);
     return html.slice(html.lastIndexOf("<button", start), html.indexOf(">", html.indexOf("data-action", start)) + 1);
   };
+  // {{#if [@root.]campaignControls.disabled}} immediately followed by the
+  // disabled attribute and, in the same block, the tooltip.
+  const GUARD = /\{\{#if (?:@root\.)?campaignControls\.disabled\}\}disabled data-tooltip="\{\{localize (?:@root\.)?campaignControls\.tooltipKey\}\}"/;
 
   it("disables File all shown", () => {
     const button = buttonFor(read("hub.hbs"), 'class="mej-cc-file-all"');
-    expect(button).toContain("campaignControls.disabled");
-    expect(button).toContain("disabled");
-    expect(button).toContain("campaignControls.tooltipKey");
+    expect(button).toMatch(GUARD);
+    expect(button).not.toContain("#unless");
   });
   it("disables the per-row File into control", () => {
     const button = buttonFor(read("hub.hbs"), 'class="mej-cc-row-file"');
+    expect(button).toMatch(GUARD);
     expect(button).toContain("@root.campaignControls.disabled");
-    expect(button).toContain("disabled");
-    expect(button).toContain("@root.campaignControls.tooltipKey");
+    expect(button).not.toContain("#unless");
   });
   it("disables the Tools menu's auto-capture target", () => {
     const button = buttonFor(read("hub-header.hbs"), 'data-action="setCaptureCampaign"');
-    expect(button).toContain("campaignControls.disabled");
-    expect(button).toContain("disabled");
-    expect(button).toContain("campaignControls.tooltipKey");
+    expect(button).toMatch(GUARD);
+    expect(button).not.toContain("#unless");
   });
 });

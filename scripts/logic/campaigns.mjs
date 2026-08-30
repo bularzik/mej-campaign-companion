@@ -219,6 +219,6 @@ export function campaignChoicePlan(campaigns, { alwaysPrompt = false } = {}) {
  * click something that silently does nothing.
  */
 export function campaignControls(campaigns) {
-  const hasCampaigns = campaigns.length > 0;
-  return { hasCampaigns, disabled: !hasCampaigns, tooltipKey: hasCampaigns ? null : NO_CAMPAIGNS_KEY };
+  const disabled = campaigns.length === 0;
+  return { disabled, tooltipKey: disabled ? NO_CAMPAIGNS_KEY : null };
 }

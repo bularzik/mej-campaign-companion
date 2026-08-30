@@ -508,7 +508,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (game.user.isGM) {
       options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
     }
-    return { hasCampaigns: campaigns.length > 0, campaignControls: campaignControls(campaigns), options, isCampaignScope: !!current && current !== "unfiled" };
+    return { campaignControls: campaignControls(campaigns), options, isCampaignScope: !!current && current !== "unfiled" };
   }
 
   #indexContext() {
