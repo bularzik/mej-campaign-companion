@@ -15,7 +15,7 @@ below, and runs in CI alongside the unit suite.
 
 | File | Upstream | License | Build format |
 |---|---|---|---|
-| `mammoth.browser.min.js` | [mwilliamson/mammoth.js](https://github.com/mwilliamson/mammoth.js) | BSD-2-Clause | browserify UMD, minified |
+| `mammoth.browser.min.js` | [mwilliamson/mammoth.js](https://github.com/mwilliamson/mammoth.js) **1.12.0** | BSD-2-Clause | browserify UMD, minified |
 | `docx.iife.js` | [dolanmiu/docx](https://github.com/dolanmiu/docx) | MIT | rolldown IIFE |
 | `d3-force.esm.js` | [d3/d3-force](https://github.com/d3/d3-force) + its deps | ISC | esbuild ESM bundle |
 
@@ -27,30 +27,34 @@ that parses untrusted input, so it is the one whose version matters most.
 
     sha256  48f782490b81115af367308c904b6f5b8795c1662467f3b317208a017d62e3d8  d3-force.esm.js
     sha256  d5ec4f5a8b99740845974f5f6f020d6e5b1b6c27026195befc67eb37035c84c7  docx.iife.js
-    sha256  5d4c0e7c9165d70b78f789c5274a2c7846d9e1c06ec19b69afa6ef45f789a3b9  mammoth.browser.min.js
+    sha256  5d4c0e7c9165d70b78f789c5274a2c7846d9e1c06ec19b69afa6ef45f789a3b9  mammoth.browser.min.js  mammoth@1.12.0
 
 These are also in `checksums.txt`, which is what `check:vendor` reads.
 
-## Known gap: the current versions are unidentified
+## Version provenance
 
-**None of these files records the version it was built from, and the versions
-cannot be recovered after the fact.** The bundles were added on 2026-08-16 with
-no version noted. `mammoth.browser.min.js` was checked by SHA-256 against every
-published `mammoth` release from 1.6.0 through 1.12.1 and matches **none** of
-them — consistent with a local build rather than a copy of the file shipped in
-the npm package (`d3-force.esm.js`'s own header says it was bundled locally with
-esbuild, and `docx.iife.js` is a rolldown build, so a local build step is the
-likely origin for all three).
+`mammoth.browser.min.js` is **`mammoth@1.12.0`**, byte-identical to the prebuilt
+browser bundle inside that release's npm tarball (`package/mammoth.browser.min.js`).
+Established by `npm pack`-ing every release from 1.6.0 to 1.12.2 and hashing each:
+1.12.0 is an exact match, and it is the only one. The earlier claim here — that the
+file matched no published release and was probably a local build — was wrong; the
+comparison it rested on was never actually run against the tarball's own prebuilt
+file. `checksums.txt` now records the claim as a third field, and
+`npm run check:vendor:upstream` re-checks it against the registry (opt-in: the
+default `check:vendor` run stays offline, because it runs in CI beside the unit
+suite).
 
-The practical consequence: if a CVE is published against `mammoth`, there is
-currently no way to answer "are we affected?" from this repository. Treat that
-as open.
+Two bundles are still unidentified. `docx.iife.js` is not `docx@9.1.0`
+(776 004 bytes there against 1 123 332 here); the same size/hash sweep across
+`docx` 9.x should be repeated when the registry cooperates. `d3-force.esm.js` is
+genuinely a local esbuild bundle — its own first-line provenance comment says so —
+and cannot be matched by hash; it needs its source version recorded at
+regeneration time instead.
 
-Closing it means re-vendoring from pinned versions and recording them here.
-That is deliberately **not** bundled into the bugfix round that wrote this file:
-replacing these bundles changes library behavior for docx import and export, so
-it needs its own change with the round-trip e2e specs (`05-docx-import`) run
-against it, not a drive-by swap.
+`mammoth` 1.12.2 is the latest published release, so the vendored copy is two
+patch releases behind. That upgrade is deliberately **not** taken here: replacing
+the bundle changes docx-import behaviour and needs `05-docx-import` run against
+it, per the Regenerating steps below.
 
 ## Regenerating (for whoever does that next)
 

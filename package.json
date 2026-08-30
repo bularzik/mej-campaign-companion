@@ -7,7 +7,8 @@
     "test:e2e": "playwright test",
     "e2e:unlock": "node tests/e2e/helpers/unlock.mjs",
     "check:links": "node tests/docs/check-guide-links.mjs",
-    "check:vendor": "node tests/vendor/check-vendor.mjs"
+    "check:vendor": "node tests/vendor/check-vendor.mjs",
+    "check:vendor:upstream": "node tests/vendor/check-vendor.mjs --verify-upstream"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
