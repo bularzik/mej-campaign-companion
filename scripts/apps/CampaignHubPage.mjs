@@ -655,7 +655,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         return { ...q, error: null, results };
       } catch (err) {
         // A stored query that no longer parses renders as an error row, not a crash (spec §6).
-        return { ...q, error: game.i18n.localize(`${I18N}.hub.dashboards.badQuery`), results: [] };
+        return { ...q, error: game.i18n.format(`${I18N}.hub.dashboards.badQuery`, { reason: err.message }), results: [] };
       }
     });
     return { rows, isGM };
@@ -801,10 +801,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * instead and re-open pre-filled with what they actually wrote. Cancelling
    * still exits, so this cannot trap anyone in a loop.
    *
-   * Note (C16, recorded not fixed): the parseQuery branch below is currently
-   * unreachable - parseQuery only throws on empty input, which the !query
-   * check above it already catches - so "that query can't be parsed" can
-   * never actually appear. Kept so a stricter grammar stays covered.
+   * C16 (fixed 0.13.6): parseQuery is strict now - `attr:` with an empty key
+   * and a `type:` value that cannot name a registry key throw `bad-attr` /
+   * `bad-type` - so this branch is live and the warning below really appears.
+   * Everything else the grammar does not recognize is still free text.
    */
   static async #promptDashboard(initial = {}, { titleKey }) {
     let current = initial;
@@ -818,8 +818,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       }
       try {
         parseQuery(typed.query);
-      } catch {
-        ui.notifications.warn(game.i18n.localize(`${I18N}.hub.dashboards.badQuery`));
+      } catch (err) {
+        ui.notifications.warn(game.i18n.format(`${I18N}.hub.dashboards.badQuery`, { reason: err.message }));
         continue;
       }
       return typed;
