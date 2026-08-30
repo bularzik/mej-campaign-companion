@@ -294,21 +294,54 @@ describe("hub templates consume campaignControls", () => {
   // {{#if [@root.]campaignControls.disabled}} immediately followed by the
   // disabled attribute and, in the same block, the tooltip.
   const GUARD = /\{\{#if (?:@root\.)?campaignControls\.disabled\}\}disabled data-tooltip="\{\{localize (?:@root\.)?campaignControls\.tooltipKey\}\}"/;
+  // The bare `disabled` ATTRIBUTE, as opposed to the flag name
+  // `campaignControls.disabled`: preceded by whitespace, the tag start, or the
+  // `}}` that closes a Handlebars expression (which is how the guarded one
+  // appears - the reviewer's plain \s boundary never matches it), and followed
+  // by whitespace, `>`, or a `{{`.
+  const BARE_DISABLED = /(?:^|[\s}])disabled(?=[\s>{]|$)/g;
+
+  // Matching the guard is not enough on its own: a second, UNCONDITIONAL
+  // `disabled` anywhere else in the same opening tag leaves every other
+  // assertion green while the button is permanently dead. So the attribute
+  // must appear exactly once in the tag, and that one occurrence must lie
+  // inside the guard; likewise every data-tooltip must sit inside the
+  // conditional (the row button legitimately carries two - the disabled
+  // reason and the normal "File into campaign" - in mutually exclusive
+  // branches of one {{#if}}/{{else}}, so they are bounded, not counted).
+  const expectGuardedAndNothingElse = (tag) => {
+    const guard = tag.match(GUARD);
+    expect(guard, "button does not carry the campaignControls guard").not.toBeNull();
+    const guardStart = tag.indexOf(guard[0]);
+    const guardEnd = guardStart + guard[0].length;
+
+    const attrs = [...tag.matchAll(BARE_DISABLED)].map((m) => m.index + m[0].indexOf("disabled"));
+    expect(attrs, `expected exactly one bare "disabled" attribute in: ${tag}`).toHaveLength(1);
+    expect(attrs[0]).toBeGreaterThanOrEqual(guardStart);
+    expect(attrs[0]).toBeLessThan(guardEnd);
+
+    const condStart = tag.indexOf("{{#if");
+    const condEnd = tag.indexOf("{{/if}}") + "{{/if}}".length;
+    expect(condStart).toBeGreaterThan(-1);
+    expect(condEnd).toBeGreaterThan(condStart);
+    const tooltips = [...tag.matchAll(/data-tooltip=/g)].map((m) => m.index);
+    expect(tooltips.length).toBeGreaterThan(0);
+    for (const at of tooltips) {
+      expect(at, `data-tooltip outside the conditional in: ${tag}`).toBeGreaterThan(condStart);
+      expect(at).toBeLessThan(condEnd);
+    }
+    expect(tag).not.toContain("#unless");
+  };
 
   it("disables File all shown", () => {
-    const button = buttonFor(read("hub.hbs"), 'class="mej-cc-file-all"');
-    expect(button).toMatch(GUARD);
-    expect(button).not.toContain("#unless");
+    expectGuardedAndNothingElse(buttonFor(read("hub.hbs"), 'class="mej-cc-file-all"'));
   });
   it("disables the per-row File into control", () => {
     const button = buttonFor(read("hub.hbs"), 'class="mej-cc-row-file"');
-    expect(button).toMatch(GUARD);
+    expectGuardedAndNothingElse(button);
     expect(button).toContain("@root.campaignControls.disabled");
-    expect(button).not.toContain("#unless");
   });
   it("disables the Tools menu's auto-capture target", () => {
-    const button = buttonFor(read("hub-header.hbs"), 'data-action="setCaptureCampaign"');
-    expect(button).toMatch(GUARD);
-    expect(button).not.toContain("#unless");
+    expectGuardedAndNothingElse(buttonFor(read("hub-header.hbs"), 'data-action="setCaptureCampaign"'));
   });
 });
