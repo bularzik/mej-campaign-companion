@@ -372,8 +372,28 @@ export async function timelineJournalIds(page) {
  *
  * Take the snapshot BEFORE anything opens a GM Hub - a snapshot taken after
  * would bless a journal the run itself created.
+ *
+ * `preexisting` has NO default ledger, deliberately. It used to default to
+ * `[]`, which quietly turned "I have no snapshot" into "nothing is protected"
+ * - i.e. "delete every flagged timeline that carries no non-TT timepoint".
+ * That is reachable without anyone writing a bug: a caller's `beforeAll`
+ * failing inside withGmPage's own login (which happens on this host) leaves
+ * its module-scoped ledger at its initial value, and the `afterAll`/
+ * `afterEach` still runs. The TT-content guard is no help there, because a
+ * real campaign's freshly created default timeline is legitimately empty - so
+ * an un-snapshotted run could delete exactly the user data this helper exists
+ * to protect. A missing ledger now means "I cannot know what was here, so I
+ * touch nothing".
  */
-export async function cleanupTimelineJournals(page, preexisting = [], { prefix = TT_PREFIX } = {}) {
+export async function cleanupTimelineJournals(page, preexisting = null, { prefix = TT_PREFIX } = {}) {
+  if (!Array.isArray(preexisting)) {
+    console.warn(
+      `${MODULE_ID} | cleanupTimelineJournals: no id snapshot (got ${preexisting === null ? "null" : typeof preexisting}); ` +
+      "skipping cleanup entirely rather than risk deleting a timeline this run did not create. " +
+      "The caller's beforeAll snapshot most likely did not run."
+    );
+    return;
+  }
   await page.evaluate(async ({ id, TT, keep }) => {
     const keepSet = new Set(keep);
     const doomed = game.journal.filter((e) => !!e.getFlag(id, "timeline") && !keepSet.has(e.id));

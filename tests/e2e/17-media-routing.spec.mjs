@@ -265,7 +265,11 @@ test.describe.serial("17 media routing", () => {
   // Ids of every flagged timeline journal that existed BEFORE this file ran -
   // snapshotted as a GM before the first Hub open, so afterAll deletes only
   // the timelines this suite itself induced.
-  let preexistingTimelines = [];
+  // null, not []: an empty ledger would mean "nothing is protected" if the
+  // beforeAll snapshot below never ran (a withGmPage login failure still lets
+  // the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+  // real snapshot - see its doc comment.
+  let preexistingTimelines = null;
 
   test.beforeAll(async ({ browser }) => {
     await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });

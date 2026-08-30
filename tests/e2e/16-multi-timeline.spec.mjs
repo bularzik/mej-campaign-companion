@@ -94,7 +94,11 @@ test.describe.serial("16 multi-timeline", () => {
   // snapshotted as a GM before test 1 opens a Hub, so afterAll deletes only
   // the timelines this suite itself induced (campaign-owned ones included,
   // which the old name filter never even saw).
-  let preexistingTimelines = [];
+  // null, not []: an empty ledger would mean "nothing is protected" if the
+  // beforeAll snapshot below never ran (a withGmPage login failure still lets
+  // the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+  // real snapshot - see its doc comment.
+  let preexistingTimelines = null;
 
   test.beforeAll(async ({ browser }) => {
     await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });

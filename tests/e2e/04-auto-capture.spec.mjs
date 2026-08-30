@@ -86,7 +86,11 @@ async function installCaptureTarget(page) {
 // Ids of every flagged timeline journal that existed BEFORE this file ran,
 // snapshotted as a GM before any test opens a Hub: cleanup deletes only what
 // this file itself induced.
-let preexistingTimelines = [];
+// null, not []: an empty ledger would mean "nothing is protected" if the
+// beforeAll snapshot below never ran (a withGmPage login failure still lets
+// the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+// real snapshot - see its doc comment.
+let preexistingTimelines = null;
 
 // The world's own auto-capture target, snapshotted before this file replaces
 // it and restored in cleanupAll — it points at a REAL campaign in World A.

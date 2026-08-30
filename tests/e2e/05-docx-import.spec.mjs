@@ -47,7 +47,11 @@ async function openImportWizard(page) {
 // Ids of every flagged timeline journal that existed BEFORE this file ran,
 // snapshotted as a GM before the first import: cleanup deletes only what this
 // file itself induced.
-let preexistingTimelines = [];
+// null, not []: an empty ledger would mean "nothing is protected" if the
+// beforeAll snapshot below never ran (a withGmPage login failure still lets
+// the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+// real snapshot - see its doc comment.
+let preexistingTimelines = null;
 
 async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
   await page.evaluate(async ({ names, campaignFolderIds }) => {

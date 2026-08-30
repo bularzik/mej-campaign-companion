@@ -77,6 +77,42 @@ test.describe("18 harness cleanup", () => {
     assertNoConsoleErrors(errors);
   });
 
+  test("a missing id snapshot cancels the sweep instead of deleting everything", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    // An empty flagged timeline is exactly what a real campaign's freshly
+    // created default timeline looks like, and the TT-content guard cannot
+    // tell that apart from this suite's own leavings. The id ledger is the
+    // only thing between it and deletion - so a caller that never managed to
+    // take its snapshot (a beforeAll that died inside withGmPage's login, which
+    // happens on this host) must get NO sweep at all, not an unprotected one.
+    const strandedId = await page.evaluate(async (id) => {
+      const j = await JournalEntry.create({
+        name: `${"TT-"}Stranded Empty Timeline`,
+        flags: { [id]: { timeline: { timepoints: [] } } }
+      });
+      return j.id;
+    }, MODULE_ID);
+    const alive = () => page.evaluate((i) => !!game.journal.get(i), strandedId);
+
+    await cleanupTimelineJournals(page, null);
+    expect(await alive()).toBe(true);
+
+    // An absent argument is the same case as an explicit null.
+    await cleanupTimelineJournals(page);
+    expect(await alive()).toBe(true);
+
+    // Control, in the test itself rather than in a reviewer's hand-edit: with a
+    // REAL ledger that happens to be empty ("I snapshotted, there was nothing")
+    // the very same journal IS swept. Without this line the two assertions
+    // above would still pass if cleanup had simply stopped working.
+    await cleanupTimelineJournals(page, []);
+    expect(await alive()).toBe(false);
+
+    assertNoConsoleErrors(errors);
+  });
+
   test("gotoGame and reloadGame return on a session-bound document", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");

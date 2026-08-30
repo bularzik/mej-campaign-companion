@@ -79,7 +79,11 @@ async function openOwnTimelineTab(shell, page, timelineId) {
 // Ids of every flagged timeline journal that existed BEFORE this file ran.
 // Snapshotted as a GM before any Hub opens, so cleanup can delete only what
 // this file's own Hub renders side-effected into existence.
-let preexistingTimelines = [];
+// null, not []: an empty ledger would mean "nothing is protected" if the
+// beforeAll snapshot below never ran (a withGmPage login failure still lets
+// the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+// real snapshot - see its doc comment.
+let preexistingTimelines = null;
 
 test.describe("02 hub + timeline", () => {
   // Tests in this spec mix the default `page` fixture with tests that open
