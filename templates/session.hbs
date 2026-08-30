@@ -2,6 +2,25 @@
     <div class="flexcol journal-subsheet" editable="{{editable}}">
         <div class="sheet-container detailed session-container flexcol">
             {{#if showHeader}}{{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs"}}{{/if}}
+            {{#if showCompactHeader}}
+            {{!-- Stands in for the suppressed header (spec amendment): that partial is
+                  the sheet's only rename input and its only add-image control. --}}
+            <div class="mej-cc-session-header-compact">
+                <i class="fas {{icon}} sheet-icon" inert></i>
+                <input type="text" name="name" placeholder="{{localize placeholder}}" value="{{name}}" />
+                <button type="button" class="mej-cc-add-image" data-action="addImage" data-tooltip="{{localize 'MEJCampaignCompanion.session.addImage'}}">
+                    <i class="fas fa-image" inert></i>
+                </button>
+                {{!-- Value carrier, not decoration. MEJ's onAddImage -> _onEditImage opens a
+                      FilePicker whose callback writes the chosen path onto
+                      img[data-edit="src"] and calls submit(), and FormDataExtended reads
+                      `src` off exactly that element (ux/form-data-extended.mjs
+                      #processEditableHTML) - without it a picked image is silently
+                      dropped. No src attribute rather than src="": the schema's src is
+                      blank:false/nullable:true, so a missing attribute submits null. --}}
+                <img class="mej-cc-compact-src" data-edit="src" alt="">
+            </div>
+            {{/if}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.description.active}} active{{/if}}" data-group="primary" data-tab="description">

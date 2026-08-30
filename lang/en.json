@@ -78,7 +78,8 @@
       "secretPlaceholder": "Secret text...",
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
-      "editGmNotes": "Edit GM Notes"
+      "editGmNotes": "Edit GM Notes",
+      "addImage": "Add Image"
     },
     "hub": {
       "title": "Campaign Hub",

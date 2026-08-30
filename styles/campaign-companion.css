@@ -17,6 +17,42 @@
   position: relative;
 }
 
+/* Compact stand-in for MEJ's detailed header on an image-less Session (spec
+   amendment, review of Task 3). MEJ's header is a ~250px flexrow block; this
+   is deliberately one line — the rename input, an add-image button, and the
+   hidden img[data-edit="src"] the add-image round trip submits through (see
+   session.hbs for why that element has to exist). `flex: 0 0 auto` keeps it
+   from stretching inside .session-container's flexcol. */
+.session-container .mej-cc-session-header-compact {
+  display: flex;
+  /* Deliberately NOT class="flexrow": core's `.flexrow > * { flex: 1 }` plus
+     `flex-wrap: wrap` put each control on its own line here (82px instead of
+     one 32px row, measured live). Own flex context, no wrapping. */
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.session-container .mej-cc-session-header-compact input[name="name"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-container .mej-cc-session-header-compact .mej-cc-add-image {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  padding: 0;
+}
+
+/* Never displayed: it exists only to carry `src` into the form submit. */
+.session-container .mej-cc-session-header-compact .mej-cc-compact-src {
+  display: none;
+}
+
 /* MEJ's own base rule (css/monks-journal-sheet.css):
    `.journal-subsheet[editable='false'] .tab[data-tab]:not([data-tab="notes"])
    .editor-edit { display: none !important; }` — it assumes the only

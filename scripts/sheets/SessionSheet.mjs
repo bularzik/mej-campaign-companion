@@ -111,7 +111,10 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     // MEJ's shared header partial (session.hbs:4) iterates `fields`; see
     // logic/session-header.mjs for what core leaves there and why.
-    Object.assign(context, sessionHeaderContext({ src: context.data?.src ?? null }));
+    Object.assign(context, sessionHeaderContext({
+      src: context.data?.src ?? null,
+      editable: context.editable ?? this.isEditable
+    }));
 
     // Month <select> options for the campaign-date field (I5): always 0-based, matching
     // both the module's storage contract and the Hub's own #promptTimepoint dialog - see
