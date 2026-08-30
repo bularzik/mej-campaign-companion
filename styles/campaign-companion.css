@@ -250,6 +250,25 @@
   padding: 0.5em;
 }
 
+/* Modelled on .mej-cc-index-controls above - every other control row in this
+   file is a flex row, and this one (the newest, from the multi-timeline work)
+   was simply never given a rule, so it stayed display:block and stacked. */
+.mej-cc-timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex: 0 0 auto;
+}
+
+.mej-cc-timeline-controls .mej-cc-timeline-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mej-cc-timeline-controls button {
+  flex: 0 0 auto;
+}
+
 .mej-cc-order-menu {
   display: flex;
   gap: 0.3em;

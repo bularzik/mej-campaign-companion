@@ -387,6 +387,16 @@ test.describe.serial("16 multi-timeline", () => {
       await gotoTab(shell, page, "timeline");
       await selectTimeline(shell, page, tl2Id);
 
+      // L1 (spec Group L): .mej-cc-timeline-controls had no rule at all, so it
+      // stayed display:block and the picker, Make default, rename and delete
+      // each took their own line. Every sibling control row in the stylesheet
+      // (.mej-cc-index-controls, .mej-cc-graph-controls, .mej-cc-secrets-controls)
+      // is a flex row; this one was simply never given one.
+      const selectBox = await shell.locator("select.mej-cc-timeline-select").boundingBox();
+      const renameBox = await shell.locator("button.mej-cc-timeline-rename").boundingBox();
+      const centre = (b) => b.y + b.height / 2;
+      expect(Math.abs(centre(selectBox) - centre(renameBox))).toBeLessThan(6);
+
       await shell.locator("button.mej-cc-timeline-rename").click();
       const renameDialog = page.locator("dialog.application").last();
       await renameDialog.locator('input[name="name"]').fill(`${TT_PREFIX}Renamed`);
