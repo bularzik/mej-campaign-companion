@@ -12,7 +12,7 @@ Everything it does builds on entries and pages MEJ already knows how to render �
 
 The screenshot below is the Campaign Hub — the module's home base. You'll spend most of your GM prep time here once you're set up.
 
-![The Campaign Hub's Index pane in All campaigns scope, with the name filter narrowing nine entries to three; the two filed rows carry their campaign's name and a mention-count badge](images/hub-index.png)
+![The Campaign Hub's Index pane in All campaigns scope, with the name filter narrowing the index to three rows; the two filed rows carry their campaign's name and a mention-count badge](images/hub-index.png)
 
 ## Installation & first-time setup
 
@@ -121,9 +121,9 @@ The **Timeline** pane leads with a timeline picker, because a world can hold mor
 
 Timelines come in two flavours. **World timelines** belong to no campaign and are listed under that separator. **Campaign timelines** live inside a campaign's folder: the first time you scope the Hub to a campaign without picking a timeline explicitly, the Hub creates that campaign's timeline on the spot, named `<campaign name> — Timeline`. That first one is the campaign's default, and the picker marks a default with a **★** before its name. In **All campaigns** scope the pane stacks each campaign's default timeline under a heading bearing the campaign's name, then every world timeline under its own name.
 
-Selecting a real timeline (rather than "All timelines in scope") brings up the GM-only management controls — **★ Make default** on a campaign timeline that isn't already the default, a pen for **Rename timeline**, and a trash for **Delete timeline**. In the current build they stack one per line under the picker rather than sitting in a row beside it:
+Selecting a real timeline (rather than "All timelines in scope") brings up the GM-only management controls — **★ Make default** on a campaign timeline that isn't already the default, a pen for **Rename timeline**, and a trash for **Delete timeline**. They sit in a row beside the picker:
 
-![The Timeline pane with the non-default campaign timeline "Side Quests" selected, showing Make default, rename and delete beneath the picker](images/timeline-selector.png)
+![The Timeline pane with the non-default campaign timeline "Side Quests" selected, showing Make default, rename and delete beside the picker](images/timeline-selector.png)
 
 **➕ New timeline…** opens a dialog of the same name with one field, **Timeline name**, and a **Confirm** button; cancelling reverts the picker and creates nothing.
 
@@ -284,8 +284,6 @@ That makes the portal the thing you hand your players. Give the campaign **Playe
 
 What's missing from that screen compared with your own is the whole of the GM surface: the **Secrets** tab isn't rendered, there's no **New Session** button and no settings gear, the Tools menu holds only **Open the user guide**, index rows have no hide or file buttons, the timeline picker has no **➕ New timeline…** and no management buttons, there's no **Add Timepoint** and no **Add dashboard**, and the knowledge panel is read-only. Players also see fewer entries than you do — ordinary Foundry permissions still filter the index and the graph.
 
-One quirk to expect: because the portal is a typed MEJ page like any other, the knowledge panel (**Tags** / **Attributes** / **Mentioned in**) renders underneath the Hub on the portal page. It's harmless.
-
 If a portal entry gets deleted, you don't lose the campaign — open **Campaign settings** from the gear and click **Restore campaign entry**, as described under [Campaigns](#campaigns).
 
 ## Running on stock MEJ (native mode)
@@ -326,15 +324,5 @@ A world [running native mode](#running-on-stock-mej-native-mode) shows neither o
 **Auto-link and auto-capture never block a save.** Both are pure observers: if either one fails for any reason, the failure is logged to the console and skipped, and the underlying page-save or combat-end action that triggered it still completes normally.
 
 **Docx import is all-or-nothing per run.** Entries are only created once you confirm the import wizard; if anything fails partway, you get per-section error messages and no partial documents are left behind.
-
-**Known quirks in the current build.** None of these lose data, but they'll look wrong until they're fixed:
-
-- With **zero campaigns** in the world, **File all shown into…**, **File into campaign…** and **Tools → Auto-capture campaign** all render and are all clickable, and none of them does anything — no dialog, no message. Create a campaign first.
-- On the **Timeline** pane, the timeline picker and its **★ Make default** / rename / delete buttons each drop onto their own line instead of sitting in a row beside it. Cosmetic only.
-- The **prep board** lists attendees as bare portraits with no names beside them.
-- On the GM's own **Recap** tab, the **Player Recaps** block can appear empty even when a player has written their recap — the player's own sheet still shows it correctly.
-- **Search** snippets are taken from the raw page text, so an `@UUID` link inside a matching passage shows through as markup in the snippet.
-- After an **Everyone** reveal, core Foundry's own **Hide** toggle renders on the revealed section for players as well as for you.
-- Session sheets inherit MEJ's shared detailed-header partial, which fills the top of the sheet with a placeholder image and five empty generic fields before the tabs begin.
 
 **Filing issues.** If you hit a bug, file it at the [GitHub repository](https://github.com/bularzik/mej-campaign-companion/issues).

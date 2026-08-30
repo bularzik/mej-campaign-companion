@@ -20,7 +20,7 @@ Your GM will let you know how to find a session page — usually by sharing it d
 
 Your own recap is the block under **Player Recaps**. Click the pencil beside it to open the editor and type your recap:
 
-![The player recap open for editing, with the full formatting toolbar sitting directly under the tab strip and the recap text below it](images/recap-editing.png)
+![The player recap open for editing, with the full formatting toolbar sitting directly under the Player Recaps heading and the recap text below it](images/recap-editing.png)
 
 **Click the pencil again to close the editor when you're done, before you go anywhere else.** That is what commits your recap: closing the editor takes focus off it, and the editor writes what you typed on its way out. Make it a habit — it's the one route this guide can promise saves your text.
 
@@ -61,8 +61,6 @@ Every campaign has a **portal entry** — an ordinary-looking journal entry in y
 ![A campaign portal opened from a player's seat: the window and shell tab read "The Vale Chronicles", the campaign picker is already set to it, and the Hub shows five tabs with no gear and no New Session button](images/portal.png)
 
 That makes the portal the easiest thing to bookmark: one click and you're in the Hub looking at just that campaign, with everything you're not allowed to see already stripped out. In the shot above the index holds the five entries this player can reach — two Persons, a Session, a Place and a Quest — and the rows carry no hide or file buttons, because those are your GM's.
-
-One quirk to expect at the bottom of the portal page: because the portal is a typed page like any other, the **Tags** / **Attributes** / **Mentioned in** panel renders underneath the Hub there too. On a portal it's normally empty ("No tags", "Mentioned in (0)"). It's harmless.
 
 ## The relationship graph
 

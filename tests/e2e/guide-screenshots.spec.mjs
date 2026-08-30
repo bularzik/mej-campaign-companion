@@ -148,7 +148,11 @@ async function seedMejEntry(page, { name, mejType, text = "", flags = {}, owners
 async function createSessionViaDialog(page, name) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  await page.locator("#journal [data-action=createEntry]").click();
+  // Scoped to the directory header: every FOLDER row in the journal sidebar
+  // carries its own icon-only [data-action=createEntry] too, so the unscoped
+  // selector is a strict-mode violation in a world that has campaign folders
+  // (World A has real ones). Mirrors the same fix in 01-session.spec.mjs.
+  await page.locator("#journal .directory-header [data-action=createEntry]").click();
   const dialog = page.locator("dialog.application").last();
   await dialog.locator('input[name="name"]').fill(name);
   const typeSelect = dialog.locator('select[name="flags.monks-enhanced-journal.pagetype"]');
@@ -991,8 +995,17 @@ guideDescribe("guide screenshots", () => {
     await shot(dashboardsShell, "hub-dashboards");
 
     const secretsShell = await openHubTab(page, "secrets");
+    // Campaign-scoped for the same reason hub-index.png is name-filtered
+    // above: in All-campaigns scope this pane lists every secret in this
+    // shared, never-wiped world — including the ones on documents this run
+    // does not own — and a published screenshot must show this run's own
+    // demo secrets only (the guide's caption counts three). Scope is put
+    // back to neutral straight after.
+    await scopeHub(secretsShell, page, demo.campaignId);
     await settle(page, 300);
+    await expect(secretsShell.locator(".mej-cc-secret-row")).toHaveCount(3);
     await shot(secretsShell, "hub-secrets-tab");
+    await scopeHub(secretsShell, page, "");
 
     // Ego/Focus mode centered on Aldric, opened the same way the entity-
     // header "open graph" button does (showGraphFor(uuid), imported
@@ -1234,6 +1247,11 @@ guideDescribe("guide screenshots", () => {
     const wizard = page.locator(".mej-cc-import-wizard-app");
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
     await wizard.locator(".mej-cc-import-review").waitFor({ timeout: 60_000 });
+    await settle(page, 300);
+    // "Import into" defaults to the world's first campaign, which in this
+    // shared world is one this run does not own — its name would be
+    // published in the shot. Pick the demo campaign explicitly.
+    await wizard.locator('select[name="destination"]').selectOption(demo.campaignId);
     await settle(page, 300);
     await shot(wizard, "docx-import-wizard");
     // Not Escape-closed: this ApplicationV2 window doesn't reliably close on
