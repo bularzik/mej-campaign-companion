@@ -674,4 +674,70 @@ test.describe("09 secrets", () => {
       await gmContext.close();
     }
   });
+  // S1 (spec Group S): core's HTMLSecretBlockElement adds a Reveal/Hide toggle
+  // to every secret-block on element upgrade, with no permission check of its
+  // own (client/applications/elements/secret-block.mjs - `#revealable = true`).
+  // The platform's only suppression is DocumentSheetV2._toggleDisabled(true),
+  // and MEJ does reach it for a non-editable subsheet
+  // (EnhancedJournalSheet._toggleDisabled, walking trueElement) - but that runs
+  // BEFORE our renderJournalPageSheet hook, and injectPlayerSecrets then swaps
+  // the entire enriched body in. enrichHTML wraps every section.secret in a
+  // FRESH <secret-block> (text-editor.mjs #wrapSecrets), whose `revealable`
+  // defaults to true, so the moment a player held any companion reveal on an
+  // entry every secret still on their screen grew a Hide control - and clicking
+  // it rewrites the GM's stored page.
+  test("a player never gets core's Hide toggle on secrets the companion re-rendered for them; the GM still does", async ({ page, browser }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    // Two sections: one natively revealed to everyone, one revealed to User 1
+    // through the companion. The second is what makes injectPlayerSecrets run
+    // at all (it returns early when this user holds no reveal on the entry).
+    const NATIVE_HTML = `<p>Public intro.</p>`
+      + `<section class="secret revealed" id="secret-native1"><p>${SECRET_TEXT}</p></section>`
+      + `<section class="secret" id="secret-cc1"><p>${SECRET_TEXT}-granted</p></section>`;
+    const id = await page.evaluate(async ({ n, html }) => {
+      const entry = await JournalEntry.create({
+        name: n,
+        ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+        pages: [{ name: n, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
+      });
+      await entry.update({
+        "flags.mej-campaign-companion.secretReveals.secret-cc1":
+          { users: [game.users.getName("User 1").id], groups: [], all: false, revealedAt: 1 }
+      });
+      return entry.id;
+    }, { n: `${TT_PREFIX}Native-Reveal`, html: NATIVE_HTML });
+
+    const gmShell = await openEntry(page, id);
+    // The GM owns the entry and keeps the control.
+    const gmState = await contentPreview(gmShell).locator("secret-block").first()
+      .evaluate((el) => ({ revealable: el.revealable, buttonHidden: el.querySelector("button.reveal")?.hidden ?? null }));
+    expect(gmState).toEqual({ revealable: true, buttonHidden: false });
+
+    const p1Ctx = await browser.newContext(VIEW);
+    const p1 = await p1Ctx.newPage();
+    await login(p1, "User 1");
+    const p1Shell = await openEntry(p1, id);
+    // Load-bearing anti-vacuity guard: this marker only exists on content that
+    // injectPlayerSecrets rebuilt. Without it the assertions below would hold
+    // for free - MEJ's own _toggleDisabled already covers a body it never
+    // replaced, so a fixture that skipped this path would pass either way.
+    await expect(contentPreview(p1Shell).locator("section.secret.mej-cc-revealed-to-you")).toHaveCount(1);
+    // The player can read both secrets - that part is the feature working.
+    await expect(contentPreview(p1Shell)).toContainText(SECRET_TEXT);
+    await expect(contentPreview(p1Shell)).toContainText(`${SECRET_TEXT}-granted`);
+    // Asserted on the property, not on visibility: MEJ has a display:none CSS
+    // backstop for non-owners, so a visibility check would pass vacuously
+    // whether or not this fix exists.
+    const p1States = await contentPreview(p1Shell).locator("secret-block").evaluateAll(
+      (els) => els.map((el) => ({ revealable: el.revealable, buttonHidden: el.querySelector("button.reveal")?.hidden ?? null })));
+    expect(p1States.length).toBe(2);
+    for (const state of p1States) {
+      expect(state.revealable).toBe(false);
+      expect(state.buttonHidden).not.toBe(false);
+    }
+
+    await p1Ctx.close();
+    assertNoConsoleErrors(errors);
+  });
 });

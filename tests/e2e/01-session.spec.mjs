@@ -15,7 +15,11 @@ const BASE_URL = "http://localhost:30000";
 async function createSessionViaDialog(page, name) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  await page.locator("#journal [data-action=createEntry]").click();
+  // Scoped to the directory header: every FOLDER row in the journal sidebar
+  // carries its own icon-only [data-action=createEntry] too, so the unscoped
+  // selector became a strict-mode violation as soon as this world grew a
+  // campaign folder (World A has real ones now).
+  await page.locator("#journal .directory-header [data-action=createEntry]").click();
   const dialog = page.locator("dialog.application").last();
   await dialog.locator('input[name="name"]').fill(name);
   const typeSelect = dialog.locator('select[name="flags.monks-enhanced-journal.pagetype"]');
@@ -286,5 +290,40 @@ test.describe("01 session entries", () => {
       await JournalEntry.implementation.deleteDocuments([id]);
     }, entryId);
     await gmContext.close();
+  });
+
+  // S2 (spec Group S): SessionSheet never shadowed context.fields, so MEJ's
+  // shared detailed-header partial iterated Foundry's raw DataFields and drew
+  // "Page Name / Type / File Path / Page Category / Sort Order" over empty divs,
+  // with a broken image beside them (the partial's onerror fallback resolves to
+  // assets/session.png, which MEJ does not ship).
+  test("a fresh Session sheet renders no schema-labelled header rows", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const name = `${TT_PREFIX}Session Header`;
+    const entryId = await createSessionViaDialog(page, name);
+    const shell = page.locator("#MonksEnhancedJournal");
+    await expect(shell.locator(".session-container .journal-sheet-header")).toHaveCount(0);
+    await expect(shell.locator(".session-container .journal-sheet-header .form-group")).toHaveCount(0);
+    // The sheet still works with the header suppressed: the tab strip is the
+    // first thing in the container, and the recap editor is present.
+    await expect(shell.locator(".session-container nav.sheet-tabs")).toHaveCount(1);
+    await expect(shell.locator('.editor-parent[data-editor-id="recap"]')).toHaveCount(1);
+    // The page name is untouched by a form submit that no longer carries a
+    // name input (ApplicationV2 submits only the fields that rendered).
+    await shell.locator('a[data-action="tab"][data-tab="session"]').click();
+    await settle(page, 200);
+    const numberInput = shell.locator('input[name="flags.mej-campaign-companion.session.sessionNumber"]');
+    await numberInput.fill("3");
+    await numberInput.blur();
+    await page.waitForFunction(
+      (id) => game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "session")?.sessionNumber === 3,
+      entryId
+    );
+    const stillNamed = await page.evaluate((id) => game.journal.get(id).pages.contents[0].name, entryId);
+    expect(stillNamed).toBe(name);
+
+    await cleanupEntries(page, [entryId]);
+    assertNoConsoleErrors(errors);
   });
 });

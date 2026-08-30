@@ -1,7 +1,7 @@
 <div>
     <div class="flexcol journal-subsheet" editable="{{editable}}">
         <div class="sheet-container detailed session-container flexcol">
-            {{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs"}}
+            {{#if showHeader}}{{> "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs"}}{{/if}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.description.active}} active{{/if}}" data-group="primary" data-tab="description">

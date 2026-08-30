@@ -14,6 +14,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
 import { buildRecapEntries } from "../logic/player-recap.mjs";
+import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { savePlayerRecap } from "../hooks/player-recap.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
@@ -107,6 +108,10 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     const isGM = game.user.isGM;
     const session = sessionData(this.document);
+
+    // MEJ's shared header partial (session.hbs:4) iterates `fields`; see
+    // logic/session-header.mjs for what core leaves there and why.
+    Object.assign(context, sessionHeaderContext({ src: context.data?.src ?? null }));
 
     // Month <select> options for the campaign-date field (I5): always 0-based, matching
     // both the module's storage contract and the Hub's own #promptTimepoint dialog - see
