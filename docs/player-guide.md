@@ -96,7 +96,7 @@ From then on the secret is also on the entry's own page. What it looks like ther
 
 ![The Missing Caravan seen from a player's seat, with the revealed secret "The caravan was never attacked — Aldric staged it." sitting under the description, marked with an orange left rule](images/revealed-secret-player.png)
 
-- **Revealed to everyone** — the block is marked with Foundry's *own* reveal rather than the module's, so it reads as ordinary page text with no orange rule. The upside is that it holds up outside the module: it stays revealed on core journal sheets and in a player-safe Word export. You may also notice a small **Hide** control that core Foundry draws on such blocks; that's Foundry's own control, not part of Campaign Companion, and nothing here asks you to use it.
+- **Revealed to everyone** — the block is marked with Foundry's *own* reveal rather than the module's, so it reads as ordinary page text with no orange rule. The upside is that it holds up outside the module: it stays revealed on core journal sheets and in a player-safe Word export. Core Foundry draws a small **Hide** control on blocks like these, but you won't see it: Campaign Companion removes it for anyone who can't edit the entry, so a stray click of yours can't rewrite your GM's page. Only your GM (or another owner of that entry) gets that control.
 
 The same applies to secrets your GM tucked into a session recap rather than an entry description: once one is revealed to you, it appears in the recap on your own copy of the session sheet, with the same orange marker.
 
