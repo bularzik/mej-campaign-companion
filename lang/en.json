@@ -78,7 +78,8 @@
       "secretPlaceholder": "Secret text...",
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
-      "editGmNotes": "Edit GM Notes"
+      "editGmNotes": "Edit GM Notes",
+      "addImage": "Add Image"
     },
     "hub": {
       "title": "Campaign Hub",
@@ -116,6 +117,7 @@
       "adopted": "Filed {count} entries into \"{name}\".",
       "fileInto": "File into campaign…",
       "fileAllShown": "File all shown into…",
+      "noCampaignsYet": "No campaigns yet — create one from the campaign picker first.",
       "hide": "Hide from players",
       "reveal": "Reveal to players",
       "journalType": "Journal",
@@ -213,7 +215,7 @@
         "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>; anything else is full-text search.",
         "showPlayers": "Visible to players",
         "visibleToPlayers": "Visible to players",
-        "badQuery": "That query can't be parsed.",
+        "badQuery": "That query can't be parsed ({reason}).",
         "incomplete": "A dashboard needs both a name and a query.",
         "noResults": "No matches.",
         "empty": "No dashboards yet."
@@ -287,6 +289,7 @@
       "words": "words",
       "typeSkip": "Skip",
       "sessionsDetected": "{count} sections detected as sessions — their type and timepoint are pre-set.",
+      "sessionsDetectedOne": "1 section detected as a session — its type and timepoint are pre-set.",
       "introduction": "Introduction",
       "back": "Back",
       "create": "Import",

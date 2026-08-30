@@ -24,13 +24,29 @@ export function parseQuery(str) {
     }
     const prefix = m[1].toLowerCase();
     const rest = m[2];
-    if (prefix === "type") parsed.types.push(rest.toLowerCase());
-    else if (prefix === "tag") parsed.tags.push(rest);
-    else {
+    if (prefix === "type") {
+      // A type key is a merged-registry key: word chars, dot or dash. Anything
+      // else can name no type at all, and used to parse into a types[] entry
+      // that matches every record's `type` never - an always-empty dashboard
+      // with no feedback anywhere (C16).
+      if (!/^[\w.-]+$/.test(rest)) throw new Error("bad-type");
+      parsed.types.push(rest.toLowerCase());
+    } else if (prefix === "tag") {
+      // No validation: a tag is free-form user text, so every non-empty value
+      // is meaningful, and `tag:` with no value never reaches here (the regex
+      // above needs at least one character) - it is free text, by contract.
+      parsed.tags.push(rest);
+    } else {
       const eq = rest.indexOf("=");
+      const key = eq === -1 ? rest : rest.slice(0, eq);
+      // `attr:=:=broken` produced key "" here; matchesMeta then looked for an
+      // attribute whose key lowercases to "", which cannot exist, so the query
+      // returned zero rows forever with no way to tell it apart from a real
+      // empty result.
+      if (!key.trim()) throw new Error("bad-attr");
       parsed.attrs.push(eq === -1
         ? { key: rest, value: null }
-        : { key: rest.slice(0, eq), value: rest.slice(eq + 1) });
+        : { key, value: rest.slice(eq + 1) });
     }
   }
   parsed.text = free.join(" ");

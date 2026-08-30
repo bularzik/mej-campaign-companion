@@ -2,7 +2,7 @@
 // forceNativeMode makes the adapter ignore the API this world's MEJ fork
 // does provide, so the fallback surfaces are exercisable here.
 import { test, expect } from "@playwright/test";
-import { login, settle } from "./helpers/foundry.mjs";
+import { login, settle, reloadGame } from "./helpers/foundry.mjs";
 
 const RUN = Date.now().toString(36).slice(-5);
 
@@ -10,8 +10,7 @@ async function setForceNative(page, value) {
   await page.evaluate(async (v) => {
     await game.settings.set("mej-campaign-companion", "forceNativeMode", v);
   }, value);
-  await page.reload();
-  await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60000 });
+  await reloadGame(page);
   // Foundry rebuilds CONFIG.JournalEntryPage.sheetClasses asynchronously
   // after game.ready flips (confirmed live: DocumentSheetConfig throws
   // constructing a sheet for our synthetic Hub type if queried too soon
@@ -103,8 +102,7 @@ test.describe("native mode (no extension API)", () => {
     // after Hooks.callAll("ready") already snapshotted its listeners, and
     // "ready" only fires once per boot. Without the FIX 1 guard the sweep
     // would never run and the flag below would stay stamped forever.
-    await page.reload();
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60000 });
+    await reloadGame(page);
     await settle(page, 2500);
 
     const result = await page.evaluate(async ({ id, n }) => {

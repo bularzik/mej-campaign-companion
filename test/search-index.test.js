@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  createIndex, indexRecord, removeRecord, search, stripHtml, tokenize
+  createIndex, indexRecord, removeRecord, search, stripHtml, stripEnrichers, tokenize
 } from "../scripts/logic/search-index.mjs";
 
 const npc = {
@@ -25,6 +25,32 @@ describe("tokenize / stripHtml", () => {
   it("strips tags and lowercases tokens of length >= 2", () => {
     expect(stripHtml("<p>Hello <b>World</b></p>")).toContain("Hello");
     expect(tokenize("<p>Hello, World! A</p>")).toEqual(["hello", "world"]);
+  });
+});
+
+describe("stripEnrichers", () => {
+  it("keeps the label of a labelled content link and drops the ref", () => {
+    expect(stripEnrichers("met @UUID[JournalEntry.abc123]{Mira Thornwood} at the docks"))
+      .toBe("met Mira Thornwood at the docks");
+  });
+  it("falls back to the last id segment of a bare link", () => {
+    expect(stripEnrichers("see @UUID[JournalEntry.abc123]")).toBe("see abc123");
+  });
+  it("leaves text without enrichers untouched", () => {
+    expect(stripEnrichers("a plain sentence with an @ sign")).toBe("a plain sentence with an @ sign");
+  });
+  it("is applied to indexed fields: the label is searchable, the id is not", () => {
+    const idx = createIndex();
+    indexRecord(idx, {
+      uuid: "u9", name: "Docks", type: "campaign-record.place", tags: [],
+      fields: { description: "met @UUID[JournalEntry.abc123]{Mira Thornwood} at the docks" },
+      gmFields: {}, meta: { tags: [], attrs: [] }
+    });
+    const hit = search(idx, "mira", { gm: false })[0];
+    expect(hit.uuid).toBe("u9");
+    expect(hit.matches[0].snippet).toContain("Mira Thornwood");
+    expect(hit.matches[0].snippet).not.toContain("@UUID");
+    expect(search(idx, "abc123", { gm: false })).toHaveLength(0);
   });
 });
 

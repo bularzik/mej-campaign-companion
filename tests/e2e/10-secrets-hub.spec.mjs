@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
-  settle, KNOWN_MEJ_SESSION_ICON_404
+  settle, deleteActorsByPrefix, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
@@ -33,6 +33,7 @@ test.describe("10 secrets hub + prep board", () => {
         const chatIds = game.messages.filter((m) => m.content?.includes("TT-")).map((m) => m.id);
         if (chatIds.length) await ChatMessage.implementation.deleteDocuments(chatIds);
       });
+      await deleteActorsByPrefix(gmPage);
     });
   });
 
@@ -119,6 +120,46 @@ test.describe("10 secrets hub + prep board", () => {
       return pageDoc.flags["mej-campaign-companion"].session.secrets[0].revealed;
     }, sessionId);
     expect(revealed).toBe(true);
+
+    assertNoConsoleErrors(errors);
+  });
+
+  // T1 (spec Group T): _prepareContext resolves every attendee to a real name,
+  // but the template only ever put it in data-tooltip and alt - so the board
+  // showed an unlabelled row of 36x36 portraits.
+  test("prep board shows attendee names, not just portraits", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const actorName = `${TT_PREFIX}Attendee Ilva`;
+    const sessionId = await page.evaluate(async ({ prefix, actorName }) => {
+      const actor = await Actor.create({ name: actorName, type: "npc" });
+      const session = await JournalEntry.create({
+        name: `${prefix}Prep-Session`,
+        pages: [{
+          name: "s",
+          type: "mej-campaign-companion.session",
+          flags: {
+            "mej-campaign-companion": { session: { sessionNumber: 1, campaignDate: null, attendees: [actor.uuid], secrets: [] } },
+            "monks-enhanced-journal": { type: "session" }
+          }
+        }]
+      });
+      return session.id;
+    }, { prefix: TT_PREFIX, actorName });
+
+    // openPrepBoard() called directly - MEJ's own header-button injection for
+    // it is broken on v14 (see this file's other test).
+    await openEntry(page, sessionId, `${TT_PREFIX}Prep-Session`);
+    await page.evaluate(async (id) => {
+      const { openPrepBoard } = await import("/modules/mej-campaign-companion/scripts/apps/prep-board-app.mjs");
+      const pageDoc = game.journal.get(id).pages.contents[0];
+      await openPrepBoard({ pageUuid: pageDoc.uuid });
+    }, sessionId);
+    await settle(page, 500);
+    const board = page.locator(".mej-cc-prep-board");
+    await expect(board.locator(".mej-cc-prep-attendees li")).toHaveCount(1);
+    await expect(board.locator(".mej-cc-prep-attendees li .mej-cc-prep-attendee-name")).toHaveText(actorName);
+    await board.locator('button.header-control[data-action="close"]').click({ force: true });
 
     assertNoConsoleErrors(errors);
   });

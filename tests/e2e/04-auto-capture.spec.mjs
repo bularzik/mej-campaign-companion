@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupTimelineJournal, worldTimelineJournalId,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
 
@@ -19,27 +19,98 @@ async function enableSetting(page, key, value) {
   }, { key, value });
 }
 
-async function ensureTimepoint(page) {
-  // fileOntoNewestTimepoint() is a silent no-op with no timeline journal /
-  // no timepoints yet — auto-capture needs somewhere to file onto.
-  return page.evaluate(async () => {
-    const { getTimelineJournal, ensureTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+/**
+ * Install a capture target this file OWNS, and prove auto-capture will
+ * actually use it before any capture is triggered.
+ *
+ * hooks/auto-capture.mjs's fileOntoNewestTimepoint() resolves its destination
+ * as captureCampaign() -> ensureTimelineJournal(campaign) ->
+ * pickNewestTimepoint(). In a world that HOLDS campaigns that is always a
+ * campaign timeline: a null target makes it "decline silently for media", and
+ * the world singleton this file used to aim at is unreachable. So whatever
+ * AUTO_CAPTURE_CAMPAIGN_SETTING happens to name receives the capture - in
+ * World A a real, user-owned campaign. This file used to seed the world
+ * singleton and then assert against it, which is how its fixtures ended up
+ * filed onto someone else's timeline.
+ *
+ * So: create a TT- campaign, point the setting at it, ensure ITS default
+ * timeline, and give that timeline the one timepoint captures will land on.
+ * A campaign (not a bare timeline) is the target because that is the only
+ * shape captureCampaign() accepts - it is auto-capture's real resolution with
+ * the fewest moving parts.
+ */
+async function installCaptureTarget(page) {
+  const target = await page.evaluate(async (prefix) => {
+    const MODULE_ID = "mej-campaign-companion";
+    const { createCampaign } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+    const { ensureTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+    const { isCampaignFolder } = await import("/modules/mej-campaign-companion/scripts/logic/campaigns.mjs");
+    const { pickNewestTimepoint } = await import("/modules/mej-campaign-companion/scripts/logic/auto-capture.mjs");
     const Timepoints = await import("/modules/mej-campaign-companion/scripts/data/timepoints.mjs");
-    const journal = await ensureTimelineJournal();
+
+    const campaign = await createCampaign(`${prefix}AutoCapture`);
+    await game.settings.set(MODULE_ID, "autoCaptureCampaign", campaign.id);
+    const journal = await ensureTimelineJournal(campaign);
     const tps = Timepoints.getTimepoints(journal);
-    if (tps.length) return tps[0].id;
-    const tp = await Timepoints.addTimepoint(journal, "TT-Auto-capture anchor");
-    return tp.id;
-  });
+    const tp = tps.length ? tps[0] : await Timepoints.addTimepoint(journal, `${prefix}Auto-capture anchor`);
+
+    // Re-resolve exactly the way fileOntoNewestTimepoint() does, from the
+    // setting outward - not from the objects created above - so the guard
+    // below tests the module's own answer rather than this function's memory.
+    const settingId = game.settings.get(MODULE_ID, "autoCaptureCampaign");
+    const folder = settingId ? game.folders.get(settingId) : null;
+    const resolvedCampaign = folder && isCampaignFolder(folder) ? folder : null;
+    const resolvedJournal = resolvedCampaign ? await ensureTimelineJournal(resolvedCampaign) : null;
+    const newest = resolvedJournal ? pickNewestTimepoint(Timepoints.getTimepoints(resolvedJournal)) : null;
+
+    return {
+      campaignId: campaign.id,
+      timelineId: journal.id,
+      timepointId: tp.id,
+      resolvedCampaignId: resolvedCampaign?.id ?? null,
+      resolvedTimelineId: resolvedJournal?.id ?? null,
+      resolvedTimepointId: newest?.id ?? null
+    };
+  }, TT_PREFIX);
+
+  createdCampaignIds.add(target.campaignId);
+
+  // Fail fast, BEFORE any capture runs. Without these three, a capture files
+  // into whatever campaign the world setting happened to name.
+  expect(target.resolvedCampaignId).toBe(target.campaignId);
+  expect(target.resolvedTimelineId).toBe(target.timelineId);
+  expect(target.resolvedTimepointId).toBe(target.timepointId);
+  return target;
 }
+
+// Ids of every flagged timeline journal that existed BEFORE this file ran,
+// snapshotted as a GM before any test opens a Hub: cleanup deletes only what
+// this file itself induced.
+// null, not []: an empty ledger would mean "nothing is protected" if the
+// beforeAll snapshot below never ran (a withGmPage login failure still lets
+// the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+// real snapshot - see its doc comment.
+let preexistingTimelines = null;
+
+// The world's own auto-capture target, snapshotted before this file replaces
+// it and restored in cleanupAll — it points at a REAL campaign in World A.
+let captureCampaignPrior = "";
+// Campaign folders this file created, torn down by id (cascade).
+const createdCampaignIds = new Set();
 
 async function cleanupAll(page) {
   await page.evaluate(async () => {
-    // Auto-captured Encounter entries are named "Encounter: <scene> (<date>)"
-    // / "Encounter (<date>)", not TT- prefixed — but every scene/actor this
-    // spec creates for them is, so matching on that substring anywhere in
-    // the name (not just startsWith) catches them too.
-    const ids = game.journal.filter((j) => j.name?.includes("TT-") || j.name?.startsWith("Encounter")).map((j) => j.id);
+    // THE RULE: this file never selects or deletes a journal by a name it did
+    // not itself write. Auto-captured Encounter entries are named
+    // "Encounter: <scene> (<date>)" / "Encounter (<date>)" — a name a user's
+    // own journal can carry just as easily — so they are NOT matched here.
+    // They do not need to be: createEncounter() files them into the capture
+    // campaign's folder (createMejEntry(..., campaign.id)), and this file's
+    // capture target is a TT- campaign it created itself, so the folder
+    // delete below (deleteContents: true) reclaims them by id-rooted cascade.
+    // Only the TT- prefix — which this spec stamps on everything it makes —
+    // is safe to match on.
+    const ids = game.journal.filter((j) => j.name?.includes("TT-")).map((j) => j.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
     const actorIds = game.actors.filter((a) => a.name?.startsWith("TT-")).map((a) => a.id);
     if (actorIds.length) await Actor.implementation.deleteDocuments(actorIds);
@@ -50,14 +121,28 @@ async function cleanupAll(page) {
     await game.settings.set("mej-campaign-companion", "autoCaptureEncounters", false);
     await game.settings.set("mej-campaign-companion", "autoCaptureSharedMedia", false);
   });
-  // Separate from the evaluate above: ensureTimepoint() (this spec's own
+  // Restore the world's own auto-capture target and tear down the campaigns
+  // this file created, by id (cascade covers the campaign's own timeline and
+  // portal). Order matters: the setting must stop pointing at a folder that is
+  // about to disappear.
+  await page.evaluate(async ({ prior, owned }) => {
+    await game.settings.set("mej-campaign-companion", "autoCaptureCampaign", prior);
+    for (const id of owned) {
+      const folder = game.folders.get(id);
+      if (folder) await folder.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+  }, { prior: captureCampaignPrior, owned: [...createdCampaignIds] });
+  createdCampaignIds.clear();
+
+  // Separate from the evaluate above: installCaptureTarget() (this spec's own
   // helper) can land a TT_PREFIX timepoint directly on World A's real,
   // pre-existing legacy timeline journal (ensureTimelineJournal() returns
   // that SAME real journal in a zero-campaign world, not a fresh one) -
   // unconditionally deleting anything named "Campaign Timeline" here used
-  // to destroy that real content outright. See cleanupTimelineJournal's
-  // doc comment in helpers/foundry.mjs.
-  await cleanupTimelineJournal(page);
+  // to destroy that real content outright. Identity is now the module's own
+  // timeline flag against a pre-run id snapshot, never the name - see
+  // cleanupTimelineJournals's doc comment in helpers/foundry.mjs.
+  await cleanupTimelineJournals(page, preexistingTimelines);
 }
 
 test.describe("04 auto-capture", () => {
@@ -66,9 +151,17 @@ test.describe("04 auto-capture", () => {
   // real, logged-in page the test itself used — no withGmPage() needed
   // here. (A leaked timepoint from a *different* spec file's afterEach
   // failing silently — 02/06, before their own fixes — could still bleed
-  // into this file's ensureTimepoint()'s "reuse existing" behavior when the
+  // into this file's installCaptureTarget()'s "reuse existing" behavior when the
   // whole suite runs together; fixed at the source in those files instead
   // of defensively here.)
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => {
+      preexistingTimelines = await timelineJournalIds(p);
+      captureCampaignPrior = await p.evaluate(() =>
+        game.settings.get("mej-campaign-companion", "autoCaptureCampaign"));
+    });
+  });
+
   test.afterEach(async ({ page }) => {
     await cleanupAll(page);
   });
@@ -77,10 +170,10 @@ test.describe("04 auto-capture", () => {
     const errors = trackConsoleErrors(page, { ignore: [CANVAS_NOISE] });
     await login(page, "Gamemaster");
     await enableSetting(page, "autoCaptureEncounters", true);
-    const timepointId = await ensureTimepoint(page);
-    expect(timepointId).toBeTruthy();
+    const target = await installCaptureTarget(page);
+    expect(target.timepointId).toBeTruthy();
 
-    const result = await page.evaluate(async (prefix) => {
+    const result = await page.evaluate(async ({ prefix, timelineId, timepointId }) => {
       const goblin = await Actor.create({ name: `${prefix}Goblin`, type: "npc" });
       const wolf = await Actor.create({ name: `${prefix}Wolf`, type: "npc" });
       const scene = await Scene.create({ name: `${prefix}Ambush Scene`, width: 1000, height: 1000 });
@@ -105,10 +198,26 @@ test.describe("04 auto-capture", () => {
       const combatId = combat.id;
       // "End Combat": deleteCombat is what auto-capture listens for.
       await combat.delete();
-      await new Promise((r) => setTimeout(r, 600));
 
-      const entry = game.journal.find((j) => j.name?.startsWith("Encounter"));
-      const page0 = entry?.pages?.contents?.[0];
+      // Resolve the Encounter by IDENTITY, never by name. Any journal in the
+      // world can be called "Encounter…", including one of the user's own, so
+      // name-matching here could make a real entry the assertion subject (and,
+      // worse, the cleanup victim). auto-capture's own filing is the link:
+      // createEncounter() calls fileOntoNewestTimepoint({uuid: page.uuid,
+      // type: "JournalEntryPage"}) against the timeline installCaptureTarget()
+      // proved this capture resolves to, so the timepoint this spec owns names
+      // the page it just created, by uuid.
+      let page0 = null;
+      for (let i = 0; i < 30 && !page0; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const tp = game.journal.get(timelineId)
+          ?.getFlag("mej-campaign-companion", "timeline")?.timepoints
+          ?.find((t) => t.id === timepointId);
+        const link = (tp?.links ?? []).find((l) => l.type === "JournalEntryPage" && l.uuid);
+        const doc = link ? fromUuidSync(link.uuid) : null;
+        if (doc?.documentName === "JournalEntryPage") page0 = doc;
+      }
+      const entry = page0?.parent ?? null;
       const rows = page0 ? Object.values(page0.getFlag("monks-enhanced-journal", "actors") ?? {}) : [];
       return {
         entryFound: !!entry,
@@ -117,7 +226,7 @@ test.describe("04 auto-capture", () => {
         goblinName: goblin.name,
         combatId
       };
-    }, TT_PREFIX);
+    }, { prefix: TT_PREFIX, timelineId: target.timelineId, timepointId: target.timepointId });
 
     expect(result.entryFound).toBe(true);
     expect(result.entryFlagType).toBe("encounter");
@@ -129,13 +238,13 @@ test.describe("04 auto-capture", () => {
 
     // Timepoint link: the newest timepoint gained a link pointing at the
     // Encounter page.
-    // By id (the timelineJournalId setting), never by the "Campaign
-    // Timeline" name - see worldTimelineJournalId's doc comment.
+    // The timeline installCaptureTarget() proved auto-capture resolves to,
+    // by id - never the world singleton this file used to assume.
     const links = await page.evaluate(({ timepointId, timelineId }) => {
       const j = game.journal.get(timelineId);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.find((t) => t.id === timepointId);
       return tp?.links ?? [];
-    }, { timepointId, timelineId: await worldTimelineJournalId(page) });
+    }, { timepointId: target.timepointId, timelineId: target.timelineId });
     expect(links.some((l) => l.type === "JournalEntryPage")).toBe(true);
 
     assertNoConsoleErrors(errors);
@@ -149,7 +258,7 @@ test.describe("04 auto-capture", () => {
     });
     await login(page, "Gamemaster");
     await enableSetting(page, "autoCaptureSharedMedia", true);
-    const timepointId = await ensureTimepoint(page);
+    const target = await installCaptureTarget(page);
 
     await page.evaluate(async () => {
       const popout = new foundry.applications.apps.ImagePopout({ src: "icons/svg/mystery-man.svg", window: { title: "TT- Shared Image" } });
@@ -157,13 +266,13 @@ test.describe("04 auto-capture", () => {
     });
     await settle(page, 500);
 
-    // By id (the timelineJournalId setting), never by the "Campaign
-    // Timeline" name - see worldTimelineJournalId's doc comment.
+    // The timeline installCaptureTarget() proved auto-capture resolves to,
+    // by id - never the world singleton this file used to assume.
     const links = await page.evaluate(({ timepointId, timelineId }) => {
       const j = game.journal.get(timelineId);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.find((t) => t.id === timepointId);
       return tp?.links ?? [];
-    }, { timepointId, timelineId: await worldTimelineJournalId(page) });
+    }, { timepointId: target.timepointId, timelineId: target.timelineId });
     expect(links.some((l) => l.src === "icons/svg/mystery-man.svg")).toBe(true);
     expect(conflictWarnings).toEqual([]);
 

@@ -5,7 +5,8 @@
 // "person" (see doc-import.mjs's LEGACY_TYPE_ALIASES). Everything else is
 // unchanged.
 import { describe, it, expect } from "vitest";
-import { cleanTitle, detectSessionHeader, parseSectionDate } from "../scripts/logic/doc-import.mjs";
+import { readFileSync } from "node:fs";
+import { cleanTitle, detectSessionHeader, parseSectionDate, sessionsDetectedHint } from "../scripts/logic/doc-import.mjs";
 
 describe("cleanTitle", () => {
   it("strips stray bold markers and trailing colons", () => {
@@ -307,5 +308,37 @@ describe("splitSectionAt", () => {
     expect(after[1].title).toBe("Session Zero 10/6/2024");
     expect(after[1].isSession).toBe(true);
     expect(after[1].date).toBe("2024-10-06");
+  });
+});
+
+describe("sessionsDetectedHint", () => {
+  it("selects the singular string for exactly one detected session", () => {
+    expect(sessionsDetectedHint(1)).toEqual({ sessionsDetected: 1, sessionsDetectedOne: true });
+  });
+  it("selects the plural string for zero and for many", () => {
+    expect(sessionsDetectedHint(0)).toEqual({ sessionsDetected: 0, sessionsDetectedOne: false });
+    expect(sessionsDetectedHint(4)).toEqual({ sessionsDetected: 4, sessionsDetectedOne: false });
+  });
+});
+
+// The hint itself is rendered by a template, so the branch is pinned against
+// the template source: the singular string must be chosen by an {{#if}} on
+// sessionsDetectedOne with the plural in its {{else}}. Deleting the branch, or
+// inverting it, fails here. (Foundry's i18n does plain {token} substitution
+// with no plural selection, which is why the choice is made in the context.)
+describe("import wizard template selects the sessions hint", () => {
+  const template = readFileSync(new URL("../templates/import-wizard.hbs", import.meta.url), "utf8");
+  const lang = JSON.parse(readFileSync(new URL("../lang/en.json", import.meta.url), "utf8"));
+
+  it("branches on sessionsDetectedOne, singular first, plural in the else", () => {
+    expect(template).toMatch(
+      /\{\{#if sessionsDetectedOne\}\}\{\{localize "MEJCampaignCompanion\.import\.sessionsDetectedOne"\}\}\s*\{\{else\}\}\{\{localize "MEJCampaignCompanion\.import\.sessionsDetected" count=sessionsDetected\}\}\{\{\/if\}\}/
+    );
+    expect(template).not.toContain("#unless sessionsDetectedOne");
+  });
+  it("ships a singular string that is actually singular, and a plural one that takes the count", () => {
+    expect(lang.MEJCampaignCompanion.import.sessionsDetectedOne).toMatch(/\b1 section\b/);
+    expect(lang.MEJCampaignCompanion.import.sessionsDetectedOne).not.toMatch(/\bsections\b/);
+    expect(lang.MEJCampaignCompanion.import.sessionsDetected).toContain("{count}");
   });
 });

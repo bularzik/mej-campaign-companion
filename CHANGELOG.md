@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.13.6 (2026-08-30)
+
+Fix round. Nothing is migrated, and no data changes.
+
+- **A dashboard query that cannot mean anything is rejected** instead of
+  quietly returning nothing. `attr:` with no attribute name, for example,
+  asked for an attribute no entry can have, so the dashboard sat empty
+  with no explanation. Plain text, unbalanced brackets and stray quotes
+  are still ordinary full-text searches — only genuinely meaningless
+  tokens are refused, and the message now says which one.
+- **Search results no longer show link markup.** A snippet could read
+  `…rnalEntry.rMYO0mN9F6sSvpxN]{The Missing Caravan}` instead of the
+  link's own text.
+- **In a world with no campaigns yet, the controls that need one say so.**
+  "File into campaign…", "File all shown into…" and the Tools menu's
+  "Auto-capture campaign" used to sit there looking normal and do nothing
+  at all when clicked. They are now disabled with an explanation. The
+  import wizard's summary also reads "1 section detected as a session"
+  instead of "1 sections".
+- **The session prep board names its attendees.** They were an unlabelled
+  row of portraits; the name was only in the hover tooltip.
+- **The campaign portal no longer shows an empty "Mentioned in" panel**
+  underneath the Campaign Hub. The portal page is the Hub; there is
+  nothing on it to be mentioned in.
+- **A player no longer sees Foundry's own Hide button** on a secret that
+  was revealed to everyone. Pressing it could not actually have hidden
+  anything — the server refuses the write — but it had no business being
+  there.
+- **Session sheets no longer open with a broken image and five empty
+  fields.** A Session with no image of its own used to show Foundry's
+  internal page schema — page name, type, file path, category, sort
+  order — as blank boxes next to a portrait that could never load. A
+  Session's real details live on its Session tab, so that header is now
+  drawn only when it has something to show: a Session that does carry an
+  image keeps its usual header, and a GM on an image-less Session gets a
+  compact row instead, with the name field and an Add image control.
+- **The timeline's picker and its buttons sit on one row again.** The
+  selector, "Make default", rename and delete had each been pushed onto a
+  line of their own, shoving the timeline itself down the pane.
+- **A GM can see the players' recaps again.** On the Session sheet, the
+  GM's own — usually empty — recap editor was claiming the whole Player
+  Recaps block and pushing everyone else's recap off the bottom of the
+  sheet, where it was clipped. The recaps were always saved; they just
+  were not on screen.
+- **Clicking a secret's audience button works reliably, and a long entry
+  can be scrolled to read in full.** Two causes, both fixed at the root:
+  the "Mentioned in" panel could be injected twice into one sheet during
+  a render race, squeezing the sheet body down until every control below
+  the header was correctly placed and never painted; and the
+  enriched-preview column, once given a real height instead of that
+  squeeze, needed its own scrollbar back so a long body is not clipped.
+- No user-facing change: the vendored `mammoth` bundle is now pinned to
+  `1.12.0` with a checksum manifest and an opt-in check against upstream;
+  the e2e test harness identifies timeline journals by their own flag
+  rather than by name, and waits for a session-bound document at every
+  navigation.
+
 ## 0.13.5 (2026-08-29)
 
 - **User guides and screenshots rewritten for the 0.13.x Hub.** The header

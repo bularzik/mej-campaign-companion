@@ -14,6 +14,25 @@ describe("parseQuery", () => {
   it("throws on empty/whitespace queries", () => {
     expect(() => parseQuery("   ")).toThrow("empty-query");
   });
+
+  // C16 probes (spec Q1): the four inputs the round-5 audit typed into the
+  // dashboard dialog. Only the one that cannot mean anything is rejected.
+  it("rejects an attr token with an empty key", () => {
+    expect(() => parseQuery("attr:=:=broken")).toThrow("bad-attr");
+  });
+  it("rejects a type token that cannot name a registry key", () => {
+    expect(() => parseQuery("type:=broken")).toThrow("bad-type");
+  });
+  it("keeps attr:, ((, and an unclosed quote as free text", () => {
+    expect(parseQuery("attr:")).toEqual({ types: [], tags: [], attrs: [], text: "attr:" });
+    expect(parseQuery("((")).toEqual({ types: [], tags: [], attrs: [], text: "((" });
+    expect(parseQuery("\"unclosed")).toEqual({ types: [], tags: [], attrs: [], text: "\"unclosed" });
+  });
+  it("still accepts every dotted/dashed type key and a valueless attr", () => {
+    expect(parseQuery("type:mej-campaign-companion.session attr:patron")).toEqual({
+      types: ["mej-campaign-companion.session"], tags: [], attrs: [{ key: "patron", value: null }], text: ""
+    });
+  });
 });
 
 describe("matchesMeta", () => {

@@ -8,7 +8,7 @@
 //    chain render hook, fired when an MEJ sheet renders standalone
 //    (popped out) - the shell path never calls _onRender, so these two
 //    hooks are disjoint in practice; the injector is idempotent anyway.
-import { MODULE_ID, I18N, MEDIA_PAGE_TYPES } from "../constants.mjs";
+import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYPE, HUB_PAGE_ID } from "../constants.mjs";
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -23,6 +23,16 @@ function asElement(html) {
 function mejPageOf(sheet) {
   const doc = sheet?.document;
   if (!(doc instanceof JournalEntryPage)) return null;
+  // Shell pages (the campaign portal, the synthetic Hub page) are a third kind
+  // this predicate had no notion of: they carry the MEJ type flag on purpose,
+  // so search/index/export treat them as first-class, but their whole body IS
+  // the Hub - there is nothing to tag, no attributes and no "mentioned in".
+  // Guard on the native subtype, never on the MEJ flag, which is load-bearing.
+  // MEJ's fixType() normalizes a mounted page's in-memory `.type` to the bare
+  // key, so accept all three forms (same reasoning as CampaignHubPage's own
+  // isCampaignPage check).
+  if (doc.type === CAMPAIGN_DOCUMENT_TYPE || doc.type === CAMPAIGN_TYPE
+      || doc._source?.type === CAMPAIGN_DOCUMENT_TYPE || doc.id === HUB_PAGE_ID) return null;
   if (mejType(doc)) return doc;
   const bare = String(doc.type ?? "").split(".").pop();
   return MEDIA_PAGE_TYPES.includes(bare) ? doc : null;
@@ -55,14 +65,16 @@ const trackedElements = new Set();
 function trackPanel(sheet, element, shellHosted) {
   // Re-injecting MOVES the element to the end of the iteration order, which
   // the old delete-then-add on a Set did as a side effect and which
-  // refreshTrackedPanels depends on: injectPanel clears the first
-  // `.mej-cc-knowledge` INSIDE the element it is given, so when one tracked
-  // element is nested in another (a page container inside the shell root),
-  // refreshing them oldest-first has the outer pass strip the inner pass's
-  // freshly-built panel, and the next refresh then leaves BOTH populated -
-  // two panels on screen. Keeping the most recently injected element last
-  // preserves the old, correct ordering; the ref is stored on the record so
-  // this stays O(1) instead of the scan it replaced.
+  // refreshTrackedPanels depends on: injectPanel clears the panels INSIDE the
+  // element it is given, so when one tracked element is nested in another (a
+  // page container inside the shell root), refreshing them oldest-first has
+  // the outer pass strip the inner pass's freshly-built panel and the inner
+  // pass rebuild it, leaving BOTH populated - two panels on screen. Keeping
+  // the most recently injected element last preserves the old, correct
+  // ordering; the ref is stored on the record so this stays O(1) instead of
+  // the scan it replaced. (The duplicate that actually shipped was a
+  // different one - two injections into the SAME element, see the token
+  // below - but this ordering is still what keeps nesting single-panelled.)
   const prev = panelRecords.get(element);
   if (prev) trackedElements.delete(prev.ref);
   const ref = new WeakRef(element);
@@ -91,11 +103,40 @@ function refreshTrackedPanels() {
   }
 }
 
+// One live injection per element wins, and it is the newest one. injectPanel
+// awaits its template, so the panel it appends belongs to a DOM state it read
+// before that await - the reason every DOM mutation below happens in a single
+// synchronous block AFTER the await, guarded by this token.
+//
+// The bug this closes (Task 4b): the stale-panel removal used to sit BEFORE
+// the await and the append AFTER it, a check-then-act straddling a suspension
+// point. Captured live with injectPanel instrumented, on a plain
+// create-then-open of one entry:
+//
+//   enter    #1 hook:renderJournalPageSheet  panels=0
+//   enter    #2 refreshTrackedPanels         panels=0   (+4ms)
+//   appended #1 hook                         panels=1
+//   appended #2 refreshTrackedPanels         panels=2
+//
+// Both calls target the same element - the render hook injects into it, and
+// trackPanel() (above) registers it at the top of injectPanel, so the
+// debounced refresh the create fires finds it while the first injection is
+// still awaiting its template. Both saw zero panels, both appended.
+//
+// Two panels are 260px of a ~520px sheet: they squeeze MEJ's .sheet-container
+// until section.sheet-body is clientHeight 0 and every control below the
+// header stops being painted (the 09-secrets audience-button "intercept").
+// And the pair was self-sustaining, because the removal below used to be a
+// querySelector - one panel per pass, so removing one and appending one left
+// the count at two forever. It removes ALL of them now.
+const injectionTokens = new WeakMap();
+
 async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   const page = mejPageOf(sheet);
   if (!page || !element) return;
   trackPanel(sheet, element, shellHosted);
-  element.querySelector(":scope .mej-cc-knowledge")?.remove();
+  const token = (injectionTokens.get(element) ?? 0) + 1;
+  injectionTokens.set(element, token);
 
   const entryUuid = page.parent?.uuid ?? page.uuid;
   const canEdit = game.user.isGM;
@@ -121,6 +162,11 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // adopts it into the live document along with the listeners bound below.
   const panel = new DOMParser().parseFromString(html, "text/html").body.firstElementChild;
   bindPanel(panel, page, sheet, shellHosted);
+  // A newer injection started while this one was rendering: it read at least
+  // as fresh a document state, so let it own the element and drop this panel
+  // rather than appending a second one.
+  if (injectionTokens.get(element) !== token) return;
+  element.querySelectorAll(":scope .mej-cc-knowledge").forEach((stale) => stale.remove());
   element.appendChild(panel);
 }
 

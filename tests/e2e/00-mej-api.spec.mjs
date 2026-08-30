@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, ensureModuleEnabled, ensureModuleDisabled, TT_PREFIX, MODULE_ID, MEJ_MODULE_ID,
+  login, gotoGame, ensureModuleEnabled, ensureModuleDisabled, TT_PREFIX, MODULE_ID, MEJ_MODULE_ID,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404, EXPECTED_INVALID_TYPE_WHILE_DISABLED
 } from "./helpers/foundry.mjs";
@@ -136,8 +136,7 @@ test.describe("00 MEJ extension API — stage-1 regression", () => {
     // A GM reload is exactly the scenario fixType()'s foreign-subtype guard
     // protects: the flag must not be stripped just because the owning
     // module is temporarily offline.
-    await page.goto("http://localhost:30000/game");
-    await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+    await gotoGame(page);
     await settle(page, 500);
 
     // With the companion inactive, Foundry's own core schema validation (not

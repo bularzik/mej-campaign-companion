@@ -20,7 +20,7 @@
 // for whatever runs next in the same context).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, cleanupTimelineJournal,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -90,6 +90,20 @@ test.describe.serial("16 multi-timeline", () => {
   // world setting after its own campaign folder is deleted below.
   let captureCampaignPrior;
 
+  // Ids of every flagged timeline journal that existed BEFORE this file ran -
+  // snapshotted as a GM before test 1 opens a Hub, so afterAll deletes only
+  // the timelines this suite itself induced (campaign-owned ones included,
+  // which the old name filter never even saw).
+  // null, not []: an empty ledger would mean "nothing is protected" if the
+  // beforeAll snapshot below never ran (a withGmPage login failure still lets
+  // the cleanup hook run). cleanupTimelineJournals refuses to sweep without a
+  // real snapshot - see its doc comment.
+  let preexistingTimelines = null;
+
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+  });
+
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (page) => {
       await resetHubState(page);
@@ -126,9 +140,10 @@ test.describe.serial("16 multi-timeline", () => {
       // the legacy singleton "Campaign Timeline" journal via
       // ensureTimelineJournal() (see 02-hub-timeline.spec.mjs's and
       // 14-campaigns.spec.mjs's own header comments for the same mechanism).
-      // cleanupTimelineJournal() only ever removes a copy whose timepoints
-      // are empty/TT-prefixed - never World A's real legacy content.
-      await cleanupTimelineJournal(page);
+      // cleanupTimelineJournals() only ever removes a FLAGGED timeline that
+      // appeared after this file's own snapshot and whose timepoints are
+      // empty/TT-prefixed - never World A's real legacy content.
+      await cleanupTimelineJournals(page, preexistingTimelines);
     });
   });
 
@@ -386,6 +401,39 @@ test.describe.serial("16 multi-timeline", () => {
       await scopeHub(shell, page, campaignId);
       await gotoTab(shell, page, "timeline");
       await selectTimeline(shell, page, tl2Id);
+
+      // L1 (spec Group L): .mej-cc-timeline-controls had no rule at all, so it
+      // stayed display:block and the picker, Make default, rename and delete
+      // each took their own line. Every sibling control row in the stylesheet
+      // (.mej-cc-index-controls, .mej-cc-graph-controls, .mej-cc-secrets-controls)
+      // is a flex row; this one was simply never given one.
+      const selectBox = await shell.locator("select.mej-cc-timeline-select").boundingBox();
+      const renameBox = await shell.locator("button.mej-cc-timeline-rename").boundingBox();
+      const centre = (b) => b.y + b.height / 2;
+      expect(Math.abs(centre(selectBox) - centre(renameBox))).toBeLessThan(6);
+
+      // The other two declarations in that block, which the row-centre check
+      // above cannot see. `.mej-cc-timeline-select {flex:1 1 auto; min-width:0}`
+      // is what makes the picker absorb the row's slack: without it the select
+      // is content-width and the buttons stop well short of the row's right
+      // edge. `button {flex:0 0 auto}` is what keeps them from being squeezed
+      // by it - so every button stays on the one row and none is narrower than
+      // its own content.
+      const rowBox = await shell.locator(".mej-cc-timeline-controls").boundingBox();
+      const btnBoxes = await shell.locator(".mej-cc-timeline-controls button").evaluateAll(
+        (els) => els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height, scrollW: el.scrollWidth, clientW: el.clientWidth };
+        }));
+      expect(btnBoxes.length).toBeGreaterThan(1);
+      for (const b of btnBoxes) {
+        expect(Math.abs((b.y + b.h / 2) - centre(selectBox))).toBeLessThan(6);
+        // Not shrunk below its own content (flex-shrink: 0).
+        expect(b.scrollW - b.clientW).toBeLessThanOrEqual(1);
+      }
+      // The last button ends flush with the row: only true when the select grew.
+      const lastBtn = btnBoxes.reduce((a, b) => (b.x + b.w > a.x + a.w ? b : a));
+      expect(rowBox.x + rowBox.width - (lastBtn.x + lastBtn.w)).toBeLessThan(2);
 
       await shell.locator("button.mej-cc-timeline-rename").click();
       const renameDialog = page.locator("dialog.application").last();

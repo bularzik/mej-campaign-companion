@@ -11,7 +11,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, settle,
-  trackConsoleErrors, assertNoConsoleErrors, BASE_URL,
+  trackConsoleErrors, assertNoConsoleErrors, BASE_URL, reloadGame,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -112,6 +112,11 @@ test.describe("15 campaign portal", () => {
 
       const shell = await openEntryDirect(page, created.portalId);
       await expect(shell.locator(".mej-cc-hub-header")).toBeVisible();
+      // T3 (spec Group T): the portal page carries MEJ's type flag so search,
+      // the Hub index and export treat it as first-class - but mejPageOf used
+      // that same flag as "does the companion own this page's presentation?",
+      // so Tags/Attributes/Mentioned in were appended under the whole Hub.
+      await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(0);
       await expect(shell.locator('select[name="campaign-scope"]')).toHaveValue(folderId);
 
       // C1 regression: after OPENING the portal, MEJ's fixType() normalizes
@@ -351,8 +356,7 @@ test.describe("15 campaign portal", () => {
       expect(portalBefore).toBeNull();
 
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 1));
-      await page.reload();
-      await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 60_000 });
+      await reloadGame(page);
       // The ready hook's migration runs async after game.ready flips - poll
       // for dataVersion to actually reach CURRENT_DATA_VERSION rather than
       // racing a fixed settle(). The target is READ FROM the served module
@@ -408,6 +412,11 @@ test.describe("15 campaign portal", () => {
         await login(playerPage, "User 1");
         const shell = await openEntryDirect(playerPage, portalId);
         await expect(shell.locator(".mej-cc-hub-header")).toBeVisible();
+        // T3 (spec Group T): the portal page carries MEJ's type flag so search,
+        // the Hub index and export treat it as first-class - but mejPageOf used
+        // that same flag as "does the companion own this page's presentation?",
+        // so Tags/Attributes/Mentioned in were appended under the whole Hub.
+        await expect(shell.locator(".mej-cc-knowledge")).toHaveCount(0);
         await expect(shell.locator('select[name="campaign-scope"]')).toHaveValue(folderId);
 
         // No GM chrome: no edit-campaign pencil, Tools offers only the Guide.

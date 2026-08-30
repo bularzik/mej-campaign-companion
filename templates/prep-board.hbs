@@ -4,7 +4,7 @@
     <section class="mej-cc-prep-attendees">
         <header>{{localize 'MEJCampaignCompanion.prep.attendees'}}</header>
         <ul class="flexrow">
-            {{#each attendees}}<li data-tooltip="{{this.name}}"><img src="{{this.img}}" alt="{{this.name}}"></li>
+            {{#each attendees}}<li data-tooltip="{{this.name}}"><img src="{{this.img}}" alt="{{this.name}}"><span class="mej-cc-prep-attendee-name">{{this.name}}</span></li>
             {{else}}<li class="instruction">{{localize 'MEJCampaignCompanion.prep.noAttendees'}}</li>{{/each}}
         </ul>
     </section>

@@ -3,6 +3,19 @@ export function stripHtml(html) {
   return String(html ?? "").replace(/<[^>]*>/g, " ");
 }
 
+/**
+ * Foundry's enricher syntax is PLAIN TEXT in a stored body: a content link is
+ * `@UUID[JournalEntry.abc]{Label}` until TextEditor.enrichHTML turns it into an
+ * <a> at render time. The index deliberately stores the raw body (so indexing
+ * never has to run async enrichment), and stripHtml's tag regex cannot see it -
+ * so the ref leaked into snippets and its document id became a search token.
+ */
+export function stripEnrichers(text) {
+  return String(text ?? "")
+    .replace(/@\w+\[[^\]]*\]\{([^}]*)\}/g, "$1")                     // @UUID[ref]{Label} -> Label
+    .replace(/@\w+\[([^\]]*)\]/g, (_, ref) => ref.split(".").pop()); // @UUID[ref] -> tail
+}
+
 /** Lowercased word tokens (letters/digits), length >= 2. */
 export function tokenize(text) {
   return stripHtml(text)
@@ -37,7 +50,7 @@ export function indexRecord(index, record) {
   const texts = {};
   const tokens = new Set();
   for (const [field, raw] of Object.entries(fields)) {
-    const text = stripHtml(raw).replace(/\s+/g, " ").trim();
+    const text = stripHtml(stripEnrichers(raw)).replace(/\s+/g, " ").trim();
     if (!text) continue;
     texts[field] = text;
     for (const token of tokenize(text)) {

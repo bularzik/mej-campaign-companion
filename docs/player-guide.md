@@ -20,7 +20,7 @@ Your GM will let you know how to find a session page — usually by sharing it d
 
 Your own recap is the block under **Player Recaps**. Click the pencil beside it to open the editor and type your recap:
 
-![The player recap open for editing, with the full formatting toolbar sitting directly under the tab strip and the recap text below it](images/recap-editing.png)
+![The player recap open for editing, with the full formatting toolbar sitting directly under the Player Recaps heading and the recap text below it](images/recap-editing.png)
 
 **Click the pencil again to close the editor when you're done, before you go anywhere else.** That is what commits your recap: closing the editor takes focus off it, and the editor writes what you typed on its way out. Make it a habit — it's the one route this guide can promise saves your text.
 
@@ -62,8 +62,6 @@ Every campaign has a **portal entry** — an ordinary-looking journal entry in y
 
 That makes the portal the easiest thing to bookmark: one click and you're in the Hub looking at just that campaign, with everything you're not allowed to see already stripped out. In the shot above the index holds the five entries this player can reach — two Persons, a Session, a Place and a Quest — and the rows carry no hide or file buttons, because those are your GM's.
 
-One quirk to expect at the bottom of the portal page: because the portal is a typed page like any other, the **Tags** / **Attributes** / **Mentioned in** panel renders underneath the Hub there too. On a portal it's normally empty ("No tags", "Mentioned in (0)"). It's harmless.
-
 ## The relationship graph
 
 The Hub's **Graph** pane is a visual map of how people, places and other entries connect, built from the relationships your GM has drawn between them. It's a tab of its own, sitting between Timeline and Search — there's no graph button on an entry sheet's window header.
@@ -98,7 +96,7 @@ From then on the secret is also on the entry's own page. What it looks like ther
 
 ![The Missing Caravan seen from a player's seat, with the revealed secret "The caravan was never attacked — Aldric staged it." sitting under the description, marked with an orange left rule](images/revealed-secret-player.png)
 
-- **Revealed to everyone** — the block is marked with Foundry's *own* reveal rather than the module's, so it reads as ordinary page text with no orange rule. The upside is that it holds up outside the module: it stays revealed on core journal sheets and in a player-safe Word export. You may also notice a small **Hide** control that core Foundry draws on such blocks; that's Foundry's own control, not part of Campaign Companion, and nothing here asks you to use it.
+- **Revealed to everyone** — the block is marked with Foundry's *own* reveal rather than the module's, so it reads as ordinary page text with no orange rule. The upside is that it holds up outside the module: it stays revealed on core journal sheets and in a player-safe Word export. Core Foundry draws a small **Hide** control on blocks like these, but you won't see it: Campaign Companion removes it for anyone who can't edit the entry, so a stray click of yours can't rewrite your GM's page. Only your GM (or another owner of that entry) gets that control.
 
 The same applies to secrets your GM tucked into a session recap rather than an entry description: once one is revealed to you, it appears in the recap on your own copy of the session sheet, with the same orange marker.
 

@@ -25,6 +25,33 @@ function mejPageOf(sheet) {
   return mejType(doc) ? doc : null;
 }
 
+/**
+ * Core's HTMLSecretBlockElement adds a Reveal/Hide toggle to every secret-block
+ * on element upgrade, with NO permission check of its own (client/applications/
+ * elements/secret-block.mjs - `#revealable = true`, and connectedCallback plants
+ * the button with `hidden = !revealable`). The platform's only suppression is
+ * DocumentSheetV2._toggleDisabled(true), which MEJ does reach for a subsheet the
+ * viewer cannot edit (EnhancedJournalSheet._toggleDisabled, walking trueElement)
+ * - but it runs BEFORE this module's render hooks, and injectPlayerSecrets then
+ * replaces the whole enriched body. TextEditor.enrichHTML wraps every
+ * section.secret in a FRESH <secret-block> (text-editor.mjs #wrapSecrets), which
+ * defaults back to revealable, so a player holding any companion reveal on an
+ * entry got a Hide control on every secret still on their screen - and clicking
+ * it rewrites the GM's stored page. Do core's own operation ourselves for
+ * anyone who cannot write the entry.
+ */
+function suppressCoreRevealToggles(sheet, element) {
+  const page = mejPageOf(sheet);
+  if (!page || !element) return;
+  if (page.parent?.isOwner) return;                 // GM / genuine owner keeps the control
+  for (const block of element.querySelectorAll("secret-block")) {
+    // `revealable` is the v13+/v14 property; the fallback covers a wrapper that
+    // has not been upgraded yet.
+    if ("revealable" in block) block.revealable = false;
+    else block.querySelector(":scope > .secret > button.reveal")?.remove();
+  }
+}
+
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
 const revealsOf = (entry) => entry?.getFlag?.(MODULE_ID, REVEALS_FLAG) ?? {};
 
@@ -232,6 +259,9 @@ async function injectPlayerSecrets(sheet, element) {
     }
   }
   container.replaceChildren(...root.childNodes);
+  // Last: the sections above arrive AFTER MEJ's own _toggleDisabled sweep
+  // (and after this hook's synchronous pass) already walked the element.
+  suppressCoreRevealToggles(sheet, element);
 }
 
 /**
@@ -277,6 +307,7 @@ export function registerSecretsUi() {
     const element = asElement(html);
     injectGmOverlay(sheet, element, shellHosted).catch((err) => console.error(`${MODULE_ID} | secret overlay failed`, err));
     injectPlayerSecrets(sheet, element).catch((err) => console.error(`${MODULE_ID} | player secret render failed`, err));
+    suppressCoreRevealToggles(sheet, element);
   };
   Hooks.on("renderJournalPageSheet", (sheet, html) => inject(sheet, html, true));
   Hooks.on("renderEnhancedJournalSheet", (sheet, html) => inject(sheet, html, false));

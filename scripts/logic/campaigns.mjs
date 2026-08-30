@@ -2,7 +2,7 @@
 // can load it directly - same convention as hub-index.mjs. Operates on
 // doc-shaped plain objects: folders have .flags/.folder, entries have
 // .documentName/.folder/.flags, pages have .documentName/.parent.
-import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE } from "../constants.mjs";
+import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N } from "../constants.mjs";
 
 /** The campaign flag object ({ ownershipDefault, ... }) or null. */
 export function campaignFlagOf(folder) {
@@ -189,4 +189,36 @@ export function isCampaignPortal(doc) {
   if (!doc) return false;
   if (doc.documentName === "JournalEntryPage") return isCampaignPortalPage(doc);
   return (doc.pages?.contents ?? []).some((p) => isCampaignPortalPage(p));
+}
+
+const NO_CAMPAIGNS_KEY = `${I18N}.hub.noCampaignsYet`;
+
+/**
+ * What promptCampaignChoice should do before it opens anything (spec T4).
+ * "No campaigns exist" and "the GM cancelled the dialog" used to share one
+ * silent `null`, and since every caller returns on null, filing and capture
+ * did nothing at all - with no dialog, no warning, nothing - in a world with
+ * no campaigns yet. Separating the two here also makes the decision testable
+ * without a Foundry world; the Hub itself is an ApplicationV2 subclass.
+ */
+export function campaignChoicePlan(campaigns, { alwaysPrompt = false } = {}) {
+  if (!campaigns.length) return { kind: "none", campaign: null, warnKey: NO_CAMPAIGNS_KEY };
+  // One campaign is not a decision unless the caller says it is - a new
+  // session's destination is a real choice even then, since the alternative
+  // is staying unfiled (see promptCampaignChoice's own doc comment).
+  if (campaigns.length === 1 && !alwaysPrompt) return { kind: "single", campaign: campaigns[0], warnKey: null };
+  return { kind: "prompt", campaign: null, warnKey: null };
+}
+
+/**
+ * Render state for the Hub's three campaign-dependent GM controls - the
+ * per-row "File into campaign", the bulk "File all shown", and the Tools
+ * menu's auto-capture target. All three lead to promptCampaignChoice, so
+ * with no campaigns in the world they can only refuse: the templates draw
+ * them disabled and put the reason in the tooltip instead of letting the GM
+ * click something that silently does nothing.
+ */
+export function campaignControls(campaigns) {
+  const disabled = campaigns.length === 0;
+  return { disabled, tooltipKey: disabled ? NO_CAMPAIGNS_KEY : null };
 }
