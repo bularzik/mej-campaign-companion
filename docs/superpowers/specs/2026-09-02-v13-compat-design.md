@@ -202,9 +202,10 @@ promise is returned.
   `FOUNDRY_DATA`, so v13 and v14 locks are independent.
 - **Noise.** `KNOWN_V13_COMPUTE_PRESSURE_POLICY = /compute-pressure is not
   allowed/` joins the default ignore list in `trackConsoleErrors`.
-- **Server.** Launched by hand on port 30013:
-  `node main.js --dataPath=~/FoundryVTT/Data --port=30013 --world=world-b`
-  from `~/FoundryVTT/FoundryVTT-Node-13.351` with node 22. Not automated.
+- **Server.** The harness's existing `ensureTestWorld` starts Foundry when
+  the target world is not up; `startServer` now passes
+  `--port=<port of FOUNDRY_URL>` so the v13 launch (30013) never falls back
+  to `options.json`'s 30000, which the v14 server holds. No manual step.
 - **Regression test for §2.** `13-stock-smoke.spec.mjs` gains one test in
   the `stock` phase: open the fixture Session from the journal sidebar,
   assert zero tracked console errors and a non-empty page body (the
@@ -212,7 +213,8 @@ promise is returned.
   check: it must fail against 0.14.0 on v13 (the reproduced crash). Because
   stock MEJ 13.06 needs no symlink swap, the v13 gate is
   `FOUNDRY_TARGET=v13 STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
-  followed by the same with `STOCK_PHASE=return`. The v14 procedure
+  followed by `STOCK_PHASE=cleanup` (deletes the fixture). The `return` phase
+  asserts `api` mode on the API-carrying MEJ and is v14-only. The v14 procedure
   (symlink swap to `maint/14.00-sync`) stays as-is for v14 stock claims.
 
 ## 5. Docs and release
@@ -232,7 +234,7 @@ promise is returned.
   built from, pushed; GitHub release with `module.zip` + `module.json`.
   Gates before tagging, in order: `npm test`, `npm run check:links`,
   `npm run check:vendor`, full v14 e2e on the v14 harness, v13 stock gate
-  `stock` + `return` on `world-b`.
+  `stock` + `cleanup` on `world-b`.
 
 ## 6. Verification matrix
 

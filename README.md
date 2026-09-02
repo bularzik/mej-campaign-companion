@@ -13,7 +13,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 
 - **Session journal type** — a new MEJ page type (`mej-campaign-companion.session`) with session number, an in-world campaign date, a GM recap, per-player recaps, attendee tracking, a checklist of secrets with reveal/hide, and GM-only notes. Renders inside MEJ's own tabbed journal shell like any built-in MEJ type.
 - **Campaign Hub tab** — a "Campaign" home tab integrated into MEJ's shell (via MEJ's `registerShellPage` extension point), also reachable from the scene-controls notes group. Three panes: a filterable, sortable index of every campaign-relevant entry; a drag-reorderable timeline; and search.
-- **Timeline with campaign dates** — a single world timeline of timepoints, each optionally bound to an in-world calendar date (Foundry's v14 calendar API), holding links to any document or a raw image. Three ordering modes: manual (fractional-key drag-insert), creation order, and campaign date.
+- **Timeline with campaign dates** — a single world timeline of timepoints, each optionally bound to an in-world calendar date (Foundry's calendar API, v13+), holding links to any document or a raw image. Three ordering modes: manual (fractional-key drag-insert), creation order, and campaign date.
 - **Cross-journal search** — an inverted index over MEJ entry fields (names, descriptions, person attributes, quest objectives, shop items, …) plus Session fields. GM-only fields (secrets, GM notes) index under a separate prefix and are filtered out for non-GM searchers at query time. Builds lazily on first use and stays current via document-update hooks.
 - **Auto-link** — on page save, an opt-in world setting turns newly-typed mentions of existing MEJ entry names into `@UUID` links. Never rewrites inside an existing link or a code block; individual entries can opt out.
 - **Auto-capture** — on combat end, an opt-in world setting creates (or updates) an MEJ Encounter entry summarizing participants and outcome, filed onto the timeline's newest timepoint. A second, independent opt-in world setting auto-files GM "Show Players" images and video onto that same timepoint.
@@ -61,6 +61,7 @@ a build carrying the extension API. It resolves one of three modes at startup:
 |------|------|--------------|
 | `api` | MEJ fires `setupMonksEnhancedJournal` | Everything, with the Session sheet and Campaign Hub inside MEJ's tabbed shell |
 | `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub as standalone windows |
+| `native` on Foundry 13 | MEJ 13.06 carries no extension API, so Foundry 13 always runs this mode | Same as `native` above |
 | `absent` | MEJ is not active | The module stays inert — MEJ is a hard dependency |
 
 Native mode is a supported configuration, not a degraded fallback, and it is
@@ -93,8 +94,8 @@ stock MEJ install.
 
 ## Requirements
 
-- Foundry VTT **v14**.
-- **Monk's Enhanced Journal**, any active build. A build that includes the extension API (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
+- Foundry VTT **v13 or v14** (verified on 13.351 and 14.x).
+- **Monk's Enhanced Journal** — **13.06 or later on Foundry 13, 14.01 or later on Foundry 14**. A build that includes the extension API (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
 - A `dnd5e`-first companion whose core (search, timeline, docx, auto-link/capture, Session sheet itself) makes no `dnd5e`-specific assumptions — see [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for what to manually verify on other game systems.
 
 ## Installation
@@ -174,7 +175,7 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the ful
 ## Development
 
 - `npm test` — unit tests (Vitest). No Foundry environment required.
-- `npm run test:e2e` — 9 Playwright spec files / 33 tests against a live Foundry v14 world with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
+- `npm run test:e2e` — 9 Playwright spec files / 33 tests against a live Foundry v14 world (the stock-smoke gate also runs against a v13 world, see `tests/e2e/README.md`) with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
 - Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
 
 See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.
