@@ -53,7 +53,8 @@ function suppressCoreRevealToggles(sheet, element) {
 }
 
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
-const revealsOf = (entry) => entry?.getFlag?.(MODULE_ID, REVEALS_FLAG) ?? {};
+/** Reveal records live on the PAGE that holds the section (spec 2026-08-30). */
+const revealsOf = (page) => page?.getFlag?.(MODULE_ID, REVEALS_FLAG) ?? {};
 
 /** Short "who knows this" chip text for the GM button. */
 function chipText(audience, groups) {
@@ -72,7 +73,7 @@ async function injectGmOverlay(sheet, element, shellHosted) {
   const entry = page.parent;
   if (!entry) return;
   const groups = groupsSetting();
-  const reveals = revealsOf(entry);
+  const reveals = revealsOf(page);
   // A session page renders its body into data-key="system.recap"; everything
   // else into text.content. Pinning text.content meant recap secrets got no
   // audience button at all, so they could be seen in the tracker and never
@@ -105,7 +106,7 @@ async function injectGmOverlay(sheet, element, shellHosted) {
     }
     section.prepend(button);
   }
-  await pruneOrphans(entry, page);
+  await pruneOrphans(page);
 }
 
 /**
@@ -160,7 +161,7 @@ export async function applyBlockReveal(page, sectionId, audience, { legacyAll = 
 async function editAudience(entry, page, sectionId, section, sheet, shellHosted) {
   if (!game.user.isGM) return;
   const groups = groupsSetting();
-  const record = revealsOf(entry)[sectionId];
+  const record = revealsOf(page)[sectionId];
   // Seed the dialog from BOTH sources (sectionRevealedAll), not the flag
   // alone: with "Everyone" now stored as the native class, a flag-only seed
   // opened the dialog with Everyone unchecked on an already-everyone secret,
@@ -174,7 +175,7 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
   });
   if (!audience) return;
   const stored = await applyBlockReveal(page, sectionId, audience, { legacyAll: record?.all === true });
-  await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
+  await page.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
   // Whisper the section's content (already enriched in the GM's DOM) minus our own button.
   const clone = section.cloneNode(true);
   clone.querySelector(":scope > .mej-cc-secret-audience")?.remove();
@@ -192,29 +193,27 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
 }
 
 /**
- * Drop reveal records whose section no longer exists in the content (spec
- * §5). GM-side only. Reads the SAME body source the live index uses
- * (system.recap for session pages, text.content for everything else -
- * field-extractors.mjs's bodyText()) rather than only text.content: that
- * fallback is empty on session pages, so before this fix opening a Session
- * sheet deleted every secretReveals record for its recap secrets (I1a). Ids
- * are parsed via extractSecretBlocks (the same parser the index/prune paths
- * share) instead of a local double-quote-only regex, which also fixes I2 -
- * creation paths accept single-quoted id attributes too.
+ * Drop reveal records whose section no longer exists in THIS page's body.
+ * Page-scoped read and page-scoped write: the entry-level version deleted
+ * page 2's records whenever page 1 was opened (spec 2026-08-30 defect 2).
+ *
+ * Reads the SAME body source the live index uses (system.recap for session
+ * pages, text.content for everything else - field-extractors.mjs's
+ * bodyText()) rather than only text.content: that fallback is empty on
+ * session pages, so before this fix opening a Session sheet deleted every
+ * secretReveals record for its recap secrets (I1a). Ids are parsed via
+ * extractSecretBlocks (the same parser the index/prune paths share) instead
+ * of a local double-quote-only regex, which also fixes I2 - creation paths
+ * accept single-quoted id attributes too.
  */
-async function pruneOrphans(entry, page) {
-  const reveals = revealsOf(entry);
-  const keys = Object.keys(reveals);
-  if (!keys.length) return;
+async function pruneOrphans(page) {
+  const reveals = revealsOf(page);
+  if (!Object.keys(reveals).length) return;
   const liveIds = extractSecretBlocks(bodyRegion(page).content).map((s) => s.id);
   const { map, changed } = pruneReveals(reveals, liveIds);
-  // recursive:false replaces the whole secretReveals object outright -
-  // Document#update otherwise merges nested objects key-by-key by default
-  // (diff:false only trims the payload sent over the wire, it doesn't force
-  // replacement), so a plain update here would leave pruned ids' audience
-  // records still present in storage, ready to silently reattach if a
-  // section id is ever reused.
-  if (changed) await entry.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}`]: map }, { recursive: false });
+  // recursive:false replaces the whole map - a merging update would leave
+  // pruned ids in storage, ready to reattach if a section id is reused.
+  if (changed) await page.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}`]: map }, { recursive: false });
 }
 
 /**
@@ -227,8 +226,7 @@ async function injectPlayerSecrets(sheet, element) {
   if (game.user.isGM) return;
   const page = mejPageOf(sheet);
   if (!page || !element) return;
-  const entry = page.parent;
-  const reveals = revealsOf(entry ?? {});
+  const reveals = revealsOf(page);
   const groups = groupsSetting();
   const mine = Object.entries(reveals).filter(([, aud]) => canSee(aud, game.user.id, groups)).map(([id]) => id);
   if (!mine.length) return;
@@ -312,26 +310,28 @@ export function registerSecretsUi() {
   Hooks.on("renderJournalPageSheet", (sheet, html) => inject(sheet, html, true));
   Hooks.on("renderEnhancedJournalSheet", (sheet, html) => inject(sheet, html, false));
 
-  // Live update (spec §5): the reveal flag write replicates to every
-  // client; MEJ's own updateJournalEntry hook ignores foreign flag
-  // namespaces (see knowledge-ui.mjs's refresh comment), so reload the
-  // shell ourselves when it is showing the updated entry.
+  // Live update (spec §5): relationship reveals (relReveals) are still an
+  // entry-level flag; block reveals (secretReveals) moved to the page in
+  // this round (spec 2026-08-30) and are watched by the
+  // updateJournalEntryPage hook below instead. MEJ's own updateJournalEntry
+  // hook ignores foreign flag namespaces (see knowledge-ui.mjs's refresh
+  // comment), so reload the shell ourselves when it is showing the updated
+  // entry.
   Hooks.on("updateJournalEntry", (entry, changes) => {
-    const flags = changes?.flags?.[MODULE_ID];
-    if (flags?.[REVEALS_FLAG] === undefined && flags?.relReveals === undefined) return;
+    if (changes?.flags?.[MODULE_ID]?.relReveals === undefined) return;
     refreshRevealViews(entry);
   });
 
-  // Checklist audience reveals (spec §5/§7) are written as a page-level flag
-  // (flags.mej-campaign-companion.session.secrets on the Session page
-  // itself), not an entry-level flag like the reveal above - MEJ's own
-  // updateJournalEntryPage handling ignores foreign flag namespaces in its
-  // re-render allowlist (same gap as knowledge-ui.mjs's entry-level comment
-  // above), so a checklist reveal never live-updates another client's
-  // shell-hosted Session sheet without this (I3). Refreshed the same way as
-  // the entry-level reveal above.
+  // Block reveals (secretReveals, spec 2026-08-30) and checklist audience
+  // reveals (session.secrets, spec §5/§7) are both page-level flags on the
+  // JournalEntryPage - MEJ's own updateJournalEntryPage handling ignores
+  // foreign flag namespaces in its re-render allowlist (same gap as
+  // knowledge-ui.mjs's entry-level comment above), so neither kind of
+  // reveal live-updates another client's shell-hosted sheet without this
+  // (I3). Refreshed the same way as the entry-level reveal above.
   Hooks.on("updateJournalEntryPage", (page, changes) => {
-    if (changes?.flags?.[MODULE_ID]?.session?.secrets === undefined) return;
+    const flags = changes?.flags?.[MODULE_ID];
+    if (flags?.[REVEALS_FLAG] === undefined && flags?.session?.secrets === undefined) return;
     const entry = page.parent;
     if (!entry) return;
     // No `shell.rendered` precondition here any more: it used to sit in front

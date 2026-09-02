@@ -204,7 +204,7 @@ test.describe("09 secrets", () => {
       const u1 = game.users.getName("User 1").id;
       await game.settings.set("mej-campaign-companion", "playerGroups", [{ id: "gA", name: "TT Group", members: [u1] }]);
       const entry = game.journal.get(entryId);
-      await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-e2e1": { users: [], groups: ["gA"], all: false, revealedAt: 1 } });
+      await entry.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-e2e1": { users: [], groups: ["gA"], all: false, revealedAt: 1 } });
     }, id);
 
     const p2Ctx = await browser.newContext(VIEW);
@@ -305,10 +305,10 @@ test.describe("09 secrets", () => {
         const entry = game.journal.get(id);
         const pg = entry.pages.contents[0];
         const stored = await applyBlockReveal(pg, "secret-native", { all: true, users: [], groups: [] });
-        await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-native": stored });
+        await pg.update({ "flags.mej-campaign-companion.secretReveals.secret-native": stored });
         return {
           body: entry.pages.contents[0].text.content,
-          storedAll: entry.getFlag("mej-campaign-companion", "secretReveals")["secret-native"].all
+          storedAll: entry.pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-native"].all
         };
       }, entryId);
 
@@ -462,7 +462,7 @@ test.describe("09 secrets", () => {
         const entry = game.journal.get(id);
         return {
           body: entry.pages.contents[0].text.content,
-          users: entry.getFlag("mej-campaign-companion", "secretReveals")["secret-roundtrip"].users
+          users: entry.pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-roundtrip"].users
         };
       }, entryId);
       expect(afterSecond.body).toContain("secret revealed");
@@ -531,7 +531,7 @@ test.describe("09 secrets", () => {
       await settle(page, 800);
 
       const stored = await page.evaluate((id) =>
-        game.journal.get(id).getFlag("mej-campaign-companion", "secretReveals")["secret-recap-ui"], entryId);
+        game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-recap-ui"], entryId);
       expect(stored.users).toContain(u1Id);
 
       assertNoConsoleErrors(errors);
@@ -692,7 +692,7 @@ test.describe("09 secrets", () => {
         const { applyBlockReveal } = await import("/modules/mej-campaign-companion/scripts/hooks/secrets-ui.mjs");
         const entry = game.journal.get(id);
         const stored = await applyBlockReveal(entry.pages.contents[0], "secret-recap", { all: false, users: [userId], groups: [] });
-        await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-recap": stored });
+        await entry.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-recap": stored });
       }, { id: entryId, userId: seeded.userId });
 
       playerContext = await browser.newContext(VIEW);
@@ -745,7 +745,7 @@ test.describe("09 secrets", () => {
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
         pages: [{ name: n, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
       });
-      await entry.update({
+      await entry.pages.contents[0].update({
         "flags.mej-campaign-companion.secretReveals.secret-cc1":
           { users: [game.users.getName("User 1").id], groups: [], all: false, revealedAt: 1 }
       });
