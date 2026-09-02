@@ -11,6 +11,7 @@ describe("resolveTarget", () => {
       name: "v14",
       generation: 14,
       url: "http://localhost:30000",
+      port: "30000",
       world: "world-a",
       app: `${HOME}/FoundryVTT-14/FoundryVTT-Node-14.365`,
       data: `${HOME}/FoundryVTT-14/Data`,
@@ -26,6 +27,7 @@ describe("resolveTarget", () => {
       name: "v13",
       generation: 13,
       url: "http://localhost:30013",
+      port: "30013",
       world: "world-b",
       app: `${HOME}/FoundryVTT/FoundryVTT-Node-13.351`,
       data: `${HOME}/FoundryVTT/Data`,
@@ -38,6 +40,7 @@ describe("resolveTarget", () => {
   it("lets explicit variables override the preset, and derives moduleLink from an overridden data dir", () => {
     const t = resolveTarget({ FOUNDRY_TARGET: "v13", FOUNDRY_URL: "http://localhost:31000", FOUNDRY_DATA: "/tmp/fd" });
     expect(t.url).toBe("http://localhost:31000");
+    expect(t.port).toBe("31000");
     expect(t.data).toBe("/tmp/fd");
     expect(t.moduleLink).toBe("/tmp/fd/Data/modules/mej-campaign-companion");
     expect(t.world).toBe("world-b");
@@ -51,6 +54,10 @@ describe("resolveTarget", () => {
 
   it("rejects an unknown target name", () => {
     expect(() => resolveTarget({ FOUNDRY_TARGET: "v12" })).toThrow(/Unknown FOUNDRY_TARGET "v12"/);
+  });
+
+  it("rejects a FOUNDRY_URL with no explicit port", () => {
+    expect(() => resolveTarget({ FOUNDRY_URL: "http://foundry.local" })).toThrow(/explicit port/);
   });
 });
 

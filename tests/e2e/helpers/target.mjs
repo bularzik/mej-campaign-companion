@@ -37,10 +37,16 @@ export function resolveTarget(env = process.env) {
   }
   const pick = (key) => env[key] ?? preset[key];
   const data = pick("FOUNDRY_DATA");
+  const url = pick("FOUNDRY_URL");
+  const port = new URL(url).port;
+  if (!port) {
+    throw new Error(`FOUNDRY_URL "${url}" must carry an explicit port`);
+  }
   return {
     name,
     generation: preset.generation,
-    url: pick("FOUNDRY_URL"),
+    url,
+    port,
     world: pick("FOUNDRY_TEST_WORLD"),
     app: pick("FOUNDRY_APP"),
     data,

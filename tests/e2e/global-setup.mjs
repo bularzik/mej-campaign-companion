@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ensureTestWorld, login, ensureModuleEnabled,
+  ensureTestWorld, login, ensureModuleEnabled, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
@@ -22,6 +22,21 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 export default async function globalSetup() {
   acquireLock({ worktree: REPO_ROOT });
   try {
+    // Pre-flight wrong-server guard: check BEFORE pinSymlink/ensureTestWorld
+    // touch anything. ensureTestWorld() itself stops/starts the server on a
+    // world mismatch, so by the time the post-ensureTestWorld guard below
+    // could inspect /api/status, a mis-targeted run would already have
+    // SIGTERM'd the wrong (possibly the user's real v14) server. If nothing
+    // answers here, proceed — ensureTestWorld will start the right binary.
+    const preflight = await serverStatus();
+    if (preflight) {
+      const preflightGeneration = generationOf(preflight.version);
+      if (preflightGeneration !== TARGET.generation) {
+        throw new Error(
+          `Pre-flight: Target "${TARGET.name}" expects Foundry ${TARGET.generation} at ${BASE_URL} but /api/status reports version "${preflight.version}".`
+        );
+      }
+    }
     pinSymlink(REPO_ROOT);
     const status = await ensureTestWorld();
     // Wrong-server guard: FOUNDRY_TARGET=v13 pointed at the v14 server (or

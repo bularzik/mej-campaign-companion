@@ -32,9 +32,10 @@ export const AUTH_STATE_FILES = {
 const FOUNDRY_APP = TARGET.app;
 const FOUNDRY_DATA = TARGET.data;
 const FOUNDRY_NODE = TARGET.node;
+const PORT = TARGET.port;
 const PID_FILE = path.join(FOUNDRY_DATA, ".pid");
 
-async function serverStatus() {
+export async function serverStatus() {
   try {
     const res = await fetch(`${BASE_URL}/api/status`, { signal: AbortSignal.timeout(3000) });
     return await res.json();
@@ -57,12 +58,11 @@ function assertEnvOwned(action) {
 function stopServer() {
   assertEnvOwned("stop the Foundry server");
   try {
-    const port = new URL(BASE_URL).port || "30000";
     // -sTCP:LISTEN: only the server's listening socket. A bare `-ti :port`
     // also lists CLIENT sockets on the port — including this very process's
     // keep-alive connection from the status probe (killing the test runner
     // with SIGTERM mid-setup) and any user browser tab attached to Foundry.
-    const pids = execFileSync("lsof", ["-ti", `:${port}`, "-sTCP:LISTEN"], {
+    const pids = execFileSync("lsof", ["-ti", `:${PORT}`, "-sTCP:LISTEN"], {
       encoding: "utf8"
     }).trim();
     for (const pid of pids.split("\n").filter((p) => /^\d+$/.test(p))) {
@@ -81,7 +81,7 @@ function startServer(worldId) {
     FOUNDRY_NODE,
     // --port explicitly: the v13 install's options.json says 30000, which the
     // v14 server owns; the port always follows BASE_URL (30013 for v13).
-    ["main.js", `--dataPath=${FOUNDRY_DATA}`, `--world=${worldId}`, `--port=${new URL(BASE_URL).port || "30000"}`],
+    ["main.js", `--dataPath=${FOUNDRY_DATA}`, `--world=${worldId}`, `--port=${PORT}`],
     { cwd: FOUNDRY_APP, detached: true, stdio: ["ignore", log, log] }
   );
   child.unref();
