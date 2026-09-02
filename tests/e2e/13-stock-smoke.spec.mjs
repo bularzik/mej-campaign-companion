@@ -4,7 +4,17 @@
 // native mode via forceNativeMode on the API-carrying fork; this file is
 // the real thing, and is a manual pre-release gate, not part of normal runs.
 //
-// A normal suite run skips this file entirely (STOCK_PHASE unset).
+// A normal suite run skips this file entirely (STOCK_PHASE unset). Phases:
+// stock (asserts), return (v14 only — needs the API-carrying MEJ to come
+// back to), cleanup (v13 — deletes the fixture instead of a return phase).
+//
+// v13 gate (Foundry 13.351 + stock MEJ 13.06 at ~/FoundryVTT, world-b; no
+// symlink swap needed because that MEJ is stock already):
+//   npm run e2e:stock:v13            (FOUNDRY_TARGET=v13 STOCK_PHASE=stock)
+//   npm run e2e:stock:v13:cleanup    (FOUNDRY_TARGET=v13 STOCK_PHASE=cleanup)
+// Global setup starts the v13 server on port 30013 itself if it is not up.
+//
+// v14 stock gate (swap the MEJ symlink to a stock build):
 //
 // Procedure (also in tests/e2e/README.md). From the MEJ repo:
 //   1. git worktree add --detach /tmp/mej-stock-smoke maint/14.00-sync
@@ -248,32 +258,52 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     ).toHaveCount(1);
   });
 
-  test("recorded observation: stock MEJ opening the session itself (never asserted)", async ({ page }) => {
-    await bootAsRealUser(page);
-    // Both a sidebar directory click and the Hub index row route through
-    // game.MonksEnhancedJournal.openJournalEntry — under stock MEJ that is
-    // STOCK's behavior with a type it doesn't know. The run report needs to
-    // know what a user would see there; the suite must not fail on it.
-    const observed = await page.evaluate(async (fixture) => {
-      const entry = game.journal.getName(fixture);
-      const out = { threw: null, shellRendered: null, subsheet: null, mejFlagAfter: null };
-      try {
-        await game.MonksEnhancedJournal.openJournalEntry(entry);
-        await new Promise((r) => setTimeout(r, 1500));
-        out.shellRendered = !!game.MonksEnhancedJournal.journal?.rendered;
-        out.subsheet = game.MonksEnhancedJournal.journal?.subsheet?.constructor?.name ?? null;
-      } catch (err) {
-        out.threw = String(err);
-      }
-      out.mejFlagAfter = entry?.pages?.contents?.[0]?.getFlag("monks-enhanced-journal", "type") ?? null;
-      try { await game.MonksEnhancedJournal.journal?.close(); } catch { /* observation only */ }
-      return out;
-    }, FIXTURE);
-    test.info().annotations.push({
-      type: "stock-mej-opens-session",
-      description: JSON.stringify(observed)
+  test("opening the session from the sidebar renders it without errors", async ({ page }) => {
+    // The one companion defect stock MEJ exposed (spike 2026-09-02, MEJ 13.06):
+    // a sidebar click routes through game.MonksEnhancedJournal.openJournalEntry
+    // → JournalEntrySheet._renderPageView, which awaits sheet.render(). MEJ's
+    // EnhancedJournalSheet.render() is not awaitable, so 13.06 threw
+    // "Cannot read properties of undefined (reading 'removeAttribute')" and
+    // the shell tab showed an empty page body. scripts/sheets/awaitable-render.mjs
+    // is the fix; this test is its regression net (it fails on 0.14.0).
+    const errors = trackConsoleErrors(page, {
+      ignore: [KNOWN_MEJ_SESSION_ICON_404, EXPECTED_INVALID_TYPE_WHILE_DISABLED]
     });
-    expect(observed).toBeTruthy(); // the observation itself is the deliverable
+    await bootAsRealUser(page);
+
+    // Real sidebar row, clicked in-page (the row can sit outside the headless
+    // viewport, which makes Playwright's own click() refuse it).
+    const row = page.locator("#journal .directory-item", { hasText: FIXTURE }).first();
+    await expect(row).toHaveCount(1);
+    await row.evaluate((el) => el.click());
+
+    // Wherever stock MEJ mounted it — inside its shell tab or as a standalone
+    // window — the Session template's root must be in the document with content.
+    const container = page.locator(".session-container").first();
+    await expect(container).toBeAttached({ timeout: 15_000 });
+    await expect.poll(async () => container.evaluate((el) => el.childElementCount), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+
+    const where = await page.evaluate(() => ({
+      shellRendered: !!game.MonksEnhancedJournal?.journal?.rendered,
+      inShell: !!game.MonksEnhancedJournal?.journal?.element?.querySelector?.(".session-container"),
+      standalone: !!document.querySelector('[id^="SessionSheet-"] .session-container')
+    }));
+    // Recorded for the run report and for the spec's §2 addendum; both
+    // mounts satisfy the requirement.
+    test.info().annotations.push({ type: "stock-session-mount", description: JSON.stringify(where) });
+    expect(where.inShell || where.standalone).toBe(true);
+
+    // ALL errors, not just companion-tagged ones: the crash this guards
+    // against is thrown from MEJ's own JournalEntrySheet code.
+    expect(errors).toEqual([]);
+
+    await page.evaluate(async () => {
+      try { await game.MonksEnhancedJournal.journal?.close(); } catch { /* not open */ }
+      for (const app of foundry.applications.instances.values()) {
+        if (app.constructor?.name === "SessionSheet") await app.close();
+      }
+    });
   });
 });
 
@@ -328,5 +358,23 @@ returnDescribe("stock smoke phase 2 — back on the API-carrying MEJ", () => {
       const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
       for (const e of doomed) await e.delete();
     });
+  });
+});
+
+// STOCK_PHASE=cleanup — for a target with no API-carrying MEJ to return to
+// (the v13 install: MEJ 13.06 is stock, full stop), the return phase cannot
+// run, so this phase removes the cross-phase fixture instead. global-setup's
+// TT- sweep also runs for this phase (it only skips for "return").
+const cleanupDescribe = PHASE === "cleanup" ? test.describe : test.describe.skip;
+
+cleanupDescribe("stock smoke cleanup — remove the fixture", () => {
+  test("no TT-STOCKSMOKE journal remains", async ({ page }) => {
+    await login(page, "Gamemaster");
+    const remaining = await page.evaluate(async () => {
+      const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
+      for (const e of doomed) await e.delete();
+      return game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE")).map((e) => e.id);
+    });
+    expect(remaining).toEqual([]);
   });
 });
