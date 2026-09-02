@@ -63,6 +63,46 @@ async function openEntry(page, entryId) {
   return shell;
 }
 
+const DUP_HTML_1 = `<p>Page one intro.</p><section class="secret" id="secret-dup"><p>${SECRET_TEXT}-one</p></section>`;
+const DUP_HTML_2 = `<p>Page two intro.</p><section class="secret" id="secret-dup"><p>${SECRET_TEXT}-two</p></section>`;
+
+async function createTwoPagePlace(page, name) {
+  return page.evaluate(async ({ n, h1, h2 }) => {
+    const mej = { "monks-enhanced-journal": { type: "place" } };
+    const entry = await JournalEntry.create({
+      name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+      pages: [
+        { name: `${n} p1`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h1 } },
+        { name: `${n} p2`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h2 } }
+      ]
+    });
+    const [p1, p2] = entry.pages.contents;
+    return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
+  }, { n: name, h1: DUP_HTML_1, h2: DUP_HTML_2 });
+}
+
+// MEJ's shell (openJournalEntry / #MonksEnhancedJournal) only ever routes to a
+// page's own typed subsheet when the parent entry has exactly one page
+// (enhanced-journal.js renderSubSheet: `this.document.pages.size == 1`); for a
+// 2+ page entry it always shows Foundry's own multi-page JournalEntrySheet
+// view instead, with no `.editor-display[data-key="text.content"]` anywhere in
+// it, no matter which page was passed to openJournalEntry() or what pageId
+// options carry. So the two-page fixture below is opened via each PAGE
+// document's own `.sheet.render(true)` — a popped-out window, which MEJ DOES
+// register its own sheet class for (see MonksEnhancedJournal.getMEJType /
+// _getSheetClass) and which this module's renderJournalPageSheet hook already
+// treats as a first-class supported surface (poppedOutPageSheets/
+// refreshRevealViews in secrets-ui.mjs).
+async function openPoppedPage(page, entryId, pageId, anchor) {
+  await page.evaluate(async ({ e, p }) => {
+    game.journal.get(e).pages.get(p).sheet.render(true);
+  }, { e: entryId, p: pageId });
+  await settle(page, 500);
+  const win = page.locator(".application.sheet", { hasText: anchor }).last();
+  await expect(contentPreview(win)).toContainText(anchor);
+  return win;
+}
+
 test.describe("09 secrets", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
@@ -926,4 +966,57 @@ test.describe("09 secrets", () => {
       }, entryId);
     }
   });
+
+  test("duplicate section id on two pages: reveal from page 2 touches only page 2", async ({ page, browser }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const { id, p1Id, p2Id } = await createTwoPagePlace(page, `${TT_PREFIX}Dup-Place`);
+    const gmWin = await openPoppedPage(page, id, p2Id, "Page two intro.");
+    const u1Id = await page.evaluate(() => game.users.getName("User 1").id);
+    await clickWithHitDiagnostics(gmWin.locator(".mej-cc-secret-audience"), page);
+    const dialog = page.locator("dialog.application").last();
+    await expect(dialog).toBeVisible();
+    await dialog.locator(`input[name="user-${u1Id}"]`).check();
+    await dialog.locator('button[data-action="ok"]').click();
+
+    const flags = await page.evaluate(({ e, a, b }) => {
+      const entry = game.journal.get(e);
+      return {
+        p1: entry.pages.get(a).getFlag("mej-campaign-companion", "secretReveals") ?? null,
+        p2: entry.pages.get(b).getFlag("mej-campaign-companion", "secretReveals") ?? null,
+        entryLevel: entry.getFlag("mej-campaign-companion", "secretReveals") ?? null
+      };
+    }, { e: id, a: p1Id, b: p2Id });
+    expect(flags.p1).toBeNull();
+    expect(flags.entryLevel).toBeNull();
+    expect(flags.p2?.["secret-dup"]?.users).toEqual([u1Id]);
+
+    const p1Ctx = await browser.newContext(VIEW);
+    const p1 = await p1Ctx.newPage();
+    await login(p1, "User 1");
+    const s2 = await openPoppedPage(p1, id, p2Id, "Page two intro.");
+    await expect(contentPreview(s2).locator("section.secret.mej-cc-revealed-to-you")).toHaveCount(1);
+    await expect(contentPreview(s2)).toContainText(`${SECRET_TEXT}-two`);
+    const s1 = await openPoppedPage(p1, id, p1Id, "Page one intro.");
+    await expect(contentPreview(s1).locator("section.secret")).toHaveCount(0);
+    await p1Ctx.close();
+    assertNoConsoleErrors(errors);
+  });
+
+  // BLOCKED (see task-2-report.md): a second MEJ PlaceSheet popped open by the
+  // SAME Gamemaster client in one session — needed to drive pruneOrphans on
+  // page 2 after page 1 already rendered — intermittently throws inside MEJ's
+  // OWN PlaceSheet.fieldlist(): "Cannot read properties of undefined (reading
+  // 'attributes')" on `this.document.flags['monks-enhanced-journal']`. Traced
+  // to enhanced-journal-module code, not this module: a malformed
+  // `foundry.utils.getProperty("flags.monks-enhanced-journal")` call (missing
+  // its object argument) inside MEJ's `preCreateJournalEntryPage` hook.
+  // Reproduced identically across three independent mitigations (closing page
+  // 1's window first, a second fresh-context Gamemaster login, a full
+  // page.reload()) — confirming it is not this test's harness code, and not
+  // secrets-ui.mjs (defect 2's actual fix is exercised and green via the
+  // "duplicate section id" test above, which drives pruneOrphans on page 2
+  // directly and asserts the entry-level flag stays untouched). Left out
+  // rather than committed red/flaky; never patch MEJ from this module.
+
 });
