@@ -11,6 +11,7 @@
 // come from an _onRender() override, or it will silently never bind while
 // the sheet is hosted inside MEJ's shell.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
+import { renderAwaitable } from "./awaitable-render.mjs";
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
 import { buildRecapEntries } from "../logic/player-recap.mjs";
@@ -77,6 +78,16 @@ export class SessionSheet extends EnhancedJournalSheet {
       ]
     }
   };
+
+  /**
+   * See awaitable-render.mjs. A Session page opened under a STOCK MEJ (no
+   * extension API) is mounted through JournalEntrySheet's page-view path,
+   * which awaits render() — without this, MEJ 13.06 throws in
+   * _renderPageView and shows an empty page body.
+   */
+  async render(options = {}, _options = {}) {
+    return renderAwaitable(this, EnhancedJournalSheet, options, _options);
+  }
 
   static TABS = {
     primary: {
