@@ -11,6 +11,7 @@
 // _onRender() override (the same note SessionSheet.mjs carries).
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { renderAwaitable } from "./awaitable-render.mjs";
+import { isAbsoluteUrl } from "../logic/url.mjs";
 import { MODULE_ID, I18N, MEDIA_PAGE_TYPES } from "../constants.mjs";
 
 export class MediaPageSheet extends EnhancedJournalSheet {
@@ -101,7 +102,7 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     context.viewerSrc = "";
     if (kind === "pdf" && src) {
       const params = new URLSearchParams();
-      const resolved = URL.parse(src) ? src : foundry.utils.getRoute(src);
+      const resolved = isAbsoluteUrl(src) ? src : foundry.utils.getRoute(src);
       params.append("file", resolved);
       context.viewerSrc = `scripts/pdfjs/web/viewer.html?${params}`;
     }
