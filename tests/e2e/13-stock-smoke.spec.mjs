@@ -275,7 +275,12 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     // viewport, which makes Playwright's own click() refuse it).
     const row = page.locator("#journal .directory-item", { hasText: FIXTURE }).first();
     await expect(row).toHaveCount(1);
-    await row.evaluate((el) => el.click());
+    // v13/v14 core puts data-action="activateEntry" on the row's <a class="entry-name">,
+    // not on the <li> — and ApplicationV2 dispatches actions by walking UP from
+    // event.target, so clicking the <li> is a silent no-op. Click the anchor itself
+    // (not a descendant): MEJ's _onClickEntry wrapper reads
+    // event.target.parentElement.dataset.entryId (monks-enhanced-journal.js:358-360).
+    await row.evaluate((el) => el.querySelector("a.entry-name").click());
 
     // Wherever stock MEJ mounted it — inside its shell tab or as a standalone
     // window — the Session template's root must be in the document with content.
@@ -284,11 +289,16 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     await expect.poll(async () => container.evaluate((el) => el.childElementCount), { timeout: 15_000 })
       .toBeGreaterThan(0);
 
-    const where = await page.evaluate(() => ({
-      shellRendered: !!game.MonksEnhancedJournal?.journal?.rendered,
-      inShell: !!game.MonksEnhancedJournal?.journal?.element?.querySelector?.(".session-container"),
-      standalone: !!document.querySelector('[id^="SessionSheet-"] .session-container')
-    }));
+    const where = await page.evaluate(() => {
+      const inShell = !!game.MonksEnhancedJournal?.journal?.element?.querySelector?.(".session-container");
+      return {
+        shellRendered: !!game.MonksEnhancedJournal?.journal?.rendered,
+        inShell,
+        // A transplanted sheet keeps its SessionSheet-… id inside the shell, so
+        // "standalone" only means anything when the shell does NOT hold it.
+        standalone: !inShell && !!document.querySelector('[id^="SessionSheet-"] .session-container')
+      };
+    });
     // Recorded for the run report and for the spec's §2 addendum; both
     // mounts satisfy the requirement.
     test.info().annotations.push({ type: "stock-session-mount", description: JSON.stringify(where) });
