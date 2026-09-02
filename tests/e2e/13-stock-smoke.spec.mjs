@@ -311,7 +311,8 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     await page.evaluate(async () => {
       try { await game.MonksEnhancedJournal.journal?.close(); } catch { /* not open */ }
       for (const app of foundry.applications.instances.values()) {
-        if (app.constructor?.name === "SessionSheet") await app.close();
+        if (app.constructor?.name !== "SessionSheet") continue;
+        try { await app.close(); } catch { /* already gone — cleanup must not fail a passed test */ }
       }
     });
   });

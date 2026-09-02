@@ -7,15 +7,16 @@ Foundry 13 support. No data changes, nothing is migrated.
 - **Runs on Foundry VTT 13 with Monk's Enhanced Journal 13.06.** One build
   serves both Foundry 13 and 14; the manifest floors are now Foundry 13 and
   MEJ 13.06. MEJ 13.06 has no extension API, so on Foundry 13 the companion
-  always runs in `native` mode — the Session sheet and Campaign Hub open as
-  standalone windows, everything else is unchanged.
+  always runs in `native` mode: the Campaign Hub and a newly created Session
+  open as standalone windows, a Session or Hub page opened from the journal
+  sidebar renders inside MEJ's shell tab, and everything else is unchanged.
 - **Opening a Session or the Hub from the journal sidebar under a stock MEJ
   no longer shows an empty page.** MEJ's shell awaits the sheet's render but
   MEJ's own sheet render is not awaitable; the media sheets already carried
   the workaround and the Session sheet and Hub now share it.
-- Two small platform shims for browsers Foundry 13 still supports
-  (`URL.parse`, the secret-block reveal toggle without a `revealable`
-  property). Behaviour on Foundry 14 is unchanged.
+- One small platform shim for browsers Foundry 13 still supports
+  (`URL.parse`), plus unit coverage pinning the secret-block reveal-toggle
+  fallback that Foundry 13 needs. Behaviour on Foundry 14 is unchanged.
 - Test harness: `FOUNDRY_TARGET=v13` preset, a guard against running the
   suite on the wrong server, and the stock-smoke gate now asserts the
   sidebar open of a session (`npm run e2e:stock:v13`).

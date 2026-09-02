@@ -160,6 +160,13 @@ Timeout: 15000ms
 Error: element(s) not found
 ```
 
+Probe E2 (`.superpowers/sdd/2026-09-02-v13-compat/task-7-diagnosis.md`, run
+2026-09-02) additionally reproduces the `removeAttribute` TypeError at
+`JournalEntrySheet.js:609` with the fix removed and the correct click
+target; on 13.06 the page body is eventually populated by MEJ's second
+`_renderPageViews` pass, so `expect(errors).toEqual([])` — not the
+`.session-container` assertion — is the durable regression net.
+
 ## 3. Core shims
 
 - **`URL.parse`** (`MediaPageSheet.mjs:147`; v13 core never uses this

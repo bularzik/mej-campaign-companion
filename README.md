@@ -61,7 +61,7 @@ a build carrying the extension API. It resolves one of three modes at startup:
 |------|------|--------------|
 | `api` | MEJ fires `setupMonksEnhancedJournal` | Everything, with the Session sheet and Campaign Hub inside MEJ's tabbed shell |
 | `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub as standalone windows |
-| `native` on Foundry 13 | MEJ 13.06 carries no extension API, so Foundry 13 always runs this mode | Same as `native` above |
+| `native` on Foundry 13 | MEJ 13.06 carries no extension API, so Foundry 13 always runs this mode | As `native` above, except that a Session or Hub page opened from the journal sidebar renders inside MEJ's shell tab rather than as a standalone window |
 | `absent` | MEJ is not active | The module stays inert — MEJ is a hard dependency |
 
 Native mode is a supported configuration, not a degraded fallback, and it is
@@ -175,7 +175,7 @@ See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the ful
 ## Development
 
 - `npm test` — unit tests (Vitest). No Foundry environment required.
-- `npm run test:e2e` — 9 Playwright spec files / 33 tests against a live Foundry v14 world (the stock-smoke gate also runs against a v13 world, see `tests/e2e/README.md`) with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
+- `npm run test:e2e` — 21 Playwright spec files / 120 tests against a live Foundry v14 world (the stock-smoke gate also runs against a v13 world, see `tests/e2e/README.md`) with MEJ and this module installed and enabled (GM + player clients); requires a running, unlocked Foundry test instance reachable at the URL configured in `playwright.config.mjs`, and is not run as part of a plain docs/code review.
 - Plain ES modules, no build step, matching both MEJ's and this module's own style — edit `scripts/`, `templates/`, `styles/`, and `lang/en.json` directly.
 
 See [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for the manual checks that aren't (yet, or can't be) covered by either test suite.
