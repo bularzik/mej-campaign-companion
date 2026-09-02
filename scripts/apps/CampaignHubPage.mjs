@@ -33,7 +33,7 @@ import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
-import { extractSecretBlocks, sectionRevealedAll } from "../logic/secret-blocks.mjs";
+import { sectionRevealedAll } from "../logic/secret-blocks.mjs";
 import { bodyRegion } from "../logic/field-extractors.mjs";
 import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
@@ -682,17 +682,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     for (const rec of gmSecretRecords()) {
       if (!scopedUuids.has(rec.uuid)) continue;
       const entry = fromUuidSync(rec.uuid);
-      const reveals = entry?.getFlag(MODULE_ID, "secretReveals") ?? {};
-      // One definition of "revealed to everyone" (sectionRevealedAll), shared
-      // with the sheet overlay and the dialog: the native class in the live
-      // body, or a legacy flag. Every MEJ page's body is concatenated rather
-      // than just the first one's - the index keys these records by ENTRY
-      // (last page wins), so on a multi-page entry the first page is not
-      // necessarily the one the secret came from. sectionRevealedAll only ever
-      // looks up one section id, so a joined body reads exactly the same.
-      const body = (entry?.pages?.contents ?? []).filter((p) => mejType(p)).map((p) => bodyRegion(p).content).join("");
+      const multi = (entry?.pages?.contents ?? []).filter((p) => mejType(p)).length > 1;
       for (const s of rec.secrets) {
-        rows.push({ kind: "block", entryUuid: rec.uuid, entryName: rec.name, entryType: rec.type, secretId: s.id, preview: s.preview, audience: normalizeAudience(reveals[s.id]), revealedAll: sectionRevealedAll(body, s.id, reveals[s.id]) });
+        // Records live on the page that holds the section (spec 2026-08-30);
+        // sectionRevealedAll reads that page's own body and record.
+        const page = s.pageUuid ? fromUuidSync(s.pageUuid) : null;
+        if (!page) continue;
+        const record = page.getFlag(MODULE_ID, "secretReveals")?.[s.id];
+        const entryName = multi ? `${rec.name} · ${page.name}` : rec.name;
+        rows.push({ kind: "block", entryUuid: rec.uuid, entryName, entryType: rec.type, secretId: s.id, pageUuid: page.uuid, preview: s.preview, audience: normalizeAudience(record), revealedAll: sectionRevealedAll(bodyRegion(page).content, s.id, record) });
       }
     }
     // 2. Session checklist items + 3. hidden/secret relationships - walk
@@ -887,9 +885,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * the entry's MEJ page body - system.recap for session pages, text.content
    * otherwise (same fallback field-extractors.mjs's bodyText() uses; MEJ
    * entries are single-page journals per this file's other single-page
-   * lookups). Returns null if the entry has no MEJ page, the body is empty,
-   * or the section id can no longer be found (deleted between render and
-   * click) - callers fall back to the tracker row's stored preview text.
+   * lookups). Reads the resolved page's body region; null only when the
+   * section was deleted between render and click - callers fall back to the
+   * tracker row's stored preview text.
    *
    * Parsed with DOMParser, never createContextualFragment (S1): the latter
    * parses in the LIVE document's context, so markup in the body can act -
@@ -900,10 +898,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * DOMParser builds an inert document instead. Same reason
    * apps/import-upload.mjs and apps/import-wizard.mjs already use it.
    */
-  static #secretSectionHtml(entry, secretId) {
-    if (!secretId) return null;
-    const page = entry.pages?.contents?.find((p) => mejType(p));
-    const body = page ? (page.system?.recap ?? page.text?.content ?? "") : "";
+  static #secretSectionHtml(page, secretId) {
+    if (!page || !secretId) return null;
+    const body = bodyRegion(page).content;
     if (!body) return null;
     const parsed = new DOMParser().parseFromString(body, "text/html");
     const section = parsed.body.querySelector(`section.secret[id="${CSS.escape(secretId)}"]`);
@@ -914,7 +911,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     const row = target.closest("[data-secret-kind]");
     if (!row) return;
-    const { secretKind, entryUuid, secretId } = row.dataset;
+    const { secretKind, entryUuid, secretId, pageUuid } = row.dataset;
     const entry = await fromUuid(entryUuid);
     if (!entry) return;
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
@@ -924,18 +921,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       // from the body string instead, which is why it is shared with the
       // sheet-side path rather than each surface doing its own thing.
       //
-      // Resolve the page by CONTAINMENT first: the search index keys these
-      // rows by entry with last-page-wins, so on a multi-page entry the first
-      // MEJ page is not necessarily the one holding this secret - writing the
-      // class into the wrong page's body would do nothing while the flag
-      // claimed the reveal had happened. Falls back to the first MEJ page
-      // (the single-page convention this file uses elsewhere) when no page
-      // carries the id, which leaves applyBlockReveal's not-present branch to
-      // preserve any legacy flag.
-      const page = entry.pages?.contents?.find(
-        (p) => mejType(p) && extractSecretBlocks(bodyRegion(p).content).some((s) => s.id === secretId)
-      ) ?? entry.pages?.contents?.find((p) => mejType(p));
-      const record = (entry.getFlag(MODULE_ID, "secretReveals") ?? {})[secretId];
+      // Records live on the page that holds the section (spec 2026-08-30) -
+      // resolve the row's own pageUuid rather than re-searching the entry's
+      // pages, so this always acts on the exact page the tracker row named.
+      const page = pageUuid ? await fromUuid(pageUuid) : null;
+      if (!page) { ui.notifications.warn(game.i18n.localize(`${I18N}.secrets.pageGone`)); return; }
+      const record = page.getFlag(MODULE_ID, "secretReveals")?.[secretId];
       // Seed from both sources, exactly as the sheet overlay does - a
       // flag-only seed shows Everyone unchecked on a natively-revealed secret,
       // so applying the dialog would strip the class back off (C1).
@@ -943,13 +934,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.revealTitle`), audience: previous, groups });
       if (!audience) return;
       const stored = await applyBlockReveal(page, secretId, audience, { legacyAll: record?.all === true });
-      await entry.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
+      await page.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
       // Whisper the secret's actual content, not the 140-char index preview
       // (M5) - chat enrichment happens at render time, so the raw inner
       // HTML pulled straight off the page's body is fine unenriched. Falls
       // back to the preview if the page or the section itself can no
       // longer be located (e.g. deleted between render and click).
-      const html = CampaignHubPage.#secretSectionHtml(entry, secretId)
+      const html = CampaignHubPage.#secretSectionHtml(page, secretId)
         ?? `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? "")}</p>`;
       await sendRevealWhisper({ audience, previousAudience: previous, groups, html, entryUuid, entryName: entry.name });
     } else if (secretKind === "session") {

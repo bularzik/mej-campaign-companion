@@ -250,6 +250,7 @@
       "whisperHeader": "A secret from {name} has been revealed to you:",
       "revealedToYou": "Revealed to you",
       "noId": "This secret block has no id — re-create it with the editor's Secret button to make it revealable.",
+      "pageGone": "That page no longer exists.",
       "audienceButton": "Reveal to…",
       "checklistRevealTitle": "Reveal secret to…",
       "chipsNone": "Hidden from players",

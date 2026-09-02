@@ -24,4 +24,8 @@ describe("filterTrackerRows", () => {
     expect(filterTrackerRows(ROWS, { playerId: "u1", groups: GROUPS }).map((r) => r.secretId).sort()).toEqual(["s1", "s2"]);
     expect(filterTrackerRows(ROWS, { playerId: "u2", groups: GROUPS }).map((r) => r.secretId).sort()).toEqual(["c1", "s2"]);
   });
+  it("passes a row's pageUuid through untouched", () => {
+    const row = { entryType: "place", audience: { users: ["u1"] }, revealedAll: false, pageUuid: "JournalEntry.e.JournalEntryPage.p" };
+    expect(filterTrackerRows([row], {})[0].pageUuid).toBe("JournalEntry.e.JournalEntryPage.p");
+  });
 });

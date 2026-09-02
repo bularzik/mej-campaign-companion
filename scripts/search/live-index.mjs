@@ -101,11 +101,15 @@ function recordFor(page, type) {
   if (hidden) record.gmFields.companionAttributes = hidden;
   record.meta = { tags: record.tags, attrs: ccAttrs };
 
-  // Phase C (spec §9): secret blocks in the prose body, for the GM-only
-  // Secrets tracker and prep board. GM-gated at the accessors below —
-  // meta.secrets never reaches non-GM consumers (search()/runQuery() read
-  // fields/gmFields/meta.tags/meta.attrs, never meta.secrets).
-  record.meta.secrets = extractSecretBlocks(bodyText(page));
+  // Phase C (spec §9) + page-keyed reveals (spec 2026-08-30 §3): secret
+  // blocks from EVERY MEJ page of the entry, each tagged with its page uuid.
+  // Records are keyed by entry with last-page-wins, so reading only `page`
+  // here left a multi-page entry's other secrets out of the tracker. GM-gated
+  // at the accessors below - meta.secrets never reaches non-GM consumers.
+  const siblings = (page.parent?.pages?.contents ?? [page]).filter((p) => mejType(p));
+  record.meta.secrets = (siblings.length ? siblings : [page]).flatMap((p) =>
+    extractSecretBlocks(bodyText(p)).map((s) => ({ ...s, pageUuid: p.uuid }))
+  );
 
   return record;
 }

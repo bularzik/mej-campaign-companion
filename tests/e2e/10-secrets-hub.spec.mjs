@@ -58,7 +58,7 @@ test.describe("10 secrets hub + prep board", () => {
         }]
       });
       const u1 = game.users.getName("User 1").id;
-      await place.update({ "flags.mej-campaign-companion.secretReveals.secret-t1": { users: [u1], groups: [], all: false, revealedAt: 1 } });
+      await place.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-t1": { users: [u1], groups: [], all: false, revealedAt: 1 } });
       return { placeId: place.id, sessionId: session.id };
     }, { prefix: TT_PREFIX });
 
@@ -161,6 +161,53 @@ test.describe("10 secrets hub + prep board", () => {
     await expect(board.locator(".mej-cc-prep-attendees li .mej-cc-prep-attendee-name")).toHaveText(actorName);
     await board.locator('button.header-control[data-action="close"]').click({ force: true });
 
+    assertNoConsoleErrors(errors);
+  });
+
+  test("tracker lists a duplicate id once per page and acts on the right page", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const needle = `TT-dup-${Date.now()}`;
+    const { id, p2Id, u1Id } = await page.evaluate(async ({ prefix, needle }) => {
+      const mej = { "monks-enhanced-journal": { type: "place" } };
+      const entry = await JournalEntry.create({
+        name: `${prefix}Dup-Tracker`,
+        pages: [
+          { name: "Alpha", type: "monks-enhanced-journal.place", flags: mej, text: { content: `<section class="secret" id="secret-dup"><p>${needle}-alpha</p></section>` } },
+          { name: "Beta", type: "monks-enhanced-journal.place", flags: mej, text: { content: `<section class="secret" id="secret-dup"><p>${needle}-beta</p></section>` } }
+        ]
+      });
+      return { id: entry.id, p2Id: entry.pages.contents[1].id, u1Id: game.users.getName("User 1").id };
+    }, { prefix: TT_PREFIX, needle });
+    // The two-page fixture, opened directly, renders Foundry's core
+    // multi-page journal view inside the MEJ shell (MEJ's typed subsheet
+    // only takes over for single-page entries — see 09/Task 2's discovery).
+    // That core view's `.editor-display` region does not reliably surface
+    // page-body content in this harness, so anchor the open on the entry's
+    // own unique name (rendered in the shell's ToC/sidebar either way) and
+    // then jump straight to the campaign-hub nav button, exactly as the
+    // Hub-based flow above does.
+    const shell = await openEntry(page, id, `${TT_PREFIX}Dup-Tracker`);
+    await shell.locator(".nav-button.campaign-hub").click();
+    await settle(page, 500);
+    await shell.locator('nav.sheet-tabs a[data-tab="secrets"]').click();
+    await settle(page, 300);
+    const rows = shell.locator('.mej-cc-secret-row[data-secret-id="secret-dup"]');
+    await expect(rows).toHaveCount(2);
+    const beta = rows.filter({ hasText: "Beta" });
+    await expect(beta).toHaveCount(1);
+    await beta.locator('[data-action="trackerAudience"]').click();
+    const dialog = page.locator("dialog.application").last();
+    await dialog.locator(`input[name="user-${u1Id}"]`).check();
+    await dialog.locator('button[data-action="ok"]').click();
+    await expect.poll(() => page.evaluate(({ e, b }) => {
+      const entry = game.journal.get(e);
+      const [p1, p2] = entry.pages.contents;
+      return { p1: p1.getFlag("mej-campaign-companion", "secretReveals") ?? null, p2users: p2.getFlag("mej-campaign-companion", "secretReveals")?.["secret-dup"]?.users ?? null };
+    }, { e: id, b: p2Id })).toEqual({ p1: null, p2users: [u1Id] });
+    // Whisper carries Beta's real section HTML, not Alpha's and not the preview.
+    const whisper = await page.evaluate((n) => game.messages.contents.filter((m) => m.content?.includes(`${n}-beta`)).length, needle);
+    expect(whisper).toBeGreaterThan(0);
     assertNoConsoleErrors(errors);
   });
 });

@@ -272,7 +272,7 @@
                         </div>
                         <ol class="mej-cc-secrets-list item-list scrollable">
                             {{#each secrets.rows}}
-                            <li class="mej-cc-secret-row item" data-secret-kind="{{this.kind}}" data-entry-uuid="{{this.entryUuid}}" data-secret-id="{{this.secretId}}" data-preview="{{this.preview}}" data-rel-kind="{{this.relKind}}">
+                            <li class="mej-cc-secret-row item" data-secret-kind="{{this.kind}}" data-entry-uuid="{{this.entryUuid}}" data-secret-id="{{this.secretId}}" data-page-uuid="{{this.pageUuid}}" data-preview="{{this.preview}}" data-rel-kind="{{this.relKind}}">
                                 <i class="{{this.icon}}"></i>
                                 <a class="mej-cc-secret-source" data-action="openIndexRow" data-uuid="{{this.entryUuid}}">{{this.entryName}}</a>
                                 <span class="mej-cc-secret-preview">{{this.preview}}</span>
