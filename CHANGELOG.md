@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0 (2026-09-02)
+
+Schema change. On the first GM load, block-secret reveal records move
+from the journal entry onto the page that holds the secret; the old
+entry-level record is left in place as a rollback copy and is no longer
+read. A record whose section exists on more than one page of an entry
+is copied to each of them, so nothing a player could see changes. A
+record whose section exists on no page is not copied; the console lists
+each one.
+
+- **Revealing a secret on one page no longer touches another page's
+  copy.** Duplicating a page kept the secret's id, so un-revealing from
+  the Hub could strip the wrong page's reveal.
+- **Opening one page no longer deletes another page's reveal records.**
+- **The Hub Secrets tab lists every page's secrets** on a multi-page
+  entry, labels rows by page, and whispers the real section text from
+  the right page instead of a preview.
+
 ## 0.13.6 (2026-08-30)
 
 Fix round. Nothing is migrated, and no data changes.
