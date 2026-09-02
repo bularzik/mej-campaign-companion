@@ -142,6 +142,24 @@ assert (a) `sheet.enhancedjournal` set → MEJ's render is called, base's is
 not; (b) unset → base's render is called with the same arguments and its
 promise is returned.
 
+**Addendum (verified 2026-09-02 on Foundry 13.351 + MEJ 13.06, world-b):**
+the sidebar open of a Session mounts in the MEJ shell tab —
+`{"shellRendered":true,"inShell":true,"standalone":false}`, the
+`stock-session-mount` annotation from
+`tests/e2e/13-stock-smoke.spec.mjs`'s "opening the session from the
+sidebar renders it without errors" test. Zero console errors. Vacuity
+check: with the un-fixed SessionSheet/CampaignHubPage restored, the same
+test failed with:
+
+```
+Error: expect(locator).toBeAttached() failed
+
+Locator: locator('.session-container').first()
+Expected: attached
+Timeout: 15000ms
+Error: element(s) not found
+```
+
 ## 3. Core shims
 
 - **`URL.parse`** (`MediaPageSheet.mjs:147`; v13 core never uses this
