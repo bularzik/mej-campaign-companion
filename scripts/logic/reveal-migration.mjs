@@ -32,3 +32,40 @@ export function planNativeRevealMigration(entries) {
   }
   return plan;
 }
+
+/**
+ * dataVersion 3 -> 4 planner: copy each entry-level reveal record onto EVERY
+ * page whose body holds that section id (spec 2026-08-30 §2). Ids found on no
+ * page are reported in `dropped`, never written. Ids a page already holds in
+ * `existing` are skipped, so a re-run after a partial failure never overwrites
+ * a record the GM may since have edited. Pure and Foundry-free; junk input is
+ * tolerated because this runs during world load.
+ *
+ * @param {Array<{entryUuid:string, reveals:object, pages:Array<{pageUuid:string, sectionIds:string[], existing:object}>}>} entries
+ * @returns {{steps:Array<{pageUuid:string, reveals:object}>, dropped:Array<{entryUuid:string, sectionId:string}>}}
+ */
+export function planPageKeyedMigration(entries) {
+  const steps = [];
+  const dropped = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const reveals = entry?.reveals && typeof entry.reveals === "object" ? entry.reveals : {};
+    const ids = Object.keys(reveals);
+    if (!ids.length) continue;
+    const pages = (Array.isArray(entry.pages) ? entry.pages : []).filter((p) => p && typeof p.pageUuid === "string");
+    const seen = new Set();
+    for (const page of pages) {
+      const present = new Set(Array.isArray(page.sectionIds) ? page.sectionIds : []);
+      const existing = page.existing && typeof page.existing === "object" ? page.existing : {};
+      const out = {};
+      for (const id of ids) {
+        if (!present.has(id)) continue;
+        seen.add(id);
+        if (id in existing) continue;
+        out[id] = reveals[id];
+      }
+      if (Object.keys(out).length) steps.push({ pageUuid: page.pageUuid, reveals: out });
+    }
+    for (const id of ids) if (!seen.has(id)) dropped.push({ entryUuid: entry.entryUuid, sectionId: id });
+  }
+  return { steps, dropped };
+}
