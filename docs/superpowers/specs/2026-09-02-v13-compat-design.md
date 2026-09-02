@@ -160,7 +160,7 @@ Timeout: 15000ms
 Error: element(s) not found
 ```
 
-Probe E2 (`.superpowers/sdd/2026-09-02-v13-compat/task-7-diagnosis.md`, run
+Probe E2 (`2026-09-02-v13-compat-investigation.md` in this directory, run
 2026-09-02) additionally reproduces the `removeAttribute` TypeError at
 `JournalEntrySheet.js:609` with the fix removed and the correct click
 target; on 13.06 the page body is eventually populated by MEJ's second
