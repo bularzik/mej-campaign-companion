@@ -77,7 +77,7 @@ export const DEFAULT_TIMELINE_KEY = "defaultTimelineId";
 export const DATA_VERSION_SETTING = "dataVersion";
 
 /** Current schema version written by the adoption/migration runner. */
-export const CURRENT_DATA_VERSION = 3;
+export const CURRENT_DATA_VERSION = 4;
 
 /** World setting: Folder id of the campaign that receives auto-captured encounters/media (spec §4). "" = unset → capture declines. */
 export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";

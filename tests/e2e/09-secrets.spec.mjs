@@ -691,7 +691,7 @@ test.describe("09 secrets", () => {
       expect(result.body).toContain("secret revealed");   // converted
       expect(result.liveAll).toBe(false);                 // flag cleared
       expect(result.goneAll).toBe(true);                  // orphan left alone
-      expect(result.version).toBe(3);
+      expect(result.version).toBe(currentVersion);         // final dataVersion, not hardcoded (tracks CURRENT_DATA_VERSION like the poll above)
 
       assertNoConsoleErrors(errors);
     } finally {
