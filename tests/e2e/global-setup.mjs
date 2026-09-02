@@ -8,6 +8,7 @@ import {
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
 import { pinSymlink, verifyDeployment } from "./helpers/deploy.mjs";
+import { TARGET, generationOf } from "./helpers/target.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -22,7 +23,16 @@ export default async function globalSetup() {
   acquireLock({ worktree: REPO_ROOT });
   try {
     pinSymlink(REPO_ROOT);
-    await ensureTestWorld();
+    const status = await ensureTestWorld();
+    // Wrong-server guard: FOUNDRY_TARGET=v13 pointed at the v14 server (or
+    // the reverse) would run this suite against the wrong world — the v14
+    // one is the user's real world. /api/status reports "13.351" / "14.367".
+    const generation = generationOf(status?.version);
+    if (generation !== TARGET.generation) {
+      throw new Error(
+        `Target "${TARGET.name}" expects Foundry ${TARGET.generation} at ${BASE_URL} but /api/status reports version "${status?.version}".`
+      );
+    }
     await verifyDeployment({ baseURL: BASE_URL, repoRoot: REPO_ROOT });
     const browser = await chromium.launch();
     const page = await browser.newPage();

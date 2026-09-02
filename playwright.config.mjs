@@ -1,9 +1,12 @@
 import { defineConfig } from "@playwright/test";
+import { TARGET } from "./tests/e2e/helpers/target.mjs";
 
 /**
- * E2E tests run against a local Foundry VTT v14 server with the dedicated
- * test world (world-a) active. Global setup starts/switches the server as
- * needed. See tests/e2e/README.md for environment details and overrides.
+ * E2E tests run against a local Foundry VTT server. The default target is
+ * the v14 install with world-a active; FOUNDRY_TARGET=v13 selects the
+ * Foundry 13 + stock MEJ 13.06 install (world-b) used for the v13 stock-smoke
+ * gate. Global setup starts/switches the server as needed. See
+ * tests/e2e/helpers/target.mjs and tests/e2e/README.md.
  *
  * Adapted from campaign-record's tests/e2e/ harness (helpers copied
  * wholesale, then retargeted: module id campaign-record -> mej-campaign-companion,
@@ -20,7 +23,7 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.mjs",
   globalTeardown: "./tests/e2e/global-teardown.mjs",
   use: {
-    baseURL: process.env.FOUNDRY_URL ?? "http://localhost:30000",
+    baseURL: TARGET.url,
     viewport: { width: 1440, height: 900 },
     // window.screen defaults to 1280x720 in headless Chromium regardless of
     // viewport size. Foundry checks window.screen (not the viewport) against

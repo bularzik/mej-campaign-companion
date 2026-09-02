@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { TARGET } from "./target.mjs";
 
-const DEFAULT_DATA = process.env.FOUNDRY_DATA ?? "/Users/danbularzik/FoundryVTT-14/Data";
+const DEFAULT_DATA = TARGET.data;
 const STALE_MS = 2 * 60 * 60 * 1000;
 
 export const UNLOCK_HINT = "Run `npm run e2e:unlock` to force-release it.";

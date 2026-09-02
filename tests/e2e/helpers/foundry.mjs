@@ -4,9 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import { lockStatus, UNLOCK_HINT } from "./env-lock.mjs";
+import { TARGET } from "./target.mjs";
 
-export const BASE_URL = process.env.FOUNDRY_URL ?? "http://localhost:30000";
-export const TEST_WORLD = process.env.FOUNDRY_TEST_WORLD ?? "world-a";
+export const BASE_URL = TARGET.url;
+export const TEST_WORLD = TARGET.world;
 export const MODULE_ID = "mej-campaign-companion";
 export const MEJ_MODULE_ID = "monks-enhanced-journal";
 
@@ -28,10 +29,9 @@ export const AUTH_STATE_FILES = {
   "User 2": path.join(AUTH_DIR, "user2.json")
 };
 
-const FOUNDRY_APP =
-  process.env.FOUNDRY_APP ?? "/Users/danbularzik/FoundryVTT-14/FoundryVTT-Node-14.365";
-const FOUNDRY_DATA = process.env.FOUNDRY_DATA ?? "/Users/danbularzik/FoundryVTT-14/Data";
-const FOUNDRY_NODE = process.env.FOUNDRY_NODE ?? "/opt/homebrew/bin/node";
+const FOUNDRY_APP = TARGET.app;
+const FOUNDRY_DATA = TARGET.data;
+const FOUNDRY_NODE = TARGET.node;
 const PID_FILE = path.join(FOUNDRY_DATA, ".pid");
 
 async function serverStatus() {
@@ -79,7 +79,9 @@ function startServer(worldId) {
   const log = fs.openSync(path.join(FOUNDRY_DATA, "Logs", "stdout.log"), "a");
   const child = spawn(
     FOUNDRY_NODE,
-    ["main.js", `--dataPath=${FOUNDRY_DATA}`, `--world=${worldId}`],
+    // --port explicitly: the v13 install's options.json says 30000, which the
+    // v14 server owns; the port always follows BASE_URL (30013 for v13).
+    ["main.js", `--dataPath=${FOUNDRY_DATA}`, `--world=${worldId}`, `--port=${new URL(BASE_URL).port || "30000"}`],
     { cwd: FOUNDRY_APP, detached: true, stdio: ["ignore", log, log] }
   );
   child.unref();
@@ -551,6 +553,11 @@ export async function settle(page, ms = 300) {
 //      companion-side, and outside this task's authorized fix list.
 export const KNOWN_MEJ_SESSION_ICON_404 = /assets\/session\.png/;
 
+// Foundry 13 under headless Chromium: the page's Permissions-Policy header
+// forbids the Compute Pressure API and Chromium logs a console error about
+// it on every load. Platform noise, not ours — ignored by default.
+export const KNOWN_V13_COMPUTE_PRESSURE_POLICY = /compute-pressure is not allowed/;
+
 // The headless viewport (1280x720, set for canvas-off perf per the harness
 // convention) is below Foundry's own recommended-minimum check — logged as
 // a console error on every world load regardless of anything under test.
@@ -607,7 +614,7 @@ export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document mus
 
 /** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */
 export function trackConsoleErrors(page, { ignore = [] } = {}) {
-  const allIgnore = [KNOWN_LOW_RESOLUTION_WARNING, ...ignore];
+  const allIgnore = [KNOWN_LOW_RESOLUTION_WARNING, KNOWN_V13_COMPUTE_PRESSURE_POLICY, ...ignore];
   const errors = [];
   page.on("console", (msg) => {
     if (msg.type() !== "error") return;
