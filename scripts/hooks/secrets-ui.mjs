@@ -106,7 +106,22 @@ async function injectGmOverlay(sheet, element, shellHosted) {
     }
     section.prepend(button);
   }
-  await pruneOrphans(page);
+  // Deferred, not awaited in this render's own hook chain: pruneOrphans
+  // writes back to the page via page.update(), and Document#update()
+  // re-renders any open sheet for that document to reflect the change. Doing
+  // that write from INSIDE renderJournalPageSheet's own hook chain re-enters
+  // MEJ's PlaceSheet render mid-flight (this render hasn't settled yet) and
+  // crashed there intermittently - confirmed live: "Failed to render
+  // Application ...PlaceSheet...: Cannot read properties of undefined
+  // (reading 'attributes')" inside PlaceSheet.fieldlist(), reproduced with
+  // and without other test-side mitigations, only when this write happened
+  // synchronously inside this same render pass. A reveal write from
+  // editAudience (this file), which always happens well after a render has
+  // settled - never from inside the render hook itself - never hit this.
+  // setTimeout(0) gets the write off this task without an artificial delay:
+  // it runs after the current render has finished settling, same timing the
+  // reveal path already proves safe.
+  setTimeout(() => pruneOrphans(page).catch((err) => console.error(`${MODULE_ID} | secret prune failed`, err)), 0);
 }
 
 /**

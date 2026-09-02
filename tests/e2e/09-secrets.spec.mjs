@@ -1003,20 +1003,84 @@ test.describe("09 secrets", () => {
     assertNoConsoleErrors(errors);
   });
 
-  // BLOCKED (see task-2-report.md): a second MEJ PlaceSheet popped open by the
-  // SAME Gamemaster client in one session — needed to drive pruneOrphans on
-  // page 2 after page 1 already rendered — intermittently throws inside MEJ's
-  // OWN PlaceSheet.fieldlist(): "Cannot read properties of undefined (reading
-  // 'attributes')" on `this.document.flags['monks-enhanced-journal']`. Traced
-  // to enhanced-journal-module code, not this module: a malformed
-  // `foundry.utils.getProperty("flags.monks-enhanced-journal")` call (missing
-  // its object argument) inside MEJ's `preCreateJournalEntryPage` hook.
-  // Reproduced identically across three independent mitigations (closing page
-  // 1's window first, a second fresh-context Gamemaster login, a full
-  // page.reload()) — confirming it is not this test's harness code, and not
-  // secrets-ui.mjs (defect 2's actual fix is exercised and green via the
-  // "duplicate section id" test above, which drives pruneOrphans on page 2
-  // directly and asserts the entry-level flag stays untouched). Left out
-  // rather than committed red/flaky; never patch MEJ from this module.
+  // Regression test for defect 2's data-loss half (spec 2026-08-30): opening
+  // page 1 must prune ONLY page 1's own stale records, never touch page 2's
+  // map at all. A single popped render (page 1 only) proves this: seed BOTH
+  // pages with a live id (secret-dup, present in both bodies) and a
+  // page-specific stale id with no matching section, open page 1, and assert
+  // page 1 lost its stale id while page 2's map is untouched byte-for-byte.
+  //
+  // Page 1 is a companion Session page (mej-campaign-companion.session,
+  // secret in its recap), not an MEJ place page like page 2: even with
+  // pruneOrphans's write deferred out of the render hook's own await chain
+  // (secrets-ui.mjs), a popped MEJ PlaceSheet pre-seeded with secretReveals
+  // data still intermittently crashed on its FIRST render, before that write
+  // ever fires - "Failed to render Application ...PlaceSheet...: Cannot read
+  // properties of undefined (reading 'attributes')" inside MEJ's OWN
+  // PlaceSheet.fieldlist(), confirmed live, ruling out this write's timing as
+  // the (sole) trigger. SessionSheet is a companion-owned class
+  // (apps/session-sheet.mjs) that never calls MEJ's fieldlist() at all, so
+  // this sidesteps that MEJ-fork fragility entirely rather than working
+  // around it. Page 2's OWN prune (dropping secret-stale-p2 when IT renders)
+  // is not exercised here - that half is covered by pruneReveals' unit tests
+  // (reveal-state.test.js); driving it end-to-end would need a second popped
+  // GM render in this same session, which task-2-report.md documents as
+  // unreliable independent of this fix.
+  test("opening page 1 (a Session page) prunes only page 1's stale reveal records, leaving page 2 untouched", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const { id, p1Id, p2Id } = await page.evaluate(async ({ n, h2 }) => {
+      const entry = await JournalEntry.create({
+        name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+        pages: [
+          {
+            name: `${n} p1`, type: "mej-campaign-companion.session",
+            flags: { "monks-enhanced-journal": { type: "session" } },
+            system: { recap: '<p>Page one intro.</p><section class="secret" id="secret-dup"><p>TT-prune-recap-one</p></section>', gmNotes: "" }
+          },
+          { name: `${n} p2`, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: h2 } }
+        ]
+      });
+      const [p1, p2] = entry.pages.contents;
+      return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
+    }, { n: `${TT_PREFIX}Prune-Place`, h2: DUP_HTML_2 });
 
+    await page.evaluate(async ({ e, a, b }) => {
+      const entry = game.journal.get(e);
+      await entry.pages.get(a).update({
+        "flags.mej-campaign-companion.secretReveals.secret-dup": { users: [], groups: ["gX"], all: false, revealedAt: 1 },
+        "flags.mej-campaign-companion.secretReveals.secret-stale-p1": { users: [], groups: ["gX"], all: false, revealedAt: 1 }
+      });
+      await entry.pages.get(b).update({
+        "flags.mej-campaign-companion.secretReveals.secret-dup": { users: [], groups: ["gX"], all: false, revealedAt: 1 },
+        "flags.mej-campaign-companion.secretReveals.secret-stale-p2": { users: [], groups: ["gX"], all: false, revealedAt: 1 }
+      });
+    }, { e: id, a: p1Id, b: p2Id });
+
+    // Single popped-out render for the whole test: page 1's SessionSheet only.
+    await page.evaluate(async ({ e, a }) => {
+      game.journal.get(e).pages.get(a).sheet.render(true);
+    }, { e: id, a: p1Id });
+    await settle(page, 500);
+    const win = page.locator(".application.sheet", { hasText: "Page one intro." }).last();
+    const recap = win.locator('.editor-display[data-key="system.recap"]');
+    await expect(recap).toContainText("Page one intro.");
+    await expect(recap.locator(".mej-cc-secret-audience")).toHaveCount(1);
+
+    // pruneOrphans now runs on a deferred setTimeout(0), not inside the
+    // render hook; poll the stored state rather than sleeping - waits on the
+    // real condition (the stale id is gone).
+    await expect.poll(() => page.evaluate(
+      ({ e, a }) => Object.keys(game.journal.get(e).pages.get(a).getFlag("mej-campaign-companion", "secretReveals") ?? {}).sort(),
+      { e: id, a: p1Id }
+    )).toEqual(["secret-dup"]);
+
+    const p2Keys = await page.evaluate(
+      ({ e, b }) => Object.keys(game.journal.get(e).pages.get(b).getFlag("mej-campaign-companion", "secretReveals") ?? {}).sort(),
+      { e: id, b: p2Id }
+    );
+    expect(p2Keys).toEqual(["secret-dup", "secret-stale-p2"]);
+
+    assertNoConsoleErrors(errors);
+  });
 });
