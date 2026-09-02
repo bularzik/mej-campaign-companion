@@ -11,7 +11,7 @@ import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
-import { planNativeRevealMigration } from "./logic/reveal-migration.mjs";
+import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
 import { bodyRegion } from "./logic/field-extractors.mjs";
 
@@ -288,6 +288,40 @@ Hooks.once("ready", async () => {
       }
     }
     if (converted) console.log(`${MODULE_ID} | converted ${converted} "everyone" reveal(s) to Foundry's native revealed class`);
+
+    // v4: block reveal records move from the entry to the page holding the
+    // section (spec 2026-08-30). Copied to EVERY page holding the id; ids on
+    // no page are dropped and listed; the entry flag is left in place as a
+    // rollback copy and is never read again. Idempotent via `existing`.
+    const pageCandidates = [];
+    for (const entry of game.journal.contents) {
+      const reveals = entry.getFlag(MODULE_ID, "secretReveals");
+      if (!reveals || !Object.keys(reveals).length) continue;
+      pageCandidates.push({
+        entryUuid: entry.uuid, reveals,
+        pages: (entry.pages?.contents ?? []).filter((p) => mejType(p)).map((p) => ({
+          pageUuid: p.uuid,
+          sectionIds: extractSecretBlocks(bodyRegion(p).content).map((s) => s.id),
+          existing: p.getFlag(MODULE_ID, "secretReveals") ?? {}
+        }))
+      });
+    }
+    const { steps, dropped } = planPageKeyedMigration(pageCandidates);
+    let pagesWritten = 0;
+    for (const step of steps) {
+      try {
+        const page = await fromUuid(step.pageUuid);
+        if (!page) continue;
+        const existing = page.getFlag(MODULE_ID, "secretReveals") ?? {};
+        await page.update({ [`flags.${MODULE_ID}.secretReveals`]: { ...existing, ...step.reveals } });
+        pagesWritten += 1;
+      } catch (err) {
+        console.error(`${MODULE_ID} | page-keyed reveal migration failed for ${step.pageUuid}`, err);
+      }
+    }
+    if (pagesWritten || dropped.length) {
+      console.log(`${MODULE_ID} | moved block reveals onto ${pagesWritten} page(s); ${dropped.length} record(s) had no section on any page and were not copied`, dropped);
+    }
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }

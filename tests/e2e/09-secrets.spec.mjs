@@ -63,6 +63,46 @@ async function openEntry(page, entryId) {
   return shell;
 }
 
+const DUP_HTML_1 = `<p>Page one intro.</p><section class="secret" id="secret-dup"><p>${SECRET_TEXT}-one</p></section>`;
+const DUP_HTML_2 = `<p>Page two intro.</p><section class="secret" id="secret-dup"><p>${SECRET_TEXT}-two</p></section>`;
+
+async function createTwoPagePlace(page, name) {
+  return page.evaluate(async ({ n, h1, h2 }) => {
+    const mej = { "monks-enhanced-journal": { type: "place" } };
+    const entry = await JournalEntry.create({
+      name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+      pages: [
+        { name: `${n} p1`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h1 } },
+        { name: `${n} p2`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h2 } }
+      ]
+    });
+    const [p1, p2] = entry.pages.contents;
+    return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
+  }, { n: name, h1: DUP_HTML_1, h2: DUP_HTML_2 });
+}
+
+// MEJ's shell (openJournalEntry / #MonksEnhancedJournal) only ever routes to a
+// page's own typed subsheet when the parent entry has exactly one page
+// (enhanced-journal.js renderSubSheet: `this.document.pages.size == 1`); for a
+// 2+ page entry it always shows Foundry's own multi-page JournalEntrySheet
+// view instead, with no `.editor-display[data-key="text.content"]` anywhere in
+// it, no matter which page was passed to openJournalEntry() or what pageId
+// options carry. So the two-page fixture below is opened via each PAGE
+// document's own `.sheet.render(true)` — a popped-out window, which MEJ DOES
+// register its own sheet class for (see MonksEnhancedJournal.getMEJType /
+// _getSheetClass) and which this module's renderJournalPageSheet hook already
+// treats as a first-class supported surface (poppedOutPageSheets/
+// refreshRevealViews in secrets-ui.mjs).
+async function openPoppedPage(page, entryId, pageId, anchor) {
+  await page.evaluate(async ({ e, p }) => {
+    game.journal.get(e).pages.get(p).sheet.render(true);
+  }, { e: entryId, p: pageId });
+  await settle(page, 500);
+  const win = page.locator(".application.sheet", { hasText: anchor }).last();
+  await expect(contentPreview(win)).toContainText(anchor);
+  return win;
+}
+
 test.describe("09 secrets", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
@@ -204,7 +244,7 @@ test.describe("09 secrets", () => {
       const u1 = game.users.getName("User 1").id;
       await game.settings.set("mej-campaign-companion", "playerGroups", [{ id: "gA", name: "TT Group", members: [u1] }]);
       const entry = game.journal.get(entryId);
-      await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-e2e1": { users: [], groups: ["gA"], all: false, revealedAt: 1 } });
+      await entry.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-e2e1": { users: [], groups: ["gA"], all: false, revealedAt: 1 } });
     }, id);
 
     const p2Ctx = await browser.newContext(VIEW);
@@ -305,10 +345,10 @@ test.describe("09 secrets", () => {
         const entry = game.journal.get(id);
         const pg = entry.pages.contents[0];
         const stored = await applyBlockReveal(pg, "secret-native", { all: true, users: [], groups: [] });
-        await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-native": stored });
+        await pg.update({ "flags.mej-campaign-companion.secretReveals.secret-native": stored });
         return {
           body: entry.pages.contents[0].text.content,
-          storedAll: entry.getFlag("mej-campaign-companion", "secretReveals")["secret-native"].all
+          storedAll: entry.pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-native"].all
         };
       }, entryId);
 
@@ -462,7 +502,7 @@ test.describe("09 secrets", () => {
         const entry = game.journal.get(id);
         return {
           body: entry.pages.contents[0].text.content,
-          users: entry.getFlag("mej-campaign-companion", "secretReveals")["secret-roundtrip"].users
+          users: entry.pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-roundtrip"].users
         };
       }, entryId);
       expect(afterSecond.body).toContain("secret revealed");
@@ -531,7 +571,7 @@ test.describe("09 secrets", () => {
       await settle(page, 800);
 
       const stored = await page.evaluate((id) =>
-        game.journal.get(id).getFlag("mej-campaign-companion", "secretReveals")["secret-recap-ui"], entryId);
+        game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "secretReveals")["secret-recap-ui"], entryId);
       expect(stored.users).toContain(u1Id);
 
       assertNoConsoleErrors(errors);
@@ -651,7 +691,7 @@ test.describe("09 secrets", () => {
       expect(result.body).toContain("secret revealed");   // converted
       expect(result.liveAll).toBe(false);                 // flag cleared
       expect(result.goneAll).toBe(true);                  // orphan left alone
-      expect(result.version).toBe(3);
+      expect(result.version).toBe(currentVersion);         // final dataVersion, not hardcoded (tracks CURRENT_DATA_VERSION like the poll above)
 
       assertNoConsoleErrors(errors);
     } finally {
@@ -692,7 +732,7 @@ test.describe("09 secrets", () => {
         const { applyBlockReveal } = await import("/modules/mej-campaign-companion/scripts/hooks/secrets-ui.mjs");
         const entry = game.journal.get(id);
         const stored = await applyBlockReveal(entry.pages.contents[0], "secret-recap", { all: false, users: [userId], groups: [] });
-        await entry.update({ "flags.mej-campaign-companion.secretReveals.secret-recap": stored });
+        await entry.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-recap": stored });
       }, { id: entryId, userId: seeded.userId });
 
       playerContext = await browser.newContext(VIEW);
@@ -745,7 +785,7 @@ test.describe("09 secrets", () => {
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
         pages: [{ name: n, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
       });
-      await entry.update({
+      await entry.pages.contents[0].update({
         "flags.mej-campaign-companion.secretReveals.secret-cc1":
           { users: [game.users.getName("User 1").id], groups: [], all: false, revealedAt: 1 }
       });
@@ -925,5 +965,122 @@ test.describe("09 secrets", () => {
         if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
       }, entryId);
     }
+  });
+
+  test("duplicate section id on two pages: reveal from page 2 touches only page 2", async ({ page, browser }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const { id, p1Id, p2Id } = await createTwoPagePlace(page, `${TT_PREFIX}Dup-Place`);
+    const gmWin = await openPoppedPage(page, id, p2Id, "Page two intro.");
+    const u1Id = await page.evaluate(() => game.users.getName("User 1").id);
+    await clickWithHitDiagnostics(gmWin.locator(".mej-cc-secret-audience"), page);
+    const dialog = page.locator("dialog.application").last();
+    await expect(dialog).toBeVisible();
+    await dialog.locator(`input[name="user-${u1Id}"]`).check();
+    await dialog.locator('button[data-action="ok"]').click();
+
+    const flags = await page.evaluate(({ e, a, b }) => {
+      const entry = game.journal.get(e);
+      return {
+        p1: entry.pages.get(a).getFlag("mej-campaign-companion", "secretReveals") ?? null,
+        p2: entry.pages.get(b).getFlag("mej-campaign-companion", "secretReveals") ?? null,
+        entryLevel: entry.getFlag("mej-campaign-companion", "secretReveals") ?? null
+      };
+    }, { e: id, a: p1Id, b: p2Id });
+    expect(flags.p1).toBeNull();
+    expect(flags.entryLevel).toBeNull();
+    expect(flags.p2?.["secret-dup"]?.users).toEqual([u1Id]);
+
+    const p1Ctx = await browser.newContext(VIEW);
+    const p1 = await p1Ctx.newPage();
+    await login(p1, "User 1");
+    const s2 = await openPoppedPage(p1, id, p2Id, "Page two intro.");
+    await expect(contentPreview(s2).locator("section.secret.mej-cc-revealed-to-you")).toHaveCount(1);
+    await expect(contentPreview(s2)).toContainText(`${SECRET_TEXT}-two`);
+    const s1 = await openPoppedPage(p1, id, p1Id, "Page one intro.");
+    await expect(contentPreview(s1).locator("section.secret")).toHaveCount(0);
+    await p1Ctx.close();
+    assertNoConsoleErrors(errors);
+  });
+
+  // Regression test for defect 2's data-loss half (spec 2026-08-30): opening
+  // page 1 must prune ONLY page 1's own stale records, never touch page 2's
+  // map at all. A single popped render (page 1 only) proves this: seed BOTH
+  // pages with a live id (secret-dup, present in both bodies) and a
+  // page-specific stale id with no matching section, open page 1, and assert
+  // page 1 lost its stale id while page 2's map is untouched byte-for-byte.
+  //
+  // Page 1 is a companion Session page (mej-campaign-companion.session,
+  // secret in its recap), not an MEJ place page like page 2: even with
+  // pruneOrphans's write deferred out of the render hook's own await chain
+  // (secrets-ui.mjs), a popped MEJ PlaceSheet pre-seeded with secretReveals
+  // data still intermittently crashed on its FIRST render, before that write
+  // ever fires - "Failed to render Application ...PlaceSheet...: Cannot read
+  // properties of undefined (reading 'attributes')" inside MEJ's OWN
+  // PlaceSheet.fieldlist(), confirmed live, ruling out this write's timing as
+  // the (sole) trigger. SessionSheet is a companion-owned class
+  // (apps/session-sheet.mjs) that never calls MEJ's fieldlist() at all, so
+  // this sidesteps that MEJ-fork fragility entirely rather than working
+  // around it. Page 2's OWN prune (dropping secret-stale-p2 when IT renders)
+  // is not exercised here - that half is covered by pruneReveals' unit tests
+  // (reveal-state.test.js); driving it end-to-end would need a second popped
+  // GM render in this same session, which task-2-report.md documents as
+  // unreliable independent of this fix.
+  test("opening page 1 (a Session page) prunes only page 1's stale reveal records, leaving page 2 untouched", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const { id, p1Id, p2Id } = await page.evaluate(async ({ n, h2 }) => {
+      const entry = await JournalEntry.create({
+        name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+        pages: [
+          {
+            name: `${n} p1`, type: "mej-campaign-companion.session",
+            flags: { "monks-enhanced-journal": { type: "session" } },
+            system: { recap: '<p>Page one intro.</p><section class="secret" id="secret-dup"><p>TT-prune-recap-one</p></section>', gmNotes: "" }
+          },
+          { name: `${n} p2`, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: h2 } }
+        ]
+      });
+      const [p1, p2] = entry.pages.contents;
+      return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
+    }, { n: `${TT_PREFIX}Prune-Place`, h2: DUP_HTML_2 });
+
+    await page.evaluate(async ({ e, a, b }) => {
+      const entry = game.journal.get(e);
+      await entry.pages.get(a).update({
+        "flags.mej-campaign-companion.secretReveals.secret-dup": { users: [], groups: ["gX"], all: false, revealedAt: 1 },
+        "flags.mej-campaign-companion.secretReveals.secret-stale-p1": { users: [], groups: ["gX"], all: false, revealedAt: 1 }
+      });
+      await entry.pages.get(b).update({
+        "flags.mej-campaign-companion.secretReveals.secret-dup": { users: [], groups: ["gX"], all: false, revealedAt: 1 },
+        "flags.mej-campaign-companion.secretReveals.secret-stale-p2": { users: [], groups: ["gX"], all: false, revealedAt: 1 }
+      });
+    }, { e: id, a: p1Id, b: p2Id });
+
+    // Single popped-out render for the whole test: page 1's SessionSheet only.
+    await page.evaluate(async ({ e, a }) => {
+      game.journal.get(e).pages.get(a).sheet.render(true);
+    }, { e: id, a: p1Id });
+    await settle(page, 500);
+    const win = page.locator(".application.sheet", { hasText: "Page one intro." }).last();
+    const recap = win.locator('.editor-display[data-key="system.recap"]');
+    await expect(recap).toContainText("Page one intro.");
+    await expect(recap.locator(".mej-cc-secret-audience")).toHaveCount(1);
+
+    // pruneOrphans now runs on a deferred setTimeout(0), not inside the
+    // render hook; poll the stored state rather than sleeping - waits on the
+    // real condition (the stale id is gone).
+    await expect.poll(() => page.evaluate(
+      ({ e, a }) => Object.keys(game.journal.get(e).pages.get(a).getFlag("mej-campaign-companion", "secretReveals") ?? {}).sort(),
+      { e: id, a: p1Id }
+    )).toEqual(["secret-dup"]);
+
+    const p2Keys = await page.evaluate(
+      ({ e, b }) => Object.keys(game.journal.get(e).pages.get(b).getFlag("mej-campaign-companion", "secretReveals") ?? {}).sort(),
+      { e: id, b: p2Id }
+    );
+    expect(p2Keys).toEqual(["secret-dup", "secret-stale-p2"]);
+
+    assertNoConsoleErrors(errors);
   });
 });

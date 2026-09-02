@@ -224,6 +224,10 @@ Click a block secret's audience control and the **Reveal secret** dialog opens. 
 
 Secrets a viewer isn't cleared for never reach their screen intact: they're removed from the page before it's painted.
 
+**Reveals belong to the page.** Who a block secret is revealed to is recorded on the page that holds the secret, not on the entry as a whole. Two consequences worth knowing: duplicating a page copies its reveals along with it, so the copy's players see exactly what the original's did; and deleting a page takes its reveals with it. When an entry has more than one page, the Hub Secrets tab labels each row **entry · page** so you can tell which copy of a secret you are acting on.
+
+**Multi-page entries open differently.** Monk's Enhanced Journal shows its own typed sheet — and the audience buttons on each secret — only for a single-page entry. An entry with two or more pages opens in Foundry's standard multi-page view instead, so to reveal a block secret there, use the Hub Secrets tab (each row names its page) or open that page's own sheet from the journal sidebar.
+
 Either way, every player you reveal to gets a private whisper naming the entry the secret came from, with the secret's text and a link back to that entry:
 
 ![The private chat whisper a player receives when a secret is revealed to them, naming the source entry](images/reveal-whisper.png)
