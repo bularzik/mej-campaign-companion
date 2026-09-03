@@ -9,6 +9,7 @@ import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 import { extractSecretBlocks, setSectionRevealed, sectionRevealedAll } from "../logic/secret-blocks.mjs";
 import { bodyRegion } from "../logic/field-extractors.mjs";
+import { suppressRevealToggles } from "../logic/secret-reveal-toggles.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
 const REVEALS_FLAG = "secretReveals";
@@ -44,12 +45,7 @@ function suppressCoreRevealToggles(sheet, element) {
   const page = mejPageOf(sheet);
   if (!page || !element) return;
   if (page.parent?.isOwner) return;                 // GM / genuine owner keeps the control
-  for (const block of element.querySelectorAll("secret-block")) {
-    // `revealable` is the v13+/v14 property; the fallback covers a wrapper that
-    // has not been upgraded yet.
-    if ("revealable" in block) block.revealable = false;
-    else block.querySelector(":scope > .secret > button.reveal")?.remove();
-  }
+  suppressRevealToggles(element);                   // v13 + v14 branches: logic/secret-reveal-toggles.mjs
 }
 
 const groupsSetting = () => normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));

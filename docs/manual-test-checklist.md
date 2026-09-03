@@ -1,6 +1,6 @@
 # Manual test checklist
 
-Items here are either not automatable at all, or not currently covered by the automated suites (`npm test` — 359 unit tests; `npm run test:e2e` — 7 Playwright spec files / 21 tests against a live Foundry v14 test world). Run through these by hand before cutting a release, or whenever you touch the area they cover.
+Items here are either not automatable at all, or not currently covered by the automated suites (`npm test` — 741 unit tests; `npm run test:e2e` — 21 Playwright spec files / 120 tests against a live Foundry v14 test world (plus the v13 stock gate, `npm run e2e:stock:v13`)). Run through these by hand before cutting a release, or whenever you touch the area they cover.
 
 ## Second-display / popout behavior
 

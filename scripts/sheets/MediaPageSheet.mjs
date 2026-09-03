@@ -10,6 +10,8 @@
 // data-action bindings must attach from activateListeners(), never from an
 // _onRender() override (the same note SessionSheet.mjs carries).
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
+import { renderAwaitable } from "./awaitable-render.mjs";
+import { isAbsoluteUrl } from "../logic/url.mjs";
 import { MODULE_ID, I18N, MEDIA_PAGE_TYPES } from "../constants.mjs";
 
 export class MediaPageSheet extends EnhancedJournalSheet {
@@ -46,53 +48,9 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     super._configureRenderOptions(options);
   }
 
-  /**
-   * Restore ApplicationV2's awaitable render contract.
-   *
-   * A native pdf/video page is NOT demoted to the shell subsheet (that happens
-   * only for a page carrying flags.monks-enhanced-journal.type whose type is in
-   * getDocumentTypes() - enhanced-journal.js:482-493, :538), so this sheet
-   * mounts one level down, through JournalEntrySheet's page-view path. That
-   * path transplants the sheet's rendered element into MEJ's own <article>
-   * container (JournalEntrySheet.js:618-623):
-   *
-   *     await sheet.render({ force: true });
-   *     if (!sheet.element) return;              // silent bail-out
-   *     sheet.element.removeAttribute("class");
-   *     element.append(sheet.element);           // the transplant
-   *
-   * But EnhancedJournalSheet.render() (EnhancedJournalSheet.js:392-405) is not
-   * async and discards the promise from its own super.render(options) call.
-   * Awaiting it resolves on the next microtask - long before the render
-   * lifecycle has assigned this.element - so _renderPageView takes the silent
-   * early return and never transplants anything. The sheet still renders
-   * perfectly a moment later, into an element that is never attached to the
-   * document: the viewer simply never appears, and nothing throws. Confirmed
-   * live - the finished element held both the template and the knowledge panel
-   * and still carried its `class` attribute, which the transplant would have
-   * stripped had it ever run.
-   *
-   * MEJ's own typed sheets never hit this: they are mounted by renderSubSheet,
-   * which does not await render(). Only a sheet reached through the page-view
-   * path depends on the contract.
-   *
-   * A shell-hosted mount is delegated to MEJ unchanged; a standalone mount
-   * skips to the first real (async) render above EnhancedJournalSheet in the
-   * chain. MEJ's tempOwnership side effect is deliberately not reproduced: it
-   * silently grants the viewing user OBSERVER, and MEJ has already
-   * permission-filtered which pages render here (JournalEntrySheet's
-   * _preparePageData / isPageVisible).
-   *
-   * This whole override is a workaround for the upstream defect described
-   * above, not a design choice of ours - if MEJ's EnhancedJournalSheet.render()
-   * is ever fixed to properly await its own super.render(), this bypass
-   * should be removed rather than left in place, so we don't keep silently
-   * skipping whatever MEJ's render() later grows.
-   */
+  /** See awaitable-render.mjs — restores the awaitable render contract MEJ's render() breaks. */
   async render(options = {}, _options = {}) {
-    if (this.enhancedjournal) return super.render(options, _options);
-    const base = Object.getPrototypeOf(EnhancedJournalSheet.prototype);
-    return base.render.call(this, options, _options);
+    return renderAwaitable(this, EnhancedJournalSheet, options, _options);
   }
 
   /**
@@ -144,7 +102,7 @@ export class MediaPageSheet extends EnhancedJournalSheet {
     context.viewerSrc = "";
     if (kind === "pdf" && src) {
       const params = new URLSearchParams();
-      const resolved = URL.parse(src) ? src : foundry.utils.getRoute(src);
+      const resolved = isAbsoluteUrl(src) ? src : foundry.utils.getRoute(src);
       params.append("file", resolved);
       context.viewerSrc = `scripts/pdfjs/web/viewer.html?${params}`;
     }

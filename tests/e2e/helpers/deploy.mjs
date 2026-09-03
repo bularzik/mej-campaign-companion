@@ -2,24 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { UNLOCK_HINT } from "./env-lock.mjs";
+import { TARGET } from "./target.mjs";
 
-const DEFAULT_DATA = process.env.FOUNDRY_DATA ?? "/Users/danbularzik/FoundryVTT-14/Data";
+const DEFAULT_DATA = TARGET.data;
 
 // There is currently only one checkout of mej-campaign-companion, so
 // pinSymlink(MAIN_CHECKOUT) in global-teardown.mjs is a self-pin / no-op
 // safety net (it just re-affirms the symlink already points here) rather
 // than the multi-checkout dance campaign-record uses. It's kept for parity
 // with that harness and in case a second checkout/worktree shows up later.
-export const MAIN_CHECKOUT =
-  process.env.FOUNDRY_MAIN_CHECKOUT ??
-  "/Users/danbularzik/Claude/Projects/mej-campaign-companion";
+export const MAIN_CHECKOUT = TARGET.mainCheckout;
 
 /** Files whose served bytes must match this checkout before any spec runs. */
 export const SENTINELS = ["module.json", "scripts/campaign-companion.mjs"];
 
 export function moduleLinkPath(dataDir) {
   if (!dataDir) {
-    return process.env.FOUNDRY_MODULE_LINK ?? path.join(DEFAULT_DATA, "Data", "modules", "mej-campaign-companion");
+    return TARGET.moduleLink;
   }
   return path.join(dataDir, "Data", "modules", "mej-campaign-companion");
 }

@@ -3,8 +3,12 @@
 The suite runs against a local Foundry VTT v14 install (`~/FoundryVTT-14`,
 port 30000) with the dedicated test world `world-a` active. Global setup
 (`global-setup.mjs` → `ensureTestWorld()` in `helpers/foundry.mjs`) starts or
-switches the server as needed; overrides via `FOUNDRY_URL`, `FOUNDRY_APP`,
-`FOUNDRY_DATA`, `FOUNDRY_NODE`, `FOUNDRY_TEST_WORLD`. Test documents are
+switches the server as needed; overrides via `FOUNDRY_URL`, `FOUNDRY_APP`, `FOUNDRY_DATA`, `FOUNDRY_NODE`,
+`FOUNDRY_TEST_WORLD`, `FOUNDRY_MODULE_LINK`, `FOUNDRY_MAIN_CHECKOUT`; or pick a
+whole preset with `FOUNDRY_TARGET=v13` (Foundry 13.351 + stock MEJ 13.06 at
+`~/FoundryVTT`, world-b, port 30013 — see `helpers/target.mjs`). Global setup
+refuses to run if `/api/status` reports a different Foundry generation than
+the target expects. Test documents are
 prefixed `TT-`. Monk's Enhanced Journal is expected at
 `~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`, a symlink to a
 checkout of the MEJ repo.
@@ -56,3 +60,19 @@ attributable to stock MEJ itself is documented in the README's mode table,
 not "fixed" in the companion. Stock-MEJ-owned behaviors (what stock MEJ does
 when *it* opens an unknown-typed entry; stock MEJ's own console noise) are
 recorded as test annotations for the run report, never asserted.
+
+## Stock gate on v13 (required before any release claiming Foundry 13)
+
+The v13 install's MEJ is upstream 13.06 — stock by definition, no symlink
+swap, no world backup (world-b is a sandbox). The `return` phase cannot run
+there (it asserts `api` mode on the API-carrying MEJ), so a `cleanup` phase
+deletes the fixture instead.
+
+1. `npm run e2e:stock:v13` — global setup starts Foundry 13 on port 30013
+   with world-b if it is not already up, links the module, and runs the
+   `stock` phase (boot, Hub, New Session, search, and the asserted sidebar
+   open of the session).
+2. `npm run e2e:stock:v13:cleanup` — deletes `TT-STOCKSMOKE Session`.
+
+The v14 server on port 30000 is untouched throughout. Run the v14 full suite
+separately (`npm run test:e2e`, default target).

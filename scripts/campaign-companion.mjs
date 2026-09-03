@@ -203,7 +203,7 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
 // GM-side scene-controls entry point, mirroring how MEJ itself adds a toggle
 // to the notes control group (see monks-enhanced-journal.js's own
 // getSceneControlButtons listener: controls.notes.tools[key] = {...}, the
-// v14 object-keyed shape - not the pre-v14 array-of-tools shape).
+// object-keyed shape Foundry 13+ uses - not the pre-v13 array-of-tools shape).
 Hooks.on("getSceneControlButtons", (controls) => {
   if (!game.user.isGM) return;
   const noteControls = controls.notes;
