@@ -16,7 +16,7 @@ import {
   MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
-import { campaignOfFolder, destinationFolderOptions, resolveDestinationId } from "../logic/campaigns.mjs";
+import { campaignOfFolder, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -223,8 +223,18 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // first-in-DOM-order default.
     const form = this.element.querySelector("form.mej-cc-import-review");
     if (form) {
+      // The subfolder option only applies to an existing destination: on
+      // "__new" the campaign folder created below is already named after the
+      // document (logic/campaigns.mjs subfolderApplies). Disable, don't
+      // uncheck, so the GM's choice survives switching back to a real folder.
+      const syncSubfolder = () => {
+        if (form.elements.subfolder && form.elements.destination) {
+          form.elements.subfolder.disabled = !subfolderApplies(form.elements.destination.value);
+        }
+      };
       form.elements.destination?.addEventListener("change", () => {
         this.state.destination = form.elements.destination.value;
+        syncSubfolder();
       });
       form.elements.subfolder?.addEventListener("change", () => {
         this.state.subfolder = form.elements.subfolder.checked;
@@ -232,6 +242,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       form.elements.audience?.addEventListener("change", () => {
         this.state.audience = form.elements.audience.value;
       });
+      syncSubfolder();
     }
   }
 
@@ -505,10 +516,10 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Disabled up front, not just around the create loop further down: the
     // destination resolution immediately below is itself a single-shot side
-    // effect (it can create a campaign Folder and, with "subfolder" checked,
-    // a second Folder inside it) - a second click landing mid-await here
-    // would otherwise create duplicate campaigns/subfolders rather than
-    // just duplicate pages.
+    // effect (it can create a campaign Folder and, for an existing
+    // destination with "subfolder" checked, a Folder inside it) - a second
+    // click landing mid-await here would otherwise create duplicate
+    // campaigns/subfolders rather than just duplicate pages.
     target.disabled = true;
 
     let campaign, targetFolderId;
@@ -528,7 +539,9 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       }
       if (!campaign) throw new Error("createCampaign returned null (not GM?)");
       targetFolderId = chosen?.id ?? campaign.id;
-      if (dest.subfolder) {
+      // Only an EXISTING destination gets the subfolder: a campaign created
+      // just above is itself the folder named after the document (spec A).
+      if (dest.subfolder && chosen) {
         const sub = await Folder.create({ name: this.state.docTitle || campaign.name, type: "JournalEntry", folder: targetFolderId });
         targetFolderId = sub.id;
       }

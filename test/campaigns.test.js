@@ -206,6 +206,15 @@ describe("campaigns module", async () => {
     });
   });
 
+  describe("subfolderApplies", () => {
+    it("is false for the New Campaign… sentinel and true for any folder id", async () => {
+      const { subfolderApplies } = await import("../scripts/logic/campaigns.mjs");
+      expect(subfolderApplies("__new")).toBe(false);
+      expect(subfolderApplies("abc123")).toBe(true);
+      expect(subfolderApplies("")).toBe(true);
+    });
+  });
+
 });
 
 describe("adoptionPlan (spec §6)", () => {

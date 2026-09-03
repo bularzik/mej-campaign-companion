@@ -176,6 +176,18 @@ test.describe("05 docx import", () => {
     // rather than relying on an empty world to fall through to "__new".
     await wizard.locator('select[name="destination"]').selectOption("__new");
 
+    // Spec 2026-09-03 A: the subfolder option is inapplicable for a new
+    // campaign (its folder is already named after the document) - greyed
+    // out here, re-enabled the moment an existing folder is picked.
+    await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
+    const existingOption = await wizard.locator('select[name="destination"] option:not([value="__new"])').first().getAttribute("value");
+    if (existingOption) {
+      await wizard.locator('select[name="destination"]').selectOption(existingOption);
+      await expect(wizard.locator('input[name="subfolder"]')).toBeEnabled();
+      await wizard.locator('select[name="destination"]').selectOption("__new");
+      await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
+    }
+
     await wizard.locator('button[data-action="createImport"]').click();
     // Result dialog (DialogV2.wait) reports created/timepoint counts.
     const resultDialog = page.locator("dialog.application", { hasText: /created|import/i }).last();
@@ -190,6 +202,17 @@ test.describe("05 docx import", () => {
         .filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign && !beforeIds.includes(f.id))
         .map((f) => f.id),
       beforeCampaignFolderIds);
+
+    // No nested subfolder for a "__new" import: the campaign folder IS the
+    // document folder, so it has no child folders and the imported entries
+    // sit directly inside it.
+    const folderShape = await page.evaluate((ids) => ({
+      childFolders: game.folders.filter((f) => ids.includes(f.folder?.id)).length,
+      directEntries: game.journal.filter((j) => ids.includes(j.folder?.id)).length
+    }), createdCampaignFolderIds);
+    expect(createdCampaignFolderIds).toHaveLength(1);
+    expect(folderShape.childFolders).toBe(0);
+    expect(folderShape.directEntries).toBeGreaterThan(10);
 
     const summary = await page.evaluate((campaignFolderIds) => {
       const sessionZero = game.journal.find((j) => j.name?.startsWith("Session Zero"));
