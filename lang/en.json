@@ -32,7 +32,8 @@
     "sheettype": {
       "session": "Session",
       "campaign": "Campaign",
-      "media": "Media (Enhanced Journal)"
+      "media": "Media (Enhanced Journal)",
+      "timelineJournal": "Campaign Timeline (opens the Hub)"
     },
     "autoCapture": {
       "died": "Died",

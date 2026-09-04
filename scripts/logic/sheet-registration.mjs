@@ -58,3 +58,20 @@ export function missingSheetRegistrations(sheetClasses, sessionType, hubType, ca
     media: (mediaTypes ?? []).some((t) => !hasOurs(t))
   };
 }
+
+/**
+ * Did OUR OWN registration for `type` survive, in an arbitrary sheetClasses
+ * map? Same `${ownerScope}.` discipline as hasOurs above, exposed separately
+ * because the timeline redirect sheet (TIMELINE_SHEET_CLASS) registers
+ * against CONFIG.JournalEntry - a different document class, and a NATIVE
+ * type ("base") core always has its own entry under, so mere presence would
+ * read as registered. An empty ownerScope always reports missing.
+ * @param {object} sheetClasses  CONFIG.<Document>.sheetClasses (or a lookalike)
+ * @param {string} type          the document sub-type key
+ * @param {string} ownerScope    our registerSheet scope (the module id)
+ * @returns {boolean} true = missing, needs registering
+ */
+export function missingOwnRegistration(sheetClasses, type, ownerScope) {
+  if (!ownerScope) return true;
+  return !Object.keys((sheetClasses ?? {})[type] ?? {}).some((key) => key.startsWith(`${ownerScope}.`));
+}

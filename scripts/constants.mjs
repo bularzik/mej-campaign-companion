@@ -26,6 +26,10 @@ export const CAMPAIGN_TYPE = "campaign";
 export const CAMPAIGN_DOCUMENT_TYPE = `${MODULE_ID}.campaign`;
 
 export const HUB_PAGE_ID = "campaign-hub";
+
+/** flags.core.sheetClass value that routes a timeline journal's open to the Hub (scope.ClassName, DocumentSheetConfig's key format). */
+export const TIMELINE_SHEET_CLASS = "mej-campaign-companion.TimelineJournalSheet";
+
 export const SOCKET = `module.${MODULE_ID}`;
 
 /** World setting: JournalEntry id holding the campaign timeline flag. */

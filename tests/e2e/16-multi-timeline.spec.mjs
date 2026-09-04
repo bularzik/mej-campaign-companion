@@ -33,11 +33,23 @@ const TIMEPOINTS_MOD = "/modules/mej-campaign-companion/scripts/data/timepoints.
 const CAMPAIGN_STORE_MOD = "/modules/mej-campaign-companion/scripts/data/campaign-store.mjs";
 const CAMPAIGNS_LOGIC_MOD = "/modules/mej-campaign-companion/scripts/logic/campaigns.mjs";
 
-/** Open any journal entry (bootstraps the MEJ shell), then open the Campaign Hub. Lands on the Index tab. */
+/**
+ * Open any journal entry (bootstraps the MEJ shell), then open the Campaign
+ * Hub. Lands on the Index tab.
+ *
+ * Deliberately NOT contents[0]: since spec 2026-09-03 §C a timeline journal
+ * refuses to open in the shell (hooks/timeline-open.mjs returns false from
+ * MEJ's openJournalEntry, by design), so picking one here bootstraps nothing
+ * and the .nav-button.campaign-hub click below times out. Which entry lands
+ * at index 0 depends on the seat and on whatever fixtures earlier tests left
+ * behind - test 7 (player seat) hit exactly that. Skip timeline journals.
+ */
 async function openHub(page) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  const anyEntryId = await page.evaluate(() => game.journal.contents[0]?.id);
+  const anyEntryId = await page.evaluate(
+    () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
+  );
   await page.evaluate(async (id) => {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
   }, anyEntryId);

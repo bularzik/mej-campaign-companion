@@ -11,6 +11,7 @@ import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
+import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
 import { bodyRegion } from "./logic/field-extractors.mjs";
@@ -132,6 +133,10 @@ Hooks.once("init", () => {
   // dynamically imported inside the click callback, not here - so it's
   // safe to import and register this early, at init.
   registerFolderContext();
+
+  // Timeline journals never open in MEJ's shell (spec 2026-09-03 §C) -
+  // pure-logic import only, safe at init like registerFolderContext above.
+  registerTimelineOpen();
 });
 
 // Grants player-writable default ownership to Session entries created
