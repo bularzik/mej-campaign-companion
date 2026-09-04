@@ -6,7 +6,7 @@
 // afterAll (folder cascade covers the portal and the timeline journal).
 import { test, expect } from "@playwright/test";
 import {
-  login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, reloadGame, KNOWN_MEJ_SESSION_ICON_404
+  login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, reloadGame, settle, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const RUN = Date.now().toString(36).slice(-5);
@@ -164,6 +164,44 @@ test.describe("20 timeline journal open", () => {
     await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 5, null, { timeout: 60_000 });
     const stamped = await page.evaluate((id) => game.journal.get(id).getFlag("core", "sheetClass"), timelineId);
     expect(stamped).toBe(SHEET_CLASS);
+    assertNoConsoleErrors(errors);
+  });
+
+  /** fa-timeline class on the row icon inside `root` (core sidebar or MEJ shell sidebar). */
+  async function rowIconClass(page, id, root) {
+    return page.evaluate(({ journalId, which }) => {
+      const scope = which === "shell" ? game.MonksEnhancedJournal?.journal?.element : document.querySelector("#journal");
+      return scope?.querySelector(`[data-entry-id="${journalId}"] .entry-name .journal-type`)?.className ?? null;
+    }, { journalId: id, which: root });
+  }
+
+  test("6. the row carries the timeline icon on both sidebars (api mode)", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await page.evaluate(async () => { await ui.journal.activate(); });
+    await expect.poll(() => rowIconClass(page, timelineId, "core"), { timeout: 15_000 }).toContain("fa-timeline");
+    await clickSidebarRow(page, timelineId);
+    await expectHubOnTimeline(page, timelineId);
+    await expect.poll(() => rowIconClass(page, timelineId, "shell"), { timeout: 15_000 }).toContain("fa-timeline");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("7. native mode: sidebar click opens the standalone Hub window on the timeline; icon present", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await page.evaluate(async () => { await game.settings.set("mej-campaign-companion", "forceNativeMode", true); });
+    await reloadGame(page);
+    // Foundry rebuilds CONFIG.*.sheetClasses asynchronously after ready (see 12-native-mode.spec.mjs).
+    await settle(page, 2500);
+    try {
+      await page.evaluate(async () => { await ui.journal.activate(); });
+      await expect.poll(() => rowIconClass(page, timelineId, "core"), { timeout: 15_000 }).toContain("fa-timeline");
+      await clickSidebarRow(page, timelineId);
+      const state = await expectHubOnTimeline(page, timelineId);
+      expect(state.viaShell).toBe(false);
+    } finally {
+      await page.evaluate(async () => { await game.settings.set("mej-campaign-companion", "forceNativeMode", false); });
+    }
     assertNoConsoleErrors(errors);
   });
 });

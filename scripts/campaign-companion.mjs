@@ -12,6 +12,7 @@ import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campa
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
+import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
@@ -138,6 +139,9 @@ Hooks.once("init", () => {
   // Timeline journals never open in MEJ's shell (spec 2026-09-03 §C) -
   // pure-logic import only, safe at init like registerFolderContext above.
   registerTimelineOpen();
+
+  // ...and carry a timeline icon instead of MEJ's generic book (spec §D).
+  registerTimelineDirectory();
 });
 
 // Grants player-writable default ownership to Session entries created
