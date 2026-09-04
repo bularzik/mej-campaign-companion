@@ -127,12 +127,19 @@ test.describe("20 timeline journal open", () => {
       await game.settings.set("mej-campaign-companion", "hubCampaignScope", "");
       await adapter.openHub();
     }, ADAPTER_MOD);
-    await expect.poll(async () => (await hubState(page, timelineId)).hubOpen, { timeout: 15_000 }).toBe(true);
+    // viaShell, not just hubOpen, on BOTH the bootstrap and the assertion:
+    // hubState() falls back to the standalone `[id^="CampaignHubPage-"]`
+    // window, so a run where the dynamically imported adapter resolved with
+    // mode === null would take openHub()'s native branch and still satisfy
+    // hubOpen - going green without ever exercising the api-mode
+    // already-open-shell hand-off this test exists to cover.
+    await expect.poll(async () => (await hubState(page, timelineId)).viaShell, { timeout: 15_000 }).toBe(true);
     await page.evaluate(async (id) => {
       const journal = game.journal.get(id);
       await journal.sheet.render(true);
     }, timelineId);
-    await expectHubOnTimeline(page, timelineId);
+    const state = await expectHubOnTimeline(page, timelineId);
+    expect(state.viaShell).toBe(true);
     assertNoConsoleErrors(errors);
   });
 
