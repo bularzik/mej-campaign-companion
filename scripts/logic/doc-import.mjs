@@ -71,6 +71,12 @@ function isWhitespaceOnly(el) {
   return !(el.textContent ?? "").replace(/[\s ]/g, "").length;
 }
 
+/** Elements that carry content even with no text: tables, and anything holding inline media (mammoth emits each standalone picture as <p><img></p>). */
+const MEDIA_SELECTOR = "img, video, audio";
+function keepsMedia(el) {
+  return el.tagName === "TABLE" || !!el.querySelector(MEDIA_SELECTOR);
+}
+
 /** True when all of a paragraph's text sits inside <strong>/<b>. */
 function isFullyBold(el) {
   const text = (el.textContent ?? "").trim();
@@ -154,7 +160,7 @@ export function splitSectionAt(sections, index, cutIndices) {
  * and sections with cleaned titles, dates, html, and word counts.
  */
 export function splitSections(root) {
-  const nodes = [...root.children].filter((el) => !isWhitespaceOnly(el) || el.tagName === "TABLE");
+  const nodes = [...root.children].filter((el) => !isWhitespaceOnly(el) || keepsMedia(el));
   let title = null;
   if (nodes[0]?.tagName === "H1") title = cleanTitle(nodes.shift().textContent);
 

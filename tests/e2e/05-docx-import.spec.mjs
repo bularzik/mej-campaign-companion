@@ -256,7 +256,21 @@ test.describe("05 docx import", () => {
         introNativeType: introPage?._source?.type,
         introFlagType: introPage?.getFlag("monks-enhanced-journal", "type"),
         timepointCount: timepoints.length,
-        timepointLabels: timepoints.map((t) => t.label)
+        timepointLabels: timepoints.map((t) => t.label),
+        // Spec 2026-09-03 B: standalone pictures survive splitting and are
+        // uploaded under worlds/<id>/mej-campaign-companion/ by the wizard.
+        // A page's html lives in `text.content` for the native "text" type
+        // (createMejEntry) but in `system.recap` for the module's own
+        // "session" subtype (buildSessionPageData) - most of this docx's
+        // pictures sit in Arc/Session sections, so both fields are checked.
+        pagesWithUploadedImages: game.journal
+          .filter((j) => campaignFolderIds.includes(j.folder?.id))
+          .flatMap((j) => j.pages.contents)
+          .filter((p) => /<img [^>]*src="worlds\//.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length,
+        pagesWithDataUriImages: game.journal
+          .filter((j) => campaignFolderIds.includes(j.folder?.id))
+          .flatMap((j) => j.pages.contents)
+          .filter((p) => /<img [^>]*src="data:/.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length
       };
     }, createdCampaignFolderIds);
     expect(summary.importedCount).toBeGreaterThan(10);
@@ -272,6 +286,10 @@ test.describe("05 docx import", () => {
     expect(summary.introFlagType).toBe("journalentry");
     expect(summary.timepointCount).toBeGreaterThan(5);
     expect(summary.timepointLabels.some((l) => l.startsWith("Session Zero"))).toBe(true);
+    // Radiant Citadel.docx carries 27 inline pictures, 17 of them in
+    // picture-only paragraphs that used to be dropped before upload.
+    expect(summary.pagesWithUploadedImages).toBeGreaterThan(0);
+    expect(summary.pagesWithDataUriImages).toBe(0);
 
     // Opens correctly in MEJ.
     const sessionZeroId = await page.evaluate(() => game.journal.find((j) => j.name?.startsWith("Session Zero"))?.id);
