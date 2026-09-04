@@ -6,7 +6,7 @@
 // afterAll (folder cascade covers the portal and the timeline journal).
 import { test, expect } from "@playwright/test";
 import {
-  login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404
+  login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, reloadGame, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const RUN = Date.now().toString(36).slice(-5);
@@ -148,6 +148,22 @@ test.describe("20 timeline journal open", () => {
     await login(page, "User 1");
     await clickSidebarRow(page, timelineId);
     await expectHubOnTimeline(page, timelineId);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("5. v5 migration stamps a pre-existing timeline journal lacking the sheet class", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const versionBefore = await page.evaluate(() => game.settings.get("mej-campaign-companion", "dataVersion"));
+    expect(versionBefore).toBe(5);
+    await page.evaluate(async (id) => {
+      await game.journal.get(id).unsetFlag("core", "sheetClass");
+      await game.settings.set("mej-campaign-companion", "dataVersion", 4);
+    }, timelineId);
+    await reloadGame(page);
+    await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 5, null, { timeout: 60_000 });
+    const stamped = await page.evaluate((id) => game.journal.get(id).getFlag("core", "sheetClass"), timelineId);
+    expect(stamped).toBe(SHEET_CLASS);
     assertNoConsoleErrors(errors);
   });
 });

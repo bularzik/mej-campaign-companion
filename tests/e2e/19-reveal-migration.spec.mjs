@@ -36,7 +36,7 @@ test.describe("19 reveal migration v4", () => {
     try {
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 3));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 4, null, { timeout: 60_000 });
+      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 5, null, { timeout: 60_000 });
       const state = await page.evaluate((e) => {
         const entry = game.journal.get(e);
         const [p1, p2] = entry.pages.contents;
@@ -54,7 +54,7 @@ test.describe("19 reveal migration v4", () => {
       // Idempotence: a second run writes nothing new.
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 3));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 4, null, { timeout: 60_000 });
+      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 5, null, { timeout: 60_000 });
       const again = await page.evaluate((e) => Object.keys(game.journal.get(e).pages.contents[1].getFlag("mej-campaign-companion", "secretReveals") ?? {}), id);
       expect(again).toEqual(["secret-both"]);
     } finally {

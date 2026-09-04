@@ -2,7 +2,7 @@ import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
-  HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING
+  HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
@@ -12,6 +12,7 @@ import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campa
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
+import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
 import { bodyRegion } from "./logic/field-extractors.mjs";
@@ -327,6 +328,22 @@ Hooks.once("ready", async () => {
     if (pagesWritten || dropped.length) {
       console.log(`${MODULE_ID} | moved block reveals onto ${pagesWritten} page(s); ${dropped.length} record(s) had no section on any page and were not copied`, dropped);
     }
+
+    // v5: timeline journals carry the redirect sheet class so opening one
+    // lands in the Hub (spec 2026-09-03 §C). Creation paths stamp it from
+    // 0.16.0 on; this covers everything created earlier. Idempotent: only
+    // journals whose flag differs are written.
+    let stamped = 0;
+    for (const entry of game.journal.contents) {
+      if (!isTimelineJournal(entry) || entry.getFlag("core", "sheetClass") === TIMELINE_SHEET_CLASS) continue;
+      try {
+        await entry.update({ "flags.core.sheetClass": TIMELINE_SHEET_CLASS });
+        stamped += 1;
+      } catch (err) {
+        console.error(`${MODULE_ID} | timeline sheet-class migration failed for ${entry.uuid}`, err);
+      }
+    }
+    if (stamped) console.log(`${MODULE_ID} | stamped the timeline redirect sheet on ${stamped} timeline journal(s)`);
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
