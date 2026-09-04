@@ -18,5 +18,5 @@ export function shouldRefreshForRecap({ changes, activeEntityId, pageId, editing
   if (!recapChanged(changes)) return false;
   if (editing) return false;
   if (!activeEntityId || !pageId) return false;
-  return activeEntityId.endsWith(pageId);
+  return activeEntityId.endsWith(`.${pageId}`);
 }

@@ -24,4 +24,7 @@ describe("shouldRefreshForRecap", () => {
     expect(shouldRefreshForRecap({ changes: { name: "n" }, activeEntityId: "JournalEntry.a.JournalEntryPage.p1", pageId: "p1", editing: false })).toBe(false);
     expect(shouldRefreshForRecap({ changes, activeEntityId: null, pageId: "p1", editing: false })).toBe(false);
   });
+  it("rejects suffix-only matches (pageId without delimiter boundary)", () => {
+    expect(shouldRefreshForRecap({ changes, activeEntityId: "JournalEntry.a.JournalEntryPage.Xp1", pageId: "p1", editing: false })).toBe(false);
+  });
 });
