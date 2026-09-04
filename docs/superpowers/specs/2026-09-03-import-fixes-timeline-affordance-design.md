@@ -259,3 +259,24 @@ Modify: `scripts/apps/import-wizard.mjs`, `scripts/logic/campaigns.mjs`,
 Create: `scripts/sheets/TimelineJournalSheet.mjs`,
 `scripts/hooks/timeline-open.mjs`, `scripts/hooks/timeline-directory.mjs`,
 `tests/e2e/20-timeline-journal-open.spec.mjs`.
+
+## Deviations
+
+- Redirect sheet extends `foundry.applications.api.DocumentSheetV2`, not
+  `ApplicationV2` (v14's `DocumentSheetConfig.registerSheet` throws for a
+  non-DocumentSheetV2 class); no custom constructor (the base class owns the
+  read-only `document` getter); `canBeDefault: false` added to the
+  registration.
+- Registration is repaired at `ready` through the existing
+  `ensureSheetRegistrations()` path (new pure helper
+  `missingOwnRegistration()` in `scripts/logic/sheet-registration.mjs`,
+  unit-tested) because Foundry's one-time pre-ready `registerSheet` drain
+  dropped it; registration stays in `registerCore()` so absent mode remains
+  inert.
+- E2E hub root selector is `.mej-cc-hub-container` (`.mej-cc-hub` is the
+  flattened root PART and never reaches the DOM).
+- Nine e2e specs' MEJ-shell bootstrap (`game.journal.contents[0]`) now skips
+  timeline journals, since the `openJournalEntry` hook refuses them.
+- The 05 e2e image assertion checks both `text.content` and `system.recap`
+  (session pages store their html in `system.recap`).
+- Task 3's `openTimelineInHub` also guards `!journal`.
