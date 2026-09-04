@@ -243,10 +243,12 @@ deleted.
 - `07-knowledge.spec.mjs`: new test — collapse the bar on one sheet, open
   another MEJ-typed sheet and assert it is collapsed, reload and assert
   it is still collapsed, expand and assert the setting flips back.
-- New test for the setting's apply-existing dialog: create a
-  GM-only-owned session, flip the setting on via `game.settings.set` (the
-  `onChange` fires), accept the confirm dialog, assert
-  `ownership.default === OWNER`.
+- New test for the setting's apply-existing dialog — see Deviations:
+  the dialog is cancelled, the grant is exercised through
+  `applySessionOwnership([ttEntry])` directly.
+- New concurrent-edit test in `06`: two owning players open the recap
+  editor at once, each types a distinct sentence, each saves; the
+  persisted recap contains both sentences (fails without `collaborate`).
 - Full v14 e2e run and the v13 stock gate (`npm run e2e:stock:v13`) as
   for 0.16.0. All specs `--trace off`; no `retries`/`waitForTimeout`;
   id-tracked cleanup only.
@@ -260,6 +262,56 @@ recap (pencil appears when you own the session; otherwise ask the GM to
 turn on Players Write Sessions). `CHANGELOG.md` 0.17.0 entry, including
 the migration note. `docs/manual-test-checklist.md` rows updated if they
 mention player recaps. `module.json` → 0.17.0.
+
+## Deviations (found while planning, 2026-09-04)
+
+- **MEJ never used Foundry's collaborative editor.** Core's text page
+  editor sets `collaborate` on `<prose-mirror>`; MEJ's sheets (and
+  `session.hbs`) do not, so today every recap save is a whole-form submit
+  and two owners editing at once are last-writer-wins. To deliver the
+  collaborative claim in §A: the recap `<prose-mirror>` carries
+  `collaborate` **for owners only** (`{{#if owner}}collaborate{{/if}}` —
+  MEJ activates its non-toggled editors at render for every viewer, and a
+  non-owner's `pm.editDocument` join would be refused by the server and
+  fail the activation). Session id is `${page.uuid}#system.recap`, managed
+  by core.
+- **Stale-field guard.** MEJ's `submitOnChange` form resubmits every
+  field, so a submit triggered by the session-number input (or any
+  non-recap control) carries whatever recap HTML was rendered into that
+  client's DOM and silently overwrites a fresher recap. New
+  `SessionSheet._prepareSubmitData` override: after `super`, delete
+  `system.recap` unless the submit event's target is the
+  `prose-mirror[name="system.recap"]` element, and delete
+  `system.gmNotes` unless the target is
+  `prose-mirror[name="system.gmNotes"]`. Pure decision
+  `fieldsToStrip(targetName)` in `logic/session-submit.mjs`, unit-tested.
+  Other form fields (session number, campaign date) keep MEJ's whole-form
+  behaviour — they are not the shared document and two simultaneous
+  editors of them is not a supported scenario.
+- **Viewers see recap changes live.** MEJ re-renders the shell on
+  `text.content`, ownership and its own flag keys, never on `system.*`.
+  New `hooks/recap-refresh.mjs` (registered at init, `registerRecapRefresh`):
+  on `updateJournalEntryPage` with `changes.system?.recap !== undefined`
+  or `changes.system?.gmNotes !== undefined`, if the MEJ shell is
+  rendered, its active tab shows that page, and no `.editor-parent.editing`
+  exists inside the shell (never yank an editor out from under a local
+  edit), call `shell.render({ tempOwnership: shell.tempOwnership, reload: true })`;
+  a rendered popped-out sheet (`page._sheet?.rendered`, same editing
+  guard on its element) gets `sheet.render(true, { reload: true })`. The
+  gate (`shouldRefreshForRecap({ changes, activeEntityId, pageId, editing })`)
+  is pure and unit-tested. In native/absent mode the hook is inert (no MEJ
+  shell; popped-out branch only fires for MEJ sheets).
+- **World A safety for the apply-to-existing dialog.** The e2e never
+  confirms the dialog against the user's real world. §B's grant is split:
+  `applySessionOwnership(entries)` (exported from
+  `logic/session-ownership.mjs`'s Foundry-side sibling
+  `hooks/session-ownership-apply.mjs`) does the `updateDocuments`; the
+  `onChange` handler calls it after the confirm. The e2e (a) flips the
+  setting on, asserts the dialog appears with a count ≥ 1, clicks **No**,
+  and asserts a TT session's ownership is unchanged; (b) calls
+  `applySessionOwnership([ttEntry])` directly and asserts OWNER. Every
+  spec that turns the setting on (06 and the new test) dismisses the
+  dialog with **No** immediately after `game.settings.set`.
 
 ## Out of scope
 
