@@ -32,7 +32,11 @@
     "sheettype": {
       "session": "Session",
       "campaign": "Campaign",
-      "media": "Media (Enhanced Journal)"
+      "media": "Media (Enhanced Journal)",
+      "timelineJournal": "Campaign Timeline (opens the Hub)"
+    },
+    "timelineJournal": {
+      "openFailed": "Couldn't open this timeline in the Campaign Hub — see the console for details."
     },
     "autoCapture": {
       "died": "Died",

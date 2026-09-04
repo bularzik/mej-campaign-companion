@@ -11,7 +11,7 @@ import {
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
 import { planFlagHeal } from "../logic/session-flag-heal.mjs";
-import { missingSheetRegistrations } from "../logic/sheet-registration.mjs";
+import { missingSheetRegistrations, missingOwnRegistration } from "../logic/sheet-registration.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -114,6 +114,15 @@ export async function registerCore() {
     registerPortalSync();
   });
 
+  // Timeline journals open the Hub (spec 2026-09-03 §C). Registered but
+  // never default: only documents carrying flags.core.sheetClass ===
+  // TIMELINE_SHEET_CLASS resolve to it (data/timeline-journal.mjs stamps
+  // creations; campaign-companion.mjs's v5 migration stamps older ones).
+  await step("timeline redirect sheet", async () => {
+    const { TimelineJournalSheet } = await import("../sheets/TimelineJournalSheet.mjs");
+    registerTimelineSheetClass(TimelineJournalSheet);
+  });
+
   // Folder context menu ("Open Campaign Hub") is registered at "init" now,
   // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
   // registering this late (registerCore only ever runs from "setup"/"ready")
@@ -200,6 +209,23 @@ export function registerMediaSheetClass(MediaPageSheet) {
 }
 
 /**
+ * Timeline journals (spec 2026-09-03 §C) resolve to a sheet that never draws
+ * and hands off to the Hub's Timeline tab. Against CONFIG.JournalEntry, not
+ * JournalEntryPage, and against the native "base" type - so it is NEVER the
+ * default (that would hijack every plain journal entry in the world); only a
+ * document carrying flags.core.sheetClass === TIMELINE_SHEET_CLASS resolves
+ * to it. canConfigure stays true so a GM can opt one back to a real sheet.
+ */
+export function registerTimelineSheetClass(TimelineJournalSheet) {
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntry, MODULE_ID, TimelineJournalSheet, {
+    types: ["base"],
+    makeDefault: false,
+    canBeDefault: false,
+    label: `${I18N}.sheettype.timelineJournal`
+  });
+}
+
+/**
  * Repair sheet registrations Foundry's pre-ready registerSheet queue may
  * have silently dropped (see onHandshake's comment for the mechanism). Safe
  * to call any time after game.ready is true, in either mode: registerSheet
@@ -211,7 +237,14 @@ async function ensureSheetRegistrations() {
   const missing = missingSheetRegistrations(
     CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES, MODULE_ID
   );
-  if (!missing.session && !missing.hub && !missing.campaign && !missing.media) return;
+  // The timeline redirect sheet lives on CONFIG.JournalEntry, so it needs
+  // its own check - and it needs one: in api mode registerCore() runs from
+  // MEJ's setup-time handshake, exactly the window Foundry's one-time
+  // pre-ready drain leaves unemptied (confirmed live - the registration was
+  // silently absent from CONFIG.JournalEntry.sheetClasses.base and every
+  // timeline journal fell back to the system's JournalEntry sheet).
+  missing.timeline = missingOwnRegistration(CONFIG.JournalEntry.sheetClasses, "base", MODULE_ID);
+  if (!missing.session && !missing.hub && !missing.campaign && !missing.media && !missing.timeline) return;
 
   console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, missing);
   const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
@@ -238,6 +271,10 @@ async function ensureSheetRegistrations() {
     });
   }
   if (missing.media) registerMediaSheetClass(MediaPageSheet);
+  if (missing.timeline) {
+    const { TimelineJournalSheet } = await import("../sheets/TimelineJournalSheet.mjs");
+    registerTimelineSheetClass(TimelineJournalSheet);
+  }
 }
 
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */

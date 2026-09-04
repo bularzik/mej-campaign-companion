@@ -1,4 +1,4 @@
-import { MODULE_ID, TIMELINE_JOURNAL_SETTING, CAMPAIGN_FLAG, DEFAULT_TIMELINE_KEY } from "../constants.mjs";
+import { MODULE_ID, TIMELINE_JOURNAL_SETTING, CAMPAIGN_FLAG, DEFAULT_TIMELINE_KEY, TIMELINE_SHEET_CLASS } from "../constants.mjs";
 import { isTimelineJournal, campaignIdOf } from "../logic/campaigns.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { orderTimelines, resolveDefaultTimelineId, sortByCreation } from "../logic/timelines.mjs";
@@ -62,7 +62,10 @@ export async function createTimeline({ campaign = null, name }) {
   return JournalEntry.create({
     name,
     ...(campaign ? { folder: campaign.id } : {}),
-    flags: { [MODULE_ID]: { timeline: { timepoints: [] } } },
+    flags: {
+      [MODULE_ID]: { timeline: { timepoints: [] } },
+      core: { sheetClass: TIMELINE_SHEET_CLASS }
+    },
     ownership: {
       default: campaign ? baselineOwnership(campaign) : CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER
     }
@@ -84,7 +87,10 @@ export async function ensureTimelineJournal(campaign = null) {
   if (campaign) return createTimeline({ campaign, name: `${campaign.name} — Timeline` });
   const created = await JournalEntry.create({
     name: "Campaign Timeline",
-    flags: { [MODULE_ID]: { timeline: { timepoints: [] } } },
+    flags: {
+      [MODULE_ID]: { timeline: { timepoints: [] } },
+      core: { sheetClass: TIMELINE_SHEET_CLASS }
+    },
     ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
   });
   await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, created.id);

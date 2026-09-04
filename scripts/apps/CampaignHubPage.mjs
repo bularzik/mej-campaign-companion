@@ -79,6 +79,11 @@ const HUB_STATE = {
   graphCenterUuid: null,
   graphBacklinks: false,
   pendingTab: null,
+  // Timeline id handed over by openTimelineInHub (sidebar/link open of a
+  // timeline journal). Consumed by #timelineSelection on the next render,
+  // so an ALREADY-OPEN Hub whose state.timelineId was seeded earlier
+  // switches too, instead of only a fresh instance reading the setting.
+  pendingTimelineId: null,
   // Spec C §2: which portal document's mount already applied the one-time
   // campaign scope (see _prepareBodyContext below) - null until a portal
   // mount has happened. Lives here rather than as an instance field because
@@ -399,8 +404,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return { campaign: folder ?? null, unfiled: false };
   }
 
-  /** Lazily seeded from the client setting; a stale/invisible id resets to "" (same discipline as #scope). */
+  /** Lazily seeded from the client setting; a stale/invisible id resets to "" (same discipline as #scope). A pending hand-off (openTimelineInHub) wins over both. */
   #timelineSelection() {
+    if (HUB_STATE.pendingTimelineId) {
+      this.state.timelineId = HUB_STATE.pendingTimelineId;
+      HUB_STATE.pendingTimelineId = null;
+    }
     if (this.state.timelineId === null) {
       this.state.timelineId = game.settings.get(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING);
     }
@@ -1883,5 +1892,24 @@ export async function showGraphFor(uuid) {
   HUB_STATE.graphCenterUuid = entry?.uuid ?? uuid;
   HUB_STATE.graphMode = "ego";
   HUB_STATE.pendingTab = "graph";
+  await openHub();
+}
+
+/**
+ * Sidebar/link entry point (spec 2026-09-03 §C): open the Hub on the
+ * Timeline tab showing `journal`. A campaign timeline re-scopes the Hub to
+ * its campaign first (same persistence as showGraphFor); a world timeline
+ * leaves the scope alone - the explicit selection setting names it.
+ */
+export async function openTimelineInHub(journal) {
+  if (!journal || !isTimelineJournal(journal)) return;
+  const cid = campaignIdOf(journal);
+  if (cid) {
+    HUB_STATE.campaignId = cid;
+    await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
+  }
+  await game.settings.set(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING, journal.id);
+  HUB_STATE.pendingTimelineId = journal.id;
+  HUB_STATE.pendingTab = "timeline";
   await openHub();
 }

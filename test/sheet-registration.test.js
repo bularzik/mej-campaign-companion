@@ -1,6 +1,6 @@
 // test/sheet-registration.test.js
 import { describe, it, expect } from "vitest";
-import { missingSheetRegistrations } from "../scripts/logic/sheet-registration.mjs";
+import { missingSheetRegistrations, missingOwnRegistration } from "../scripts/logic/sheet-registration.mjs";
 
 const SESSION_TYPE = "mej-campaign-companion.session";
 const HUB_TYPE = "campaign-hub";
@@ -117,5 +117,41 @@ describe("missingSheetRegistrations", () => {
     // "any key at all" check, or this silently reintroduces the bug.
     const classes = { pdf: { ...CORE_PDF, ...OUR_MEDIA }, video: { ...CORE_VIDEO, ...OUR_MEDIA } };
     expect(missingSheetRegistrations(classes, "s", "h", "c", ["pdf", "video"]).media).toBe(true);
+  });
+});
+
+describe("missingOwnRegistration", () => {
+  const SCOPE = "mej-campaign-companion";
+  const TIMELINE_KEY = `${SCOPE}.TimelineJournalSheet`;
+  // CONFIG.JournalEntry.sheetClasses.base always carries core's (and often the
+  // system's) own entries, so "any key at all" would read as registered here -
+  // this is the JournalEntry-side twin of the media check's hasOurs().
+  const CORE_BASE = { "core.JournalEntrySheet": {}, "dnd5e.JournalSheet5e": {} };
+
+  it("reports missing when the sheetClasses map is undefined", () => {
+    expect(missingOwnRegistration(undefined, "base", SCOPE)).toBe(true);
+  });
+
+  it("reports missing when the type entry is absent", () => {
+    expect(missingOwnRegistration({}, "base", SCOPE)).toBe(true);
+  });
+
+  it("reports missing when only core/system sheets are registered for the type", () => {
+    expect(missingOwnRegistration({ base: { ...CORE_BASE } }, "base", SCOPE)).toBe(true);
+  });
+
+  it("reports present once our own scope has an entry alongside core's", () => {
+    expect(missingOwnRegistration({ base: { ...CORE_BASE, [TIMELINE_KEY]: {} } }, "base", SCOPE)).toBe(false);
+  });
+
+  it("never reads as registered without an ownerScope, even with entries present", () => {
+    expect(missingOwnRegistration({ base: { ...CORE_BASE, [TIMELINE_KEY]: {} } }, "base", "")).toBe(true);
+  });
+
+  it("does not mistake another module's similarly-named scope for ours", () => {
+    // startsWith(`${scope}.`), not startsWith(scope) - "mej-campaign-companion-extra"
+    // must not satisfy a "mej-campaign-companion" registration.
+    const classes = { base: { "mej-campaign-companion-extra.SomeSheet": {} } };
+    expect(missingOwnRegistration(classes, "base", SCOPE)).toBe(true);
   });
 });

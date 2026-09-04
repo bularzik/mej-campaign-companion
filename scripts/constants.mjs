@@ -26,6 +26,10 @@ export const CAMPAIGN_TYPE = "campaign";
 export const CAMPAIGN_DOCUMENT_TYPE = `${MODULE_ID}.campaign`;
 
 export const HUB_PAGE_ID = "campaign-hub";
+
+/** flags.core.sheetClass value that routes a timeline journal's open to the Hub (scope.ClassName, DocumentSheetConfig's key format). */
+export const TIMELINE_SHEET_CLASS = "mej-campaign-companion.TimelineJournalSheet";
+
 export const SOCKET = `module.${MODULE_ID}`;
 
 /** World setting: JournalEntry id holding the campaign timeline flag. */
@@ -77,7 +81,7 @@ export const DEFAULT_TIMELINE_KEY = "defaultTimelineId";
 export const DATA_VERSION_SETTING = "dataVersion";
 
 /** Current schema version written by the adoption/migration runner. */
-export const CURRENT_DATA_VERSION = 4;
+export const CURRENT_DATA_VERSION = 5;
 
 /** World setting: Folder id of the campaign that receives auto-captured encounters/media (spec §4). "" = unset → capture declines. */
 export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";

@@ -10,7 +10,13 @@ const DOCX_PATH = "/Users/danbularzik/Claude/Projects/campaign-record/examples/R
 async function openImportWizard(page) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  const anyEntryId = await page.evaluate(() => game.journal.contents[0]?.id);
+  // Not contents[0]: a timeline journal refuses to open in the MEJ shell
+  // (hooks/timeline-open.mjs, spec 2026-09-03 §C), so picking one bootstraps
+  // nothing and every later shell locator times out. See 16-multi-timeline's
+  // openHub() for the full account.
+  const anyEntryId = await page.evaluate(
+    () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
+  );
   await page.evaluate(async (id) => {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
   }, anyEntryId);
@@ -176,6 +182,18 @@ test.describe("05 docx import", () => {
     // rather than relying on an empty world to fall through to "__new".
     await wizard.locator('select[name="destination"]').selectOption("__new");
 
+    // Spec 2026-09-03 A: the subfolder option is inapplicable for a new
+    // campaign (its folder is already named after the document) - greyed
+    // out here, re-enabled the moment an existing folder is picked.
+    await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
+    const existingOption = await wizard.locator('select[name="destination"] option:not([value="__new"])').first().getAttribute("value");
+    if (existingOption) {
+      await wizard.locator('select[name="destination"]').selectOption(existingOption);
+      await expect(wizard.locator('input[name="subfolder"]')).toBeEnabled();
+      await wizard.locator('select[name="destination"]').selectOption("__new");
+      await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
+    }
+
     await wizard.locator('button[data-action="createImport"]').click();
     // Result dialog (DialogV2.wait) reports created/timepoint counts.
     const resultDialog = page.locator("dialog.application", { hasText: /created|import/i }).last();
@@ -190,6 +208,17 @@ test.describe("05 docx import", () => {
         .filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign && !beforeIds.includes(f.id))
         .map((f) => f.id),
       beforeCampaignFolderIds);
+
+    // No nested subfolder for a "__new" import: the campaign folder IS the
+    // document folder, so it has no child folders and the imported entries
+    // sit directly inside it.
+    const folderShape = await page.evaluate((ids) => ({
+      childFolders: game.folders.filter((f) => ids.includes(f.folder?.id)).length,
+      directEntries: game.journal.filter((j) => ids.includes(j.folder?.id)).length
+    }), createdCampaignFolderIds);
+    expect(createdCampaignFolderIds).toHaveLength(1);
+    expect(folderShape.childFolders).toBe(0);
+    expect(folderShape.directEntries).toBeGreaterThan(10);
 
     const summary = await page.evaluate((campaignFolderIds) => {
       const sessionZero = game.journal.find((j) => j.name?.startsWith("Session Zero"));
@@ -233,7 +262,21 @@ test.describe("05 docx import", () => {
         introNativeType: introPage?._source?.type,
         introFlagType: introPage?.getFlag("monks-enhanced-journal", "type"),
         timepointCount: timepoints.length,
-        timepointLabels: timepoints.map((t) => t.label)
+        timepointLabels: timepoints.map((t) => t.label),
+        // Spec 2026-09-03 B: standalone pictures survive splitting and are
+        // uploaded under worlds/<id>/mej-campaign-companion/ by the wizard.
+        // A page's html lives in `text.content` for the native "text" type
+        // (createMejEntry) but in `system.recap` for the module's own
+        // "session" subtype (buildSessionPageData) - most of this docx's
+        // pictures sit in Arc/Session sections, so both fields are checked.
+        pagesWithUploadedImages: game.journal
+          .filter((j) => campaignFolderIds.includes(j.folder?.id))
+          .flatMap((j) => j.pages.contents)
+          .filter((p) => /<img [^>]*src="worlds\//.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length,
+        pagesWithDataUriImages: game.journal
+          .filter((j) => campaignFolderIds.includes(j.folder?.id))
+          .flatMap((j) => j.pages.contents)
+          .filter((p) => /<img [^>]*src="data:/.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length
       };
     }, createdCampaignFolderIds);
     expect(summary.importedCount).toBeGreaterThan(10);
@@ -249,6 +292,10 @@ test.describe("05 docx import", () => {
     expect(summary.introFlagType).toBe("journalentry");
     expect(summary.timepointCount).toBeGreaterThan(5);
     expect(summary.timepointLabels.some((l) => l.startsWith("Session Zero"))).toBe(true);
+    // Radiant Citadel.docx carries 27 inline pictures, 17 of them in
+    // picture-only paragraphs that used to be dropped before upload.
+    expect(summary.pagesWithUploadedImages).toBeGreaterThan(0);
+    expect(summary.pagesWithDataUriImages).toBe(0);
 
     // Opens correctly in MEJ.
     const sessionZeroId = await page.evaluate(() => game.journal.find((j) => j.name?.startsWith("Session Zero"))?.id);

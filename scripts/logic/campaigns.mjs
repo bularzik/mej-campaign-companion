@@ -80,6 +80,16 @@ export function resolveDestinationId(optionIds, selectedId, activeId) {
   return ids[0] ?? null;
 }
 
+/**
+ * The import wizard's "Create a subfolder named after the document" option
+ * applies only when filing into an EXISTING folder. On the "__new" path the
+ * freshly created campaign folder is already named after the document, so a
+ * subfolder would just nest a second identically named folder inside it.
+ */
+export function subfolderApplies(destinationId) {
+  return destinationId !== "__new";
+}
+
 export function campaignIdOf(doc) {
   return campaignOf(doc)?.id ?? null;
 }

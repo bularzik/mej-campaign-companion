@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.16.0 (2026-09-03)
+
+Import fixes and a timeline-journal affordance. Data migration: dataVersion
+5 stamps `flags.core.sheetClass` on every existing timeline journal (active
+GM, on first load).
+
+- **Import into New Campaign… no longer creates a second, identically named
+  folder inside the new campaign.** The *Create a subfolder named after the
+  document* option now applies only to an existing destination and is greyed
+  out while **New Campaign…** is selected.
+- **Standalone pictures survive import.** A paragraph holding only an image
+  (how Word/Google Docs exports every non-inline picture) was discarded
+  before the upload pass; it is now kept, uploaded under
+  `worlds/<world>/mej-campaign-companion/` and shown in the created page.
+- **Opening a "<campaign> — Timeline" journal opens the Hub on its Timeline
+  tab** with that timeline selected — from the sidebar, a content link, or
+  `sheet.render()`, in api and native mode, for GMs and players — instead
+  of an empty generic journal editor. Timeline journals also carry a
+  timeline icon in the journal sidebar (core and MEJ shell) so they're easy
+  to tell apart from the campaign's portal entry.
+
 ## 0.15.0 (2026-09-02)
 
 Foundry 13 support. No data changes, nothing is migrated.

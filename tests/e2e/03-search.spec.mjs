@@ -10,7 +10,13 @@ const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 async function openHubSearch(page) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  const anyEntryId = await page.evaluate(() => game.journal.contents[0]?.id);
+  // Not contents[0]: a timeline journal refuses to open in the MEJ shell
+  // (hooks/timeline-open.mjs, spec 2026-09-03 §C), so picking one bootstraps
+  // nothing and every later shell locator times out. See 16-multi-timeline's
+  // openHub() for the full account.
+  const anyEntryId = await page.evaluate(
+    () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
+  );
   await page.evaluate(async (id) => {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
   }, anyEntryId);
