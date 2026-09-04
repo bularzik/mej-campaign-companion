@@ -280,3 +280,6 @@ Create: `scripts/sheets/TimelineJournalSheet.mjs`,
 - The 05 e2e image assertion checks both `text.content` and `system.recap`
   (session pages store their html in `system.recap`).
 - Task 3's `openTimelineInHub` also guards `!journal`.
+- The directory hook matches bare `[data-entry-id]` rows (MEJ's shell sidebar
+  and the core sidebar differ in their `li` classes); the `isTimelineJournal`
+  guard keeps it safe.

@@ -146,9 +146,20 @@ test.describe("20 timeline journal open", () => {
   test("4. a player who can see the journal gets the Hub too", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "User 1");
-    await clickSidebarRow(page, timelineId);
-    await expectHubOnTimeline(page, timelineId);
-    assertNoConsoleErrors(errors);
+    const [scopeBeforeUser1, selectionBeforeUser1] = await page.evaluate(() => [
+      game.settings.get("mej-campaign-companion", "hubCampaignScope"),
+      game.settings.get("mej-campaign-companion", "hubTimelineSelection")
+    ]);
+    try {
+      await clickSidebarRow(page, timelineId);
+      await expectHubOnTimeline(page, timelineId);
+      assertNoConsoleErrors(errors);
+    } finally {
+      await page.evaluate(async ({ scope, selection }) => {
+        await game.settings.set("mej-campaign-companion", "hubCampaignScope", scope);
+        await game.settings.set("mej-campaign-companion", "hubTimelineSelection", selection);
+      }, { scope: scopeBeforeUser1, selection: selectionBeforeUser1 });
+    }
   });
 
   test("5. v5 migration stamps a pre-existing timeline journal lacking the sheet class", async ({ page }) => {

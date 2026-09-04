@@ -74,7 +74,7 @@ function isWhitespaceOnly(el) {
 /** Elements that carry content even with no text: tables, and anything holding inline media (mammoth emits each standalone picture as <p><img></p>). */
 const MEDIA_SELECTOR = "img, video, audio";
 function keepsMedia(el) {
-  return el.tagName === "TABLE" || !!el.querySelector(MEDIA_SELECTOR);
+  return el.tagName === "TABLE" || el.matches(MEDIA_SELECTOR) || !!el.querySelector(MEDIA_SELECTOR);
 }
 
 /** True when all of a paragraph's text sits inside <strong>/<b>. */

@@ -148,6 +148,20 @@ describe("splitSections", () => {
     expect(sections[0].html).toContain("<img");
     expect(sections[0].wordCount).toBe(2);
   });
+
+  it("keeps a bare top-level media element and a video wrapped in a paragraph", () => {
+    const { sections } = splitSections(body(`
+      <h2>Gallery</h2>
+      <img src="data:image/png;base64,AA==" alt="map">
+      <p>   </p>
+      <p><video src="x.webm"></video></p>`));
+    expect(sections).toHaveLength(1);
+    expect(sections[0].blocks).toHaveLength(2);
+    expect(sections[0].blocks[0]).toContain('<img src="data:image/png;base64,AA=="');
+    expect(sections[0].blocks[1]).toContain("<video");
+    expect(sections[0].html).toContain("<img");
+    expect(sections[0].html).toContain("<video");
+  });
 });
 
 import { suggestType, stripTypeMarker, buildImportPlan } from "../scripts/logic/doc-import.mjs";

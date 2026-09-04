@@ -16,6 +16,8 @@
 // constructor stores options.document behind a read-only `document` getter,
 // so there is nothing to add here; `viewPermission` never applies because
 // render() below never reaches ApplicationV2's rendering pipeline.
+import { MODULE_ID, I18N } from "../constants.mjs";
+
 const { DocumentSheetV2 } = foundry.applications.api;
 
 export class TimelineJournalSheet extends DocumentSheetV2 {
@@ -25,8 +27,13 @@ export class TimelineJournalSheet extends DocumentSheetV2 {
   };
 
   async render() {
-    const { openTimelineInHub } = await import("../apps/CampaignHubPage.mjs");
-    await openTimelineInHub(this.document);
+    try {
+      const { openTimelineInHub } = await import("../apps/CampaignHubPage.mjs");
+      await openTimelineInHub(this.document);
+    } catch (err) {
+      console.error(`${MODULE_ID} | opening the timeline journal in the Hub failed`, err);
+      ui.notifications?.error(game.i18n.localize(`${I18N}.timelineJournal.openFailed`));
+    }
     return this;
   }
 
