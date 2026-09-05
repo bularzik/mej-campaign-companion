@@ -6,6 +6,7 @@
 // links/<code>/<pre> stay opaque. No Foundry globals here.
 import { autoLinkAdded } from "./auto-link.mjs";
 import { audienceContains } from "./link-audience.mjs";
+import { sameLinkScope } from "./link-targets.mjs";
 
 /** Occurrences of `@UUID[<uuid>]` in html (uuid taken literally, not as a pattern). */
 export function countEntityLinks(html, uuid) {
@@ -40,16 +41,17 @@ export function countEntityLinks(html, uuid) {
  * (entity, page) pair, exactly as before.
  *
  * @param {object} args
- * @param {{uuid:string, name:string, viewerIds:string[]}[]} args.entities  the new entities
+ * @param {{uuid:string, name:string, viewerIds:string[], campaignId?:string|null}[]} args.entities  the new entities
  * @param {{uuid:string, name:string, content:string, viewerIds:string[],
- *          noAutoLink:boolean, entryUuid:string}[]} args.pages  every text page
+ *          noAutoLink:boolean, entryUuid:string, key?:string, campaignId?:string|null}[]} args.pages  every text page
  *          (viewerIds = the page's PARENT ENTRY viewer set; entryUuid = that
- *          entry's uuid, used to skip an entity's own pages)
- * @param {Record<string, {viewerIds:string[]}[]>} [args.otherSameNamed]  keyed
+ *          entry's uuid, used to skip an entity's own pages; key defaults to "text.content";
+ *          campaignId = campaign Folder id or null for unfiled)
+ * @param {Record<string, {viewerIds:string[], campaignId?:string|null}[]>} [args.otherSameNamed]  keyed
  *          by entity uuid: other entities sharing that entity's trimmed,
  *          lowercased name
  * @param {number} [args.minLength=3]
- * @returns {{rows: {pageUuid:string, pageName:string, newHtml:string|null,
+ * @returns {{rows: {pageUuid:string, pageName:string, key:string, newHtml:string|null,
  *            matches:{entityUuid:string, entityName:string, count:number}[],
  *            ambiguous:{entityUuid:string, entityName:string, count:number}[]}[]}}
  */
@@ -74,11 +76,17 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
     if (typeof page.content !== "string" || !page.content) continue;
 
     const forPage = named.filter((e) =>
-      page.entryUuid !== e.uuid && audienceContains(page.viewerIds, e.viewerIds));
+      page.entryUuid !== e.uuid
+      && sameLinkScope(page.campaignId, e.campaignId)
+      && audienceContains(page.viewerIds, e.viewerIds));
     if (!forPage.length) continue;
 
+    // A twin only makes the name ambiguous where BOTH entities are in reach
+    // of the page: campaign A's "Mira" is unambiguous inside A while B keeps
+    // its own Mira, and only an unfiled page sees both (spec §1).
     const twinned = (e) =>
-      (otherSameNamed[e.uuid] ?? []).some((o) => audienceContains(page.viewerIds, o.viewerIds));
+      (otherSameNamed[e.uuid] ?? []).some((o) =>
+        sameLinkScope(page.campaignId, o.campaignId) && audienceContains(page.viewerIds, o.viewerIds));
     const writable = forPage.filter((e) => !twinned(e));
 
     const linked = writable.length
@@ -106,6 +114,7 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
     rows.push({
       pageUuid: page.uuid,
       pageName: page.name,
+      key: page.key ?? "text.content",
       newHtml: matches.length ? linked : null,
       matches,
       ambiguous
