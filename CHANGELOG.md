@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.18.0 (2026-09-05)
+
+Auto-linking that actually reaches your prose.
+
+- **Session recaps and GM notes are auto-linked** on both paths. Both hooks only ever scanned `text.content`, so session pages — where most of a campaign's prose lives — were silently skipped, and a creation that matched nothing gave no feedback at all.
+- **Both directions on by default.** `autoLink` defaults to on; `retroLinkMode` defaults to Silent. Worlds that stored a value keep it.
+- **Campaign-scoped.** An entry links with its own campaign's pages and unfiled pages; unfiled entries link anywhere; campaigns never link into each other. A same-named twin in another campaign no longer makes a name ambiguous inside yours.
+- **Results are a notification, not a whisper** (Silent) and follow the confirm dialog too; nothing matched → nothing shown; ambiguous-only → a warning naming the entry. Detail in the console.
+- **Hub "Link mentions"** (Index toolbar, campaign scope, GM): catch-up pass for a whole campaign, always through the review dialog.
+- Mentions and relationships stay separate layers (documented in the GM guide): mentions are derived from links, relationships are curated.
+
 ## 0.17.0 (2026-09-04)
 
 One shared session recap, and a knowledge panel that gets out of the way.

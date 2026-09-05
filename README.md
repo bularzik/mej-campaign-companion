@@ -45,8 +45,8 @@ The rest of this README is the technical reference: exact feature semantics, tru
 Auto-linking is now bounded by audience containment on every path: a mention links to an entity only when everyone who can view the page can also view the entity (evaluated at the JournalEntry level via ownership, threshold LIMITED); GMs are excepted.
 
 **Auto-link paths:**
+- **Auto-linking** — both directions on by default: names typed into page text, session recaps and GM notes become links on save; creating an entry links existing mentions of it (Silent = notification, Confirm = review dialog). Campaign-scoped; ambiguous names are skipped and reported. The Hub's **Link mentions** button catches up a campaign's older prose.
 - **Docx import** — auto-links imported text at creation (gated on the Auto-Link setting). The import wizard's Audience select ("GM only" default / "All players (Observer)") sets created-entry ownership and bounds link targets; ambiguous names are skipped and listed in the summary.
-- **Retroactive Auto-Link** — a new world setting (off/confirm/silent, default confirm) links existing plain-text mentions of a newly-created MEJ entity's name from the active GM's client. Confirm mode shows a review dialog with per-page checkboxes; silent mode writes immediately and sends a whispered GM summary. Entities created while no GM is online are processed when a GM next connects.
 
 **Ambiguity:** names shared by multiple in-audience entities are never auto-linked; they are reported in the dialog, summary, or import warnings instead.
 
@@ -118,8 +118,8 @@ All settings are **world-scoped** (GM-only, apply to everyone in the world) exce
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
-| `autoLink` | Yes | Off | Turn on auto-linking of newly-typed MEJ entry names in page text on save. |
-| `retroLinkMode` | Yes | Confirm | Retroactive Auto-Link world setting: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off (disabled), Confirm (review dialog with per-page checkboxes), Silent (write immediately + whispered GM summary). |
+| `autoLink` | Yes | On | Link newly-typed MEJ entry names in page text, session recaps and GM notes on save (campaign-scoped). |
+| `retroLinkMode` | Yes | Silent | Retroactive Auto-Link: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off, Confirm (review dialog with per-page checkboxes), Silent (write immediately + notification). |
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
