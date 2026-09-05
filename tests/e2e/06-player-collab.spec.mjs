@@ -31,6 +31,28 @@ async function openSession(page, entryId) {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
   }, entryId);
   await settle(page, 400);
+  // Review round 2, finding 1: a bare settle() proved race-prone for a
+  // drop dispatched right after it - nothing proved SessionSheet's own
+  // _dragDrop() had actually bound the recap drop zone on THIS render's DOM
+  // instance yet. `_state === RENDER_STATES.RENDERED` is set strictly after
+  // activateListeners()/_dragDrop() complete (apps/enhanced-journal.js's
+  // renderSubSheet), so waiting for it (plus the recap editor-parent
+  // actually being in that DOM) is real synchronization, not a fixed wait.
+  // NOT `.rendered`/`.element` - those getters read ApplicationV2's own
+  // PRIVATE #state/#element fields, which only the framework's own
+  // render()/_onRender() flow updates; MEJ's subsheet hosting bypasses that
+  // flow entirely (calls _renderHTML/_replaceHTML/activateListeners by
+  // hand) and instead sets the plain instance property `_state` and never
+  // populates `#element` at all - confirmed live, `.rendered`/`.element`
+  // never become true/non-null for a subsheet no matter how long you wait.
+  // `.trueElement` (EnhancedJournalSheet.js) is MEJ's own reliable
+  // equivalent, already used throughout SessionSheet.mjs for this reason.
+  await page.waitForFunction(() => {
+    const s = game.MonksEnhancedJournal?.journal?.subsheet;
+    return s?.constructor?.name === "SessionSheet"
+      && s._state === s.constructor.RENDER_STATES.RENDERED
+      && !!s.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap']");
+  });
   const shell = page.locator("#MonksEnhancedJournal");
   await shell.locator('nav.sheet-tabs a[data-tab="description"]').click();
   await settle(page, 200);
@@ -53,11 +75,35 @@ async function typeIntoRecap(page, shell, text) {
   await settle(page, 200);
 }
 
-async function commitRecap(page) {
-  await page.evaluate((sel) => {
-    document.querySelector(`${sel} prose-mirror`).dispatchEvent(new Event("change", { bubbles: true }));
-  }, RECAP_EDITOR);
-  await settle(page, 800);
+/**
+ * Close the recap editor the way a real user does - the shell header's own
+ * edit/save toolbar control (shares onEditRecap with the inline pencil,
+ * SessionSheet.mjs's own doc comment) - rather than dispatching a synthetic
+ * "change" straight onto the still-open element (review round 2, finding 3:
+ * that bypassed open=false -> save() -> change -> MEJ submit ->
+ * _prepareSubmitData entirely). NOT the inline `button[data-action=
+ * "editRecap"]` typeIntoRecap opens with: MEJ's own base CSS
+ * (`.editor-parent.editing .editor-edit { display: none }`) hides that
+ * specific button while editing - confirmed live (a `<div class="nav-button
+ * edit">` in the shell header is the one still visible, icon swapped to
+ * fa-save). Persistence itself is still asserted with a waitForFunction on
+ * the GM seat by each caller.
+ *
+ * Checks `.editing` first rather than clicking unconditionally: confirmed
+ * live that when two owners share one collaborative session, ONE of them
+ * saving (closing) flushes the OTHER's pending steps into the same
+ * document.update() too (core tears the whole shared session down, not
+ * just the closer's own view) and fires that other editor's own "close"
+ * event, which the activateListeners handler above already reacts to by
+ * clearing `.editing`. Calling this again on an editor already closed that
+ * way would blindly re-toggle it back open (onEditRecap's `opening` reads
+ * false -> true) instead of being the no-op it should be.
+ */
+async function commitRecap(page, shell) {
+  const parent = shell.locator(RECAP_EDITOR);
+  if (!(await parent.evaluate((el) => el.classList.contains("editing")))) return;
+  await shell.locator('.nav-button.edit[data-action="editRecap"]').click();
+  await expect(parent).not.toHaveClass(/editing/);
 }
 
 async function recapOf(page, entryId) {
@@ -106,7 +152,17 @@ test.describe("06 player collaboration", () => {
     const p1Shell = await openSession(p1.page, entryId);
     expect(await p1.page.evaluate((id) => game.journal.get(id).isOwner, entryId)).toBe(true);
     await typeIntoRecap(p1.page, p1Shell, " Player one adds the ambush.");
-    await commitRecap(p1.page);
+
+    // Review round 2, finding 4: dropping an image while the recap editor
+    // is open must be refused (appending to the persisted value and
+    // re-rendering would tear the live editor down and lose the in-flight
+    // edit). The editor is still open here (typeIntoRecap left it that way).
+    await dropFileOnRecap(p1.page, { url: "icons/svg/mystery-man.svg", name: "TT-while-editing.svg", type: "image/svg+xml" });
+    await settle(p1.page, 500);
+    await expect(p1.page.locator("#notifications li.notification.warning", { hasText: /close the recap editor/i })).toHaveCount(1);
+    expect(await recapOf(gm.page, entryId)).not.toContain("<img");
+
+    await commitRecap(p1.page, p1Shell);
 
     await gm.page.waitForFunction(
       (id) => game.journal.get(id)?.pages?.contents?.[0]?.system?.recap?.includes("Player one adds the ambush."),
@@ -117,6 +173,20 @@ test.describe("06 player collaboration", () => {
     expect(persisted).toContain("Player one adds the ambush.");
     // The per-player flag is gone for good - nothing writes it any more.
     expect(await gm.page.evaluate((id) => game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "playerRecaps"), entryId)).toBeUndefined();
+
+    // Review round 2, finding 3: a submit raised by a DIFFERENT field must
+    // leave the recap alone - exercises _prepareSubmitData's targetName
+    // derivation on the non-recap path (event.target isn't a prose-mirror).
+    await p1Shell.locator('nav.sheet-tabs a[data-tab="session"]').click();
+    await settle(p1.page, 200);
+    const numberInput = p1Shell.locator('input[name="flags.mej-campaign-companion.session.sessionNumber"]');
+    await numberInput.fill("7");
+    await numberInput.blur();
+    await gm.page.waitForFunction(
+      (id) => game.journal.get(id)?.pages?.contents?.[0]?.getFlag("mej-campaign-companion", "session")?.sessionNumber === 7,
+      entryId, { timeout: 10_000 }
+    );
+    expect(await recapOf(gm.page, entryId)).toBe(persisted);
 
     const p2 = await newSeat(browser, "User 2");
     const p2Shell = await openSession(p2.page, entryId);
@@ -173,8 +243,8 @@ test.describe("06 player collaboration", () => {
     // Each seat's editor receives the other's steps before either saves.
     await expect(p1Shell.locator(`${RECAP_EDITOR} prose-mirror`)).toContainText("Beta sentence from two.", { timeout: 10_000 });
     await expect(p2Shell.locator(`${RECAP_EDITOR} prose-mirror`)).toContainText("Alpha sentence from one.", { timeout: 10_000 });
-    await commitRecap(p1.page);
-    await commitRecap(p2.page);
+    await commitRecap(p1.page, p1Shell);
+    await commitRecap(p2.page, p2Shell);
 
     await gm.page.waitForFunction(
       (id) => {

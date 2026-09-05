@@ -244,6 +244,11 @@ export class SessionSheet extends EnhancedJournalSheet {
     const files = [...(event.originalEvent?.clipboardData?.files ?? event.clipboardData?.files ?? [])]
       .filter((f) => f.type?.startsWith("image/"));
     if (!files.length) return;
+    // Owner check before preventDefault (review round 2, minor): a
+    // non-owner's paste is never ours to swallow - _ingestRecapImage
+    // already no-ops for them, but calling preventDefault first blocked
+    // whatever default paste behavior they might otherwise have had.
+    if (!this.document.isOwner) return;
     event.preventDefault();
     for (const file of files) await this._ingestRecapImage(file);
   }
@@ -257,6 +262,16 @@ export class SessionSheet extends EnhancedJournalSheet {
    */
   async _ingestRecapImage(file) {
     if (!this.document.isOwner) return;
+    // Review round 2, finding 4 (plan-mandated, overrides the original
+    // brief): appending to the persisted recap and re-rendering while the
+    // live collaborative editor is open would tear that editor down on the
+    // very next save, silently losing whatever the owner was mid-typing.
+    // Owners with upload permission still have the editor's own image
+    // tools available while editing.
+    if ($(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing")) {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageWhileEditing`));
+      return;
+    }
     if (!isRelayableImageType(file.type)) {
       ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageTypeRejected`));
       return;
@@ -313,9 +328,6 @@ export class SessionSheet extends EnhancedJournalSheet {
     let navElement = $(".sheet-tabs.tabs", this.trueElement).get(0);
     if (this.tabGroups["primary"])
       this.changeTab.call(this.enhancedjournal || this, "description", "primary", { event, navElement });
-    let editing = $(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing");
-    $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", !editing);
-    $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", editing).toggleClass("fa-save", !editing);
 
     // The recap prose-mirror is `toggled` (template comment explains why):
     // its own activation/collaborative join only ever starts here, on the
@@ -324,9 +336,23 @@ export class SessionSheet extends EnhancedJournalSheet {
     // "change" (picked up by MEJ's submitOnChange -> our _prepareSubmitData
     // stale-field guard, event.target is this element) and then destroys
     // the editor/ends the collab session - matching a manual save exactly.
+    //
+    // Review round 2, finding 2: `opening` is derived from the element's
+    // own `open` property, not from the `.editing` CSS class - core's
+    // save() also runs from the editor's own native save button, Ctrl+S,
+    // and disconnectedCallback, all of which close the editor WITHOUT this
+    // action ever running (the activateListeners "close" handler below is
+    // what keeps `.editing`/the nav icon in sync for those paths). Reading
+    // the class here instead of the element itself would let this action
+    // and that handler fight over which one is "current". State is set
+    // explicitly (not a blind two-argument-less toggle) from that one
+    // source of truth.
     const editor = this.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap'] prose-mirror")
       ?? $(".editor-parent[data-editor-id='recap'] prose-mirror", this.trueElement).get(0);
-    if (editor) editor.open = !editing;
+    const opening = !(editor?.open ?? false);
+    $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", opening);
+    $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", !opening).toggleClass("fa-save", opening);
+    if (editor) editor.open = opening;
   }
 
   static onEditGmNotes(event, target) {
@@ -477,5 +503,22 @@ export class SessionSheet extends EnhancedJournalSheet {
   async activateListeners(html) {
     await super.activateListeners(html);
     $(".editor-parent[data-editor-id='recap']", html).on("paste", this._onPasteRecapImage.bind(this));
+
+    // Review round 2, finding 2. Core fires "close" on a toggled
+    // <prose-mirror> (prosemirror-editor.mjs save()) whenever it
+    // deactivates - not only via onEditRecap above, but also from the
+    // editor's own native save button, Ctrl+S, and disconnectedCallback
+    // (confirmed against that file: save() dispatches "close" for every
+    // toggled deactivation path). Any of those leaves `.editing` on the
+    // parent stuck and MEJ's own CSS then hides both the read view and the
+    // pencil (`.editing .editor-display, .editing .editor-edit { display:
+    // none }`) while our own CSS hides the element's native toggle button -
+    // no way back in without this. Idempotent (removing an absent class is
+    // a no-op), so it's safe regardless of which path fired it, including
+    // a re-render mid-close.
+    $(".editor-parent[data-editor-id='recap'] prose-mirror", html).on("close", () => {
+      $(".editor-parent[data-editor-id='recap']", html).removeClass("editing");
+      $(".nav-button.edit i", this.enhancedjournal?.element || this.element).removeClass("fa-save").addClass("fa-pencil-alt");
+    });
   }
 }
