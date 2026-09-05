@@ -1397,8 +1397,11 @@ async function capturePlayerShots(page) {
   await page.keyboard.type(" Someone should ask the harbor guard directly.");
   await settle(page, 300);
   await shot(sessionShell, "recap-editing");
-  // Toggle back off before moving on - tidy state, not load-bearing.
-  await recapSection.locator('button[data-action="editRecap"]').click();
+  // Toggle back off before moving on - tidy state, not load-bearing. The
+  // inline pencil is hidden by MEJ's `.editor-parent.editing .editor-edit`
+  // CSS while the editor is open, so close through the shell header's edit
+  // control (same route 06-player-collab's commitRecap takes).
+  await sessionShell.locator('.nav-button.edit[data-action="editRecap"]').click();
   await settle(page, 300);
 
   // The revealed block secret, on the Quest entry (per this file's
