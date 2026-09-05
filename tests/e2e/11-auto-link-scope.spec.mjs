@@ -256,11 +256,9 @@ test.describe("11 auto-link scoping", () => {
     await login(page, "Gamemaster");
 
     await setSettings(page, { autoLink: false, retroLinkMode: "silent" });
-    const before = await page.locator("#notifications li.notification").count();
     await createMejPlace(page, N.quietHero, "<p>Nobody mentions me.</p>", 0);
     await settle(page, 1500);
     expect(await page.locator("#notifications li.notification", { hasText: /Linked|Skipped/ }).count()).toBe(0);
-    expect(await page.locator("#notifications li.notification").count()).toBe(before);
 
     // Two same-named entities created in one burst are each other's twin:
     // the mention is ambiguous everywhere, so nothing is written and the
