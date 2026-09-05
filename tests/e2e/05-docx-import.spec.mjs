@@ -195,10 +195,16 @@ test.describe("05 docx import", () => {
     }
 
     await wizard.locator('button[data-action="createImport"]').click();
-    // Result is a toast (ui.notifications.info), not a dialog.
+    // Result is a toast (ui.notifications.info), not a dialog. Assert only
+    // that the removed result dialog itself is gone (its "Import Results"
+    // title, lang key import.resultTitle, no longer exists anywhere) rather
+    // than that no dialog.application is open at all: this same import can
+    // also raise the retro auto-link REVIEW dialog (hooks/retro-link.mjs), a
+    // legitimate input dialog (Confirm mode) that races the toast and must
+    // stay untouched.
     await expect(page.locator("#notifications li.notification.info", { hasText: /Imported \d+ entries/ }))
       .toHaveCount(1, { timeout: 60_000 });
-    await expect(page.locator("dialog.application")).toHaveCount(0);
+    await expect(page.locator("dialog.application", { hasText: /Import Results/ })).toHaveCount(0);
     await settle(page, 500);
 
     createdCampaignFolderIds = await page.evaluate((beforeIds) =>
