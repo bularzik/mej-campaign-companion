@@ -61,6 +61,12 @@
                                 <i class="fa-solid fa-folder-open"></i> {{localize "MEJCampaignCompanion.hub.fileAllShown"}}
                             </button>
                             {{/if}}
+                            {{#if index.isCampaignScope}}
+                            <button type="button" class="mej-cc-link-mentions" data-action="linkMentions"
+                                    data-tooltip="{{localize 'MEJCampaignCompanion.hub.linkMentionsTitle'}}">
+                                <i class="fa-solid fa-link"></i> {{localize "MEJCampaignCompanion.hub.linkMentions"}}
+                            </button>
+                            {{/if}}
                             {{/if}}
                         </div>
                         <ol class="mej-cc-index-list item-list scrollable">
