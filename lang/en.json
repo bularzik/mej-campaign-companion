@@ -21,7 +21,8 @@
         "name": "Players Write Sessions",
         "hint": "New Session entries are owned by all players, so any player can edit the shared recap. Turning this on also offers to grant ownership of existing sessions.",
         "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
-        "applied": "Updated ownership on {count} session entries."
+        "applied": "Updated ownership on {count} session entries.",
+        "applyFailed": "Granting session ownership failed — see the console."
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",

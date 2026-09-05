@@ -1,7 +1,11 @@
 // playersWriteSessions reaches existing sessions (spec 2026-09-04 §B).
 // The preCreateJournalEntry stamp in campaign-companion.mjs still covers
 // new entries; this is the one-shot offer made when the setting turns on.
-// GM client only - a world setting's onChange fires on every client.
+// Active-GM client only - a world setting's onChange fires on EVERY client,
+// GMs included, so with more than one GM connected a plain `isGM` guard
+// would pop the confirm dialog once per GM. Gating on the elected single
+// writer (`game.user === game.users.activeGM`) matches the migration
+// block's own reasoning (campaign-companion.mjs) and hooks/socket.mjs.
 import { MODULE_ID, I18N, SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
 import { sessionEntriesNeedingOwnership } from "../logic/session-ownership.mjs";
 
@@ -23,7 +27,7 @@ export async function applySessionOwnership(entries) {
 }
 
 export async function offerExistingSessionOwnership() {
-  if (!game.user.isGM) return;
+  if (game.user !== game.users.activeGM) return;
   const entries = sessionsNeedingOwnership();
   if (!entries.length) return;
   const ok = await foundry.applications.api.DialogV2.confirm({
@@ -32,6 +36,11 @@ export async function offerExistingSessionOwnership() {
     rejectClose: false
   });
   if (!ok) return;
-  const count = await applySessionOwnership(entries);
-  ui.notifications.info(game.i18n.format(`${I18N}.settings.playersWriteSessions.applied`, { count }));
+  try {
+    const count = await applySessionOwnership(entries);
+    ui.notifications.info(game.i18n.format(`${I18N}.settings.playersWriteSessions.applied`, { count }));
+  } catch (error) {
+    console.error(`${MODULE_ID} | granting session ownership failed`, error);
+    ui.notifications.error(game.i18n.localize(`${I18N}.settings.playersWriteSessions.applyFailed`));
+  }
 }
