@@ -26,10 +26,10 @@
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
-        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name across the journal (audience-scoped). Confirm shows a review dialog to the GM; Silent writes immediately and whispers a summary.",
+        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM notes. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",
         "off": "Off",
         "confirm": "Confirm (review dialog)",
-        "silent": "Silent (whisper summary)"
+        "silent": "Silent (notification)"
       }
     },
     "sheettype": {
@@ -377,10 +377,13 @@
       "apply": "Link Checked",
       "skip": "Skip",
       "ambiguous": "Skipped as ambiguous (another entity shares this name):",
-      "summary": "Auto-linked \"{name}\" in {count} page(s).",
-      "titleMany": "Auto-Link New Entries",
-      "introMany": "{count} new entries are mentioned in the pages below. Link the checked pages?",
-      "summaryMany": "Auto-linked {entities} new entries in {count} page(s)."
+      "ambiguousOnly": "Skipped auto-linking \"{name}\": another entity in reach shares that name.",
+      "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
+      "gmNotes": "GM notes",
+      "summary": "Linked \"{name}\" in {count} place(s).",
+      "titleMany": "Auto-Link Entries",
+      "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",
+      "summaryMany": "Linked {entities} entries in {count} place(s)."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",
