@@ -154,10 +154,13 @@ async function confirmDialog(entities, rows) {
 /**
  * Report a finished pass (spec §3): an info toast with the counts when
  * anything was written; a warn toast when nothing was written only because
- * every match was ambiguous; nothing at all when nothing matched. The
- * per-page detail goes to the console under the module prefix.
+ * every match was ambiguous (never when the GM simply unchecked every row in
+ * confirm mode - `writable` is the pre-dialog matched-row count, so a GM
+ * decline reads as `writable` truthy with `applied` empty and draws no
+ * toast); nothing at all when nothing matched. The per-page detail goes to
+ * the console under the module prefix.
  */
-function notifyRetroResult(entities, applied, rows) {
+function notifyRetroResult(entities, applied, rows, { writable } = {}) {
   const single = entities.length === 1;
   const ambiguousRows = rows.filter((r) => r.ambiguous.length);
   const detail = {
@@ -174,7 +177,7 @@ function notifyRetroResult(entities, applied, rows) {
     console.info(`${MODULE_ID} | auto-link`, detail);
     return;
   }
-  if (ambiguousRows.length) {
+  if (!writable && ambiguousRows.length) {
     const name = ambiguousRows[0].ambiguous[0].entityName;
     ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
     console.info(`${MODULE_ID} | auto-link`, detail);
@@ -327,6 +330,10 @@ async function processBurst(queued, { modeOverride = null } = {}) {
     if (!rows.length) return;
 
     let chosen = rows.filter((r) => r.newHtml && r.matches.length);
+    // The pre-dialog matched-row count - used below to tell "nothing written
+    // because every match was ambiguous" apart from "the GM declined every
+    // row in confirm mode", which also ends with an empty `applied`.
+    const writableCount = chosen.length;
     if (mode === "confirm") {
       chosen = await confirmDialog(live, rows);
       if (!chosen) return;
@@ -343,12 +350,19 @@ async function processBurst(queued, { modeOverride = null } = {}) {
         // written, putting a link in the page the GM was told they would not
         // get. Restricting the entity set makes that impossible: nothing can
         // enter the plan that was not already in it.
-        const keep = new Set(chosen.map((r) => r.pageUuid));
+        //
+        // Rows are per REGION, not per page - a session's recap and its GM
+        // notes are two separate rows sharing one pageUuid. Keying on
+        // pageUuid alone would keep both regions of a page the GM only
+        // half-approved (checked the recap, unchecked GM notes), writing the
+        // region the GM declined. Key on the (page, region) pair instead.
+        const rowKey = (r) => `${r.pageUuid} ${r.key}`;
+        const keep = new Set(chosen.map(rowKey));
         const approved = new Set(chosen.flatMap((r) => r.matches.map((m) => m.entityUuid)));
         live = survivors.filter((e) => approved.has(e.uuid));
         if (!live.length) return;
         ({ rows } = planForBurst(live));
-        chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(r.pageUuid));
+        chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(rowKey(r)));
       }
     }
     // One write per page carrying every region and every entity that matched
@@ -371,7 +385,7 @@ async function processBurst(queued, { modeOverride = null } = {}) {
         console.error(`${MODULE_ID} | retro-link write failed for ${pageUuid}`, err);
       }
     }
-    notifyRetroResult(live, applied, rows);
+    notifyRetroResult(live, applied, rows, { writable: writableCount });
   } catch (err) {
     console.error(`${MODULE_ID} | retro-link burst failed`, err);
   } finally {
