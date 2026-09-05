@@ -7,7 +7,7 @@
     "settings": {
       "autoLink": {
         "name": "Auto-Link Entry Names",
-        "hint": "When enabled, newly-typed mentions of other Monk's Enhanced Journal entry names in a page's text are automatically turned into links as the page is saved. Existing links, code blocks, and pages flagged to opt out are left untouched."
+        "hint": "Newly-typed mentions of other Enhanced Journal entry names — in page text, session recaps and GM notes — become links when the page is saved. Linking stays within the entry's campaign (plus unfiled entries). Existing links, code blocks, and pages flagged to opt out are left untouched."
       },
       "autoCaptureEncounters": {
         "name": "Auto-Capture Encounters",

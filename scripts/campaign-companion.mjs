@@ -40,7 +40,7 @@ Hooks.once("init", () => {
     scope: "world",
     config: true,
     type: Boolean,
-    default: false
+    default: true
   });
 
   game.settings.register(MODULE_ID, RETRO_LINK_MODE_SETTING, {

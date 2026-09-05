@@ -16,7 +16,7 @@ import {
   MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
-import { campaignOfFolder, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
+import { campaignOfFolder, campaignIdOf, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
 import { importResultMessages } from "../logic/import-result.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
@@ -34,6 +34,7 @@ import { countEntityLinks } from "../logic/retro-link.mjs";
 import { suspendRetroBursts, resumeRetroBursts } from "../hooks/retro-link.mjs";
 import { dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceViewerIdsForImport, filterCandidatesForAudience } from "../logic/link-audience.mjs";
+import { sameLinkScope } from "../logic/link-targets.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
@@ -323,11 +324,11 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
    * entries will actually have). Ambiguous names are dropped and reported
    * into the wizard's warnings list (shown in the result dialog).
    */
-  #linkCandidates(audience, warnings) {
+  #linkCandidates(audience, warnings, campaignId = null) {
     const users = game.users.contents;
     const audienceViewers = audienceViewerIdsForImport(audience, users);
     const all = game.journal
-      .filter((e) => mejType(e))
+      .filter((e) => mejType(e) && sameLinkScope(campaignId, campaignIdOf(e)))
       .map((e) => ({ name: e.name, uuid: e.uuid, viewerIds: viewerIds(e, users, isVisibleToUser) }));
     const contained = filterCandidatesForAudience(all, audienceViewers)
       .filter((c) => (c.name?.trim().length ?? 0) >= 3)
@@ -577,7 +578,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
       : audience;
     if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
       try {
-        const candidates = this.#linkCandidates(linkAudience, plan.warnings);
+        const candidates = this.#linkCandidates(linkAudience, plan.warnings, campaign?.id ?? null);
         const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
         const seenWarnings = new Set(plan.warnings);
         let sessionCandidates = null;
@@ -585,7 +586,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
           if (!playersWriteSessions || page.type !== "session") return candidates;
           if (sessionCandidates === null) {
             const scratch = [];
-            sessionCandidates = this.#linkCandidates("players", scratch);
+            sessionCandidates = this.#linkCandidates("players", scratch, campaign?.id ?? null);
             for (const w of scratch) {
               if (seenWarnings.has(w)) continue;
               seenWarnings.add(w);
