@@ -2,7 +2,8 @@ import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
-  HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS
+  HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
+  KNOWLEDGE_COLLAPSED_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
@@ -121,6 +122,9 @@ Hooks.once("init", () => {
   });
   game.settings.register(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, {
     scope: "client", config: false, type: String, default: ""
+  });
+  game.settings.register(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING, {
+    scope: "client", config: false, type: Boolean, default: false
   });
   game.settings.register(MODULE_ID, ADOPTION_PROMPTED_SETTING, {
     scope: "world", config: false, type: Boolean, default: false

@@ -629,6 +629,35 @@
   font-style: italic;
 }
 
+/* Collapsed state: only the bar stays (spec 2026-09-04 §D). */
+.mej-cc-knowledge-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  font-weight: bold;
+  user-select: none;
+}
+
+.mej-cc-knowledge-summary {
+  margin-left: auto;
+  font-weight: normal;
+  font-size: 0.9em;
+  opacity: 0.75;
+}
+
+.mej-cc-knowledge-chevron {
+  transition: transform 120ms ease;
+}
+
+.mej-cc-knowledge.collapsed > details {
+  display: none;
+}
+
+.mej-cc-knowledge.collapsed .mej-cc-knowledge-chevron {
+  transform: rotate(-90deg);
+}
+
 .mej-cc-tag-chips {
   display: flex;
   flex-wrap: wrap;

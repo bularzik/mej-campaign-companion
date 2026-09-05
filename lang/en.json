@@ -230,6 +230,16 @@
       "badQuery": "Invalid @CampaignQuery."
     },
     "knowledge": {
+      "title": "Knowledge",
+      "summary": {
+        "tags": "{count} tags",
+        "tagsOne": "1 tag",
+        "attributes": "{count} attributes",
+        "attributesOne": "1 attribute",
+        "mentions": "{count} mentions",
+        "mentionsOne": "1 mention",
+        "empty": "empty"
+      },
       "tags": "Tags",
       "addTag": "Add tag…",
       "removeTag": "Remove tag",

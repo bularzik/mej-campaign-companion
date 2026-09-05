@@ -89,6 +89,9 @@ export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";
 /** Client setting: the Hub's campaign picker choice ("" = All, "unfiled", or a Folder id) (spec §2). */
 export const HUB_CAMPAIGN_SCOPE_SETTING = "hubCampaignScope";
 
+/** Client setting: the knowledge panel is collapsed to its bar on every sheet (spec 2026-09-04 §D). */
+export const KNOWLEDGE_COLLAPSED_SETTING = "knowledgePanelCollapsed";
+
 /** World setting: the one-time adoption offer has been shown/dismissed (spec §6). */
 export const ADOPTION_PROMPTED_SETTING = "adoptionPrompted";
 

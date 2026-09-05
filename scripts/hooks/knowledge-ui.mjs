@@ -8,10 +8,11 @@
 //    chain render hook, fired when an MEJ sheet renders standalone
 //    (popped out) - the shell path never calls _onRender, so these two
 //    hooks are disjoint in practice; the injector is idempotent anyway.
-import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYPE, HUB_PAGE_ID } from "../constants.mjs";
+import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYPE, HUB_PAGE_ID, KNOWLEDGE_COLLAPSED_SETTING } from "../constants.mjs";
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
 
 function asElement(html) {
   if (!html) return null;
@@ -152,7 +153,14 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   const attributes = canEdit ? getAttributes(page) : getAttributes(page).filter((a) => !a.playerHidden);
   const html = await foundry.applications.handlebars.renderTemplate(
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
-    { pageUuid: page.uuid, canEdit, tags: getTags(page), attributes, backlinks }
+    {
+      pageUuid: page.uuid, canEdit, tags: getTags(page), attributes, backlinks,
+      collapsed: game.settings.get(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING),
+      summary: knowledgeSummary(
+        { tags: getTags(page).length, attributes: attributes.length, backlinks: backlinks.length },
+        (key, data) => game.i18n.format(key, data)
+      )
+    }
   );
   // DOMParser rather than createContextualFragment (S1). This html is our own
   // Handlebars output, so it is escaped and the exposure is far smaller than
@@ -162,6 +170,7 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // adopts it into the live document along with the listeners bound below.
   const panel = new DOMParser().parseFromString(html, "text/html").body.firstElementChild;
   bindPanel(panel, page, sheet, shellHosted);
+  bindCollapseBar(panel);
   // A newer injection started while this one was rendering: it read at least
   // as fresh a document state, so let it own the element and drop this panel
   // rather than appending a second one.
@@ -253,6 +262,30 @@ function bindPanel(panel, page, sheet, shellHosted) {
     input.addEventListener("change", commitAttributes)
   );
   bindBacklinks(panel);
+}
+
+// Whole-panel collapse (spec 2026-09-04 §D): one client setting, read on
+// every injection, so the state follows the user across sheets, re-renders
+// and reloads. The inner <details> keep their own open/closed state.
+function bindCollapseBar(panel) {
+  const bar = panel.querySelector(".mej-cc-knowledge-bar");
+  if (!bar) return;
+  const toggle = async () => {
+    const collapsed = !panel.classList.contains("collapsed");
+    panel.classList.toggle("collapsed", collapsed);
+    bar.setAttribute("aria-expanded", String(!collapsed));
+    try {
+      await game.settings.set(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING, collapsed);
+    } catch (err) {
+      console.error(`${MODULE_ID} | saving the knowledge panel state failed`, err);
+    }
+  };
+  bar.addEventListener("click", toggle);
+  bar.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggle();
+  });
 }
 
 function bindBacklinks(panel) {
