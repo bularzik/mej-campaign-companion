@@ -60,6 +60,7 @@
     "session": {
       "editRecap": "Edit Recap",
       "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
+      "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
       "recapImageTooLarge": "That image is too large to upload (10MB max).",
       "recapImageUploadFailed": "Uploading that image failed. Try again, or ask your GM to check the console.",

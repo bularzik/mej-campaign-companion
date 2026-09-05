@@ -280,6 +280,14 @@ export class SessionSheet extends EnhancedJournalSheet {
       ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageTooLarge`));
       return;
     }
+    // A player without FILES_UPLOAD needs an active GM online to relay the
+    // upload (hooks/media-relay.mjs's relayUploadMedia) - fail fast with a
+    // clear message instead of letting the request time out silently 30s
+    // later against nobody.
+    if (!game.user.can("FILES_UPLOAD") && !game.users.activeGM) {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageNoGM`));
+      return;
+    }
     try {
       // Never trust the caller's extension on the direct-upload path either: force it to
       // match the validated MIME, same as the relay path's GM-side enforcedImageName call

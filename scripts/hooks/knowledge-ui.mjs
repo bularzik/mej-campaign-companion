@@ -151,13 +151,14 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // here leaked hidden attribute values verbatim to any viewer with mere
   // OBSERVER access (confirmed live via 07-knowledge.spec.mjs's leak check).
   const attributes = canEdit ? getAttributes(page) : getAttributes(page).filter((a) => !a.playerHidden);
+  const tags = getTags(page);
   const html = await foundry.applications.handlebars.renderTemplate(
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
     {
-      pageUuid: page.uuid, canEdit, tags: getTags(page), attributes, backlinks,
+      pageUuid: page.uuid, canEdit, tags, attributes, backlinks,
       collapsed: game.settings.get(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING),
       summary: knowledgeSummary(
-        { tags: getTags(page).length, attributes: attributes.length, backlinks: backlinks.length },
+        { tags: tags.length, attributes: attributes.length, backlinks: backlinks.length },
         (key, data) => game.i18n.format(key, data)
       )
     }

@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { login, TT_PREFIX, trackConsoleErrors, assertNoConsoleErrors, reloadGame, KNOWN_MEJ_SESSION_ICON_404 } from "./helpers/foundry.mjs";
+import { CURRENT_DATA_VERSION } from "../../scripts/constants.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const BACKUP_DIR = process.env.CLAUDE_JOB_DIR ? join(process.env.CLAUDE_JOB_DIR, "tmp") : "test-results";
@@ -36,7 +37,10 @@ test.describe("19 reveal migration v4", () => {
     try {
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 3));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 6, null, { timeout: 60_000 });
+      await page.waitForFunction(
+        (v) => game.settings.get("mej-campaign-companion", "dataVersion") === v,
+        CURRENT_DATA_VERSION, { timeout: 60_000 }
+      );
       const state = await page.evaluate((e) => {
         const entry = game.journal.get(e);
         const [p1, p2] = entry.pages.contents;
@@ -54,7 +58,10 @@ test.describe("19 reveal migration v4", () => {
       // Idempotence: a second run writes nothing new.
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 3));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 6, null, { timeout: 60_000 });
+      await page.waitForFunction(
+        (v) => game.settings.get("mej-campaign-companion", "dataVersion") === v,
+        CURRENT_DATA_VERSION, { timeout: 60_000 }
+      );
       const again = await page.evaluate((e) => Object.keys(game.journal.get(e).pages.contents[1].getFlag("mej-campaign-companion", "secretReveals") ?? {}), id);
       expect(again).toEqual(["secret-both"]);
     } finally {
@@ -90,7 +97,10 @@ test.describe("19 reveal migration v4", () => {
     try {
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 5));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 6, null, { timeout: 60_000 });
+      await page.waitForFunction(
+        (v) => game.settings.get("mej-campaign-companion", "dataVersion") === v,
+        CURRENT_DATA_VERSION, { timeout: 60_000 }
+      );
       const state = await page.evaluate((e) => {
         const p = game.journal.get(e).pages.contents[0];
         return { recap: p.system.recap, flag: p.getFlag("mej-campaign-companion", "playerRecaps") };
@@ -100,7 +110,10 @@ test.describe("19 reveal migration v4", () => {
       // Idempotence: a second run leaves the recap alone.
       await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 5));
       await reloadGame(page);
-      await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 6, null, { timeout: 60_000 });
+      await page.waitForFunction(
+        (v) => game.settings.get("mej-campaign-companion", "dataVersion") === v,
+        CURRENT_DATA_VERSION, { timeout: 60_000 }
+      );
       const again = await page.evaluate((e) => game.journal.get(e).pages.contents[0].system.recap, id);
       expect(again).toBe(state.recap);
     } finally {

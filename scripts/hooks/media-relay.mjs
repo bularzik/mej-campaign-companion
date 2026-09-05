@@ -70,7 +70,10 @@ export function relayFilename(name) {
 /**
  * Ask the active GM to upload this image on our behalf; resolves with the
  * stored path. Images only, capped at MAX_RELAY_FILE_BYTES. The caller
- * ensures an active GM exists (see SessionSheet's upload-permission branch).
+ * checks an active GM actually exists before calling this (see
+ * SessionSheet._ingestRecapImage's `!game.users.activeGM` pre-check) - this
+ * function does not re-check it, so a request made with no active GM online
+ * just runs out the RELAY_TIMEOUT_MS below with nobody to answer it.
  * `contextUuid` travels as the wire payload's `groupId` field purely for
  * GM-side logging context (see this module's header comment) - it plays no
  * access-scoping role, unlike campaign-record's group id.

@@ -2,9 +2,14 @@
 // another client (spec 2026-09-04, Deviations). MEJ's own
 // updateJournalEntryPage hook reloads the shell for text.content, ownership
 // and its flag keys - never for system.*, so a viewer kept a stale recap
-// until they reopened the page. Never touches a view with an editor open.
-// Inert without MEJ (no shell; the popped-out branch only fires for a
-// rendered MEJ sheet).
+// until they reopened the page. This hook fires on every client, including
+// the one that just saved - the reload triggered here is what repaints
+// `.editor-display` with the newly-enriched recap even on the saver's own
+// client, since MEJ never re-renders on system.* by itself. Never touches a
+// view with an editor open. Inert without MEJ (no shell; the popped-out
+// branch's `!sheet.enhancedjournal` guard is defensive - a subsheet hosted
+// inside the shell never reports `rendered` the way a standalone sheet
+// does, so that branch only ever fires for a genuinely popped-out sheet).
 import { MODULE_ID } from "../constants.mjs";
 import { recapChanged, shouldRefreshForRecap } from "../logic/recap-refresh.mjs";
 
