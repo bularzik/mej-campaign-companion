@@ -166,13 +166,13 @@ test.describe("20 timeline journal open", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const versionBefore = await page.evaluate(() => game.settings.get("mej-campaign-companion", "dataVersion"));
-    expect(versionBefore).toBe(5);
+    expect(versionBefore).toBe(6);
     await page.evaluate(async (id) => {
       await game.journal.get(id).unsetFlag("core", "sheetClass");
       await game.settings.set("mej-campaign-companion", "dataVersion", 4);
     }, timelineId);
     await reloadGame(page);
-    await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 5, null, { timeout: 60_000 });
+    await page.waitForFunction(() => game.settings.get("mej-campaign-companion", "dataVersion") === 6, null, { timeout: 60_000 });
     const stamped = await page.evaluate((id) => game.journal.get(id).getFlag("core", "sheetClass"), timelineId);
     expect(stamped).toBe(SHEET_CLASS);
     assertNoConsoleErrors(errors);

@@ -62,4 +62,4 @@ With both fixed, the `tempOwnership` workaround has been removed from `openHubSe
 
 - **Knowledge panel on every MEJ type:**
   - Open or create entries of each MEJ type (Person, Place, Quest, NPC, Custom, Session, Encounter, Loot, Shop, Compendium) and confirm the knowledge panel (tags, attributes, "Mentioned in" links) appears on each sheet type and renders without errors.
-  - For Session entries specifically, confirm the knowledge panel is visible alongside the recap sections and other Session-specific controls.
+  - For Session entries specifically, confirm the knowledge panel is visible alongside the recap, collapsed to its bar when you have collapsed it elsewhere.

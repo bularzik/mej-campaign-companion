@@ -658,7 +658,7 @@ guideDescribe("guide screenshots", () => {
     // The block secret (09-secrets.spec.mjs:18's HTML shape) lives here, not
     // on the Session page: the Session sheet never renders a
     // `.editor-display[data-key="text.content"]` region at all (its own
-    // template only ever keys system.recap/system.gmNotes/playerRecaps), so
+    // template only ever keys system.recap/system.gmNotes), so
     // a block secret placed in a Session page's text.content would be inert
     // — the secrets-ui.mjs GM overlay hook that adds `.mej-cc-secret-audience`
     // only scans that exact data-key. Quest/Place/Person pages all render it
@@ -804,42 +804,33 @@ guideDescribe("guide screenshots", () => {
       await settle(page, 400);
     }
 
-    // GM recap + one player recap: set directly (system.recap / playerRecaps
-    // are plain page flags/fields — logic/player-recap.mjs's reserved
-    // shape), rather than driving the real ProseMirror editor via UI. A real
-    // contenteditable ProseMirror element is significantly more fragile to
-    // automate reliably (focus/selection state, custom-element internals)
-    // than the plain <input>/<select> fields above, and recap content isn't
-    // one of the brief's listed UI-is-the-subject exceptions (timepoints,
-    // saved query, player group, audience dialog) — a deliberate deviation
-    // from the brief's literal "through the sheet UI" wording for this one
-    // field, noted in the task report. Done LAST, after every session-tab
-    // field above: confirmed live that MEJ's shared <form> submits its
-    // FULL current field set (every tab's fields, not just the one just
-    // blurred) on each of those submits — setting recap/playerRecaps any
-    // earlier got silently stomped back to empty by the next blur's
-    // whole-form resubmit carrying the stale (pre-update) recap value still
-    // sitting in the still-mounted, not-currently-active recap tab's DOM.
-    await page.evaluate(async ({ sessionId, recap, user1Id, playerRecap }) => {
-      const p = game.journal.get(sessionId).pages.contents[0];
+    // The shared recap: set directly (system.recap is a plain page field —
+    // SessionSheet's reserved shape), rather than driving the real
+    // ProseMirror editor via UI. A real contenteditable ProseMirror element
+    // is significantly more fragile to automate reliably (focus/selection
+    // state, custom-element internals) than the plain <input>/<select>
+    // fields above, and recap content isn't one of the brief's listed
+    // UI-is-the-subject exceptions (timepoints, saved query, player group,
+    // audience dialog) — a deliberate deviation from the brief's literal
+    // "through the sheet UI" wording for this one field, noted in the task
+    // report. Done LAST, after every session-tab field above: confirmed
+    // live that MEJ's shared <form> submits its FULL current field set
+    // (every tab's fields, not just the one just blurred) on each of those
+    // submits — setting recap any earlier got silently stomped back to
+    // empty by the next blur's whole-form resubmit carrying the stale
+    // (pre-update) recap value still sitting in the still-mounted,
+    // not-currently-active recap tab's DOM.
+    await page.evaluate(async ({ sessionId, recap }) => {
+      const entry = game.journal.get(sessionId);
+      const p = entry.pages.contents[0];
       await p.update({ system: { recap } });
-      await p.setFlag("mej-campaign-companion", "playerRecaps", { [user1Id]: playerRecap });
+      // User 1 owns the entry so the player-seat shots show the pencil on the shared recap.
+      await entry.update({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
     }, {
       sessionId,
-      // Kept short deliberately: the Session sheet's shared MEJ header
-      // partial (sheet-detailed-header.hbs, via a generic Page Name/Type/
-      // File Path/Page Category/Sort Order fields fallback the companion's
-      // SessionSheet never overrides with session-specific fields) eats
-      // most of the vertical space available at this window size, leaving
-      // only ~180px for the whole description tab body — confirmed live,
-      // reported as a concern rather than fixed here (a SessionSheet/MEJ
-      // integration gap, out of this task's scope). Short text is the
-      // practical way to keep both recaps actually visible in the shot.
-      recap: "<p>The party found the caravan's last stop — a burned-out waystation. Vane's story about bandits doesn't add up.</p>",
-      user1Id,
-      playerRecap: "<p>Boot prints led away from where the \"bandits\" supposedly came from.</p>"
+      // Kept short: the description tab has ~180px at this window size.
+      recap: "<p>The party found the caravan's last stop — a burned-out waystation. Vane's story about bandits doesn't add up.</p><p>Boot prints led away from where the \"bandits\" supposedly came from.</p>"
     });
-    await settle(page, 300);
 
     // --- Campaign container -------------------------------------------------
     // Created BEFORE the Hub is ever opened, and that ordering is
@@ -1332,20 +1323,13 @@ guideDescribe("guide screenshots", () => {
     // headroom on a bad run.
     test.setTimeout(180_000);
 
-    // SessionSheet.mjs's _disableFields/subRender only re-enable the
-    // player-recap pencil/editor when `game.users.some(u => u.isGM &&
-    // u.active)` is true (mirroring EnhancedJournalSheet's own "notes" tab
-    // precedent — verified live: with no GM connected the button renders
-    // `disabled` and stays that way, which is exactly what a clean run of
-    // this test hit as a real TimeoutError, not an ENOSPC artifact). This
-    // spec's `login()` reuses one `page` across users sequentially, so
-    // without a second, still-connected session nobody is ever "active" as
-    // GM while User 1's page is up. 06-player-collab.spec.mjs's own
-    // multi-context pattern is the fix: hold a second browser context
-    // logged in as Gamemaster (idle — it never interacts) for the
-    // lifetime of this test so `hasGM` is genuinely true, matching how a
-    // real player would actually experience this feature (live, with a GM
-    // online), not a test-harness artifact.
+    // This spec's `login()` reuses one `page` across users sequentially, so
+    // without a second, still-connected session nobody else is online while
+    // User 1's page is up. 06-player-collab.spec.mjs's own multi-context
+    // pattern is followed here too: hold a second browser context logged in
+    // as Gamemaster (idle — it never interacts) for the lifetime of this
+    // test, so these shots reflect a real player's session with a GM
+    // connected, not a test-harness artifact.
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();
     await login(gmPage, "Gamemaster");
@@ -1391,27 +1375,20 @@ async function capturePlayerShots(page) {
   // (a different tab from "description"), so this shot is structurally
   // GM-content-free for any non-GM viewer regardless of what's captured.
   // The recap section's pencil icon (editor-edit) is visible because
-  // SessionSheet.mjs's onEditPlayerRecap has no isEditable/isOwner gate —
-  // every user can edit their OWN recap, matching the brief's "recap
-  // field editable" subject (the separate hasGM-active gate discussed
-  // above is satisfied by the idle GM context opened at the top of this
-  // test).
+  // SessionSheet.mjs's onEditRecap only gates on isEditable — User 1 owns
+  // the entry (seeded above), so the pencil on the shared recap renders
+  // enabled, matching the brief's "recap field editable" subject.
   const sessionShell = await openEntry(page, demo.sessionId);
   await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
   await settle(page, 300);
   await shot(sessionShell, "session-sheet-player");
 
-  // User 1's own recap field, mid-edit. Toggle the editPlayerRecap pencil
-  // (same mechanism the GM recap's own editor-edit button uses, MEJ's
-  // shared `.editor-parent.editing` show/hide CSS — confirmed live in
-  // monks-journal-sheet.css:605-618), then click into the now-visible
-  // <prose-mirror> and type an addition so the shot shows a real,
-  // in-progress editing state (not just the toggle) — the seed test
-  // already gave User 1's own recap flag real starting content via
-  // playerRecaps, so this is genuinely editing existing text, not an
-  // empty field.
-  const recapSection = sessionShell.locator(".player-recap-self");
-  await recapSection.locator('button[data-action="editPlayerRecap"]').click();
+  // The shared recap, mid-edit from User 1's seat: toggle the editRecap
+  // pencil (MEJ's shared `.editor-parent.editing` show/hide CSS), click
+  // into the now-visible <prose-mirror> and type an addition so the shot
+  // shows a real in-progress editing state.
+  const recapSection = sessionShell.locator(".editor-parent[data-editor-id='recap']");
+  await recapSection.locator('button[data-action="editRecap"]').click();
   await settle(page, 300);
   await expect(recapSection).toHaveClass(/editing/);
   const recapEditor = recapSection.locator("prose-mirror .editor-content, prose-mirror");
@@ -1420,8 +1397,8 @@ async function capturePlayerShots(page) {
   await page.keyboard.type(" Someone should ask the harbor guard directly.");
   await settle(page, 300);
   await shot(sessionShell, "recap-editing");
-  // Toggle back off before moving on — tidy state, not load-bearing.
-  await recapSection.locator('button[data-action="editPlayerRecap"]').click();
+  // Toggle back off before moving on - tidy state, not load-bearing.
+  await recapSection.locator('button[data-action="editRecap"]').click();
   await settle(page, 300);
 
   // The revealed block secret, on the Quest entry (per this file's
