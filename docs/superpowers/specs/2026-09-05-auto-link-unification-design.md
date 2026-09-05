@@ -121,4 +121,4 @@ Changes:
 
 ## Deviations
 
-None yet — recorded here during implementation as `Ruling: … — why — cost if wrong`.
+- Ruling (Task 1): `linkableRegions` returns every region of the page even when its content is `""` (a session page always yields `system.recap` and `system.gmNotes`), instead of omitting empty regions — the forward hook needs a region whose *current* content is empty so a first save diffs against baseline `""`. The retro planner keeps its existing empty-content skip, so scanning behaviour is as specified. Cost if wrong: none observable; only the helper's contract differs.
