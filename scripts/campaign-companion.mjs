@@ -17,6 +17,7 @@ import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
+import { foldPlayerRecaps } from "./logic/recap-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
 import { bodyRegion } from "./logic/field-extractors.mjs";
 
@@ -359,6 +360,32 @@ Hooks.once("ready", async () => {
       }
     }
     if (stamped) console.log(`${MODULE_ID} | stamped the timeline redirect sheet on ${stamped} timeline journal(s)`);
+
+    // v6: per-player recaps fold into the shared recap as attributed blocks
+    // (spec 2026-09-04 §C), then the legacy flag is removed. Idempotent: a
+    // page without the flag is skipped. Per-page failures are logged and
+    // skipped; the version bump below still happens.
+    let foldedPages = 0;
+    let foldedRecaps = 0;
+    for (const entry of game.journal.contents) {
+      for (const page of entry.pages.contents) {
+        if (page.type !== SESSION_DOCUMENT_TYPE && page.type !== SESSION_TYPE) continue;
+        const flag = page.getFlag(MODULE_ID, "playerRecaps");
+        if (!flag || typeof flag !== "object") continue;
+        const entries = Object.entries(flag).map(([userId, html]) => ({ name: game.users.get(userId)?.name ?? userId, html }));
+        const { recap, folded } = foldPlayerRecaps(page.system?.recap ?? "", entries);
+        const update = { [`flags.${MODULE_ID}.-=playerRecaps`]: null };
+        if (folded) update["system.recap"] = recap;
+        try {
+          await page.update(update);
+          foldedPages += 1;
+          foldedRecaps += folded;
+        } catch (err) {
+          console.error(`${MODULE_ID} | player-recap fold failed for ${page.uuid}`, err);
+        }
+      }
+    }
+    if (foldedPages) console.log(`${MODULE_ID} | folded ${foldedRecaps} player recap(s) into ${foldedPages} session page(s)`);
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
