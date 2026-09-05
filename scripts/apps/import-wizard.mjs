@@ -452,6 +452,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     // try/catch, so it silently landed every "session" section in
     // results.failed instead of actually creating anything) - the same bug
     // class already found and fixed in data/mej-entry.mjs's createMejEntry.
+    let created;
     if (page.type === "session") {
       const entry = await JournalEntry.create({
         name: page.name,
@@ -459,9 +460,23 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         ...(folderId ? { folder: folderId } : {}),
         pages: [buildSessionPageData(page.name, page.html, campaignDate, parseSessionNumber(page.name))]
       });
-      return entry.pages.contents[0];
+      created = entry.pages.contents[0];
+    } else {
+      created = await createMejEntry(page.type, page.name, page.html, {}, ownership, folderId);
     }
-    return createMejEntry(page.type, page.name, page.html, {}, ownership, folderId);
+    // First uploaded picture becomes the entry's own image (default-images
+    // design 2026-09-05). `src` is the field both branches' sheets actually
+    // read/render (session.hbs's compact-header image control is
+    // data-edit="src", same as every MEJ type's own portrait control -
+    // module.json's session filePathFields.img declares a `system.img`
+    // schema field the header partial never binds, so it is not the one to
+    // set here). createMejEntry does not accept an src/image parameter to
+    // set this cleanly at creation (its payload shape is fixed to
+    // name/type/text/flags, and adding one would mean threading a new
+    // positional argument through its other caller, hooks/auto-capture.mjs,
+    // for no benefit there) - a follow-up update() is the smaller change.
+    if (page.coverImage) await created.update({ src: page.coverImage });
+    return created;
   }
 
   /**
@@ -614,10 +629,14 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     let retroSuspended = false;
     try {
       // Upload inline images once each (deduped across the whole document).
+      // A section's first uploaded picture becomes its entry's own image
+      // (default-images design 2026-09-05) - #createPage sets it via a
+      // follow-up update() once the page/entry exists.
       const uploadedByUri = new Map();
       for (const page of plan.pages) {
-        const { html } = await uploadInlineImages(page.html, plan.warnings, uploadedByUri);
+        const { html, images } = await uploadInlineImages(page.html, plan.warnings, uploadedByUri);
         page.html = html;
+        page.coverImage = images[0]?.src ?? null;
       }
 
       let timeline = null;

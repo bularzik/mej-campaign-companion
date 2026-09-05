@@ -280,7 +280,29 @@ test.describe("05 docx import", () => {
         pagesWithDataUriImages: game.journal
           .filter((j) => campaignFolderIds.includes(j.folder?.id))
           .flatMap((j) => j.pages.contents)
-          .filter((p) => /<img [^>]*src="data:/.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length
+          .filter((p) => /<img [^>]*src="data:/.test((p.text?.content ?? "") + (p.system?.recap ?? ""))).length,
+        // Default-images (2026-09-05): a page whose html carries an uploaded
+        // picture takes its FIRST one as its own `src` (import-wizard.mjs's
+        // #createPage); one with no picture at all keeps `src` empty. Pick
+        // one concrete example of each from this run's own pages rather than
+        // asserting over the whole set, since which section gets which
+        // picture depends on the docx's own layout.
+        ...(() => {
+          const pages = game.journal
+            .filter((j) => campaignFolderIds.includes(j.folder?.id))
+            .flatMap((j) => j.pages.contents);
+          const withImage = pages.find((p) =>
+            /<img [^>]*src="worlds\//.test((p.text?.content ?? "") + (p.system?.recap ?? "")));
+          const html = withImage ? ((withImage.text?.content ?? "") + (withImage.system?.recap ?? "")) : "";
+          const firstImgSrc = withImage ? html.match(/<img [^>]*src="(worlds\/[^"]*)"/)?.[1] ?? null : null;
+          const withoutImage = pages.find((p) =>
+            !/<img [^>]*src="/.test((p.text?.content ?? "") + (p.system?.recap ?? "")));
+          return {
+            imagePageFoundSrc: withImage?.src ?? undefined,
+            imagePageFirstImgSrc: firstImgSrc,
+            picturelessPageFoundSrc: withoutImage ? (withoutImage.src ?? "") : undefined
+          };
+        })()
       };
     }, createdCampaignFolderIds);
     expect(summary.importedCount).toBeGreaterThan(10);
@@ -300,6 +322,12 @@ test.describe("05 docx import", () => {
     // picture-only paragraphs that used to be dropped before upload.
     expect(summary.pagesWithUploadedImages).toBeGreaterThan(0);
     expect(summary.pagesWithDataUriImages).toBe(0);
+    // Default-images (2026-09-05): the created page's own `src` equals the
+    // first uploaded picture found in its html; a picture-less page's `src`
+    // stays empty.
+    expect(summary.imagePageFoundSrc).toMatch(/worlds\/.*mej-campaign-companion\//);
+    expect(summary.imagePageFoundSrc).toBe(summary.imagePageFirstImgSrc);
+    expect(summary.picturelessPageFoundSrc).toBeFalsy();
 
     // Opens correctly in MEJ.
     const sessionZeroId = await page.evaluate(() => game.journal.find((j) => j.name?.startsWith("Session Zero"))?.id);

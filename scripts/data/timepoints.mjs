@@ -101,8 +101,15 @@ export async function toggleLinkShowPlayers(group, timepointId, linkId) {
 /**
  * Timepoint links resolved and permission-filtered for a user.
  * Permission is evaluated at call time, never cached.
+ * `getType(doc)` is injected rather than imported (this module stays pure/
+ * vitest-loadable with no Foundry-side imports — resolving a document's MEJ
+ * type needs integrations/mej-adapter.mjs, which pulls in hook registration
+ * and search-index wiring that only run inside a real Foundry world); the
+ * Hub (its Foundry-side caller) passes `mejType`. Falls back to the
+ * document's own native `type` field when `getType` is omitted or returns
+ * nothing.
  */
-export function resolveLinks(timepoint, user) {
+export function resolveLinks(timepoint, user, { getType } = {}) {
   return (timepoint.links ?? [])
     .map((link) => {
       if (link.src) return displayLink(link, { isGM: user.isGM });
@@ -114,7 +121,9 @@ export function resolveLinks(timepoint, user) {
         || doc?.testUserPermission?.(user, "LIMITED") === true;
       return displayLink(link, {
         isGM: user.isGM,
-        doc: doc ? { permitted, name: doc.name, img: doc.img ?? doc.thumb ?? null } : null
+        doc: doc
+          ? { permitted, name: doc.name, img: doc.img ?? doc.thumb ?? null, type: getType?.(doc) || doc.type || null }
+          : null
       });
     })
     .filter(Boolean);

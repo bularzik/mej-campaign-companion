@@ -94,6 +94,11 @@ describe("displayLink", () => {
     });
   });
 
+  it("falls back to the type's default image when the resolved document has none", () => {
+    const entry = displayLink(docLink, { isGM: false, doc: { permitted: true, name: "Bob", img: null, type: "person" } });
+    expect(entry.img).toBe("modules/monks-enhanced-journal/assets/person.png");
+  });
+
   it("hides an unpermitted document", () => {
     expect(displayLink(docLink, { isGM: false, doc: { permitted: false, name: "Strahd", img: null } }))
       .toBeNull();

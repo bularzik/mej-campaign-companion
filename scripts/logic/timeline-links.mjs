@@ -1,4 +1,5 @@
 import { MODULE_ID } from "../constants.mjs";
+import { imageFor } from "./default-image.mjs";
 
 /** Document classes accepted as timeline links. */
 export const LINKABLE_TYPES = ["JournalEntry", "JournalEntryPage", "Actor", "Scene", "Item"];
@@ -98,8 +99,10 @@ export function classifyDropData(data, uriList = "", files = []) {
 /**
  * Decide how one stored link renders for a user.
  * @param {object} link stored link entry ({uuid,name,type} or {src,name,showPlayers})
- * @param {object} ctx {isGM, doc} — doc is {permitted, name, img} for a resolved
- *   document, null when the uuid no longer resolves; omit for image links.
+ * @param {object} ctx {isGM, doc} — doc is {permitted, name, img, type} for a
+ *   resolved document (type is the MEJ/native type used for the per-type
+ *   default image, see logic/default-image.mjs), null when the uuid no
+ *   longer resolves; omit for image links.
  * @returns {object|null} render entry, or null to hide from this user
  */
 export function displayLink(link, { isGM, doc }) {
@@ -118,7 +121,7 @@ export function displayLink(link, { isGM, doc }) {
   if (!doc.permitted) return null;
   return {
     id: link.id, name: doc.name ?? link.name, icon, kind: "document",
-    uuid: link.uuid, img: doc.img ?? null
+    uuid: link.uuid, img: imageFor(doc.img, doc.type ?? null)
   };
 }
 

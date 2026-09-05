@@ -302,6 +302,47 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     assertNoConsoleErrors(errors);
   });
 
+  // Default-images (2026-09-05): a NEW, self-contained test rather than
+  // extending "graph smoke" above - that test is a known-environmental
+  // failure on a loaded machine (recorded in the task brief), and this
+  // assertion needs to stand on its own regardless. Own TT- fixtures, own
+  // node lookups; cleanup is the describe-level afterEach's TT- sweep.
+  test("graph nodes with no picture show the per-type default image", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const nameA = `${TT_PREFIX}DefaultImg-Person`;
+    const nameS = `${TT_PREFIX}DefaultImg-Session`;
+    await createPerson(page, nameA);
+    await page.evaluate(async (n) => {
+      await JournalEntry.create({
+        name: n,
+        pages: [{
+          name: n,
+          type: "mej-campaign-companion.session",
+          flags: { "monks-enhanced-journal": { type: "session" } }
+        }]
+      });
+    }, nameS);
+
+    const shell = await openHub(page);
+    await shell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+    await settle(page, 600);
+    const graphApp = shell.locator(".mej-cc-graph-pane");
+    await expect(graphApp).toHaveCount(1);
+    await settle(page, 1000); // let the sim place both nodes before locating them
+
+    const nodeA = graphApp.locator(".mej-cc-graph-node", { hasText: nameA });
+    await expect(nodeA).toHaveCount(1);
+    await expect(nodeA.locator("image")).toHaveAttribute("href", /modules\/monks-enhanced-journal\/assets\/person\.png$/);
+
+    const nodeS = graphApp.locator(".mej-cc-graph-node", { hasText: nameS });
+    await expect(nodeS).toHaveCount(1);
+    await expect(nodeS.locator("image")).toHaveAttribute("href", /modules\/mej-campaign-companion\/assets\/session\.png$/);
+
+    assertNoConsoleErrors(errors);
+  });
+
   test("graph hidden-relationship gate: GM sees the edge, player does not", async ({ browser }) => {
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();

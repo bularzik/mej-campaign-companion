@@ -6,7 +6,8 @@
 // game.journal, and pane state lives in the Hub's HUB_STATE.
 import { MODULE_ID, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
-import { graphRowsFor, nodeImage } from "../logic/graph-rows.mjs";
+import { graphRowsFor } from "../logic/graph-rows.mjs";
+import { imageFor } from "../logic/default-image.mjs";
 import { graphSignature } from "../logic/graph-signature.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
@@ -16,15 +17,6 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
 const NODE_R = 14;
-const MEJ_ASSET_PATH = "modules/monks-enhanced-journal/assets";
-// MEJ ships a placeholder PNG only for its built-in types (assets/<type>.png).
-// Other types mejType() can return — "session" (ours), "picture", externally
-// registered types — have none, so synthesizing the path would 404 on every
-// node on every redraw; those nodes keep the plain ring instead.
-const MEJ_ASSET_TYPES = new Set([
-  "person", "place", "poi", "quest", "encounter", "event",
-  "organization", "shop", "loot", "list", "slideshow", "journalentry"
-]);
 
 let activeSim = null;
 // Cleanup for a drag still in flight, if any (C9). A pointerdown installs
@@ -48,10 +40,10 @@ export function prepareGraphContext(entries, state) {
     relRevealsOf: (entry) => entry.getFlag(MODULE_ID, "relReveals"),
     relationshipsOf: (page) => page.flags?.[MEJ_FLAGS]?.relationships,
     // Entity picture is the typed page's src (MEJ's own convention, see
-    // EnhancedJournalSheet relationship rendering); MEJ's generic per-type
-    // placeholder otherwise, but only for the built-in types MEJ_ASSET_TYPES
-    // ships an asset for — other typed nodes keep the plain ring.
-    imageOf: (page, type) => nodeImage(page.src, type, MEJ_ASSET_TYPES, MEJ_ASSET_PATH)
+    // EnhancedJournalSheet relationship rendering); the per-type default
+    // placeholder otherwise (MEJ's own art for its built-in types, the
+    // companion's for session/campaign), null for types with no art.
+    imageOf: (page, type) => imageFor(page.src, type)
   });
   const graph = buildGraph(rows, state.graphBacklinks ? backlinkPairs() : [], {
     mode: state.graphMode, centerUuid: state.graphCenterUuid,

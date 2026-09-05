@@ -167,11 +167,13 @@ The graph is capped at the **200 most-connected** entries, for performance — a
 
 **Revealing individual relationships.** Which relationships a player can see is set on the entry's own **Relationships** panel, not on the graph. Every row there carries a GM-only audience button: **Reveal relationship** controls the row itself, and **Reveal secret relationship** controls a secret label attached to it — a hidden row that also carries a secret label gets both buttons, revealable independently. They open the same audience dialog as a secret, with the same Everyone / players / groups choices, and send the same whisper. A hidden relationship stays out of a player's relationships list *and* off their graph until you reveal it to them or to a group they're in, so a player's graph draws only the edges they've been granted.
 
-**Portraits on graph nodes.** Each node draws the entry page's own image inside its coloured ring. Give a Person a picture on their MEJ page and that portrait is what appears on their node; an entry with no picture of its own falls back to MEJ's per-type icon, and a Session node draws a plain coloured disc with no image at all. Both branches are visible side by side in the shot above — the two Persons carry portraits, the Quest and the Place carry type icons.
+**Portraits on graph nodes.** Each node draws the entry page's own image inside its coloured ring. Give a Person a picture on their MEJ page and that portrait is what appears on their node; an entry with no picture of its own falls back to a per-type placeholder image instead. Both branches are visible side by side in the shot above — the two Persons carry portraits, the Quest and the Place carry type icons.
 
 ![Two graph nodes close up: "Mira Thornwood" drawing her own portrait inside the node circle, beside "The Gilded Flagon" drawing MEJ's Place icon](images/portrait-node.png)
 
 Index rows are the exception: they always show the font-awesome type glyph, never the portrait.
+
+Entries without a picture show a per-type placeholder in the Hub, the timeline and the graph; imported sections that contain a picture use their first one as the entry image.
 
 **Hub Dashboards.** The **Dashboards** pane holds saved searches using a simple grammar — `type:`, `tag:`, `attr:`, and plain free-text terms combined together (for example, `type:person tag:ally`). Click **Add dashboard** (GM only; a player's Dashboards pane has no controls at all) and fill in **Name** and **Query** — the dialog spells the grammar out under the query box as "Tokens: type:&lt;key&gt;, tag:&lt;tag&gt;, attr:&lt;key&gt;=&lt;value&gt;; anything else is full-text search." The third field is a **Visible to players** checkbox: leave it unchecked (the default) to keep the dashboard GM-only, or check it to let players see that saved query and its live results too. **Save** stores it.
 

@@ -622,7 +622,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       canEdit,
       formatDate: (tp) => (order === "campaign" ? formatCampaignDate(tp.campaignDate) : formatCreateDate(tp.createdAt)),
       resolveRowLinks: (tp) =>
-        Timepoints.resolveLinks(tp, game.user).map((entry) => ({
+        // getType: displayLink's doc branch (timeline-links.mjs) resolves the
+        // per-type default image from this; entry.img below is already the
+        // fully-resolved thumbnail (actual image, type default, or null for
+        // a broken/typeless link) - no separate imageFor() call needed here.
+        Timepoints.resolveLinks(tp, game.user, { getType: mejType }).map((entry) => ({
           ...entry,
           broken: entry.kind === "broken",
           thumb: entry.img || null,

@@ -27,6 +27,14 @@ per-player flag (active GM, on first load).
   wizard now reports its counts in a toast; failures and warnings go to a
   second toast plus the browser console. Rule going forward: a message that
   needs no decision is a toast.
+- **Default images.** Entries with no picture show a per-type placeholder
+  (MEJ's for its types; new session and campaign art) in the Hub timeline,
+  timepoints and graph; docx-imported sections that contain a picture now
+  use their first one as the entry image.
+
+Packaging note: this release adds `assets/` (the session/campaign
+placeholder art) - make sure it is in the release zip alongside the other
+packaged directories.
 
 ## 0.16.0 (2026-09-03)
 
