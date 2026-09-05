@@ -285,6 +285,27 @@ test.describe("06 player collaboration", () => {
     await gm.context.close();
   });
 
+  test("a viewer's open session refreshes when another owner saves the recap", async ({ browser }) => {
+    const gm = await newSeat(browser, "Gamemaster");
+    const entryId = await createSession(gm.page, `${TT_PREFIX}Live Session`, "OWNER");
+    const gmShell = await openSession(gm.page, entryId);
+    await expect(gmShell.locator(`${RECAP_EDITOR} .editor-display`)).toContainText("GM opening line.");
+
+    const p1 = await newSeat(browser, "User 1");
+    const p1Shell = await openSession(p1.page, entryId);
+    await typeIntoRecap(p1.page, p1Shell, " Live update from one.");
+    await commitRecap(p1.page, p1Shell);
+
+    // The GM never reopened the page: the hook re-rendered the shell.
+    await expect(gmShell.locator(`${RECAP_EDITOR} .editor-display`)).toContainText("Live update from one.", { timeout: 10_000 });
+    await expect(gmShell.locator(RECAP_EDITOR)).not.toHaveClass(/editing/);
+
+    assertNoConsoleErrors(p1.errors);
+    assertNoConsoleErrors(gm.errors);
+    await p1.context.close();
+    await gm.context.close();
+  });
+
   test("an oversized file drop produces a clean client-side error, no upload attempted", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");

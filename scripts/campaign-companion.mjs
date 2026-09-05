@@ -13,6 +13,7 @@ import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
+import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
@@ -142,6 +143,9 @@ Hooks.once("init", () => {
 
   // ...and carry a timeline icon instead of MEJ's generic book (spec §D).
   registerTimelineDirectory();
+
+  // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
+  registerRecapRefresh();
 });
 
 // Grants player-writable default ownership to Session entries created
