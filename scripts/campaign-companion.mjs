@@ -368,7 +368,7 @@ Hooks.once("ready", async () => {
     let foldedPages = 0;
     let foldedRecaps = 0;
     for (const entry of game.journal.contents) {
-      for (const page of entry.pages.contents) {
+      for (const page of entry.pages?.contents ?? []) {
         if (page.type !== SESSION_DOCUMENT_TYPE && page.type !== SESSION_TYPE) continue;
         const flag = page.getFlag(MODULE_ID, "playerRecaps");
         if (!flag || typeof flag !== "object") continue;
