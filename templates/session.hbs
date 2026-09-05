@@ -26,15 +26,20 @@
                 <div class="tab{{#if subtabs.description.active}} active{{/if}}" data-group="primary" data-tab="description">
                     <div class="tab-inner flexcol">
                         {{!-- The one shared recap (spec 2026-09-04 §A). `collaborate` only for
-                              owners: MEJ activates non-toggled editors at render for every
-                              viewer, and a non-owner's pm.editDocument join is refused.
+                              owners: a non-owner's pm.editDocument join is refused.
                               `data-document-uuid` (not MEJ's own bare `document-uuid`
                               convention elsewhere in this file - see prosemirror-editor.mjs
                               #activateEditor's `this.dataset.documentUuid`) is load-bearing
                               here: with `collaborate`, TextEditor.create requires a resolved
-                              document and throws synchronously in _activateListeners if it
-                              can't find one, which broke this editor's own render on every
-                              owner's client. --}}
+                              document and throws synchronously if it can't find one.
+                              `toggled` (no `open` here - SessionSheet.onEditRecap drives it):
+                              a non-toggled editor activates its collaborative join at render
+                              time, which can race a re-render already in flight (core's
+                              ProseMirrorMenu looks its placeholder up via the GLOBAL
+                              document.getElementById, so a re-render mid-join throws against
+                              a detached element) - exactly what happens on the creator's own
+                              client right after create. Deferring activation to the pencil
+                              means the join only ever starts once the sheet is settled. --}}
                         <div class="flexcol editor-parent" data-editor-id="recap">
                             {{#if editable}}
                             <button type="button" class="unbutton control-button always-interactive editor-edit" data-action="editRecap" data-tooltip="{{localize 'MEJCampaignCompanion.session.editRecap'}}">
@@ -45,7 +50,7 @@
                                 {{{ enrichedRecap }}}
                             </div>
                             <div class="editor editor-control wrapper">
-                                <prose-mirror name="system.recap" value="{{ data.system.recap }}" data-document-uuid="{{ document.uuid }}"{{#if owner}} collaborate{{/if}}></prose-mirror>
+                                <prose-mirror name="system.recap" value="{{ data.system.recap }}" data-document-uuid="{{ document.uuid }}" toggled{{#if owner}} collaborate{{/if}}></prose-mirror>
                             </div>
                         </div>
                     </div>

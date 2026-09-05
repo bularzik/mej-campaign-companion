@@ -7,6 +7,16 @@
   position: relative;
 }
 
+/* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
+   so Foundry's own HTMLProseMirrorElement builds itself a second, native
+   edit/save toggle button (prosemirror-editor.mjs #_buildElements,
+   `button.icon.toggle`) alongside our own pencil (data-action="editRecap").
+   SessionSheet.onEditRecap drives `open` itself, so that native button is
+   pure redundant chrome once mounted inside .editor-control - hide it. */
+.session-container .editor-parent[data-editor-id='recap'] .editor-control prose-mirror > button.icon.toggle {
+  display: none;
+}
+
 /* L3. The same height:100% chain (.editor-parent, then .editor.editor-display
    at :612-619) resolves against a container that is not definite in these tab
    layouts, so the wrapper lays out at clientHeight 0 while still holding

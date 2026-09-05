@@ -176,6 +176,11 @@ test.describe("01 session entries", () => {
     await shell.locator('button[data-action="editRecap"]').click();
     await settle(page, 200);
     await expect(editorParent).toHaveClass(/editing/);
+    // The recap prose-mirror is `toggled` (spec 2026-09-04 §A): the pencil
+    // only flips `open`, and activation (constructing the ProseMirror view)
+    // happens asynchronously from there - wait for it before interacting,
+    // rather than trusting the fixed settle above.
+    await expect(editorParent.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
 
     // ⚠️ parked item: base-class editor context menu on system.recap — smoke
     // only (right-click doesn't crash the sheet / throw a console error).

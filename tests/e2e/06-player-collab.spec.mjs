@@ -40,8 +40,13 @@ async function openSession(page, entryId) {
 /** Open the recap editor, type, and commit the way a real blur does (the prose-mirror element's own change event). */
 async function typeIntoRecap(page, shell, text) {
   await shell.locator('button[data-action="editRecap"]').click();
-  await settle(page, 200);
   const editor = shell.locator(`${RECAP_EDITOR} prose-mirror`);
+  // The recap editor is `toggled`: the pencil only flips `open`, and
+  // activation (construction of the ProseMirror view, plus the
+  // collaborative join for an owner) happens asynchronously from there
+  // (core adds the "active" class once it's actually up) - wait for it
+  // before typing, rather than a fixed settle.
+  await expect(editor).toHaveClass(/active/, { timeout: 10_000 });
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type(text);

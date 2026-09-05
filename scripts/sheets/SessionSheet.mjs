@@ -316,6 +316,17 @@ export class SessionSheet extends EnhancedJournalSheet {
     let editing = $(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing");
     $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", !editing);
     $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", editing).toggleClass("fa-save", !editing);
+
+    // The recap prose-mirror is `toggled` (template comment explains why):
+    // its own activation/collaborative join only ever starts here, on the
+    // pencil, never at render time. Setting `open` false when leaving edit
+    // calls the element's own save() (prosemirror-editor.mjs), which fires
+    // "change" (picked up by MEJ's submitOnChange -> our _prepareSubmitData
+    // stale-field guard, event.target is this element) and then destroys
+    // the editor/ends the collab session - matching a manual save exactly.
+    const editor = this.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap'] prose-mirror")
+      ?? $(".editor-parent[data-editor-id='recap'] prose-mirror", this.trueElement).get(0);
+    if (editor) editor.open = !editing;
   }
 
   static onEditGmNotes(event, target) {
