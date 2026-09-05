@@ -17,6 +17,7 @@ import {
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
 import { campaignOfFolder, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
+import { importResultMessages } from "../logic/import-result.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -613,10 +614,14 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     let retroSuspended = false;
     try {
       // Upload inline images once each (deduped across the whole document).
+      // A section's first uploaded picture becomes its entry's own image
+      // (default-images design 2026-09-05) - the per-row loop below sets it
+      // via a follow-up update() once the page/entry exists.
       const uploadedByUri = new Map();
       for (const page of plan.pages) {
-        const { html } = await uploadInlineImages(page.html, plan.warnings, uploadedByUri);
+        const { html, images } = await uploadInlineImages(page.html, plan.warnings, uploadedByUri);
         page.html = html;
+        page.coverImage = images[0]?.src ?? null;
       }
 
       let timeline = null;
@@ -635,6 +640,27 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
         try {
           const created = await this.#createPage(page, campaignDate, ownership, targetFolderId);
           results.created++;
+          // First uploaded picture becomes the entry's own image
+          // (default-images design 2026-09-05), set via a follow-up update()
+          // now that the entry/page exists. Its own try/catch: the entry
+          // itself is already successfully created at this point, so a
+          // failure here must not land the whole section in results.failed
+          // (that would both mis-report a real create as a failure AND, on
+          // retry, create a duplicate entry) - warn instead and leave the
+          // entry as created, without its picture. `src` is the field both
+          // branches' sheets actually read/render (session.hbs's
+          // compact-header image control is data-edit="src", same as every
+          // MEJ type's own portrait control - module.json's session
+          // filePathFields.img declares a `system.img` schema field the
+          // header partial never binds, so it is not the one to set here).
+          if (page.coverImage) {
+            try {
+              await created.update({ src: page.coverImage });
+            } catch (err) {
+              console.warn(`${MODULE_ID} | cover image failed`, page.name, err);
+              plan.warnings.push(game.i18n.format(`${I18N}.import.coverImageFailed`, { name: page.name }));
+            }
+          }
           if (page.timepoint) {
             // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
             // never prompts and never follows the Hub's currently-viewed one.
@@ -675,29 +701,15 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     this.close();
-    await ImportWizard.#showResult(results, plan.warnings, linkedCount);
+    ImportWizard.#showResult(results, plan.warnings, linkedCount);
   }
 
-  static async #showResult(results, warnings, linkedCount = 0) {
-    const esc = foundry.utils.escapeHTML;
-    const parts = [`<p>${game.i18n.format(`${I18N}.import.created`, {
-      pages: results.created, timepoints: results.timepoints
-    })}</p>`];
-    if (linkedCount) {
-      parts.push(`<p>${game.i18n.format(`${I18N}.import.linked`, { count: linkedCount })}</p>`);
+  static #showResult(results, warnings, linkedCount = 0) {
+    const { info, issues } = importResultMessages(results, warnings, linkedCount, (k, d) => game.i18n.format(k, d));
+    ui.notifications.info(info);
+    if (issues) {
+      ui.notifications.warn(issues.message, { permanent: true });
+      console.warn(`${MODULE_ID} | import issues`, { failed: issues.failed, warnings: issues.warnings });
     }
-    if (results.failed.length) {
-      parts.push(`<p>${game.i18n.localize(`${I18N}.import.someFailed`)}</p>`
-        + `<ul>${results.failed.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`);
-    }
-    if (warnings.length) {
-      parts.push(`<ul>${warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>`);
-    }
-    await foundry.applications.api.DialogV2.wait({
-      window: { title: game.i18n.localize(`${I18N}.import.resultTitle`) },
-      content: parts.join(""),
-      buttons: [{ action: "ok", label: `${I18N}.import.ok`, default: true }],
-      rejectClose: false
-    });
   }
 }

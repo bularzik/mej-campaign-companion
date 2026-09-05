@@ -81,13 +81,16 @@ export const DEFAULT_TIMELINE_KEY = "defaultTimelineId";
 export const DATA_VERSION_SETTING = "dataVersion";
 
 /** Current schema version written by the adoption/migration runner. */
-export const CURRENT_DATA_VERSION = 5;
+export const CURRENT_DATA_VERSION = 6;
 
 /** World setting: Folder id of the campaign that receives auto-captured encounters/media (spec §4). "" = unset → capture declines. */
 export const AUTO_CAPTURE_CAMPAIGN_SETTING = "autoCaptureCampaign";
 
 /** Client setting: the Hub's campaign picker choice ("" = All, "unfiled", or a Folder id) (spec §2). */
 export const HUB_CAMPAIGN_SCOPE_SETTING = "hubCampaignScope";
+
+/** Client setting: the knowledge panel is collapsed to its bar on every sheet (spec 2026-09-04 §D). */
+export const KNOWLEDGE_COLLAPSED_SETTING = "knowledgePanelCollapsed";
 
 /** World setting: the one-time adoption offer has been shown/dismissed (spec §6). */
 export const ADOPTION_PROMPTED_SETTING = "adoptionPrompted";
@@ -136,9 +139,6 @@ export const RELAY_UPLOAD_DIR = () => `${IMPORT_MEDIA_DIR()}/uploads`;
  */
 export const UPLOAD_MEDIA_ACTION = "relay-upload-media";
 export const UPLOAD_MEDIA_RESULT_ACTION = "relay-upload-media-result";
-
-/** Socket action: a player relays a playerRecaps write to the active GM (scripts/hooks/player-recap.mjs). */
-export const SAVE_RECAP_ACTION = "save-player-recap";
 
 /** Native Foundry JournalEntryPage types the companion mounts inside the MEJ shell (spec E §1). */
 export const MEDIA_PAGE_TYPES = ["pdf", "video"];

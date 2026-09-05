@@ -203,4 +203,45 @@ describe("resolveLinks", () => {
     const result = resolveLinks(tp, gmUser);
     expect(result[0].kind).toBe("broken");
   });
+
+  // Default-images (2026-09-05): resolveLinks' `getType` option feeds
+  // displayLink's per-type default image (timeline-links.mjs). resolveLinks
+  // never exposes a `type` field of its own on the row - the only observable
+  // effect of getType's result is on `img` when the doc has none of its own,
+  // so that's what these assert.
+  describe("getType threading", () => {
+    function fakeDoc(overrides = {}) {
+      return { name: "Something", testUserPermission: () => true, ...overrides };
+    }
+    function tpFor(name) {
+      return { links: [{ id: "l1", uuid: "JournalEntryPage.x", name, type: "JournalEntryPage" }] };
+    }
+
+    it("a resolved MEJ type from getType reaches the per-type default image", () => {
+      vi.stubGlobal("fromUuidSync", () => fakeDoc({ name: "Bob" }));
+      const result = resolveLinks(tpFor("Bob"), gmUser, { getType: () => "person" });
+      expect(result[0].img).toBe("modules/monks-enhanced-journal/assets/person.png");
+    });
+
+    it("falls through to the document's own native type when getType returns false (mejType's contract for a non-MEJ doc)", () => {
+      vi.stubGlobal("fromUuidSync", () => fakeDoc({ type: "pdf" }));
+      const result = resolveLinks(tpFor("Something"), gmUser, { getType: () => false });
+      // "pdf" has no per-type art, so this alone only proves resolveLinks
+      // doesn't choke on a falsy getType result - the next test pins that
+      // doc.type genuinely ran, not that `false` itself was treated as absent.
+      expect(result[0].img).toBeNull();
+    });
+
+    it("a falsy getType result falls through to doc.type via ||, not treated as itself a type (mejType returns false, not undefined/null, so ?? would not fall through)", () => {
+      vi.stubGlobal("fromUuidSync", () => fakeDoc({ name: "The Herald", type: "session" }));
+      const result = resolveLinks(tpFor("The Herald"), gmUser, { getType: () => false });
+      expect(result[0].img).toBe("modules/mej-campaign-companion/assets/session.png");
+    });
+
+    it("resolves to a null image when neither getType nor the document's own type is available", () => {
+      vi.stubGlobal("fromUuidSync", () => fakeDoc());
+      const result = resolveLinks(tpFor("Something"), gmUser);
+      expect(result[0].img).toBeNull();
+    });
+  });
 });

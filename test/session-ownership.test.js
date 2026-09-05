@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldOwnSessionEntry } from "../scripts/logic/session-ownership.mjs";
+import { shouldOwnSessionEntry, sessionEntriesNeedingOwnership } from "../scripts/logic/session-ownership.mjs";
 import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../scripts/constants.mjs";
 
 // Derived from the same constants the production code (campaign-companion.mjs)
@@ -32,5 +32,31 @@ describe("shouldOwnSessionEntry", () => {
   it("tolerates missing flags/pages entirely", () => {
     expect(shouldOwnSessionEntry({}, opts(true))).toBe(false);
     expect(shouldOwnSessionEntry(undefined, opts(true))).toBe(false);
+  });
+});
+
+describe("sessionEntriesNeedingOwnership", () => {
+  const OWNER = 3;
+  const sel = { sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, ownerLevel: OWNER };
+  const entry = (id, level, pages) => ({ id, ownership: level === undefined ? undefined : { default: level }, pages: { contents: pages } });
+
+  it("keeps a session entry whose default ownership is below OWNER", () => {
+    const e = entry("a", 2, [{ type: SESSION_DOCUMENT_TYPE }]);
+    expect(sessionEntriesNeedingOwnership([e], sel)).toEqual([e]);
+  });
+  it("accepts the bare in-memory page type MEJ's fixType leaves behind", () => {
+    const e = entry("a", 0, [{ type: SESSION_TYPE }]);
+    expect(sessionEntriesNeedingOwnership([e], sel)).toEqual([e]);
+  });
+  it("drops an entry that is already OWNER", () => {
+    expect(sessionEntriesNeedingOwnership([entry("a", 3, [{ type: SESSION_DOCUMENT_TYPE }])], sel)).toEqual([]);
+  });
+  it("drops entries with no session page", () => {
+    expect(sessionEntriesNeedingOwnership([entry("a", 0, [{ type: "text" }]), entry("b", 0, [])], sel)).toEqual([]);
+  });
+  it("treats missing ownership as 0 and tolerates a plain pages array", () => {
+    const e = { id: "a", pages: [{ type: SESSION_DOCUMENT_TYPE }] };
+    expect(sessionEntriesNeedingOwnership([e], sel)).toEqual([e]);
+    expect(sessionEntriesNeedingOwnership(undefined, sel)).toEqual([]);
   });
 });

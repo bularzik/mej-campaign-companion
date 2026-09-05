@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.17.0 (2026-09-04)
+
+One shared session recap, and a knowledge panel that gets out of the way.
+Data migration: dataVersion 6 folds every per-player recap into its
+session's shared recap as a `Recap — <player>` block and removes the
+per-player flag (active GM, on first load).
+
+- **The Session sheet's Recap tab holds one recap.** The separate "Player
+  Recaps" section is gone: the table edits a single document. Players edit
+  it when they own the session entry — Foundry's collaborative editor keeps
+  simultaneous owners in sync — and read it otherwise. The GM-relay save
+  path for per-player recaps is removed (image uploads for players without
+  upload permission are still relayed).
+- **Saves no longer overwrite each other's recap.** A save raised by any
+  other field on the sheet (session number, date) leaves the recap and GM
+  notes untouched; only the editor being used writes its own field.
+- **Open session views refresh when another owner saves the recap.**
+- **Players Write Sessions reaches existing sessions.** Turning the setting
+  on offers to grant all players ownership of every existing session entry
+  (a confirm dialog with the count); turning it off changes nothing.
+- **The knowledge panel (tags, attributes, mentioned-in) collapses to a
+  one-line bar** with a summary of what it holds. The state is remembered
+  per client and applies to every sheet.
+- **Import results are a notification, not a dialog.** The docx import
+  wizard now reports its counts in a toast; failures and warnings go to a
+  second toast plus the browser console. Rule going forward: a message that
+  needs no decision is a toast.
+- **Default images.** Entries with no picture show a per-type placeholder
+  (MEJ's for its types; new session and campaign art) in the Hub timeline,
+  timepoints and graph; docx-imported sections that contain a picture now
+  use their first one as the entry image.
+
+Packaging note: this release adds `assets/` (the session/campaign
+placeholder art) - make sure it is in the release zip alongside the other
+packaged directories.
+
 ## 0.16.0 (2026-09-03)
 
 Import fixes and a timeline-journal affordance. Data migration: dataVersion
