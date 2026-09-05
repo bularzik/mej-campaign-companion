@@ -1,4 +1,9 @@
-<section class="mej-cc-knowledge" data-page-uuid="{{pageUuid}}">
+<section class="mej-cc-knowledge{{#if collapsed}} collapsed{{/if}}" data-page-uuid="{{pageUuid}}">
+    <header class="mej-cc-knowledge-bar" role="button" tabindex="0" aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}">
+        <i class="fa-solid fa-chevron-down mej-cc-knowledge-chevron"></i>
+        <span class="mej-cc-knowledge-title">{{localize "MEJCampaignCompanion.knowledge.title"}}</span>
+        <span class="mej-cc-knowledge-summary">{{#if summary}}{{summary}}{{else}}{{localize "MEJCampaignCompanion.knowledge.summary.empty"}}{{/if}}</span>
+    </header>
     <details class="mej-cc-knowledge-tags" open>
         <summary><i class="fa-solid fa-tags"></i> {{localize "MEJCampaignCompanion.knowledge.tags"}}</summary>
         <div class="mej-cc-tag-chips">

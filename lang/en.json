@@ -19,7 +19,10 @@
       },
       "playersWriteSessions": {
         "name": "Players Write Sessions",
-        "hint": "When enabled, new Session entries created through the docx import wizard or Monk's Enhanced Journal's own New Entry dialog are owned by all players by default, so any player can add their own recap without a GM relaying the write."
+        "hint": "New Session entries are owned by all players, so any player can edit the shared recap. Turning this on also offers to grant ownership of existing sessions.",
+        "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
+        "applied": "Updated ownership on {count} session entries.",
+        "applyFailed": "Granting session ownership failed — see the console."
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
@@ -56,9 +59,8 @@
     },
     "session": {
       "editRecap": "Edit Recap",
-      "playerRecaps": "Player Recaps",
-      "editMyRecap": "Edit My Recap",
-      "recapNoGM": "No GM is currently online - your recap will be saved once one is, but drops/pastes need a GM online to relay an upload if you don't have upload permission.",
+      "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
+      "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
       "recapImageTooLarge": "That image is too large to upload (10MB max).",
       "recapImageUploadFailed": "Uploading that image failed. Try again, or ask your GM to check the console.",
@@ -230,6 +232,16 @@
       "badQuery": "Invalid @CampaignQuery."
     },
     "knowledge": {
+      "title": "Knowledge",
+      "summary": {
+        "tags": "{count} tags",
+        "tagsOne": "1 tag",
+        "attributes": "{count} attributes",
+        "attributesOne": "1 attribute",
+        "mentions": "{count} mentions",
+        "mentionsOne": "1 mention",
+        "empty": "empty"
+      },
       "tags": "Tags",
       "addTag": "Add tag…",
       "removeTag": "Remove tag",

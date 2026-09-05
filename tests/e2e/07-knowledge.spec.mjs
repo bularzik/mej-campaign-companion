@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm,
-  trackConsoleErrors, assertNoConsoleErrors, settle,
+  trackConsoleErrors, assertNoConsoleErrors, settle, reloadGame,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -439,5 +439,39 @@ test.describe("07 knowledge panel", () => {
     assertNoConsoleErrors(errors);
     await playerContext.close();
     await gmContext.close();
+  });
+
+  test("the panel collapses to its bar; the state follows the client across sheets and a reload", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const personId = await createPerson(page, `${TT_PREFIX}Bar Person`);
+    const placeId = await createPlace(page, `${TT_PREFIX}Bar Place`);
+    await page.evaluate(async (id) => {
+      await game.journal.get(id).pages.contents[0].update({ "flags.mej-campaign-companion.tags": ["alpha"] });
+    }, personId);
+    try {
+      const { panel } = await openEntry(page, personId);
+      await expect(panel).not.toHaveClass(/collapsed/);
+      await expect(panel.locator(".mej-cc-knowledge-summary")).toHaveText("1 tag");
+      await panel.locator(".mej-cc-knowledge-bar").click();
+      await expect(panel).toHaveClass(/collapsed/);
+      await expect(panel.locator("details").first()).toBeHidden();
+      expect(await page.evaluate(() => game.settings.get("mej-campaign-companion", "knowledgePanelCollapsed"))).toBe(true);
+
+      const { panel: placePanel } = await openEntry(page, placeId);
+      await expect(placePanel).toHaveClass(/collapsed/);
+      await expect(placePanel.locator(".mej-cc-knowledge-summary")).toHaveText("empty");
+
+      await reloadGame(page);
+      const { panel: afterReload } = await openEntry(page, placeId);
+      await expect(afterReload).toHaveClass(/collapsed/);
+      await afterReload.locator(".mej-cc-knowledge-bar").click();
+      await expect(afterReload).not.toHaveClass(/collapsed/);
+      await expect(afterReload.locator("details").first()).toBeVisible();
+      expect(await page.evaluate(() => game.settings.get("mej-campaign-companion", "knowledgePanelCollapsed"))).toBe(false);
+    } finally {
+      await page.evaluate(() => game.settings.set("mej-campaign-companion", "knowledgePanelCollapsed", false));
+    }
+    assertNoConsoleErrors(errors);
   });
 });

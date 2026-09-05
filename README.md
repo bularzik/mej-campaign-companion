@@ -11,14 +11,14 @@ The rest of this README is the technical reference: exact feature semantics, tru
 
 ## Features
 
-- **Session journal type** — a new MEJ page type (`mej-campaign-companion.session`) with session number, an in-world campaign date, a GM recap, per-player recaps, attendee tracking, a checklist of secrets with reveal/hide, and GM-only notes. Renders inside MEJ's own tabbed journal shell like any built-in MEJ type.
+- **Session journal type** — a new MEJ page type (`mej-campaign-companion.session`) with session number, an in-world campaign date, one shared recap, attendee tracking, a checklist of secrets with reveal/hide, and GM-only notes. Renders inside MEJ's own tabbed journal shell like any built-in MEJ type.
 - **Campaign Hub tab** — a "Campaign" home tab integrated into MEJ's shell (via MEJ's `registerShellPage` extension point), also reachable from the scene-controls notes group. Three panes: a filterable, sortable index of every campaign-relevant entry; a drag-reorderable timeline; and search.
 - **Timeline with campaign dates** — a single world timeline of timepoints, each optionally bound to an in-world calendar date (Foundry's calendar API, v13+), holding links to any document or a raw image. Three ordering modes: manual (fractional-key drag-insert), creation order, and campaign date.
 - **Cross-journal search** — an inverted index over MEJ entry fields (names, descriptions, person attributes, quest objectives, shop items, …) plus Session fields. GM-only fields (secrets, GM notes) index under a separate prefix and are filtered out for non-GM searchers at query time. Builds lazily on first use and stays current via document-update hooks.
 - **Auto-link** — on page save, an opt-in world setting turns newly-typed mentions of existing MEJ entry names into `@UUID` links. Never rewrites inside an existing link or a code block; individual entries can opt out.
 - **Auto-capture** — on combat end, an opt-in world setting creates (or updates) an MEJ Encounter entry summarizing participants and outcome, filed onto the timeline's newest timepoint. A second, independent opt-in world setting auto-files GM "Show Players" images and video onto that same timepoint.
 - **Docx import and export** — a wizard imports a `.docx` (Word or Google Docs export) into MEJ entries and Session pages, with per-section type suggestions, inline images, and dated-header detection that creates timepoints. Export walks selected MEJ entries and the timeline into a round-trippable `.docx`, with an opt-in toggle to include GM-only content.
-- **Player collaboration** — an opt-in world setting lets players own the Session entries they help create, so they can write their own recaps directly; players without upload permission get a chunked socket relay through an active GM instead.
+- **Player collaboration** — an opt-in world setting lets players own the Session entries they help create, so they can edit the shared recap directly, alongside the GM, through Foundry's own collaborative editor; players without upload permission still get inline images relayed through an active GM instead.
 
 ### Knowledge layer (0.2.0)
 
@@ -122,7 +122,7 @@ All settings are **world-scoped** (GM-only, apply to everyone in the world) exce
 | `retroLinkMode` | Yes | Confirm | Retroactive Auto-Link world setting: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off (disabled), Confirm (review dialog with per-page checkboxes), Silent (write immediately + whispered GM summary). |
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
-| `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so they can write their own recaps directly. |
+| `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
 | `timelineJournalId` | No (internal) | `""` | Holds the id of the world's singleton "Campaign Timeline" JournalEntry once the Hub creates it. Not user-facing; don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
@@ -142,16 +142,11 @@ The world's singleton timeline JournalEntry that `timelineJournalId` points at i
 
 ## Player collaboration notes
 
-Session entries can be made player-writable via the `playersWriteSessions` setting; owning players write their own recap directly through the sheet. Players without file-upload permission (or without ownership at all, when the setting is off) have their recap and inline-image writes relayed through an active GM instead, over the same world socket channel MEJ's own per-user notes save path uses.
+Session entries can be made player-writable via the `playersWriteSessions` setting; owning players edit the session's one shared recap directly through the sheet, using Foundry's collaborative ProseMirror editor (simultaneous owners see each other's edits). Turning the setting on offers to grant ownership of existing session entries as well. There is no relay path for recap text: a player without ownership reads the recap and cannot write it.
 
-**Trust model, stated honestly rather than idealized** (see `scripts/hooks/player-recap.mjs`'s header comment for the full detail): Foundry's client-side socket API gives a receiving client no server-verified sender identity — only whatever the emitting client claims. This module is intentionally **stricter** than MEJ's own precedent (`saveUserData`), not just a copy of it:
+Players without file-upload permission still get inline images into a recap they own: the upload itself is relayed through an active GM's client (`scripts/hooks/media-relay.mjs`), and the resulting `<img>` is written by the player's own owner update.
 
-- The GM-side handler validates the claimed sender id resolves to a real user in the world before doing anything with it.
-- A relayed write is scoped to write **only** `flags.mej-campaign-companion.playerRecaps.<senderId>` on the target document — never any other flag, field, or document. At worst, a malicious client can overwrite another real user's recap text; it cannot touch anything else.
-- Every rejected relay is logged.
-- The claimed HTML is round-tripped through ProseMirror's own schema (parse → serialize) before it's ever written, dropping anything out-of-schema (event-handler attributes, `<script>`, …). This matters more here than for MEJ's own per-user notes, because a player recap renders to **every other user, including the GM** — an unsanitized relay would let any socket-reachable client plant markup that executes in someone else's client.
-
-What this **doesn't** eliminate: the "impersonate another user's recap" risk from the unverifiable sender id itself. That's a limitation of Foundry's client socket API, not something a module can close without a server-side authority it doesn't have — it's bounded to that one flag path (the same bound MEJ's own precedent accepts), not eliminated. The content-injection risk, unlike the identity risk, is fully closed by the sanitization step.
+**Trust model:** Foundry's client-side socket API gives a receiving client no server-verified sender identity, so the upload relay validates the claimed sender resolves to a real user, enforces the file's extension from its validated MIME type, writes only under the world's relay upload directory, and logs every rejection. What it doesn't eliminate is a socket-reachable client claiming another user's id to upload an image on their behalf — bounded to that directory, the same bound MEJ's own relay precedent accepts.
 
 ## Error handling and troubleshooting
 

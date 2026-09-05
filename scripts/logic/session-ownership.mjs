@@ -35,3 +35,19 @@ export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentT
   return Array.isArray(entryData?.pages)
     && entryData.pages.some((p) => p?.type === sessionType || p?.type === sessionDocumentType);
 }
+
+/**
+ * Existing JournalEntries the `playersWriteSessions` setting should offer
+ * to open up when it is switched on (spec 2026-09-04 §B): any entry holding
+ * a session page whose default ownership is below OWNER. Accepts a live
+ * collection (`pages.contents`) or a plain array, and both the prefixed
+ * document type and the bare key MEJ's fixType() leaves on mounted pages.
+ */
+export function sessionEntriesNeedingOwnership(entries, { sessionType, sessionDocumentType, ownerLevel }) {
+  return (entries ?? []).filter((e) => {
+    const level = e?.ownership?.default ?? 0;
+    if (level >= ownerLevel) return false;
+    const pages = Array.isArray(e?.pages) ? e.pages : (e?.pages?.contents ?? []);
+    return pages.some((p) => p?.type === sessionDocumentType || p?.type === sessionType);
+  });
+}

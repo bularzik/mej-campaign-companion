@@ -22,6 +22,7 @@
 import { sessionData } from "../sheets/session-data.mjs";
 import { SESSION_TYPE, SESSION_DOCUMENT_TYPE, CAMPAIGN_TYPE } from "../constants.mjs";
 import { stripSecretSections } from "./secret-blocks.mjs";
+import { escapeHtml } from "./html-escape.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const COMPANION_FLAGS = "mej-campaign-companion";
@@ -36,11 +37,6 @@ const COMPANION_FLAGS = "mej-campaign-companion";
  * itself, not for anything this module writes.
  */
 export const SESSION_KIND = "session";
-
-function escapeHtml(text) {
-  return String(text ?? "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 /** Main body text, matching field-extractors.mjs's bodyText() exactly. */
 function bodyText(page) {

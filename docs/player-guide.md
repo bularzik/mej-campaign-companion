@@ -10,25 +10,19 @@ Your GM's world is organised into **campaigns** — a folder of entries plus a *
 
 The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**.
 
-![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the three tabs Recap, Session and Notes, the GM's recap at the top of the Recap tab, and this player's own recap under a Player Recaps heading with an edit pencil beside it](images/session-sheet-player.png)
+![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the three tabs Recap, Session and Notes, and the session's shared recap on the Recap tab with an edit pencil beside it](images/session-sheet-player.png)
 
-At the top of the Recap tab is your GM's own recap of what happened. Below it, under **Player Recaps**, is space for you and the rest of the table to add your own — what your character remembers, noticed, or wants to flag for next time.
+The Recap tab holds one recap for the whole table — what happened, as the GM and the players write it together.
 
 ## Reading session pages & writing your recap
 
-Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). Once it's open, the recap at the top is your GM's to write; you can read it any time, but you can't edit it.
+Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, a pencil sits at the right of the recap, and the sheet header carries the same edit button — either opens the editor; click one to add what your character remembers, noticed, or wants to flag for next time:
 
-Your own recap is the block under **Player Recaps**. Click the pencil beside it to open the editor and type your recap:
+![The recap open for editing, with the full formatting toolbar directly above the recap text](images/recap-editing.png)
 
-![The player recap open for editing, with the full formatting toolbar sitting directly under the Player Recaps heading and the recap text below it](images/recap-editing.png)
+**Click the pencil (or the header button, whichever you used to open it) again to close the editor when you're done, before you go anywhere else.** That is what commits your text: closing the editor takes focus off it, and the editor writes what you typed on its way out. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies. If someone else at the table saves while you're typing, your editor closes too — nothing you wrote is lost, it's all in the saved recap; click the pencil again to keep going. Close the editor before dropping or pasting an image onto the recap — while it's open, the drop is refused with a notice.
 
-**Click the pencil again to close the editor when you're done, before you go anywhere else.** That is what commits your recap: closing the editor takes focus off it, and the editor writes what you typed on its way out. Make it a habit — it's the one route this guide can promise saves your text.
-
-After you've closed the editor that way, Foundry may still pop up a "You have unsaved changes" dialog the next time you open another entry. That one is a false alarm and you can dismiss it either way: Foundry's editor latches a "dirty" flag at your first keystroke and never clears it, so it keeps warning about a field that was already written.
-
-If you get that dialog while the editor is *still open* — you tabbed away, hit Escape, or clicked straight through to another entry without closing it first — don't assume it's the same false alarm. Answer it by keeping or saving your changes, not by discarding them, then go back and close the editor with the pencil.
-
-If there's no pencil at all, your GM hasn't given you edit access to that session — the **Players Write Sessions** setting and per-entry ownership are both theirs to set, so ask them. One thing worth knowing if you don't own the entry outright: your recap is written through an online GM's client, so if no GM is logged in, the editor stays inactive until one is.
+If there's no pencil at all, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
 
 ## Finding things
 
@@ -126,6 +120,6 @@ Two empty states are worth recognising: a timeline that exists but holds nothing
 
 **Where's the Secrets tab?** There isn't one for you. The Hub renders five panes for a player and six for a GM; **Secrets** is the GM's own tracker for everything they've hidden and everything they've revealed.
 
-**Can the GM read my recap?** Treat it as public — recaps live on the shared session page, not in a private note between you and your character. Worth knowing, though: in the build this guide was written against, a GM's own Recap tab showed only their own recap slot rather than the players' recaps, even where a player's recap existed and rendered fine on the player's own sheet. So if there's something you want your GM to have read, say so rather than assuming they've seen it.
+**Can the GM read my recap?** Yes — there is one recap per session and everyone at the table, GM included, reads and (if they own the entry) edits the same text. Treat it as public.
 
 **Why does a search snippet look like code?** Snippets come from the raw page text, so a link inside a matched sentence shows through as `@UUID[...]` markup. The entry itself is fine — it's only the preview.
