@@ -1,53 +1,10 @@
 .mej-campaign-companion {}
 
-/* Session sheet: MEJ's base .editor-edit rule (css/monks-journal-sheet.css)
-   is `position: absolute; top: 4px; right: 12px;` with no `position` set on
-   .editor-parent itself — it relies on .editor-parent being the *only*
-   editor in its tab, so it positions relative to whatever ancestor further
-   up the tree happens to be positioned. The Session sheet's description tab
-   has two (.recap and .player-recap-self), which land their edit buttons on
-   the exact same coordinates as a result — confirmed live via Task 14's e2e
-   suite (getBoundingClientRect() identical for both buttons), meaning a
-   click meant for "Edit Recap" on a freshly-created session (empty recap)
-   actually hits "Edit My Recap" underneath it. Giving each .editor-parent
-   its own positioning context fixes this without touching MEJ's shared CSS.
-   session.hbs and other-recap items also assume flex sizing similar to
-   MEJ's editor-parent - no functional CSS besides `position` is changed. */
+/* Session sheet: MEJ's .editor-edit pencil is absolutely positioned against
+   whatever ancestor happens to be positioned. Give each editor parent its
+   own context so the recap and GM-notes pencils sit on their own editors. */
 .session-container .editor-parent {
   position: relative;
-}
-
-/* L2. MEJ's .editor-parent is `flex:1; height:100%` (css/monks-journal-sheet.css
-   :606-610) - correct when it is the only editor in a tab. The Session
-   description tab has two plus a sibling list. .player-recaps-section sits
-   inside .tab-inner.flexcol, so ITS height is definite (flex-resolved) and
-   `height:100%` on the (for a GM, empty) self-recap editor resolved to the
-   whole section, pushing ol.other-recaps-list past a .sheet-body that clips its
-   overflow. Pin the self-recap to content size; the list then follows it in
-   normal flow, inside the body.
-
-   The leading `.monks-journal-sheet` is load-bearing, not decoration: MEJ's
-   rule is `.monks-journal-sheet.sheet .editor-parent` (0,3,0), a plain
-   `.session-container .player-recap-self.editor-parent` ties it at (0,3,0), and
-   Foundry loads monks-enhanced-journal's CSS AFTER mej-campaign-companion's
-   (module ids sort "mej-" < "monks-"), so on a tie MEJ wins and the override is
-   silently inert. Measured here: `height:auto` written at the tying specificity
-   changed nothing at all - the parent still resolved to the full section and
-   the e2e bound still failed by the same 110px. Same reason the L3 block below
-   carries `.sheet` as well. */
-.monks-journal-sheet .session-container .player-recap-self.editor-parent {
-  height: auto;
-}
-
-/* MEJ pairs the parent's height:100% with `min-height:100%` on the display
-   wrapper; once the parent is auto that percentage is indefinite, so an empty
-   recap (the GM's, normally) collapses to 0 and takes the absolutely-positioned
-   "Edit My Recap" pencil down with it, on top of the "Edit Recap" pencil the
-   rule at the top of this file exists to separate. A floor keeps the read state
-   clickable and the two pencils apart. */
-.monks-journal-sheet .session-container .player-recap-self .editor.editor-display {
-  height: auto;
-  min-height: 4.5em;
 }
 
 /* L3. The same height:100% chain (.editor-parent, then .editor.editor-display
@@ -131,24 +88,6 @@
 /* Never displayed: it exists only to carry `src` into the form submit. */
 .session-container .mej-cc-session-header-compact .mej-cc-compact-src {
   display: none;
-}
-
-/* MEJ's own base rule (css/monks-journal-sheet.css):
-   `.journal-subsheet[editable='false'] .tab[data-tab]:not([data-tab="notes"])
-   .editor-edit { display: none !important; }` — it assumes the only
-   per-user-always-editable content lives in its own built-in "notes" tab,
-   hiding every other tab's edit-toggle button whenever the sheet as a whole
-   is non-editable (i.e. for any non-owner). The player-recap-self editor is
-   deliberately always-interactive regardless of document ownership (see
-   SessionSheet.mjs's own header comment on _disableFields/subRender) and
-   lives in the "description" tab, not "notes" — so a non-owner player had a
-   genuinely interactive <prose-mirror> underneath a completely invisible
-   toggle button, with no way to ever open it. Confirmed live via Task 14's
-   e2e suite (getComputedStyle(button).display === "none" for a non-owner,
-   "flex" for the document owner/GM — restored here to match). Needs equal
-   specificity + !important to win over MEJ's rule. */
-.monks-journal-sheet .journal-subsheet[editable='false'] .tab[data-tab] .player-recap-self[data-editor-id="playerRecap"] .editor-edit[data-action="editPlayerRecap"] {
-  display: flex !important;
 }
 
 /* Campaign Hub shell page - shell pages get no MEJ per-type theming (see

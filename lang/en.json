@@ -56,9 +56,6 @@
     },
     "session": {
       "editRecap": "Edit Recap",
-      "playerRecaps": "Player Recaps",
-      "editMyRecap": "Edit My Recap",
-      "recapNoGM": "No GM is currently online - your recap will be saved once one is, but drops/pastes need a GM online to relay an upload if you don't have upload permission.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
       "recapImageTooLarge": "That image is too large to upload (10MB max).",
       "recapImageUploadFailed": "Uploading that image failed. Try again, or ask your GM to check the console.",

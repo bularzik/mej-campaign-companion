@@ -29,7 +29,7 @@
 //    honest client can do, not what a hostile one can spoof; the real
 //    security floor is that uploads are still image-MIME-validated,
 //    size-capped, extension-forced, and land only in RELAY_UPLOAD_DIR().
-//    Same honest-trust posture as hooks/player-recap.mjs.
+//    Same honest-trust posture as MEJ's own saveUserData relay.
 import {
   MODULE_ID, SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION, RELAY_UPLOAD_DIR, SESSION_DOCUMENT_TYPE
 } from "../constants.mjs";
@@ -70,8 +70,7 @@ export function relayFilename(name) {
 /**
  * Ask the active GM to upload this image on our behalf; resolves with the
  * stored path. Images only, capped at MAX_RELAY_FILE_BYTES. The caller
- * ensures an active GM exists (see logic/player-recap.mjs's
- * recapWriteRoute / SessionSheet's upload-permission branch).
+ * ensures an active GM exists (see SessionSheet's upload-permission branch).
  * `contextUuid` travels as the wire payload's `groupId` field purely for
  * GM-side logging context (see this module's header comment) - it plays no
  * access-scoping role, unlike campaign-record's group id.
