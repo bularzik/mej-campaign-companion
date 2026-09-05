@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm,
-  trackConsoleErrors, assertNoConsoleErrors, settle,
+  trackConsoleErrors, assertNoConsoleErrors, settle, reloadGame,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -318,5 +318,78 @@ test.describe("06 player collaboration", () => {
     await expect(page.locator("#notifications li.notification.warning", { hasText: /too large/i })).toHaveCount(1);
     expect(await recapOf(page, entryId)).not.toContain("<img");
     assertNoConsoleErrors(errors);
+  });
+
+  // Final-review fix wave, spec 2026-09-04 §A: the stale-field guard must not
+  // remove GM Notes' only save path. gmNotes has no toggle/collaborative join
+  // (unlike recap) - the pencil is purely a CSS show/hide, so onEditGmNotes
+  // has to call the editor's own save() itself on close, or nothing ever
+  // fires the "change" MEJ's submitOnChange needs to persist it.
+  test("GM notes commit on pencil close", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const entryId = await createSession(page, `${TT_PREFIX}GM Notes Session`, "OBSERVER");
+    const shell = await openSession(page, entryId);
+    await shell.locator('nav.sheet-tabs a[data-tab="session"]').click();
+    await settle(page, 200);
+
+    // In-page click, not locator.click(): the pencil is absolutely positioned
+    // inside MEJ's clipped scrolling session-details body, and Playwright's
+    // actionability check sees the scroll container intercepting the pointer
+    // even though the button is genuinely visible/clickable to a real user.
+    await shell.locator('button[data-action="editGmNotes"]').evaluate((b) => b.click());
+    const editor = shell.locator(".editor-parent[data-editor-id='gmNotes'] prose-mirror");
+    await expect(editor).toHaveClass(/active/, { timeout: 10_000 });
+    // Same clipped-scroll-container interception as the pencil above -
+    // focus the element directly (HTMLProseMirrorElement.focus() delegates
+    // to the live ProseMirror view) rather than a pointer click.
+    await editor.evaluate((el) => el.focus());
+    await page.keyboard.press("End");
+    await page.keyboard.type("Notes for next week.");
+    await settle(page, 200);
+    await shell.locator('button[data-action="editGmNotes"]').evaluate((b) => b.click());
+
+    await page.waitForFunction(
+      (id) => game.journal.get(id)?.pages?.contents?.[0]?.system?.gmNotes?.includes("Notes for next week."),
+      entryId, { timeout: 10_000 }
+    );
+
+    assertNoConsoleErrors(errors);
+  });
+
+  // Final-review fix wave, spec 2026-09-04 §A: closing the whole shell (not
+  // the recap editor itself) while a collaborative editor is still open must
+  // not lose the in-flight text. Relies on Foundry's server committing the
+  // collaborative document to the underlying field when the last
+  // participant's session ends - if that doesn't happen, this is a real gap
+  // rather than a test bug, so it must not be weakened to pass.
+  test("recap survives closing the shell with the editor open", async ({ browser }) => {
+    const gm = await newSeat(browser, "Gamemaster");
+    const entryId = await createSession(gm.page, `${TT_PREFIX}Shell Close Session`, "OWNER");
+
+    const p1 = await newSeat(browser, "User 1");
+    const p1Shell = await openSession(p1.page, entryId);
+    await typeIntoRecap(p1.page, p1Shell, " Left open when the shell closes.");
+
+    // Fire-and-forget: MEJ's close() awaits its own "unsaved changes"
+    // DialogV2.confirm before resolving (EnhancedJournalSheet.js), so
+    // awaiting the evaluate here would block until the dialog is answered -
+    // which is the very thing the next lines do.
+    await p1.page.evaluate(() => { game.MonksEnhancedJournal.journal.close(); });
+    const unsavedDialog = p1.page.locator("dialog.application").last();
+    await expect(unsavedDialog).toBeVisible({ timeout: 10_000 });
+    await unsavedDialog.locator('button[data-action="yes"]').click();
+    await expect(p1.page.locator("#MonksEnhancedJournal")).toHaveCount(0);
+
+    await reloadGame(p1.page);
+    await p1.page.waitForFunction(
+      (id) => (game.journal.get(id)?.pages?.contents?.[0]?.system?.recap ?? "").includes("Left open when the shell closes."),
+      entryId, { timeout: 15_000 }
+    );
+
+    assertNoConsoleErrors(p1.errors);
+    assertNoConsoleErrors(gm.errors);
+    await p1.context.close();
+    await gm.context.close();
   });
 });
