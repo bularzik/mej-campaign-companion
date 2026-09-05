@@ -16,11 +16,11 @@ The Recap tab holds one recap for the whole table — what happened, as the GM a
 
 ## Reading session pages & writing your recap
 
-Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, a pencil sits at the right of the recap; click it to open the editor and add what your character remembers, noticed, or wants to flag for next time:
+Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, a pencil sits at the right of the recap, and the sheet header carries the same edit button — either opens the editor; click one to add what your character remembers, noticed, or wants to flag for next time:
 
 ![The recap open for editing, with the full formatting toolbar directly above the recap text](images/recap-editing.png)
 
-**Click the pencil again to close the editor when you're done, before you go anywhere else.** That is what commits your text: closing the editor takes focus off it, and the editor writes what you typed on its way out. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies. If someone else at the table saves while you're typing, your editor closes too — nothing you wrote is lost, it's all in the saved recap; click the pencil again to keep going.
+**Click the pencil (or the header button, whichever you used to open it) again to close the editor when you're done, before you go anywhere else.** That is what commits your text: closing the editor takes focus off it, and the editor writes what you typed on its way out. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies. If someone else at the table saves while you're typing, your editor closes too — nothing you wrote is lost, it's all in the saved recap; click the pencil again to keep going. Close the editor before dropping or pasting an image onto the recap — while it's open, the drop is refused with a notice.
 
 If there's no pencil at all, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
 
