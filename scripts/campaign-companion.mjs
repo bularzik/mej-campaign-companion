@@ -6,6 +6,7 @@ import {
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
+import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
@@ -78,7 +79,13 @@ Hooks.once("init", () => {
     scope: "world",
     config: true,
     type: Boolean,
-    default: false
+    default: false,
+    // Turning it on offers ownership of existing sessions (spec 2026-09-04 §B);
+    // turning it off changes nothing.
+    onChange: (value) => {
+      if (value !== true) return;
+      offerExistingSessionOwnership().catch((err) => console.error(`${MODULE_ID} | offering session ownership failed`, err));
+    }
   });
 
   game.settings.register(MODULE_ID, SAVED_QUERIES_SETTING, {

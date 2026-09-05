@@ -19,7 +19,9 @@
       },
       "playersWriteSessions": {
         "name": "Players Write Sessions",
-        "hint": "When enabled, new Session entries created through the docx import wizard or Monk's Enhanced Journal's own New Entry dialog are owned by all players by default, so any player can add their own recap without a GM relaying the write."
+        "hint": "New Session entries are owned by all players, so any player can edit the shared recap. Turning this on also offers to grant ownership of existing sessions.",
+        "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
+        "applied": "Updated ownership on {count} session entries."
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
