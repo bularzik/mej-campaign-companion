@@ -11,4 +11,13 @@ describe("fieldsToStrip", () => {
     expect(fieldsToStrip(null)).toEqual(EDITOR_FIELDS);
     expect(fieldsToStrip(undefined)).toEqual(EDITOR_FIELDS);
   });
+  it("keeps a field that is currently open/active even when something else raised the submit", () => {
+    expect(fieldsToStrip(null, ["system.gmNotes"])).toEqual(["system.recap"]);
+  });
+  it("strips nothing when the raising field and the active field together cover every editor field", () => {
+    expect(fieldsToStrip("system.recap", ["system.gmNotes"])).toEqual([]);
+  });
+  it("strips nothing when every editor field is active, regardless of what raised the submit", () => {
+    expect(fieldsToStrip(null, ["system.recap", "system.gmNotes"])).toEqual([]);
+  });
 });

@@ -357,6 +357,20 @@ export class SessionSheet extends EnhancedJournalSheet {
 
   static onEditGmNotes(event, target) {
     const editing = $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).hasClass("editing");
+    // Unlike the recap editor, gmNotes is not toggled (no collaborative
+    // join to manage) - it activates at render time and just stays active,
+    // so the pencil here is purely a CSS show/hide. That means the pencil is
+    // ALSO this editor's only commit point: nothing else ever calls this
+    // element's own save() for it (no toggle -> no open=false -> save()
+    // chain the way the recap editor gets from onEditRecap below). Call it
+    // explicitly, BEFORE removing .editing, while closing - core's save()
+    // fires "change" (event.target = this element) only when the value
+    // actually changed, which MEJ's submitOnChange turns into a submit the
+    // stale-field guard already keeps (session-submit.mjs's activeFields).
+    if (editing) {
+      const editor = this.trueElement?.querySelector?.("prose-mirror[name='system.gmNotes']");
+      editor?.save();
+    }
     $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).toggleClass("editing", !editing);
   }
 
@@ -469,14 +483,25 @@ export class SessionSheet extends EnhancedJournalSheet {
   // form resubmits every field, so a submit raised by the session-number
   // input would write back whatever recap HTML this client rendered -
   // stale the moment another owner saved. Only the editor that raised the
-  // submit may write its own field; every other submit leaves both rich
-  // text fields alone. The change event bubbles from the <prose-mirror>
-  // itself, so event.target is that element.
+  // submit, or an editor that is currently open, may write its field; every
+  // other submit leaves the rest of the rich text fields alone. The change
+  // event bubbles from the <prose-mirror> itself, so event.target is that
+  // element. "Currently open" is read straight off the live elements
+  // (`open === true` and the `active` class core adds once
+  // #activateEditor() finishes - see prosemirror-editor.mjs) rather than
+  // trusted from anywhere else: gmNotes is untoggled and so active from
+  // render (its field is effectively never stripped), while the recap
+  // editor is toggled and only active while a participant has it open -
+  // exactly the case where its live value is fresher than whatever this
+  // client last rendered.
   _prepareSubmitData(event, form, formData, updateData) {
     const submitData = super._prepareSubmitData(event, form, formData, updateData);
     const target = event?.target;
     const targetName = target?.closest?.("prose-mirror")?.getAttribute("name") ?? target?.name ?? null;
-    for (const field of fieldsToStrip(targetName)) foundry.utils.deleteProperty(submitData, field);
+    const activeFields = [...form.querySelectorAll("prose-mirror[name]")]
+      .filter((el) => el.open === true && el.classList.contains("active"))
+      .map((el) => el.getAttribute("name"));
+    for (const field of fieldsToStrip(targetName, activeFields)) foundry.utils.deleteProperty(submitData, field);
     return submitData;
   }
 
