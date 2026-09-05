@@ -314,6 +314,7 @@
       "resultSummaryLinked": "Imported {pages} entries and {timepoints} timepoints; {links} name mentions auto-linked.",
       "resultIssues": "Import finished with {failed} failed section(s) and {warnings} warning(s) — details are in the browser console (F12).",
       "imagesDropped": "Some images could not be uploaded and were left out.",
+      "coverImageFailed": "Could not set the image for \"{name}\" — the entry was created without one.",
       "imageTypeUnsupported": "Skipped an image of unsupported type \"{type}\".",
       "imageCorrupt": "Skipped a damaged \"{type}\" image that could not be decoded.",
       "abortedPartway": "The import stopped early because of an unexpected error — anything listed above was still created. See the console for details.",

@@ -298,9 +298,11 @@ test.describe("05 docx import", () => {
           const withoutImage = pages.find((p) =>
             !/<img [^>]*src="/.test((p.text?.content ?? "") + (p.system?.recap ?? "")));
           return {
-            imagePageFoundSrc: withImage?.src ?? undefined,
+            foundImagePage: !!withImage,
+            imagePageFoundSrc: withImage?.src ?? null,
             imagePageFirstImgSrc: firstImgSrc,
-            picturelessPageFoundSrc: withoutImage ? (withoutImage.src ?? "") : undefined
+            foundPicturelessPage: !!withoutImage,
+            picturelessPageFoundSrc: withoutImage ? (withoutImage.src ?? "") : null
           };
         })()
       };
@@ -324,10 +326,27 @@ test.describe("05 docx import", () => {
     expect(summary.pagesWithDataUriImages).toBe(0);
     // Default-images (2026-09-05): the created page's own `src` equals the
     // first uploaded picture found in its html; a picture-less page's `src`
-    // stays empty.
-    expect(summary.imagePageFoundSrc).toMatch(/worlds\/.*mej-campaign-companion\//);
-    expect(summary.imagePageFoundSrc).toBe(summary.imagePageFirstImgSrc);
-    expect(summary.picturelessPageFoundSrc).toBeFalsy();
+    // stays empty. This also covers the import-accounting fix (a section
+    // whose cover-image update() fails still counts as created, never
+    // failed) end-to-end for the happy path exercised here - a real update()
+    // failure isn't practical to induce from an e2e test, so that branch is
+    // covered by the vitest-level per-row try/catch reasoning alone (no pure
+    // helper exists to unit-test in isolation; the write lives inline in
+    // ImportWizard#onCreate).
+    //
+    // Radiant Citadel.docx is known to carry pages of both kinds (17
+    // picture-only paragraphs plus plenty of plain prose) - assert that
+    // explicitly before trusting the `undefined`-safe src checks below,
+    // rather than letting an absent fixture pass silently.
+    expect(summary.foundImagePage).toBe(true);
+    expect(summary.foundPicturelessPage).toBe(true);
+    if (summary.foundImagePage) {
+      expect(summary.imagePageFoundSrc).toMatch(/worlds\/.*mej-campaign-companion\//);
+      expect(summary.imagePageFoundSrc).toBe(summary.imagePageFirstImgSrc);
+    }
+    if (summary.foundPicturelessPage) {
+      expect(summary.picturelessPageFoundSrc).toBeFalsy();
+    }
 
     // Opens correctly in MEJ.
     const sessionZeroId = await page.evaluate(() => game.journal.find((j) => j.name?.startsWith("Session Zero"))?.id);
