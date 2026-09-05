@@ -17,6 +17,7 @@ import {
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
 import { campaignOfFolder, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
+import { importResultMessages } from "../logic/import-result.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
@@ -675,29 +676,15 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     this.close();
-    await ImportWizard.#showResult(results, plan.warnings, linkedCount);
+    ImportWizard.#showResult(results, plan.warnings, linkedCount);
   }
 
-  static async #showResult(results, warnings, linkedCount = 0) {
-    const esc = foundry.utils.escapeHTML;
-    const parts = [`<p>${game.i18n.format(`${I18N}.import.created`, {
-      pages: results.created, timepoints: results.timepoints
-    })}</p>`];
-    if (linkedCount) {
-      parts.push(`<p>${game.i18n.format(`${I18N}.import.linked`, { count: linkedCount })}</p>`);
+  static #showResult(results, warnings, linkedCount = 0) {
+    const { info, issues } = importResultMessages(results, warnings, linkedCount, (k, d) => game.i18n.format(k, d));
+    ui.notifications.info(info);
+    if (issues) {
+      ui.notifications.warn(issues.message, { permanent: true });
+      console.warn(`${MODULE_ID} | import issues`, { failed: issues.failed, warnings: issues.warnings });
     }
-    if (results.failed.length) {
-      parts.push(`<p>${game.i18n.localize(`${I18N}.import.someFailed`)}</p>`
-        + `<ul>${results.failed.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`);
-    }
-    if (warnings.length) {
-      parts.push(`<ul>${warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>`);
-    }
-    await foundry.applications.api.DialogV2.wait({
-      window: { title: game.i18n.localize(`${I18N}.import.resultTitle`) },
-      content: parts.join(""),
-      buttons: [{ action: "ok", label: `${I18N}.import.ok`, default: true }],
-      rejectClose: false
-    });
   }
 }

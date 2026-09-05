@@ -23,6 +23,10 @@ per-player flag (active GM, on first load).
 - **The knowledge panel (tags, attributes, mentioned-in) collapses to a
   one-line bar** with a summary of what it holds. The state is remembered
   per client and applies to every sheet.
+- **Import results are a notification, not a dialog.** The docx import
+  wizard now reports its counts in a toast; failures and warnings go to a
+  second toast plus the browser console. Rule going forward: a message that
+  needs no decision is a toast.
 
 ## 0.16.0 (2026-09-03)
 

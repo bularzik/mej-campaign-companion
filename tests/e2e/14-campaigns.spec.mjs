@@ -599,11 +599,10 @@ test.describe.serial("14 campaigns", () => {
     expect(rowCount).toBeGreaterThan(10);
 
     await wizard.locator('button[data-action="createImport"]').click();
-    const resultDialog = page.locator("dialog.application", { hasText: /created|import/i }).last();
-    await resultDialog.waitFor({ timeout: 60_000 });
-    await settle(page, 300);
-    const okBtn = resultDialog.locator('button[data-action="ok"]').first();
-    if (await okBtn.count()) await okBtn.click();
+    // Result is a toast (ui.notifications.info), not a dialog.
+    await expect(page.locator("#notifications li.notification.info", { hasText: /Imported \d+ entries/ }))
+      .toHaveCount(1, { timeout: 60_000 });
+    await expect(page.locator("dialog.application")).toHaveCount(0);
     await settle(page, 500);
 
     const summary = await page.evaluate(async ({ alphaId, before }) => {
