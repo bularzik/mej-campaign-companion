@@ -652,7 +652,8 @@ Append inside `test.describe("11 auto-link scoping", …)`:
       return { id: e.id, ownershipDefault: e.ownership.default };
     }, { n: N.inheritHero, folderId: folder });
     expect(hero.ownershipDefault).toBe(2);
-    await expect(page.locator("#notifications li.notification.info", { hasText: /Linked .* in 1 place/ }))
+    // Recap and GM notes are two linkable regions of one page = two rows.
+    await expect(page.locator("#notifications li.notification.info", { hasText: /Linked .* in 2 place/ }))
       .toHaveCount(1, { timeout: 10_000 });
     await settle(page, 500);
     expect(await recapOf(page, session.id)).toContain(`@UUID[JournalEntry.${hero.id}]`);
