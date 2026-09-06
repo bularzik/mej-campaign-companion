@@ -200,7 +200,7 @@ Auto-linking turns plain-text mentions of Enhanced Journal entry names into `@UU
 
 **Scope.** Linking stays inside a campaign: an entry filed in a campaign links with that campaign's pages and with unfiled pages; an unfiled entry links anywhere; two campaigns never link into each other. A name shared by two entries that are both in reach of a page is skipped rather than guessed — you get a notification naming the entry when that is the only reason nothing was linked. On top of that, a mention only becomes a link when everyone who can already read the page can also see the entry being linked to (the GM is exempt).
 
-**Catching up an existing campaign.** Prose written before auto-linking was on stays unlinked until you ask. Scope the Hub to the campaign and click **Link mentions** in the Index toolbar: it plans every entry in the campaign against the campaign's pages and shows the review dialog — check what you want linked and click **Link Checked**.
+**Catching up an existing campaign.** Prose written before auto-linking was on stays unlinked until you ask. Scope the Hub to the campaign and click **Link mentions** in the Index toolbar: it plans every entry in the campaign against the campaign's pages and any unfiled pages and shows the review dialog — check what you want linked and click **Link Checked**. The pass runs on your client in one go and the review dialog lists every matching page, so on a very large campaign expect a pause of a few seconds and a long list — scope the Hub to one campaign at a time.
 
 **Opting out.** Set either setting to Off, or flag an individual page with the module's `noAutoLink` flag to keep auto-linking away from it entirely.
 
@@ -317,8 +317,8 @@ Five settings are visible in **Configure Settings → Module Settings**, all wor
 
 ![Campaign Companion's module settings panel](images/settings.png)
 
-- **Auto-Link Entry Names** (on by default) — see [Auto-linking](#auto-linking). Turn this on once you have enough named entries that manually linking every mention becomes tedious; it's safe to leave on indefinitely, since it only links names that already exist and never touches an existing link or a code block.
-- **Retroactive Auto-Link** (default: Silent — notification) — see [Auto-linking](#auto-linking). Confirm is the safer default: you review a checklist before anything gets linked. Switch to Silent once you trust the results and don't want the dialog interrupting you; set it to Off if you don't want retroactive linking at all (new-mention auto-linking on save, above, is independent of this).
+- **Auto-Link Entry Names** (on by default) — see [Auto-linking](#auto-linking). Links newly-typed mentions of existing entry names as pages are saved, without touching an existing link or a code block.
+- **Retroactive Auto-Link** (default: Silent — notification) — see [Auto-linking](#auto-linking). Links existing plain-text mentions of a newly created entry's name and shows a notification; switch to Confirm if you want to review every pass first, or Off to turn retroactive linking off entirely (new-mention auto-linking on save, above, is independent of this).
 - **Auto-Capture Encounters** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you'd rather have an Encounter entry appear automatically after every fight than create one yourself.
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.

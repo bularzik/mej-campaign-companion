@@ -40,7 +40,7 @@ export function linkableRegions(page)
 ```
 - Session page (has `system.recap` defined): `{ key: "system.recap", gmOnly: false }` and, when `system.gmNotes` is a non-empty string, `{ key: "system.gmNotes", gmOnly: true }`.
 - Any other page: `{ key: "text.content", gmOnly: false }`.
-- Regions whose content is not a non-empty string are omitted. Built on `bodyRegion()` from `field-extractors.mjs` (which is refactored to share the same `system.recap` presence test — one definition of "where the body lives").
+- Every region is returned, with `content: ""` when the field is empty or missing (see Deviations). Built on `bodyRegion()` from `field-extractors.mjs`, which already is the single definition of where the body lives.
 
 ```js
 /** true when a page and an entity may link to each other. Either side unfiled (null) matches everything. */
@@ -65,13 +65,15 @@ Import: `ImportWizard.#linkCandidates` filters by `sameLinkScope(destinationCamp
 
 ## §3 Create-time path and feedback — `scripts/hooks/retro-link.mjs`
 
-Unchanged: `preCreateJournalEntry` pending-flag stamp, active-GM `createJournalEntry` trigger, burst coalescing (`BURST_IDLE_MS`), promise-chain serialization, `suspendRetroBursts`/`resumeRetroBursts` around import, login catch-up sweep, deleted-entity re-plan in confirm mode.
+Unchanged: `preCreateJournalEntry` pending-flag stamp, active-GM `createJournalEntry` trigger, burst coalescing (`BURST_IDLE_MS`), promise-chain serialization, `suspendRetroBursts`/`resumeRetroBursts` around import, login catch-up sweep.
 
 Changes:
+- **Confirm mode re-plans after the dialog.** The rows the GM approved identify (page, region) pairs and entities; the pass re-plans against current content restricted to those, so a human-length wait cannot make the write clobber a concurrent edit or add an unshown link.
 - **`planForBurst` walks regions.** For every eligible entry (not timeline/portal) and every region of each of its pages, one row `{ uuid: page.uuid, key, content, viewerIds, campaignId, noAutoLink, entryUuid, name }`; `viewerIds` is `[]` for `gmOnly`. Entities carry `campaignId` too. `buildRetroPlanBatch` pairs entity × row only when `sameLinkScope` holds, then containment, then scope-aware ambiguity (§1). Output rows are per region; a page with two matched regions produces two rows that are merged into one `pageDoc.update({ [keyA]: htmlA, [keyB]: htmlB }, { [MODULE_ID]: { retroLink: true } })`.
-- **Feedback** (`silent` mode, new default): replace `whisperSummary` with `notifyRetroResult(entities, applied, rows)`:
-  - `applied.length > 0` → `ui.notifications.info` with `retroLink.summary` ("Linked \"{name}\" in {count} place(s).") for one entity or `retroLink.summaryMany` ("Linked {entities} new entries in {count} place(s).") for several; `console.info(\`${MODULE_ID} | auto-link\`, { pages: [...names + per-entity counts], ambiguous: [...] })`.
-  - `applied.length === 0` and some row has `ambiguous.length` → `ui.notifications.warn` with `retroLink.ambiguousOnly` ("Skipped auto-linking \"{name}\": another entity in reach shares that name.") — one toast per burst, naming the first ambiguous entity, remaining names in the console.
+- **Feedback** (`silent` mode, new default): replace `whisperSummary` with `notifyRetroResult(entities, applied, rows, { writable })`:
+  - `applied.length > 0` → `ui.notifications.info` with `retroLink.summary` ("Linked \"{name}\" in {count} place(s).") for one entity or `retroLink.summaryMany` ("Linked {entities} new entries in {count} place(s).") for several, where `{entities}` is the count of distinct entities that gained links (`applied.flatMap((r) => r.matches)`, deduped by `entityUuid`) rather than every entity in the pass; `console.info(\`${MODULE_ID} | auto-link\`, { pages: [...names + per-entity counts], ambiguous: [...] })`.
+  - `applied` empty but `writable > 0` (every planned write failed) → `ui.notifications.error` with `retroLink.writeFailed` ("Auto-link could not write {count} planned change(s) — see the browser console (F12)."), detail logged with `console.error`.
+  - no writable row at all and some row has `ambiguous.length` → `ui.notifications.warn` with `retroLink.ambiguousOnly` ("Skipped auto-linking \"{name}\": another entity in reach shares that name.") — one toast per burst, naming the first ambiguous entity, remaining names in the console.
   - nothing matched, nothing ambiguous → no output.
   - `confirm` mode: dialog as today; after the writes, the same `notifyRetroResult`. `off`: unchanged.
 - Import produces two toasts by design: the wizard's own (links *from* imported pages) and the retro burst's (existing pages linked *to* the new entries).
@@ -122,3 +124,7 @@ Changes:
 ## Deviations
 
 - Ruling (Task 1): `linkableRegions` returns every region of the page even when its content is `""` (a session page always yields `system.recap` and `system.gmNotes`), instead of omitting empty regions — the forward hook needs a region whose *current* content is empty so a first save diffs against baseline `""`. The retro planner keeps its existing empty-content skip, so scanning behaviour is as specified. Cost if wrong: none observable; only the helper's contract differs.
+- Ruling (Task 4): the confirm-mode re-plan keep-set is keyed on `${pageUuid} ${key}` (rows are per region; keying on page alone could write a GM-notes region the GM unchecked). The ambiguous-only warning is gated on the pre-dialog writable count so a GM who unchecked every row is not told "ambiguous". Cost if wrong: none (strictly narrower writes).
+- Ruling (Task 7): the plan's raw before/after `#notifications` count assertion in spec 11's zero-match test was removed as flaky by construction (permanent boot toast); the filtered `/Linked|Skipped/` === 0 assertion carries the check. Cost if wrong: an unrelated toast during the window goes unnoticed, which was never the test's job.
+- Ruling (Task 8): spec 22's cleanup closes the MEJ shell first (an open Hub re-creates the campaign timeline on re-render), deletes every journal filed in a tracked folder, then deletes tracked folders with `deleteContents: true`. Still id/folder-tracked, never name-based. Cost if wrong: none outside test-created folders.
+- Ruling (final review): confirm mode always re-plans after the dialog (see §3); `summaryMany` counts distinct linked entities; total write failure raises an error toast; twin detection skips timeline journals and portals; spec 05's ambient-state dialog assertion dropped. Session pages created outside the companion without a stored `system.recap` are classified as text pages until their first recap save — accepted (companion-created sessions always store `recap: ""`).

@@ -124,7 +124,7 @@
       "fileInto": "File into campaign…",
       "fileAllShown": "File all shown into…",
       "linkMentions": "Link mentions",
-      "linkMentionsTitle": "Find plain-text mentions of this campaign's entries in its pages and offer to link them",
+      "linkMentionsTitle": "Find plain-text mentions of this campaign's entries in its pages and in unfiled entries, and offer to link them",
       "linkMentionsNone": "This campaign has no Enhanced Journal entries to link.",
       "noCampaignsYet": "No campaigns yet — create one from the campaign picker first.",
       "hide": "Hide from players",
@@ -386,7 +386,8 @@
       "summary": "Linked \"{name}\" in {count} place(s).",
       "titleMany": "Auto-Link Entries",
       "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",
-      "summaryMany": "Linked {entities} entries in {count} place(s)."
+      "summaryMany": "Linked {entities} entries in {count} place(s).",
+      "writeFailed": "Auto-link could not write {count} planned change(s) — see the browser console (F12)."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",

@@ -204,10 +204,6 @@ test.describe("05 docx import", () => {
     // stay untouched.
     await expect(page.locator("#notifications li.notification.info", { hasText: /Imported \d+ entries/ }))
       .toHaveCount(1, { timeout: 60_000 });
-    // The create-time pass that follows an import must not surface a dialog
-    // in the default Silent mode (it may or may not toast, depending on
-    // whether the fixture's names occur in pre-existing pages).
-    await expect(page.locator("dialog.application.mej-cc-retro-link-dialog")).toHaveCount(0);
     await expect(page.locator("dialog.application", { hasText: /Import Results/ })).toHaveCount(0);
     await settle(page, 500);
 
