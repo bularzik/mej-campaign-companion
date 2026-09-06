@@ -217,4 +217,88 @@ test.describe("23 campaign creation", () => {
     await page.keyboard.press("Escape");
     assertNoConsoleErrors(errors);
   });
+
+  test("7. neither MEJ's New Entry dialog nor the core Create Page dialog offers Campaign", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await showSidebar(page);
+    await page.locator("#journal .directory-header button.create-entry").click();
+    const mejSelect = page.locator('select[name="flags.monks-enhanced-journal.pagetype"]');
+    await expect(mejSelect).toBeVisible();
+    await expect(mejSelect.locator('option[value="campaign"], option[value="mej-campaign-companion.campaign"]')).toHaveCount(0);
+    await expect(mejSelect.locator('option[value="session"]')).toHaveCount(1); // Session stays (api mode)
+    await page.keyboard.press("Escape");
+    await settle(page, 200);
+
+    const hostId = await page.evaluate(async (n) => (await JournalEntry.create({ name: n, pages: [{ name: "p", type: "text" }] })).id, name("Host"));
+    created.journals.push(hostId);
+    // MEJ's JournalEntryPage.createDialog libWrapper (onCreatePageDialog, monks-enhanced-journal.js:1574)
+    // unconditionally sets `options.journalentrypage = true` on the 3rd positional
+    // arg with no undefined guard, so a 2-arg call crashes before the dialog ever
+    // opens; pass an explicit (empty) options object to reach the dialog at all.
+    // createDialog()'s own promise only resolves once the dialog is closed, so it
+    // is fired without awaiting it here (awaiting would deadlock against the
+    // Escape press below, which is what actually closes it).
+    await page.evaluate((id) => { JournalEntryPage.createDialog({}, { parent: game.journal.get(id) }, {}); }, hostId);
+    await settle(page, 300);
+    const coreSelect = page.locator('.application.dialog select[name="type"]').last();
+    await expect(coreSelect).toBeVisible();
+    await expect(coreSelect.locator('option[value="mej-campaign-companion.campaign"]')).toHaveCount(0);
+    await expect(coreSelect.locator('option[value="text"]')).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("8. a loose campaign page created by API is upgraded into a campaign", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const n = name("Stray");
+    const entryId = await page.evaluate(async (n) =>
+      (await JournalEntry.create({ name: n, pages: [{ name: n, type: "mej-campaign-companion.campaign" }] })).id, n);
+    created.journals.push(entryId);
+    await expect(page.locator("#notifications .notification", { hasText: `Created campaign "${n}" from this entry.` })).toBeVisible({ timeout: 15_000 });
+    const folderId = await page.evaluate((id) => game.journal.get(id).folder?.id ?? null, entryId);
+    expect(folderId).not.toBe(null);
+    created.folders.push(folderId);
+    const s = await structureOf(page, folderId);
+    expect(s.flag).toEqual({ ownershipDefault: "observer" });
+    expect(s.portalId).toBe(entryId);
+    expect(s.timelineNames).toEqual([`${n} — Timeline`]);
+    const pageFlags = await page.evaluate((id) => game.journal.get(id).pages.contents[0].flags, entryId);
+    expect(pageFlags["mej-campaign-companion"].campaignPortal).toBe(true);
+    expect(pageFlags["monks-enhanced-journal"].type).toBe("campaign");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("9. a campaign page inside a campaign, into a multipage entry, or via MEJ's dialog intent into a campaign folder is refused", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const n = name("Refuse");
+    const campaignId = await page.evaluate(async ({ STORE, n }) => {
+      const { createCampaign } = await import(STORE);
+      return (await createCampaign(n)).id;
+    }, { STORE, n });
+    created.folders.push(campaignId);
+    const hostId = await page.evaluate(async (n) => (await JournalEntry.create({ name: `${n} host`, pages: [{ name: "p", type: "text" }] })).id, n);
+    created.journals.push(hostId);
+    const results = await page.evaluate(async ({ campaignId, hostId, n }) => {
+      const T = "mej-campaign-companion.campaign";
+      const inCampaign = await JournalEntry.create({ name: `${n} in`, folder: campaignId, pages: [{ name: "c", type: T }] });
+      const intent = await JournalEntry.create({ name: `${n} intent`, folder: campaignId, flags: { "monks-enhanced-journal": { pagetype: "campaign" } } });
+      const multipage = await JournalEntryPage.create({ name: "c", type: T }, { parent: game.journal.get(hostId) });
+      return {
+        inCampaign: inCampaign?.id ?? null,
+        intent: intent?.id ?? null,
+        multipage: multipage?.id ?? null,
+        hostPages: game.journal.get(hostId).pages.size,
+        warnings: [...document.querySelectorAll("#notifications .notification")].filter((el) => /New Campaign button/.test(el.textContent)).length
+      };
+    }, { campaignId, hostId, n });
+    expect(results.inCampaign).toBe(null);
+    expect(results.intent).toBe(null);
+    expect(results.multipage).toBe(null);
+    expect(results.hostPages).toBe(1);
+    expect(results.warnings).toBeGreaterThanOrEqual(1);
+    assertNoConsoleErrors(errors);
+  });
 });

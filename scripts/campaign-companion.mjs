@@ -17,6 +17,7 @@ import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
+import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { foldPlayerRecaps } from "./logic/recap-migration.mjs";
@@ -260,6 +261,11 @@ Hooks.once("ready", async () => {
     ui.notifications.error(game.i18n.localize(`${I18N}.errors.${key}`), { permanent: true });
     if (mode === MODE_ABSENT) return;
   }
+
+  // Campaign is never offered as a page type, and a campaign page created
+  // any other way is refused or upgraded (spec 2026-09-06 §3). Must follow
+  // MEJ's own module-level renderDialogV2 hook, hence ready rather than init.
+  registerCampaignGuard();
 
   // Single shared socket listener for the whole module (media relay +
   // player recap relay) - see hooks/socket.mjs's header comment.
