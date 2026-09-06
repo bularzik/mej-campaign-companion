@@ -99,10 +99,34 @@ async function openHubScoped(page, campaignFolderId, bootstrapEntryId) {
 
 async function cleanup(gmPage) {
   await gmPage.evaluate(async ({ journals, folders, MOD }) => {
-    const jids = journals.filter((id) => game.journal.get(id));
+    // The Hub, if left open (test 3 never closes it), re-renders on the
+    // deleteJournalEntry hooks the deletes below fire, and its own
+    // _prepareContext re-resolves ensureTimelineJournal(campaign) for the
+    // still-live campaign scope mid-cleanup - confirmed live: closing the
+    // shell first (before anything is deleted) is what actually stops a
+    // fresh timeline being (re)created out from under this same cleanup.
+    try { await game.MonksEnhancedJournal?.journal?.close?.(); } catch { /* nothing open */ }
+    // Opening the Hub scoped to a campaign folder auto-creates that
+    // campaign's timeline journal (ensureTimelineJournal), asynchronously,
+    // as a side effect of rendering - the click that opens the Hub can
+    // return (and this cleanup can start) before that create() lands. It's
+    // never in `journals`, so pick it up (and anything else the module filed
+    // into a tracked folder) by folder id, not by name - polling briefly
+    // first so a still-in-flight create isn't missed by an early snapshot.
+    const tracked = new Set(folders);
+    const inTrackedFolders = () => game.journal.contents.filter((e) => tracked.has(e.folder?.id)).map((e) => e.id);
+    let extra = inTrackedFolders();
+    for (let i = 0; i < 6 && extra.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      extra = inTrackedFolders();
+    }
+    const jids = [...new Set([...journals.filter((id) => game.journal.get(id)), ...extra])];
     if (jids.length) await JournalEntry.implementation.deleteDocuments(jids);
     const fids = folders.filter((id) => game.folders.get(id));
-    if (fids.length) await Folder.implementation.deleteDocuments(fids);
+    // deleteContents as defense-in-depth: catches anything the module still
+    // manages to file into the folder between the snapshot above and this
+    // delete, rather than letting it survive the folder as a root orphan.
+    if (fids.length) await Folder.implementation.deleteDocuments(fids, { deleteContents: true });
     await game.settings.set(MOD, "autoLink", true);
     await game.settings.set(MOD, "retroLinkMode", "silent");
   }, { ...created, MOD });
