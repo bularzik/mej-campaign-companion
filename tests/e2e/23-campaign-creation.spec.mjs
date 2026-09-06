@@ -100,4 +100,77 @@ test.describe("23 campaign creation", () => {
     expect(s.timelineNames).toEqual([`${n} — Timeline`]);
     assertNoConsoleErrors(errors);
   });
+
+  /** Bring the core journal sidebar to the front (the MEJ shell covers it while open). */
+  async function showSidebar(page) {
+    await page.evaluate(async () => {
+      try { await game.MonksEnhancedJournal?.journal?.close?.(); } catch { /* nothing open */ }
+      await ui.journal.activate();
+    });
+    await settle(page, 300);
+  }
+
+  /** Fill the New Campaign DialogV2 and confirm. */
+  async function confirmNewCampaign(page, n, baseline = "observer") {
+    const dialog = page.locator(".application.dialog:has(input[name='name'])").last();
+    await expect(dialog).toBeVisible();
+    await dialog.locator("input[name='name']").fill(n);
+    await dialog.locator("select[name='baseline']").selectOption(baseline);
+    await dialog.locator("button[data-action='ok']").click();
+  }
+
+  test("3. the sidebar New Campaign button creates folder, portal and timeline and toasts", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await showSidebar(page);
+    const button = page.locator("#journal .directory-header button.mej-cc-create-campaign");
+    await expect(button).toHaveCount(1);
+    await expect(button).toContainText("New Campaign");
+    const n = name("Sidebar");
+    await button.click();
+    await confirmNewCampaign(page, n, "owner");
+    await expect(page.locator("#notifications .notification", { hasText: `Campaign "${n}" created.` })).toBeVisible();
+    const folderId = await page.evaluate((n) => game.folders.find((f) => f.type === "JournalEntry" && f.name === n)?.id ?? null, n);
+    expect(folderId).not.toBe(null);
+    created.folders.push(folderId);
+    const s = await structureOf(page, folderId);
+    expect(s.flag).toEqual({ ownershipDefault: "owner" });
+    expect(s.portalName).toBe(n);
+    expect(s.timelineNames).toEqual([`${n} — Timeline`]);
+    // The row is a campaign now: flag icon + class, on the same render.
+    const row = page.locator(`#journal li.folder[data-folder-id="${folderId}"]`);
+    await expect(row).toHaveClass(/mej-cc-campaign-folder/);
+    await expect(row.locator(":scope > .folder-header > i.fa-flag")).toHaveCount(1);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("4. MEJ's shell sidebar carries the same button; plain folders carry no flag", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const plainId = await page.evaluate(async (n) => (await Folder.create({ name: n, type: "JournalEntry" })).id, name("Plain"));
+    created.folders.push(plainId);
+    await showSidebar(page);
+    const plainRow = page.locator(`#journal li.folder[data-folder-id="${plainId}"]`);
+    await expect(plainRow).toHaveCount(1);
+    await expect(plainRow).not.toHaveClass(/mej-cc-campaign-folder/);
+    await expect(plainRow.locator(":scope > .folder-header > i.fa-flag")).toHaveCount(0);
+    // Open the shell on any non-timeline entry and look at its sidebar copy.
+    await page.evaluate(async () => {
+      const entry = game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"));
+      await game.MonksEnhancedJournal.openJournalEntry(entry);
+    });
+    await settle(page, 500);
+    const shell = page.locator("#MonksEnhancedJournal");
+    await expect(shell.locator(".directory-header button.mej-cc-create-campaign")).toHaveCount(1);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("5. a player seat sees no New Campaign button", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "User 1");
+    await showSidebar(page);
+    await expect(page.locator("#journal .directory-header")).toBeVisible();
+    await expect(page.locator("#journal .directory-header button.mej-cc-create-campaign")).toHaveCount(0);
+    assertNoConsoleErrors(errors);
+  });
 });

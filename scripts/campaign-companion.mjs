@@ -15,6 +15,7 @@ import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
+import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { isTimelineJournal } from "./logic/campaigns.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
@@ -155,6 +156,10 @@ Hooks.once("init", () => {
 
   // ...and carry a timeline icon instead of MEJ's generic book (spec §D).
   registerTimelineDirectory();
+
+  // Sidebar New Campaign button + flag icon on campaign folders (spec
+  // 2026-09-06 §2) - pure-logic imports only, safe at init like the two above.
+  registerCampaignDirectory();
 
   // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
   registerRecapRefresh();
