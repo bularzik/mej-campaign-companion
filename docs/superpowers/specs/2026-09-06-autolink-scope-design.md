@@ -122,8 +122,9 @@ Rules:
 - **Order with the session hook.** `playersWriteSessions` sets OWNER on
   session entries; both hooks run and the higher level wins regardless of
   order because the session hook writes only when the setting is on and
-  OWNER ≥ every baseline. Registered from `registerCore()` next to
-  `registerRetroLink()` so api and native mode both get it.
+  OWNER ≥ every baseline. Registered as its own step in `registerCore()`
+  (`integrations/mej-adapter.mjs`, next to the `retro-link` step) so api
+  and native mode both get it.
 - **Import wizard "GM only" audience** currently passes `ownership: null`
   and lets Foundry default the entry. Under inheritance that would silently
   become the baseline. `#onCreate` now maps `"gm"` to
