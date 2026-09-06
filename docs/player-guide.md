@@ -32,6 +32,8 @@ Once your campaign has more than a few sessions, you won't always remember which
 - the **Campaign Hub** tool in the **Journal Notes** group of Foundry's scene controls;
 - opening a campaign's portal entry from the journal sidebar — see [The campaign portal](#the-campaign-portal) below.
 
+Campaign folders show a flag icon in the sidebar; everything inside one belongs to that campaign.
+
 A **header bar** runs across the top of the Hub. From your seat it holds two things: a **campaign picker** and a **Tools** button. The picker scopes every pane below it — it offers **All campaigns**, each campaign you're allowed to see, and **Unfiled** when there are any unfiled entries you can see, but not the GM-only option for creating one. **Tools** holds a single item for you, **Open the user guide**, which opens this document in a new browser tab. Your GM's header bar has more on it: a settings gear and a **New Session** button that aren't rendered for you.
 
 Below the header bar are the panes. **You see five** — **Index**, **Timeline**, **Graph**, **Search** and **Dashboards**. Your GM sees a sixth, **Secrets**, which isn't rendered for a non-GM at all.

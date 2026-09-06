@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.19.0 (2026-09-06)
+
+Campaigns are created whole. Data migration: dataVersion 7 backfills
+timelines onto existing campaigns and upgrades loose campaign pages.
+
+- **Campaigns are created whole.** `createCampaign()` now makes the folder, the portal entry and the `<name> — Timeline` journal in one go; the Hub no longer creates timelines as a side effect of being opened.
+- **New Campaign in the journal sidebar** (GM only, core sidebar and MEJ's shell sidebar) — the first way to create a campaign that doesn't need the Hub open. Campaign folders carry a flag icon.
+- **Make this folder a campaign** — right-click a plain top-level journal folder to promote it in place; its entries stay put.
+- **Campaign is no longer a page type.** It is stripped from MEJ's New Entry dialog and Foundry's Create Page dialog; a loose campaign page created by any other path is upgraded into a real campaign, or refused with a toast when it can't be.
+- **Data migration (dataVersion 7):** every campaign without a timeline gets one; loose single-page campaign entries become campaigns; anything that can't be converted is listed in the console, never deleted.
+
 ## 0.18.0 (2026-09-05)
 
 Auto-linking that actually reaches your prose.
