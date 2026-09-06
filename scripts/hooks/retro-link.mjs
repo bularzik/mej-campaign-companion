@@ -14,16 +14,20 @@ import {
 } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
-import { campaignIdOf, isTimelineJournal, isCampaignPortal } from "../logic/campaigns.mjs";
+import { campaignIdOf, isTimelineJournal, isCampaignPortal, isLinkableEntity } from "../logic/campaigns.mjs";
 
 /**
  * MEJ's own New Entry dialog creates the entry FIRST (with
  * flags["monks-enhanced-journal"].pagetype) and its _onCreate patch adds the
  * typed page afterward — so at preCreate time getMEJType(entry) can still be
  * false for a dialog-created entry. Check both the constructed document and
- * the raw entry-level MEJ flags.
+ * the raw entry-level MEJ flags. A campaign portal (MEJ type "campaign",
+ * created with its marked page inline) and a timeline journal are never
+ * candidates (spec 2026-09-06 §1) — the pending document already carries
+ * its pages and flags, so both predicates work on it here.
  */
 function isMejCandidate(entry) {
+  if (isTimelineJournal(entry) || isCampaignPortal(entry)) return false;
   if (mejType(entry)) return true;
   const mejFlags = entry.flags?.["monks-enhanced-journal"];
   return !!(mejFlags?.pagetype || mejFlags?.type);
@@ -40,10 +44,12 @@ function isMejCandidate(entry) {
  */
 function planForBurst(entries) {
   const users = game.users.contents;
-  const entities = entries.map((entry) => ({
-    uuid: entry.uuid, name: entry.name, campaignId: campaignIdOf(entry),
-    viewerIds: viewerIds(entry, users, isVisibleToUser)
-  }));
+  const entities = entries
+    .filter((entry) => isLinkableEntity(entry, mejType))
+    .map((entry) => ({
+      uuid: entry.uuid, name: entry.name, campaignId: campaignIdOf(entry),
+      viewerIds: viewerIds(entry, users, isVisibleToUser)
+    }));
 
   // Same-named twins, resolved for every entity in the burst in one pass over
   // the journal rather than one pass each. An entity in the burst can be
@@ -52,7 +58,7 @@ function planForBurst(entries) {
   // reach (spec §1).
   const byName = new Map();
   for (const e of game.journal.contents) {
-    if (!mejType(e) || isTimelineJournal(e) || isCampaignPortal(e)) continue;
+    if (!isLinkableEntity(e, mejType)) continue;
     const norm = e.name.trim().toLowerCase();
     if (!byName.has(norm)) byName.set(norm, []);
     byName.get(norm).push(e);
@@ -338,6 +344,7 @@ async function processBurst(queued, { modeOverride = null } = {}) {
     let live = queued.map((q) => q.entry).filter(stillExists);
     if (!live.length) return;
     let { rows } = planForBurst(live);
+    live = live.filter((e) => isLinkableEntity(e, mejType));
     if (!rows.length) return;
 
     let chosen = rows.filter((r) => r.newHtml && r.matches.length);

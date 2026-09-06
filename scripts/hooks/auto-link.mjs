@@ -13,7 +13,7 @@ import { autoLinkAdded } from "../logic/auto-link.mjs";
 import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
 import { linkableRegions, sameLinkScope } from "../logic/link-targets.mjs";
-import { campaignIdOf, isTimelineJournal, isCampaignPortal } from "../logic/campaigns.mjs";
+import { campaignIdOf, isLinkableEntity } from "../logic/campaigns.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { MODULE_ID, AUTO_LINK_SETTING, NO_AUTO_LINK_FLAG } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -29,7 +29,7 @@ function buildCandidates(page, region) {
   const pageViewers = region.gmOnly ? [] : viewerIds(page.parent, users, isVisibleToUser);
   const pageCampaignId = campaignIdOf(page);
   const pages = game.journal
-    .filter((entry) => mejType(entry) && !isTimelineJournal(entry) && !isCampaignPortal(entry)
+    .filter((entry) => isLinkableEntity(entry, mejType)
       && sameLinkScope(pageCampaignId, campaignIdOf(entry)))
     .map((entry) => ({
       id: entry.id,

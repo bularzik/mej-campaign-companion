@@ -201,6 +201,19 @@ export function isCampaignPortal(doc) {
   return (doc.pages?.contents ?? []).some((p) => isCampaignPortalPage(p));
 }
 
+/**
+ * An entry auto-link may link TO or scan FOR (spec 2026-09-06 §1): MEJ-typed,
+ * and neither a campaign portal nor a timeline journal. The portal carries
+ * MEJ type "campaign" and the timeline a companion flag, so without this
+ * both read as ordinary entities and creating a campaign linked its own
+ * name into every page in scope. `mejTypeOf` is injected because this
+ * module stays free of Foundry imports.
+ */
+export function isLinkableEntity(entry, mejTypeOf) {
+  if (!entry) return false;
+  return !!mejTypeOf(entry) && !isTimelineJournal(entry) && !isCampaignPortal(entry);
+}
+
 /** The page carries the companion's portal marker (stamped by buildCampaignPortalData and upgradeEntryToCampaign). */
 export function hasPortalMarker(page) {
   return page?.flags?.[MODULE_ID]?.campaignPortal === true;
