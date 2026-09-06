@@ -128,6 +128,17 @@ export function upgradeEntryToCampaign(entry, { ownershipDefault = "observer" } 
   return run;
 }
 
+/**
+ * The entry-move (`entry.update`) makes `campaignOf(entry)` truthy, which is
+ * part of this function's own eligibility gate - once it lands, a retry after
+ * a later failure here is a permanent no-op (by design: re-running would
+ * re-home an already-adopted entry). So the two post-move writes are each
+ * wrapped rather than left to reject the whole call, same shape as
+ * completeCampaignStructure: a failed marker stamp is tolerated because
+ * isCampaignPortalPage also matches on the campaign page type/subtype alone
+ * (see logic/campaigns.mjs), and a failed timeline write self-heals the next
+ * time this campaign's Hub renders (ensureTimelineJournal is idempotent).
+ */
 async function doUpgrade(entry, { ownershipDefault }) {
   if (!game.user.isGM || !entry?.pages) return null;
   const pages = entry.pages.contents;
@@ -143,9 +154,17 @@ async function doUpgrade(entry, { ownershipDefault }) {
   if (!folder) return null;
   await seedAutoCaptureIfFirst(folder, wasFirst);
   await entry.update({ folder: folder.id, "ownership.default": baselineOwnership(folder) });
-  const { flags } = buildCampaignPortalData(entry.name);
-  await page.update({ name: entry.name, flags });
-  await ensureTimelineJournal(folder);
+  try {
+    const { flags } = buildCampaignPortalData(entry.name);
+    await page.update({ name: entry.name, flags });
+  } catch (err) {
+    console.error(`${MODULE_ID} | portal marker stamp failed for campaign ${folder.id}`, err);
+  }
+  try {
+    await ensureTimelineJournal(folder);
+  } catch (err) {
+    console.error(`${MODULE_ID} | timeline creation failed for campaign ${folder.id}`, err);
+  }
   return folder;
 }
 
