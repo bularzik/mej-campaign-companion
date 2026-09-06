@@ -71,7 +71,8 @@ function maybeUpgrade(entry, userId) {
     .then(({ upgradeEntryToCampaign }) => upgradeEntryToCampaign(entry))
     .then((folder) => {
       if (folder) ui.notifications.info(game.i18n.format(`${I18N}.campaign.strayUpgraded`, { name: folder.name }));
-    });
+    })
+    .catch((err) => console.error(`${MODULE_ID} | campaign upgrade failed for ${entry.uuid}`, err));
 }
 
 export function registerCampaignGuard() {
