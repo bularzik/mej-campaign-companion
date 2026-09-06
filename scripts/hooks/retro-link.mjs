@@ -153,17 +153,19 @@ async function confirmDialog(entities, rows) {
 
 /**
  * Report a finished pass (spec §3): an info toast with the counts when
- * anything was written; an error toast when every planned write failed
- * (`writable` rows existed but `applied` came back empty); a warn toast when
- * nothing was written only because every match was ambiguous; nothing at all
- * when nothing matched. `writable` is the pre-dialog matched-row count, so
- * this function is never even reached for a GM who unchecked every row in
- * confirm mode: the unconditional re-plan that follows the dialog restricts
- * `live` to the approved entities, which comes back empty, and `processBurst`
- * returns before calling here. The per-page detail goes to the console under
- * the module prefix.
+ * anything was written; an error toast when `failed` (an actual write threw,
+ * or its page had vanished by write time) is nonzero; a warn toast when
+ * nothing was written and nothing failed, only because every match was
+ * ambiguous; nothing at all when nothing matched. `writable` is the
+ * pre-dialog matched-row count, gating only the ambiguous-only warn (never
+ * "was anything actually wrong" - that's `failed`'s job) so a GM who
+ * unchecked every row in confirm mode is not told "ambiguous" either: the
+ * unconditional re-plan that follows the dialog restricts `live` to the
+ * approved entities, which comes back empty, and `processBurst` returns
+ * before calling here. The per-page detail goes to the console under the
+ * module prefix.
  */
-function notifyRetroResult(entities, applied, rows, { writable } = {}) {
+function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   const single = entities.length === 1;
   const ambiguousRows = rows.filter((r) => r.ambiguous.length);
   const detail = {
@@ -181,12 +183,12 @@ function notifyRetroResult(entities, applied, rows, { writable } = {}) {
     console.info(`${MODULE_ID} | auto-link`, detail);
     return;
   }
-  if (writable) {
-    ui.notifications.error(game.i18n.format(`${I18N}.retroLink.writeFailed`, { count: writable }));
-    console.error(`${MODULE_ID} | auto-link — all ${writable} planned write(s) failed`, detail);
+  if (failed) {
+    ui.notifications.error(game.i18n.format(`${I18N}.retroLink.writeFailed`, { count: failed }));
+    console.error(`${MODULE_ID} | auto-link — ${failed} page write(s) failed`, detail);
     return;
   }
-  if (ambiguousRows.length) {
+  if (!writable && ambiguousRows.length) {
     const name = ambiguousRows[0].ambiguous[0].entityName;
     ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
     console.info(`${MODULE_ID} | auto-link`, detail);
@@ -386,17 +388,19 @@ async function processBurst(queued, { modeOverride = null } = {}) {
       byPage.set(row.pageUuid, w);
     }
     const applied = [];
+    let failed = 0;
     for (const [pageUuid, w] of byPage) {
       try {
         const pageDoc = await fromUuid(pageUuid);
-        if (!pageDoc) continue;
+        if (!pageDoc) { failed++; continue; }
         await pageDoc.update(w.update, { [MODULE_ID]: { retroLink: true } });
         applied.push(...w.rows);
       } catch (err) {
+        failed++;
         console.error(`${MODULE_ID} | retro-link write failed for ${pageUuid}`, err);
       }
     }
-    notifyRetroResult(live, applied, rows, { writable: writableCount });
+    notifyRetroResult(live, applied, rows, { failed, writable: writableCount });
   } catch (err) {
     console.error(`${MODULE_ID} | retro-link burst failed`, err);
   } finally {
