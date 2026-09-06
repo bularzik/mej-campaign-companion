@@ -10,13 +10,17 @@ import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
-import { getCampaigns, campaignPortal, ensureCampaignPortal } from "./data/campaign-store.mjs";
+import { getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
+import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
-import { isTimelineJournal } from "./logic/campaigns.mjs";
+import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
+import { isTimelineJournal, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
+import { campaignTimelines, ensureTimelineJournal } from "./data/timeline-journal.mjs";
+import { planCampaignStructure } from "./logic/campaign-migration.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
 import { foldPlayerRecaps } from "./logic/recap-migration.mjs";
 import { setSectionRevealed, extractSecretBlocks } from "./logic/secret-blocks.mjs";
@@ -156,6 +160,10 @@ Hooks.once("init", () => {
   // ...and carry a timeline icon instead of MEJ's generic book (spec §D).
   registerTimelineDirectory();
 
+  // Sidebar New Campaign button + flag icon on campaign folders (spec
+  // 2026-09-06 §2) - pure-logic imports only, safe at init like the two above.
+  registerCampaignDirectory();
+
   // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
   registerRecapRefresh();
 });
@@ -245,6 +253,17 @@ Hooks.on("getSceneControlButtons", (controls) => {
 });
 
 Hooks.once("ready", async () => {
+  // Registered before awaiting onReady() below, on a cheap synchronous
+  // check that mirrors resolveMode's own MODE_ABSENT test (mej-mode.mjs)
+  // rather than waiting for the resolved mode: MEJ builds its New Entry
+  // pagetype <select> inside its own module-level renderDialogV2 hook,
+  // which fires the instant a GM opens that dialog - a real race against
+  // onReady()'s native-mode wiring (several dynamic imports) on a slower
+  // boot, observed concretely on Foundry 13 (spec 2026-09-06 §3, final fix
+  // wave F2). Campaign is never offered as a page type, and a campaign page
+  // created any other way is refused or upgraded.
+  if (game.modules.get("monks-enhanced-journal")?.active) registerCampaignGuard();
+
   const mode = await onReady();
 
   // Native mode is a SUPPORTED configuration, not an error - it gets no
@@ -390,6 +409,48 @@ Hooks.once("ready", async () => {
       }
     }
     if (foldedPages) console.log(`${MODULE_ID} | folded ${foldedRecaps} player recap(s) into ${foldedPages} session page(s)`);
+
+    // v7: every campaign has its timeline, and loose campaign pages become
+    // campaigns (spec 2026-09-06 §4). Pure plan; per-step try/catch; strays
+    // the plan can't convert are listed, never deleted.
+    const structurePlan = planCampaignStructure({
+      folders: getCampaigns().map((f) => ({ id: f.id, isCampaign: true, hasTimeline: campaignTimelines(f).length > 0 })),
+      entries: game.journal.contents.map((e) => {
+        const pages = e.pages?.contents ?? [];
+        return {
+          id: e.id,
+          uuid: e.uuid,
+          pageCount: pages.length,
+          strayCampaignPage: pages.some((p) => isCampaignTypedPage(p) && !hasPortalMarker(p)),
+          inCampaign: !!campaignOf(e)
+        };
+      })
+    });
+    let timelinesCreated = 0;
+    for (const id of structurePlan.timelineFor) {
+      try {
+        if (await ensureTimelineJournal(game.folders.get(id))) timelinesCreated += 1;
+      } catch (err) {
+        console.error(`${MODULE_ID} | timeline backfill failed for folder ${id}`, err);
+      }
+    }
+    let campaignsCreated = 0;
+    for (const id of structurePlan.upgrade) {
+      try {
+        if (await upgradeEntryToCampaign(game.journal.get(id))) campaignsCreated += 1;
+      } catch (err) {
+        console.error(`${MODULE_ID} | campaign upgrade failed for entry ${id}`, err);
+      }
+    }
+    for (const s of structurePlan.skipped) {
+      console.warn(`${MODULE_ID} | campaign page on ${s.uuid} was not converted (${s.reason})`);
+    }
+    if (timelinesCreated || campaignsCreated) {
+      ui.notifications.info(game.i18n.format(`${I18N}.migration.campaignStructure`, { timelines: timelinesCreated, campaigns: campaignsCreated }));
+    }
+    if (structurePlan.skipped.length) {
+      ui.notifications.warn(game.i18n.format(`${I18N}.migration.campaignStructureSkipped`, { count: structurePlan.skipped.length }), { permanent: true });
+    }
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }

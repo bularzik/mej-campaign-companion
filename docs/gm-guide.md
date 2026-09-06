@@ -93,9 +93,15 @@ Once you know roughly what you're looking for, the **Search** pane is faster tha
 
 ## Campaigns
 
-A campaign is a folder in Foundry's journal sidebar plus a **portal entry** named after it. Everything filed into that folder is what the Hub means by "in this campaign".
+A campaign is three things created together: a folder in Foundry's journal sidebar, a **portal entry** named after it, and a **timeline** journal named `<campaign name> — Timeline`. Everything filed into that folder is what the Hub means by "in this campaign". Campaign folders carry a flag icon in the sidebar so they stand out from ordinary folders.
 
-**Creating one.** Open the campaign picker in the header bar and choose **➕ New Campaign…** (GM only — a player's picker doesn't have it). The **New Campaign** dialog asks for two things: a **Name**, and **Player access** with three options — **GM only**, **Players can view** (selected by default), and **Players can edit**. Click **Confirm** and you get the folder and its portal entry together; there's no separate step.
+**Creating one.** The journal sidebar's header has a GM-only **New Campaign** button beside **Create Folder** — it works whether or not MEJ's window is open. It asks for two things: a **Name**, and **Player access** with three options — **GM only**, **Players can view** (selected by default), and **Players can edit**. Click **Confirm** and the folder, its portal entry and its timeline appear together; there's no separate step. The same dialog is reachable from the Hub's campaign picker (**➕ New Campaign…**).
+
+![The journal sidebar header with Create Entry, Create Folder and the companion's New Campaign button](images/campaign-create-button.png)
+
+**Already have a folder?** Right-click any plain top-level journal folder and choose **Make this folder a campaign**. The same dialog appears with the folder's name filled in; confirming adds the flag, portal and timeline in place — the entries already in the folder stay exactly where they are. Nested folders can't become campaigns (campaigns never nest).
+
+**Campaign is not a page type.** It never appears in MEJ's New Entry dialog or Foundry's Create Page dialog. If something else — a macro, an import — creates a loose campaign page anyway, the companion turns it into a proper campaign on the spot (folder named after the entry, timeline included, players can view) and says so in a toast; a campaign page that can't be converted cleanly (inside an existing campaign, or added to an entry that already has pages) is refused with a message pointing at the New Campaign button.
 
 **Scoping the Hub.** The picker's options are **All campaigns**, **Unfiled**, then each campaign by name, then the create option. Picking a campaign narrows every pane to it and brings up the gear:
 
@@ -107,7 +113,7 @@ A campaign is a folder in Foundry's journal sidebar plus a **portal entry** name
 
 ![The Hub in Unfiled scope, filtered to one entry, with File all shown into… on the toolbar and a per-row folder button](images/campaign-unfiled.png)
 
-**From the sidebar.** Right-click a campaign's folder in Foundry's journal sidebar and the context menu ends with **Open Campaign Hub**, appended after Foundry's own six items (Edit Folder, Configure Ownership, Create Rollable Table, Export to Compendium, Remove Folder, Delete All). One catch: MEJ's shell window covers the sidebar's tab button while it's open, so close the shell first.
+**From the sidebar.** Right-click a campaign's folder in Foundry's journal sidebar and the context menu ends with **Open Campaign Hub**, appended after Foundry's own six items (Edit Folder, Configure Ownership, Create Rollable Table, Export to Compendium, Remove Folder, Delete All). Right-clicking a plain top-level folder instead offers **Make this folder a campaign** to promote it in place. One catch: MEJ's shell window covers the sidebar's tab button while it's open, so close the shell first.
 
 **The adoption banner.** If your world already has MEJ-typed content but no campaign, the Index pane shows a GM-only banner reading "This world has campaign content but no campaign. Create one from it?" with a **Create campaign from this world** button and a ✕ to dismiss it. It stops appearing once a campaign exists.
 
@@ -119,7 +125,7 @@ The **Timeline** pane leads with a timeline picker, because a world can hold mor
 
 ![The Hub's Timeline pane scoped to a campaign, with the timeline picker set to "All timelines in scope", the three order buttons, and four timepoints](images/hub-timeline.png)
 
-Timelines come in two flavours. **World timelines** belong to no campaign and are listed under that separator. **Campaign timelines** live inside a campaign's folder: the first time you scope the Hub to a campaign without picking a timeline explicitly, the Hub creates that campaign's timeline on the spot, named `<campaign name> — Timeline`. That first one is the campaign's default, and the picker marks a default with a **★** before its name. In **All campaigns** scope the pane stacks each campaign's default timeline under a heading bearing the campaign's name, then every world timeline under its own name. A timeline journal has no pages of its own — it's where the timepoints are stored — so opening it from the journal sidebar (or from a link) opens the Hub on the Timeline tab showing that timeline, and it carries a timeline icon in the sidebar so it's easy to tell apart from the campaign's portal entry, which shares the campaign's name.
+Timelines come in two flavours. **World timelines** belong to no campaign and are listed under that separator. **Campaign timelines** live inside a campaign's folder; the one created with the campaign, named `<campaign name> — Timeline`, is its default, and the picker marks a default with a **★** before its name. In **All campaigns** scope the pane stacks each campaign's default timeline under a heading bearing the campaign's name, then every world timeline under its own name. A timeline journal has no pages of its own — it's where the timepoints are stored — so opening it from the journal sidebar (or from a link) opens the Hub on the Timeline tab showing that timeline, and it carries a timeline icon in the sidebar so it's easy to tell apart from the campaign's portal entry, which shares the campaign's name.
 
 Selecting a real timeline (rather than "All timelines in scope") brings up the GM-only management controls — **★ Make default** on a campaign timeline that isn't already the default, a pen for **Rename timeline**, and a trash for **Delete timeline**. They sit in a row beside the picker:
 
@@ -303,7 +309,7 @@ If a portal entry gets deleted, you don't lose the campaign — open **Campaign 
 
 Campaign Companion works against a stock Monk's Enhanced Journal install, not just one carrying MEJ's extension API. Mode detection happens automatically and silently at startup — there's no warning, no setting to flip, and native mode is a fully supported configuration, not a degraded fallback. Everything in this guide still applies; only three things differ:
 
-- **Session** and **Campaign** don't appear in MEJ's own "New Entry" dialog. Create sessions with the **New Session** button in the Hub's header bar instead, and campaigns from the header bar's campaign picker.
+- **Session** appears in MEJ's own "New Entry" dialog only in API mode; on stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…` entry instead — use the **New Session** button in the Hub's header bar either way. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub opens as its own standalone window rather than as a tab inside MEJ's shell.
 

@@ -1172,6 +1172,14 @@ guideDescribe("guide screenshots", () => {
     await page.evaluate(() => ui.notifications.clear());
     await unpause(page);
 
+    // Sidebar New Campaign button (gm-guide "Campaigns", spec 2026-09-06).
+    await page.evaluate(async () => {
+      try { await game.MonksEnhancedJournal?.journal?.close?.(); } catch { /* nothing open */ }
+      await ui.journal.activate();
+    });
+    await settle(page, 300);
+    await shot(page.locator("#journal .directory-header .header-actions"), "campaign-create-button");
+
     // Settings window's module section — must show genuine defaults, not
     // whatever the seed test last left retroLinkMode/autoLink at (the seed
     // test sets retroLinkMode "off" for its own seeding hygiene, per its own

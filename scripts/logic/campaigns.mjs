@@ -201,6 +201,31 @@ export function isCampaignPortal(doc) {
   return (doc.pages?.contents ?? []).some((p) => isCampaignPortalPage(p));
 }
 
+/** The page carries the companion's portal marker (stamped by buildCampaignPortalData and upgradeEntryToCampaign). */
+export function hasPortalMarker(page) {
+  return page?.flags?.[MODULE_ID]?.campaignPortal === true;
+}
+
+/** A campaign-typed page by any of its three spellings - see isCampaignPortalPage for why there are three. */
+export function isCampaignTypedPage(page) {
+  if (!page) return false;
+  return page.type === CAMPAIGN_DOCUMENT_TYPE ||
+    page.type === "campaign" ||
+    page._source?.type === CAMPAIGN_DOCUMENT_TYPE;
+}
+
+/**
+ * Can this folder be converted in place into a campaign (spec 2026-09-06
+ * §1): a plain, root-level JournalEntry folder. Nested folders are refused
+ * because campaigns never nest; campaign folders because there is nothing
+ * to convert.
+ */
+export function canConvertFolder(folder) {
+  if (!folder || folder.type !== "JournalEntry") return false;
+  if (folder.folder) return false;
+  return !isCampaignFolder(folder);
+}
+
 const NO_CAMPAIGNS_KEY = `${I18N}.hub.noCampaignsYet`;
 
 /**

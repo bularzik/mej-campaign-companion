@@ -4,10 +4,14 @@
 import { MODULE_ID, CAMPAIGN_FLAG, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
 import {
   isCampaignFolder, campaignOf, campaignFlagOf, isTimelineJournal, isCampaignPortal,
-  ownershipLevelFor, bulkOwnershipPlan
+  ownershipLevelFor, bulkOwnershipPlan, canConvertFolder, hasPortalMarker, isCampaignTypedPage
 } from "../logic/campaigns.mjs";
 import { buildCampaignPortalData } from "../logic/campaign-portal-data.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
+// ESM cycle: timeline-journal.mjs imports baselineOwnership from this file.
+// Safe because both sides only reference the other's function declarations
+// at call time (hoisted bindings), never during module evaluation.
+import { ensureTimelineJournal } from "./timeline-journal.mjs";
 
 /** Every campaign folder in the world, name-sorted. */
 export function getCampaigns() {
@@ -17,27 +21,38 @@ export function getCampaigns() {
 }
 
 /**
- * GM-only. Creates a root-level campaign folder (campaigns never nest -
- * spec §1). RULING: if this is the world's first campaign and no auto-
- * capture target is set yet, seed AUTO_CAPTURE_CAMPAIGN_SETTING to it - a
- * legacy (pre-campaign) world's auto-capture setting is unset by
+ * GM-only. Creates the whole campaign structure (spec 2026-09-06 §1): a
+ * root-level flagged folder (campaigns never nest - spec §1), then its
+ * portal, then its timeline. RULING: if this is the world's first campaign
+ * and no auto-capture target is set yet, seed AUTO_CAPTURE_CAMPAIGN_SETTING
+ * to it - a legacy (pre-campaign) world's auto-capture setting is unset by
  * definition, and without this its first import/adoption would silently
  * stop auto-capturing until a GM finds the separate capture-target picker.
  */
 export async function createCampaign(name, { ownershipDefault = "observer" } = {}) {
   if (!game.user.isGM) return null;
-  const isFirst = getCampaigns().length === 0;
-  const folder = await Folder.create({
+  const wasFirst = getCampaigns().length === 0;
+  const folder = await createCampaignFolder(name, ownershipDefault);
+  if (!folder) return null;
+  await seedAutoCaptureIfFirst(folder, wasFirst);
+  await completeCampaignStructure(folder);
+  return folder;
+}
+
+/** The campaign Folder.create payload shared by createCampaign and doUpgrade. */
+function createCampaignFolder(name, ownershipDefault) {
+  return Folder.create({
     name,
     type: "JournalEntry",
     folder: null,
     flags: { [MODULE_ID]: { [CAMPAIGN_FLAG]: { ownershipDefault } } }
   });
-  if (folder && isFirst && !game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING)) {
+}
+
+async function seedAutoCaptureIfFirst(folder, wasFirst) {
+  if (wasFirst && !game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING)) {
     await game.settings.set(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING, folder.id);
   }
-  if (folder) await ensureCampaignPortal(folder);
-  return folder;
 }
 
 /** The campaign's portal entry (spec C §1), or null. Direct children only - portals live at the folder root. */
@@ -60,6 +75,97 @@ export async function ensureCampaignPortal(campaign) {
     ownership: { default: baselineOwnership(campaign) },
     pages: [buildCampaignPortalData(campaign.name)]
   });
+}
+
+/**
+ * Portal, then timeline - each idempotent, each its own repair point.
+ * Foundry has no transactions: a failed write is logged and the other still
+ * runs, so a later Hub open or the migration completes the structure rather
+ * than duplicating it (spec 2026-09-06 §1).
+ */
+export async function completeCampaignStructure(campaign) {
+  try {
+    await ensureCampaignPortal(campaign);
+  } catch (err) {
+    console.error(`${MODULE_ID} | portal creation failed for campaign ${campaign.id}`, err);
+  }
+  try {
+    await ensureTimelineJournal(campaign);
+  } catch (err) {
+    console.error(`${MODULE_ID} | timeline creation failed for campaign ${campaign.id}`, err);
+  }
+}
+
+/**
+ * GM-only. Promote a plain root JournalEntry folder into a campaign in place
+ * (spec 2026-09-06 §1): flag it, then portal + timeline. Entries already in
+ * it stay where they are. Null (no writes) when canConvertFolder refuses.
+ */
+export async function convertFolderToCampaign(folder, { ownershipDefault = "observer" } = {}) {
+  if (!game.user.isGM || !canConvertFolder(folder)) return null;
+  const wasFirst = getCampaigns().length === 0;
+  await folder.update({ [`flags.${MODULE_ID}.${CAMPAIGN_FLAG}`]: { ownershipDefault } });
+  await seedAutoCaptureIfFirst(folder, wasFirst);
+  await completeCampaignStructure(folder);
+  return folder;
+}
+
+// Upgrades run one at a time: two create hooks can fire for the same entry
+// (createJournalEntry for inline pages, createJournalEntryPage for MEJ's
+// _onCreate) and rapid creates must not interleave folder writes.
+let upgradeChain = Promise.resolve();
+
+/**
+ * GM-only. Turn a loose single-page campaign entry into a real campaign
+ * (spec 2026-09-06 §3): root folder named after the entry, entry moved in
+ * and stamped as the portal, timeline created. Re-checks eligibility at run
+ * time, so a second call for the same entry is a no-op. Resolves to the
+ * folder, or null when nothing was done.
+ */
+export function upgradeEntryToCampaign(entry, { ownershipDefault = "observer" } = {}) {
+  const run = upgradeChain
+    .then(() => doUpgrade(entry, { ownershipDefault }))
+    .catch((err) => {
+      console.error(`${MODULE_ID} | campaign upgrade failed for ${entry?.uuid}`, err);
+      return null;
+    });
+  upgradeChain = run;
+  return run;
+}
+
+/**
+ * The entry-move (`entry.update`) makes `campaignOf(entry)` truthy, which is
+ * part of this function's own eligibility gate - once it lands, a retry after
+ * a later failure here is a permanent no-op (by design: re-running would
+ * re-home an already-adopted entry). So the two post-move writes are each
+ * wrapped rather than left to reject the whole call, same shape as
+ * completeCampaignStructure: a failed marker stamp is tolerated because
+ * isCampaignPortalPage also matches on the campaign page type/subtype alone
+ * (see logic/campaigns.mjs), and a failed timeline write self-heals the next
+ * time this campaign's Hub renders (ensureTimelineJournal is idempotent).
+ */
+async function doUpgrade(entry, { ownershipDefault }) {
+  if (!game.user.isGM || !entry?.pages) return null;
+  const pages = entry.pages.contents;
+  const page = pages[0];
+  if (pages.length !== 1 || !isCampaignTypedPage(page) || hasPortalMarker(page) || campaignOf(entry)) return null;
+  const wasFirst = getCampaigns().length === 0;
+  const folder = await createCampaignFolder(entry.name, ownershipDefault);
+  if (!folder) return null;
+  await seedAutoCaptureIfFirst(folder, wasFirst);
+  await entry.update({ folder: folder.id, "ownership.default": baselineOwnership(folder) });
+  try {
+    const { flags } = buildCampaignPortalData(entry.name);
+    await page.update({ name: entry.name, flags });
+  } catch (err) {
+    console.error(`${MODULE_ID} | portal marker stamp failed for campaign ${folder.id}`, err);
+  }
+  try {
+    await ensureTimelineJournal(folder);
+  } catch (err) {
+    console.error(`${MODULE_ID} | timeline creation failed for campaign ${folder.id}`, err);
+  }
+  return folder;
 }
 
 /** Visibility-filtered members of a campaign; the campaign's timeline journal and portal are excluded (spec §1). */

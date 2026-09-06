@@ -1196,3 +1196,11 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .theme-dark .mej-cc-graph-node text {
   stroke: var(--color-cool-5, #0b0a13);
 }
+
+/* Campaign folder rows in the journal sidebar (spec 2026-09-06 §2): the flag
+   icon is swapped in by hooks/campaign-directory.mjs; this only lifts the
+   header so a campaign reads as more than a folder. */
+#journal .mej-cc-campaign-folder > .folder-header .folder-name,
+#MonksEnhancedJournal .mej-cc-campaign-folder > .folder-header .folder-name {
+  font-weight: 600;
+}
