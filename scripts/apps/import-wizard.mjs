@@ -554,10 +554,16 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     const audience = this.#formAudience();
+    // Every audience is explicit now: entries created in a campaign inherit
+    // its baseline when the creation data carries no ownership (spec
+    // 2026-09-06 §2), so a "GM only" import must say NONE rather than lean
+    // on Foundry's default. ("default" with no campaign cannot occur - the
+    // wizard always resolves or creates one above.)
     const ownership =
       audience === "players" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
-      : audience === "default" && campaign ? { default: baselineOwnership(campaign) }
-      : null;  // "gm", or "default" with no campaign -> Foundry default (GM-only)
+      : audience === "gm" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE }
+      : campaign ? { default: baselineOwnership(campaign) }
+      : null;
     // Import-time auto-link (spec Part 2): same engine as the typing path,
     // empty baseline = whole document eligible. Gated on the same autoLink
     // world setting; failure never blocks the import (observer posture).
