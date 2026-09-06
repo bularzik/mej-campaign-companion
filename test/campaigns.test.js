@@ -215,6 +215,33 @@ describe("campaigns module", async () => {
     });
   });
 
+  describe("canConvertFolder / hasPortalMarker / isCampaignTypedPage", async () => {
+    const { canConvertFolder, hasPortalMarker, isCampaignTypedPage } = await import("../scripts/logic/campaigns.mjs");
+    const jf = (id, extra = {}) => ({ id, type: "JournalEntry", folder: null, flags: {}, ...extra });
+
+    it("accepts a plain root JournalEntry folder", () => {
+      expect(canConvertFolder(jf("f1"))).toBe(true);
+    });
+    it("rejects nested, campaign, non-journal and null folders", () => {
+      expect(canConvertFolder(jf("f2", { folder: jf("p") }))).toBe(false);
+      expect(canConvertFolder(jf("f3", { flags: { [MODULE_ID]: { campaign: { ownershipDefault: "observer" } } } }))).toBe(false);
+      expect(canConvertFolder(jf("f4", { type: "Actor" }))).toBe(false);
+      expect(canConvertFolder(null)).toBe(false);
+    });
+    it("hasPortalMarker reads only the companion flag", () => {
+      expect(hasPortalMarker({ flags: { [MODULE_ID]: { campaignPortal: true } } })).toBe(true);
+      expect(hasPortalMarker({ type: "mej-campaign-companion.campaign", flags: {} })).toBe(false);
+      expect(hasPortalMarker(null)).toBe(false);
+    });
+    it("isCampaignTypedPage matches the three type spellings and nothing else", () => {
+      expect(isCampaignTypedPage({ type: "mej-campaign-companion.campaign" })).toBe(true);
+      expect(isCampaignTypedPage({ type: "campaign" })).toBe(true);
+      expect(isCampaignTypedPage({ type: "text", _source: { type: "mej-campaign-companion.campaign" } })).toBe(true);
+      expect(isCampaignTypedPage({ type: "text" })).toBe(false);
+      expect(isCampaignTypedPage(null)).toBe(false);
+    });
+  });
+
 });
 
 describe("adoptionPlan (spec §6)", () => {
