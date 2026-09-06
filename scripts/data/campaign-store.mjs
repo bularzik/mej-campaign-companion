@@ -32,16 +32,21 @@ export function getCampaigns() {
 export async function createCampaign(name, { ownershipDefault = "observer" } = {}) {
   if (!game.user.isGM) return null;
   const wasFirst = getCampaigns().length === 0;
-  const folder = await Folder.create({
+  const folder = await createCampaignFolder(name, ownershipDefault);
+  if (!folder) return null;
+  await seedAutoCaptureIfFirst(folder, wasFirst);
+  await completeCampaignStructure(folder);
+  return folder;
+}
+
+/** The campaign Folder.create payload shared by createCampaign and doUpgrade. */
+function createCampaignFolder(name, ownershipDefault) {
+  return Folder.create({
     name,
     type: "JournalEntry",
     folder: null,
     flags: { [MODULE_ID]: { [CAMPAIGN_FLAG]: { ownershipDefault } } }
   });
-  if (!folder) return null;
-  await seedAutoCaptureIfFirst(folder, wasFirst);
-  await completeCampaignStructure(folder);
-  return folder;
 }
 
 async function seedAutoCaptureIfFirst(folder, wasFirst) {
@@ -145,12 +150,7 @@ async function doUpgrade(entry, { ownershipDefault }) {
   const page = pages[0];
   if (pages.length !== 1 || !isCampaignTypedPage(page) || hasPortalMarker(page) || campaignOf(entry)) return null;
   const wasFirst = getCampaigns().length === 0;
-  const folder = await Folder.create({
-    name: entry.name,
-    type: "JournalEntry",
-    folder: null,
-    flags: { [MODULE_ID]: { [CAMPAIGN_FLAG]: { ownershipDefault } } }
-  });
+  const folder = await createCampaignFolder(entry.name, ownershipDefault);
   if (!folder) return null;
   await seedAutoCaptureIfFirst(folder, wasFirst);
   await entry.update({ folder: folder.id, "ownership.default": baselineOwnership(folder) });

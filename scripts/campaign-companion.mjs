@@ -253,6 +253,17 @@ Hooks.on("getSceneControlButtons", (controls) => {
 });
 
 Hooks.once("ready", async () => {
+  // Registered before awaiting onReady() below, on a cheap synchronous
+  // check that mirrors resolveMode's own MODE_ABSENT test (mej-mode.mjs)
+  // rather than waiting for the resolved mode: MEJ builds its New Entry
+  // pagetype <select> inside its own module-level renderDialogV2 hook,
+  // which fires the instant a GM opens that dialog - a real race against
+  // onReady()'s native-mode wiring (several dynamic imports) on a slower
+  // boot, observed concretely on Foundry 13 (spec 2026-09-06 §3, final fix
+  // wave F2). Campaign is never offered as a page type, and a campaign page
+  // created any other way is refused or upgraded.
+  if (game.modules.get("monks-enhanced-journal")?.active) registerCampaignGuard();
+
   const mode = await onReady();
 
   // Native mode is a SUPPORTED configuration, not an error - it gets no
@@ -263,11 +274,6 @@ Hooks.once("ready", async () => {
     ui.notifications.error(game.i18n.localize(`${I18N}.errors.${key}`), { permanent: true });
     if (mode === MODE_ABSENT) return;
   }
-
-  // Campaign is never offered as a page type, and a campaign page created
-  // any other way is refused or upgraded (spec 2026-09-06 §3). Must follow
-  // MEJ's own module-level renderDialogV2 hook, hence ready rather than init.
-  registerCampaignGuard();
 
   // Single shared socket listener for the whole module (media relay +
   // player recap relay) - see hooks/socket.mjs's header comment.

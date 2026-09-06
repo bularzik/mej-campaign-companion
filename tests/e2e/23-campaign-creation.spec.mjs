@@ -226,7 +226,10 @@ test.describe("23 campaign creation", () => {
     const mejSelect = page.locator('select[name="flags.monks-enhanced-journal.pagetype"]');
     await expect(mejSelect).toBeVisible();
     await expect(mejSelect.locator('option[value="campaign"], option[value="mej-campaign-companion.campaign"]')).toHaveCount(0);
-    await expect(mejSelect.locator('option[value="session"]')).toHaveCount(1); // Session stays (api mode)
+    // Session is only registered in this dialog when the MEJ extension API is present; stock MEJ has no API at all.
+    if (await page.evaluate(() => !!game.modules.get("monks-enhanced-journal")?.api)) {
+      await expect(mejSelect.locator('option[value="session"]')).toHaveCount(1); // Session stays (api mode)
+    }
     await page.keyboard.press("Escape");
     await settle(page, 200);
 
@@ -302,6 +305,10 @@ test.describe("23 campaign creation", () => {
     assertNoConsoleErrors(errors);
   });
 
+  // Rolling dataVersion back to 6 and reloading runs the real v7 migration
+  // world-wide by design - the same thing every world's next upgrade does -
+  // rather than anything scoped to this test's own id-tracked fixtures; see
+  // cleanup()'s dataVersion reset above for how that blast radius is undone.
   test("10. dataVersion 7 backfills a missing timeline, upgrades a loose stray and skips a multipage one", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");

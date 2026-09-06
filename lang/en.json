@@ -94,6 +94,7 @@
       "convertFolder": "Make this folder a campaign",
       "converted": "Folder \"{name}\" is now a campaign.",
       "strayBlocked": "Campaign pages are created with the New Campaign button in the journal sidebar.",
+      "strayNotGm": "Only a GM can create a campaign.",
       "strayUpgraded": "Created campaign \"{name}\" from this entry.",
       "noCampaignFolder": "This page isn't inside a campaign folder — use New Campaign in the journal sidebar."
     },
