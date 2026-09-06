@@ -42,6 +42,7 @@ import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
+import { promptNewCampaign } from "./new-campaign-dialog.mjs";
 import { mejType, openHub } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
@@ -294,6 +295,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (portalCampaign) {
         this.state.campaignId = portalCampaign.id;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, portalCampaign.id);
+      } else {
+        // A campaign page with no campaign folder: only the v7 migration's
+        // skipped strays can still look like this (spec 2026-09-06 §5).
+        ui.notifications.warn(game.i18n.localize(`${I18N}.campaign.noCampaignFolder`));
       }
     }
 
@@ -1100,26 +1105,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * seat, same convention as onOpenImportWizard/onOpenExportDialog below.
    */
   static async onNewCampaign() {
-    const esc = foundry.utils.escapeHTML;
-    const baselineOptions = ["none", "observer", "owner"].map((k) =>
-      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
-    const content = `
-      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
-        <input type="text" name="name" value="" autofocus></div>
-      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
-        <select name="baseline">${baselineOptions}</select></div>`;
-    const result = await foundry.applications.api.DialogV2.prompt({
-      window: { title: game.i18n.localize(`${I18N}.hub.newCampaign`) },
-      content,
-      ok: {
-        callback: (event, button) => ({
-          name: button.form.elements.name.value.trim(),
-          baseline: button.form.elements.baseline.value
-        })
-      },
-      rejectClose: false
-    });
-    if (!result?.name) return;
+    const result = await promptNewCampaign();
+    if (!result) return;
     const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
     if (campaign) {
       this.state.campaignId = campaign.id;
@@ -1198,25 +1185,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    */
   static async onAdoptWorld() {
     if (!game.user.isGM) return;
-    const esc = foundry.utils.escapeHTML;
-    const baselineOptions = ["none", "observer", "owner"].map((k) =>
-      `<option value="${k}" ${k === "observer" ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
-    const content = `
-      <p>${esc(game.i18n.localize(`${I18N}.hub.adoptExplain`))}</p>
-      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignName`))}</label>
-        <input type="text" name="name" value="${esc(game.world.title)}"></div>
-      <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
-        <select name="baseline">${baselineOptions}</select></div>`;
-    const result = await foundry.applications.api.DialogV2.prompt({
-      window: { title: game.i18n.localize(`${I18N}.hub.adoptGo`) },
-      content,
-      ok: { callback: (event, button) => ({
-        name: button.form.elements.name.value.trim(),
-        baseline: button.form.elements.baseline.value
-      }) },
-      rejectClose: false
+    const result = await promptNewCampaign({
+      name: game.world.title,
+      title: game.i18n.localize(`${I18N}.hub.adoptGo`),
+      intro: game.i18n.localize(`${I18N}.hub.adoptExplain`)
     });
-    if (!result?.name) return;
+    if (!result) return;
     const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
     if (!campaign) return;
     const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
