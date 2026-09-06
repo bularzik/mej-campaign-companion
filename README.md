@@ -68,9 +68,11 @@ a build carrying the extension API. It resolves one of three modes at startup:
 Native mode is a supported configuration, not a degraded fallback, and it is
 not announced with a warning. What differs:
 
-- Session does not appear in MEJ's own "New Entry" dialog — create sessions
-  with the **New Session** button in the Campaign Hub. Campaigns are created
-  with the **New Campaign** button in the journal sidebar in both modes.
+- Session appears in MEJ's own "New Entry" dialog only in `api` mode; on
+  stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…`
+  entry instead — use the **New Session** button in the Campaign Hub either
+  way. Campaigns are created with the **New Campaign** button in the journal
+  sidebar in both modes, and never appear as a page type in that dialog.
 - Session pages cannot be MEJ *relationship* targets (MEJ's picker only
   enumerates its own registry). Companion relationships are unaffected.
 - The Hub opens as its own window rather than a shell tab.

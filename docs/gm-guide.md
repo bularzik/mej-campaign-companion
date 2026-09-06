@@ -97,7 +97,7 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 **Creating one.** The journal sidebar's header has a GM-only **New Campaign** button beside **Create Folder** — it works whether or not MEJ's window is open. It asks for two things: a **Name**, and **Player access** with three options — **GM only**, **Players can view** (selected by default), and **Players can edit**. Click **Confirm** and the folder, its portal entry and its timeline appear together; there's no separate step. The same dialog is reachable from the Hub's campaign picker (**➕ New Campaign…**).
 
-![The journal sidebar header with Create Journal Entry, Create Folder and the companion's New Campaign button](images/campaign-create-button.png)
+![The journal sidebar header with Create Entry, Create Folder and the companion's New Campaign button](images/campaign-create-button.png)
 
 **Already have a folder?** Right-click any plain top-level journal folder and choose **Make this folder a campaign**. The same dialog appears with the folder's name filled in; confirming adds the flag, portal and timeline in place — the entries already in the folder stay exactly where they are. Nested folders can't become campaigns (campaigns never nest).
 
@@ -309,7 +309,7 @@ If a portal entry gets deleted, you don't lose the campaign — open **Campaign 
 
 Campaign Companion works against a stock Monk's Enhanced Journal install, not just one carrying MEJ's extension API. Mode detection happens automatically and silently at startup — there's no warning, no setting to flip, and native mode is a fully supported configuration, not a degraded fallback. Everything in this guide still applies; only three things differ:
 
-- **Session** doesn't appear in MEJ's own "New Entry" dialog — create sessions with the **New Session** button in the Hub's header bar. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
+- **Session** appears in MEJ's own "New Entry" dialog only in API mode; on stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…` entry instead — use the **New Session** button in the Hub's header bar either way. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub opens as its own standalone window rather than as a tab inside MEJ's shell.
 

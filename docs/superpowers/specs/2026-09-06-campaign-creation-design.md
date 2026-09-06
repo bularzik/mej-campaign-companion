@@ -288,4 +288,72 @@ flag icon, core Create Page stripping.
 
 ## Deviations
 
-(Recorded during implementation.)
+- `14-campaigns` test 7 was left unchanged rather than flipped to assert the
+  timeline exists right after creation: it seeds a raw flagged folder via
+  `Folder.create` directly, never calling `createCampaign`, so this branch's
+  eager (folder + portal + timeline in one call) creation path never applies
+  to it.
+- The migration's summary toast is shown only when it actually created at
+  least one timeline or campaign — a no-op migration pass stays silent
+  rather than reporting "0 created" every time.
+- The sidebar and folder-context New Campaign controls use icon + text label
+  markup matching their neighbouring buttons/menu items, not icon-only or
+  text-only.
+- `doUpgrade` (scripts/data/campaign-store.mjs) keeps its original order —
+  move the entry, then stamp the portal marker, then create the timeline —
+  but wraps the post-move marker stamp and the timeline write each in their
+  own try/catch rather than letting either reject the whole call. A failed
+  marker stamp is tolerated because `isCampaignPortalPage`
+  (scripts/logic/campaigns.mjs) also matches a campaign page by type/subtype
+  alone, with the flag marker as just the cheap fast path; a failed timeline
+  write self-heals the next time this campaign's scoped Hub renders
+  (`ensureTimelineJournal` is idempotent).
+- Every async UI callback this branch added — the sidebar New Campaign
+  click handler, both folder-context-menu callbacks (convert-to-campaign and
+  the pre-existing Open Campaign Hub), and `maybeUpgrade`'s
+  `import().then(...)` chain in scripts/hooks/campaign-guard.mjs — is
+  wrapped in `.catch` logging `console.error` with the module's id prefix,
+  matching the rest of the codebase's convention; the two GM-initiated click
+  handlers additionally toast `campaign.createFailed` since a user action
+  started them.
+- `stripCampaignOptions` (scripts/hooks/campaign-guard.mjs) also listens to
+  the AppV1 `renderDialog` hook, not just `renderDialogV2`: stock MEJ
+  13.06's New Entry dialog is a plain AppV1 `Dialog`, so `renderDialogV2`
+  never fires for it and Campaign would otherwise leak through untouched on
+  Foundry 13. The bare `campaign` option value is stripped only from MEJ's
+  own pagetype select — Foundry's generic `select[name="type"]` strips only
+  the prefixed native subtype, since a system or module could legitimately
+  register its own subtype literally named `campaign`.
+- `registerCampaignGuard()`'s call site in scripts/campaign-companion.mjs
+  moved: it now runs at the very top of the `ready` hook, gated on a direct
+  `game.modules.get("monks-enhanced-journal")?.active` check, instead of
+  after `await onReady()` resolves. Verifying F2 against the running v13
+  test environment surfaced a real registration race distinct from (and in
+  addition to) the AppV1 dialog gap above: MEJ's own New Entry pagetype
+  `<select>` is built inside a module-level `renderDialogV2` hook that fires
+  the instant a GM opens that dialog, and `onReady()`'s native-mode wiring
+  (several dynamic imports) is slow enough on Foundry 13 that a GM could
+  open the dialog before `registerCampaignGuard()` was reached, missing the
+  render event entirely with no amount of waiting recovering it afterward.
+  Registering at the top of `ready`, before that wiring, still runs after
+  MEJ's own top-level `Hooks.on` call (every active module's script-level
+  code executes before `init` fires, let alone `ready`), so the ordering
+  invariant the original placement was protecting still holds.
+- `onPreCreateEntry` (scripts/hooks/campaign-guard.mjs) resolves the
+  creating entry's folder via `entry.folder ?? game.folders.get(data.folder?.id
+  ?? data.folder)`, not a bare `game.folders.get(data.folder)`: Foundry
+  creation data accepts either a folder id or a Folder document, and the
+  pending document instance (`entry`) already resolves either form.
+- A non-GM's stray campaign create shows its own message
+  (`campaign.strayNotGm`, "Only a GM can create a campaign.") rather than
+  the GM-facing `campaign.strayBlocked`, which points at a button only a GM
+  can see; every other `block-*` verdict still shows `strayBlocked`.
+- Known limitation, not fixed on this branch: Campaign stripping from
+  MEJ's/Foundry's page-type `<select>` elements is DOM surgery keyed to the
+  option values MEJ happens to render today, which is inherently fragile
+  across MEJ versions (the v13 AppV1-dialog gap above is exactly that
+  fragility surfacing once already). The durable fix is an upstream
+  `creatable: false` (or equivalent) option on MEJ's `registerSheetType`, so
+  a companion-declared type can opt out of MEJ's own creation UI instead of
+  a downstream module having to scrub it back out; tracked as an MEJ
+  backlog item, out of scope for this branch.
