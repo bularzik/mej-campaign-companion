@@ -173,4 +173,48 @@ test.describe("23 campaign creation", () => {
     await expect(page.locator("#journal .directory-header button.mej-cc-create-campaign")).toHaveCount(0);
     assertNoConsoleErrors(errors);
   });
+
+  test("6. right-click 'Make this folder a campaign' converts a root folder in place; nested and campaign folders don't offer it", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const n = name("Ctx");
+    const ids = await page.evaluate(async (n) => {
+      const root = await Folder.create({ name: n, type: "JournalEntry" });
+      const nested = await Folder.create({ name: `${n} nested`, type: "JournalEntry", folder: root.id });
+      const member = await JournalEntry.create({ name: `${n} member`, folder: root.id, pages: [{ name: "p", type: "text" }] });
+      return { root: root.id, nested: nested.id, member: member.id };
+    }, n);
+    created.folders.push(ids.root, ids.nested);
+    created.journals.push(ids.member);
+    await showSidebar(page);
+    const item = page.locator("#context-menu .context-item", { hasText: "Make this folder a campaign" });
+
+    // Nested folder: expand the root so the nested row is visible, right-click it, no option.
+    const rootRow = page.locator(`#journal li.folder[data-folder-id="${ids.root}"]`);
+    if (!(await rootRow.evaluate((el) => el.classList.contains("expanded")))) await rootRow.locator(":scope > .folder-header").click();
+    await page.locator(`#journal li.folder[data-folder-id="${ids.nested}"] > .folder-header`).click({ button: "right" });
+    await expect(page.locator("#context-menu")).toBeVisible();
+    await expect(item).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // Root folder: option present; rename in the dialog; converted in place.
+    await rootRow.locator(":scope > .folder-header").click({ button: "right" });
+    await expect(item).toHaveCount(1);
+    await item.click();
+    const renamed = `${n} renamed`;
+    await confirmNewCampaign(page, renamed, "none");
+    await expect(page.locator("#notifications .notification", { hasText: `Folder "${renamed}" is now a campaign.` })).toBeVisible();
+    const s = await structureOf(page, ids.root);
+    expect(s.flag).toEqual({ ownershipDefault: "none" });
+    expect(s.portalName).toBe(renamed);
+    expect(s.timelineNames).toEqual([`${renamed} — Timeline`]);
+    expect(await page.evaluate((id) => game.journal.get(id).folder?.id, ids.member)).toBe(ids.root);
+
+    // Campaign folder now: option gone.
+    await rootRow.locator(":scope > .folder-header").click({ button: "right" });
+    await expect(page.locator("#context-menu")).toBeVisible();
+    await expect(item).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    assertNoConsoleErrors(errors);
+  });
 });
