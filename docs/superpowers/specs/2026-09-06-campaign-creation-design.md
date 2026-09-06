@@ -92,10 +92,12 @@ directories, never without folder-create permission). Inserted after
 has the identical structure). Markup:
 
 ```html
-<button type="button" class="mej-cc-create-campaign"
-        data-tooltip="<localized campaign.createButton>"
-        aria-label="<same>"><i class="fa-solid fa-flag"></i></button>
+<button type="button" class="mej-cc-create-campaign">
+  <i class="fa-solid fa-flag" inert></i><span><localized campaign.createButton></span>
+</button>
 ```
+
+(icon + text label, matching the Create Entry / Create Folder buttons beside it.)
 
 Click → `promptNewCampaign()` → `createCampaign()` → info toast
 `campaign.created` ("Campaign "{name}" created."). It does not switch Hub
