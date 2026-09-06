@@ -301,4 +301,54 @@ test.describe("23 campaign creation", () => {
     expect(results.warnings).toBeGreaterThanOrEqual(1);
     assertNoConsoleErrors(errors);
   });
+
+  test("10. dataVersion 7 backfills a missing timeline, upgrades a loose stray and skips a multipage one", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const n = name("Mig");
+    const ids = await page.evaluate(async (n) => {
+      const M = "mej-campaign-companion";
+      const T = `${M}.campaign`;
+      const marked = { [M]: { campaignPortal: true } };
+      const bare = await Folder.create({ name: `${n} bare`, type: "JournalEntry", flags: { [M]: { campaign: { ownershipDefault: "observer" } } } });
+      const stray = await JournalEntry.create({ name: `${n} stray`, pages: [{ name: "c", type: T, flags: marked }] });
+      const multi = await JournalEntry.create({ name: `${n} multi`, pages: [{ name: "t", type: "text" }, { name: "c", type: T, flags: marked }] });
+      for (const e of [stray, multi]) {
+        const p = e.pages.contents.find((p) => p.type === T);
+        await p.update({ [`flags.${M}.-=campaignPortal`]: null });
+      }
+      return { bare: bare.id, stray: stray.id, multi: multi.id };
+    }, n);
+    created.folders.push(ids.bare);
+    created.journals.push(ids.stray, ids.multi);
+    expect(await page.evaluate((id) => game.journal.get(id).pages.contents[0].getFlag("mej-campaign-companion", "campaignPortal") ?? null, ids.stray)).toBe(null);
+
+    await page.evaluate(() => game.settings.set("mej-campaign-companion", "dataVersion", 6));
+    await reloadGame(page);
+    await page.waitForFunction((v) => game.settings.get("mej-campaign-companion", "dataVersion") === v, CURRENT_DATA_VERSION, { timeout: 60_000 });
+
+    const after = await page.evaluate(({ ids, n }) => {
+      const M = "mej-campaign-companion";
+      const bare = game.folders.get(ids.bare);
+      const stray = game.journal.get(ids.stray);
+      const multi = game.journal.get(ids.multi);
+      return {
+        bareTimelines: bare.contents.filter((e) => e.getFlag(M, "timeline")).map((e) => e.name),
+        strayFolder: stray.folder?.id ?? null,
+        strayFolderFlag: stray.folder?.getFlag(M, "campaign") ?? null,
+        strayMarked: stray.pages.contents[0].getFlag(M, "campaignPortal") === true,
+        strayTimelines: (stray.folder?.contents ?? []).filter((e) => e.getFlag(M, "timeline")).map((e) => e.name),
+        multiFolder: multi.folder?.id ?? null,
+        multiPages: multi.pages.size
+      };
+    }, { ids, n });
+    if (after.strayFolder) created.folders.push(after.strayFolder);
+    expect(after.bareTimelines).toEqual([`${n} bare — Timeline`]);
+    expect(after.strayFolderFlag).toEqual({ ownershipDefault: "observer" });
+    expect(after.strayMarked).toBe(true);
+    expect(after.strayTimelines).toEqual([`${n} stray — Timeline`]);
+    expect(after.multiFolder).toBe(null);
+    expect(after.multiPages).toBe(2);
+    assertNoConsoleErrors(errors);
+  });
 });
