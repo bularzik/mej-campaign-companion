@@ -4,7 +4,7 @@
 // two hooks timeline-directory.mjs uses (see its header for why both run
 // after MEJ's own decoration). Top-level imports are constants + pure logic
 // only, so this registers at init; the dialog and store load on click.
-import { I18N } from "../constants.mjs";
+import { MODULE_ID, I18N } from "../constants.mjs";
 import { isCampaignFolder } from "../logic/campaigns.mjs";
 
 const BUTTON_CLASS = "mej-cc-create-campaign";
@@ -30,7 +30,10 @@ export function addCreateCampaignButton(root) {
   button.type = "button";
   button.className = BUTTON_CLASS;
   button.innerHTML = `<i class="fa-solid fa-flag" inert></i><span>${foundry.utils.escapeHTML(game.i18n.localize(`${I18N}.campaign.createButton`))}</span>`;
-  button.addEventListener("click", onCreateCampaign);
+  button.addEventListener("click", (event) => onCreateCampaign(event).catch((err) => {
+    console.error(`${MODULE_ID} | New Campaign failed`, err);
+    ui.notifications.error(game.i18n.localize(`${I18N}.campaign.createFailed`));
+  }));
   after.after(button);
 }
 
