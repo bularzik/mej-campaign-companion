@@ -153,6 +153,8 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 
 ![The Mentioned in backlinks section, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
+**How mentions and relationships relate.** They are two different things, on purpose. Mentions are *derived*: prose → auto-link → `@UUID` link → this list and the graph's dashed mention edges. Relationships are *curated*: the rows you add on an entry's Relationships tab, with their own labels and per-row hiding, drawn as the graph's solid edges. The module never turns a mention into a relationship or a relationship into a link — a name appearing in a paragraph says nothing about how two entries are related, and only you can.
+
 **The relationship graph.** The graph is the Hub's own **Graph** pane, sitting between Timeline and Search — there is no graph button on any entry sheet's window header in current MEJ v14 builds, so the Graph tab is the route. Three controls sit above the canvas:
 
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
@@ -189,15 +191,20 @@ One thing to keep in mind: enricher results refresh only when the page re-render
 
 ## Auto-linking
 
-The **Auto-Link Entry Names** setting (off by default) turns newly-typed mentions of existing MEJ entry names into `@UUID` links automatically, as soon as you save the page. It never touches text that's already inside a link, and it never rewrites inside a code block. Any individual page can opt out entirely with its own `noAutoLink` flag.
+Auto-linking turns plain-text mentions of Enhanced Journal entry names into `@UUID` links, so the knowledge panel's **Mentioned in** list and the graph's mention edges reflect what your prose actually says. It works in both directions, and both are on by default:
 
-A separate **Retroactive Auto-Link** setting (default: **Confirm (review dialog)**) handles the other direction: when you create a *new* MEJ entity, it finds existing plain-text mentions of that entity's name elsewhere in your journal and offers to link them. In Confirm mode you get a review dialog with a checkbox per matching page, like the one below — check the pages you want linked and click **Link Checked**, or **Skip** to leave them as plain text. In Silent mode it links immediately and whispers you a summary instead of asking. Off disables retroactive linking entirely.
+- **As you type** (the **Auto-Link Entry Names** setting): when a page is saved, names you *added* since the last save are linked — in ordinary page text, and in a session's Recap and GM Notes. Text that was already there is never rewritten, and nothing inside an existing link or a code block is touched.
+- **When an entry is created** (the **Retroactive Auto-Link** setting): the active GM's client finds existing plain-text mentions of the new entry's name and links them. In **Silent** mode (the default) it writes immediately and shows a notification — "Linked *Old Toby Rackett* in 3 place(s)" — with the page-by-page detail in the browser console (F12). **Confirm** mode shows a review dialog with a checkbox per matching page first, like the one below. **Off** disables it. Entries created while no GM was online are processed when a GM next connects.
 
 ![The Auto-Link New Entry dialog, offering to link the one page that mentions "Old Toby Rackett"](images/autolink-confirm.png)
 
-Both paths skip names that are ambiguous — shared by more than one entity in the audience — rather than guessing; ambiguous names are listed in the dialog or summary instead of being linked.
+**Scope.** Linking stays inside a campaign: an entry filed in a campaign links with that campaign's pages and with unfiled pages; an unfiled entry links anywhere; two campaigns never link into each other. A name shared by two entries that are both in reach of a page is skipped rather than guessed — you get a notification naming the entry when that is the only reason nothing was linked. On top of that, a mention only becomes a link when everyone who can already read the page can also see the entry being linked to (the GM is exempt).
 
-Both paths are also bounded by audience containment, stated in plain terms: a mention only ever becomes a link when everyone who can already read the page can also see the entity being linked to. A GM is exempted from that check, but a page a player can see will never get auto-linked to something that player can't.
+**Catching up an existing campaign.** Prose written before auto-linking was on stays unlinked until you ask. Scope the Hub to the campaign and click **Link mentions** in the Index toolbar: it plans every entry in the campaign against the campaign's pages and any unfiled pages and shows the review dialog — check what you want linked and click **Link Checked**. The pass runs on your client in one go and the review dialog lists every matching page, so on a very large campaign expect a pause of a few seconds and a long list — scope the Hub to one campaign at a time.
+
+**Opting out.** Set either setting to Off, or flag an individual page with the module's `noAutoLink` flag to keep auto-linking away from it entirely.
+
+One limitation to know about: if the create-time pass rewrites a recap while another player has that recap's editor open, their next save can overwrite the links — the same thing that happens with any outside edit during a collaborative session. Reopening the editor picks the links up.
 
 ## Auto-capture
 
@@ -310,8 +317,8 @@ Five settings are visible in **Configure Settings → Module Settings**, all wor
 
 ![Campaign Companion's module settings panel](images/settings.png)
 
-- **Auto-Link Entry Names** (default: off) — see [Auto-linking](#auto-linking). Turn this on once you have enough named entries that manually linking every mention becomes tedious; it's safe to leave on indefinitely, since it only links names that already exist and never touches an existing link or a code block.
-- **Retroactive Auto-Link** (default: **Confirm (review dialog)**) — see [Auto-linking](#auto-linking). Confirm is the safer default: you review a checklist before anything gets linked. Switch to Silent once you trust the results and don't want the dialog interrupting you; set it to Off if you don't want retroactive linking at all (new-mention auto-linking on save, above, is independent of this).
+- **Auto-Link Entry Names** (on by default) — see [Auto-linking](#auto-linking). Links newly-typed mentions of existing entry names as pages are saved, without touching an existing link or a code block.
+- **Retroactive Auto-Link** (default: Silent — notification) — see [Auto-linking](#auto-linking). Links existing plain-text mentions of a newly created entry's name and shows a notification; switch to Confirm if you want to review every pass first, or Off to turn retroactive linking off entirely (new-mention auto-linking on save, above, is independent of this).
 - **Auto-Capture Encounters** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you'd rather have an Encounter entry appear automatically after every fight than create one yourself.
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.

@@ -40,7 +40,7 @@ Hooks.once("init", () => {
     scope: "world",
     config: true,
     type: Boolean,
-    default: false
+    default: true
   });
 
   game.settings.register(MODULE_ID, RETRO_LINK_MODE_SETTING, {
@@ -54,7 +54,7 @@ Hooks.once("init", () => {
       confirm: `${I18N}.settings.retroLinkMode.confirm`,
       silent: `${I18N}.settings.retroLinkMode.silent`
     },
-    default: "confirm"
+    default: "silent"
   });
 
   game.settings.register(MODULE_ID, AUTO_CAPTURE_SETTING, {

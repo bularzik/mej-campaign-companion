@@ -7,7 +7,7 @@
     "settings": {
       "autoLink": {
         "name": "Auto-Link Entry Names",
-        "hint": "When enabled, newly-typed mentions of other Monk's Enhanced Journal entry names in a page's text are automatically turned into links as the page is saved. Existing links, code blocks, and pages flagged to opt out are left untouched."
+        "hint": "Newly-typed mentions of other Enhanced Journal entry names — in page text, session recaps and GM notes — become links when the page is saved. Linking stays within the entry's campaign (plus unfiled entries). Existing links, code blocks, and pages flagged to opt out are left untouched."
       },
       "autoCaptureEncounters": {
         "name": "Auto-Capture Encounters",
@@ -26,10 +26,10 @@
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
-        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name across the journal (audience-scoped). Confirm shows a review dialog to the GM; Silent writes immediately and whispers a summary.",
+        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM notes. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",
         "off": "Off",
         "confirm": "Confirm (review dialog)",
-        "silent": "Silent (whisper summary)"
+        "silent": "Silent (notification)"
       }
     },
     "sheettype": {
@@ -123,6 +123,9 @@
       "adopted": "Filed {count} entries into \"{name}\".",
       "fileInto": "File into campaign…",
       "fileAllShown": "File all shown into…",
+      "linkMentions": "Link mentions",
+      "linkMentionsTitle": "Find plain-text mentions of this campaign's entries in its pages and in unfiled entries, and offer to link them",
+      "linkMentionsNone": "This campaign has no Enhanced Journal entries to link.",
       "noCampaignsYet": "No campaigns yet — create one from the campaign picker first.",
       "hide": "Hide from players",
       "reveal": "Reveal to players",
@@ -377,10 +380,14 @@
       "apply": "Link Checked",
       "skip": "Skip",
       "ambiguous": "Skipped as ambiguous (another entity shares this name):",
-      "summary": "Auto-linked \"{name}\" in {count} page(s).",
-      "titleMany": "Auto-Link New Entries",
-      "introMany": "{count} new entries are mentioned in the pages below. Link the checked pages?",
-      "summaryMany": "Auto-linked {entities} new entries in {count} page(s)."
+      "ambiguousOnly": "Skipped auto-linking \"{name}\": another entity in reach shares that name.",
+      "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
+      "gmNotes": "GM notes",
+      "summary": "Linked \"{name}\" in {count} place(s).",
+      "titleMany": "Auto-Link Entries",
+      "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",
+      "summaryMany": "Linked {entities} entries in {count} place(s).",
+      "writeFailed": "Auto-link could not write {count} page(s) — see the browser console (F12)."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",

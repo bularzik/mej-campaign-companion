@@ -15,7 +15,7 @@
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { renderAwaitable } from "../sheets/awaitable-render.mjs";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls } from "../logic/campaigns.mjs";
@@ -43,6 +43,7 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { mejType, openHub } from "../integrations/mej-adapter.mjs";
+import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 
@@ -139,7 +140,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       adoptWorld: CampaignHubPage.onAdoptWorld,
       dismissAdoption: CampaignHubPage.onDismissAdoption,
       fileIntoCampaign: CampaignHubPage.onFileIntoCampaign,
-      fileAllShown: CampaignHubPage.onFileAllShown
+      fileAllShown: CampaignHubPage.onFileAllShown,
+      linkMentions: CampaignHubPage.onLinkMentions
     }
   };
 
@@ -551,7 +553,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       sortMenuOpen: this.state.sortMenuOpen,
       doctypeFilter: buildDoctypeFilter(allTypes, this.state.types, this.#typeLabel.bind(this), this.#typeIcon.bind(this), game.i18n.localize(`${I18N}.hub.allTypes`)),
       sortMenu: buildSortMenu(this.state.sort, (k) => game.i18n.localize(`${I18N}.hub.sort.${k}`)),
-      isUnfiledScope: unfiled
+      isUnfiledScope: unfiled,
+      isCampaignScope: !!campaign
     };
   }
 
@@ -1282,6 +1285,28 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
     ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
     this.render({ parts: ["main"] });
+  }
+
+  /**
+   * Catch-up pass for a campaign whose prose predates working auto-linking
+   * (spec §4): every MEJ entity in the campaign is planned against the
+   * campaign's own pages. Always confirm-gated - a bulk rewrite of many
+   * pages is a decision - unless the setting is Off, which wins.
+   */
+  static async onLinkMentions() {
+    if (!game.user.isGM) return;
+    const { campaign } = this.#scope();
+    if (!campaign) return;
+    if (game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING) === "off") {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.retroLink.disabled`));
+      return;
+    }
+    const entries = campaignEntries(campaign).filter((e) => mejType(e));
+    if (!entries.length) {
+      ui.notifications.info(game.i18n.localize(`${I18N}.hub.linkMentionsNone`));
+      return;
+    }
+    await runRetroPass(entries, { mode: "confirm" });
   }
 
   /** GM-only hide/reveal toggle (spec §5) on an index row: NONE <-> the entry's campaign baseline. */

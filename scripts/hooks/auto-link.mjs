@@ -6,25 +6,31 @@
 // GMs: typing a GM-only entity's name into a player-visible page no longer
 // produces a link players can see but not open. Same-name candidates that
 // both pass containment are dropped (never guess) — the typing path has no
-// report channel, so the drop is silent here.
+// report channel, so the drop is silent here. Regions come from
+// logic/link-targets.mjs so session recaps and GM notes are covered;
+// candidates are limited to the page's campaign scope.
 import { autoLinkAdded } from "../logic/auto-link.mjs";
 import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
+import { linkableRegions, sameLinkScope } from "../logic/link-targets.mjs";
+import { campaignIdOf, isTimelineJournal, isCampaignPortal } from "../logic/campaigns.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { MODULE_ID, AUTO_LINK_SETTING, NO_AUTO_LINK_FLAG } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
 /**
- * Linkable candidates for a page: every other MEJ-typed JournalEntry whose
- * viewer set contains the page's parent-entry viewer set. Each candidate's
- * `uuid` is the entry's own Foundry uuid ("JournalEntry.<id>"), which is
- * exactly the @UUID target auto-link.mjs emits.
+ * Linkable candidates for one region of a page: every other MEJ-typed
+ * JournalEntry in the page's campaign scope whose viewer set contains the
+ * region's viewers. A gmOnly region (session GM notes) has no non-GM
+ * viewers, so containment passes for every entity in scope.
  */
-function buildCandidates(page) {
+function buildCandidates(page, region) {
   const users = game.users.contents;
-  const pageViewers = viewerIds(page.parent, users, isVisibleToUser);
+  const pageViewers = region.gmOnly ? [] : viewerIds(page.parent, users, isVisibleToUser);
+  const pageCampaignId = campaignIdOf(page);
   const pages = game.journal
-    .filter((entry) => mejType(entry))
+    .filter((entry) => mejType(entry) && !isTimelineJournal(entry) && !isCampaignPortal(entry)
+      && sameLinkScope(pageCampaignId, campaignIdOf(entry)))
     .map((entry) => ({
       id: entry.id,
       uuid: entry.uuid,
@@ -58,15 +64,17 @@ export function registerAutoLink() {
       if (options?.[MODULE_ID]?.retroLink) return;
       if (!game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) return;
       if (page.getFlag(MODULE_ID, NO_AUTO_LINK_FLAG)) return;
-      const next = changes?.text?.content;
-      if (next === undefined || typeof next !== "string" || !next) return;
 
-      const candidates = buildCandidates(page);
-      if (!candidates.length) return;
-
-      const baseline = page.text?.content ?? "";
-      const linked = autoLinkAdded(baseline, next, candidates);
-      if (linked !== next) foundry.utils.setProperty(changes, "text.content", linked);
+      for (const region of linkableRegions(page)) {
+        const next = foundry.utils.getProperty(changes, region.key);
+        if (typeof next !== "string" || !next) continue;
+        const candidates = buildCandidates(page, region);
+        if (!candidates.length) continue;
+        // Baseline = the field as of the last save that ran this hook (see
+        // the baseline note above): only words added since then are linked.
+        const linked = autoLinkAdded(region.content, next, candidates);
+        if (linked !== next) foundry.utils.setProperty(changes, region.key, linked);
+      }
     } catch (err) {
       console.error(`${MODULE_ID} | auto-link failed`, err);
     }

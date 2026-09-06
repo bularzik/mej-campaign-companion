@@ -13,6 +13,8 @@ import {
   MODULE_ID, I18N, RETRO_LINK_MODE_SETTING, RETRO_LINK_PENDING_FLAG, NO_AUTO_LINK_FLAG
 } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { linkableRegions } from "../logic/link-targets.mjs";
+import { campaignIdOf, isTimelineJournal, isCampaignPortal } from "../logic/campaigns.mjs";
 
 /**
  * MEJ's own New Entry dialog creates the entry FIRST (with
@@ -39,15 +41,18 @@ function isMejCandidate(entry) {
 function planForBurst(entries) {
   const users = game.users.contents;
   const entities = entries.map((entry) => ({
-    uuid: entry.uuid, name: entry.name, viewerIds: viewerIds(entry, users, isVisibleToUser)
+    uuid: entry.uuid, name: entry.name, campaignId: campaignIdOf(entry),
+    viewerIds: viewerIds(entry, users, isVisibleToUser)
   }));
 
   // Same-named twins, resolved for every entity in the burst in one pass over
   // the journal rather than one pass each. An entity in the burst can be
-  // another's twin, so the burst is included in the search.
+  // another's twin, so the burst is included in the search. Twins carry
+  // their campaign so the planner can ignore one that is out of a page's
+  // reach (spec §1).
   const byName = new Map();
   for (const e of game.journal.contents) {
-    if (!mejType(e)) continue;
+    if (!mejType(e) || isTimelineJournal(e) || isCampaignPortal(e)) continue;
     const norm = e.name.trim().toLowerCase();
     if (!byName.has(norm)) byName.set(norm, []);
     byName.get(norm).push(e);
@@ -57,23 +62,34 @@ function planForBurst(entries) {
     const norm = entity.name.trim().toLowerCase();
     otherSameNamed[entity.uuid] = (byName.get(norm) ?? [])
       .filter((e) => e.uuid !== entity.uuid)
-      .map((e) => ({ viewerIds: viewerIds(e, users, isVisibleToUser) }));
+      .map((e) => ({ viewerIds: viewerIds(e, users, isVisibleToUser), campaignId: campaignIdOf(e) }));
   }
 
+  // One planner row per linkable REGION (text.content, or a session's recap
+  // and GM notes), so session pages are scanned at last. GM notes have no
+  // non-GM viewers, so their audience is empty and containment passes.
+  const gmNotesLabel = game.i18n.localize(`${I18N}.retroLink.gmNotes`);
   const pages = [];
   for (const e of game.journal.contents) {
+    if (isTimelineJournal(e) || isCampaignPortal(e)) continue;
     const entryViewers = viewerIds(e, users, isVisibleToUser);
+    const campaignId = campaignIdOf(e);
     for (const p of e.pages.contents) {
-      const content = p.text?.content;
-      if (typeof content !== "string" || !content) continue;
-      pages.push({
-        uuid: p.uuid,
-        name: e.name === p.name ? e.name : `${e.name}: ${p.name}`,
-        content,
-        viewerIds: entryViewers,
-        noAutoLink: !!p.getFlag(MODULE_ID, NO_AUTO_LINK_FLAG),
-        entryUuid: e.uuid
-      });
+      const noAutoLink = !!p.getFlag(MODULE_ID, NO_AUTO_LINK_FLAG);
+      const baseName = e.name === p.name ? e.name : `${e.name}: ${p.name}`;
+      for (const region of linkableRegions(p)) {
+        if (!region.content) continue;
+        pages.push({
+          uuid: p.uuid,
+          key: region.key,
+          name: region.gmOnly ? `${baseName} — ${gmNotesLabel}` : baseName,
+          content: region.content,
+          viewerIds: region.gmOnly ? [] : entryViewers,
+          campaignId,
+          noAutoLink,
+          entryUuid: e.uuid
+        });
+      }
     }
   }
   return buildRetroPlanBatch({ entities, pages, otherSameNamed });
@@ -135,22 +151,48 @@ async function confirmDialog(entities, rows) {
   return Array.isArray(result) ? result.map((i) => writable[i]) : null;
 }
 
-async function whisperSummary(entities, applied, rows) {
-  const esc = foundry.utils.escapeHTML;
+/**
+ * Report a finished pass (spec §3): an info toast with the counts when
+ * anything was written; an error toast when `failed` (an actual write threw,
+ * or its page had vanished by write time) is nonzero; a warn toast when
+ * nothing was written and nothing failed, only because every match was
+ * ambiguous; nothing at all when nothing matched. `writable` is the
+ * pre-dialog matched-row count, gating only the ambiguous-only warn (never
+ * "was anything actually wrong" - that's `failed`'s job) so a GM who
+ * unchecked every row in confirm mode is not told "ambiguous" either: the
+ * unconditional re-plan that follows the dialog restricts `live` to the
+ * approved entities, which comes back empty, and `processBurst` returns
+ * before calling here. The per-page detail goes to the console under the
+ * module prefix.
+ */
+function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   const single = entities.length === 1;
-  const head = single
-    ? game.i18n.format(`${I18N}.retroLink.summary`, { name: esc(entities[0].name), count: applied.length })
-    : game.i18n.format(`${I18N}.retroLink.summaryMany`, { entities: entities.length, count: applied.length });
-  const parts = [`<p>${head}</p>`];
+  const ambiguousRows = rows.filter((r) => r.ambiguous.length);
+  const detail = {
+    linked: applied.map((r) => ({ page: r.pageName, field: r.key,
+      entities: r.matches.map((m) => `${m.entityName} (${m.count})`) })),
+    ambiguous: ambiguousRows.map((r) => ({ page: r.pageName, field: r.key,
+      entities: r.ambiguous.map((m) => m.entityName) }))
+  };
   if (applied.length) {
-    parts.push(`<ul>${applied.map((r) => `<li>${matchLabel(r, single)}</li>`).join("")}</ul>`);
+    const linkedCount = new Set(applied.flatMap((r) => r.matches.map((m) => m.entityUuid))).size;
+    const message = single
+      ? game.i18n.format(`${I18N}.retroLink.summary`, { name: entities[0].name, count: applied.length })
+      : game.i18n.format(`${I18N}.retroLink.summaryMany`, { entities: linkedCount, count: applied.length });
+    ui.notifications.info(message);
+    console.info(`${MODULE_ID} | auto-link`, detail);
+    return;
   }
-  const amb = ambiguousList(rows, single);
-  if (amb) parts.push(amb);
-  await ChatMessage.create({
-    whisper: ChatMessage.getWhisperRecipients("GM").map((u) => u.id),
-    content: parts.join("")
-  });
+  if (failed) {
+    ui.notifications.error(game.i18n.format(`${I18N}.retroLink.writeFailed`, { count: failed }));
+    console.error(`${MODULE_ID} | auto-link — ${failed} page write(s) failed`, detail);
+    return;
+  }
+  if (!writable && ambiguousRows.length) {
+    const name = ambiguousRows[0].ambiguous[0].entityName;
+    ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
+    console.info(`${MODULE_ID} | auto-link`, detail);
+  }
 }
 
 // Hooks.callAll never awaits async handlers, so N rapid entity creations
@@ -257,12 +299,26 @@ function flushBurst() {
   return closeBurst() ?? retroChain;
 }
 
+/**
+ * Plan and write a pass for EXISTING entries on demand (the Hub's "Link
+ * mentions in this campaign", spec §4). Queued on the same chain as live
+ * bursts so it can never interleave with one. `mode` overrides the world
+ * setting for this pass only; callers decide policy (the Hub forces confirm).
+ */
+export function runRetroPass(entries, { mode = null } = {}) {
+  const queued = entries.map((entry) => ({ entry, needsClear: false }));
+  retroChain = retroChain
+    .then(() => processBurst(queued, { modeOverride: mode }))
+    .catch((err) => console.error(`${MODULE_ID} | retro-link pass failed`, err));
+  return retroChain;
+}
+
 /** Still in the world - not deleted since the burst was queued. */
 const stillExists = (e) => !!e?.name && !!game.journal.get(e.id);
 
-async function processBurst(queued) {
+async function processBurst(queued, { modeOverride = null } = {}) {
   try {
-    const mode = game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING);
+    const mode = modeOverride ?? game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING);
     // Sweep-queued entries keep their flag until here, so an interrupted
     // login leaves the backlog retryable (see the sweep's call site). Cleared
     // in ONE batched update, not one round trip each: a large backlog is
@@ -285,44 +341,66 @@ async function processBurst(queued) {
     if (!rows.length) return;
 
     let chosen = rows.filter((r) => r.newHtml && r.matches.length);
+    // The pre-dialog matched-row count - used below to tell "nothing written
+    // because every match was ambiguous" apart from "the GM declined every
+    // row in confirm mode", which also ends with an empty `applied`.
+    const writableCount = chosen.length;
     if (mode === "confirm") {
       chosen = await confirmDialog(live, rows);
       if (!chosen) return;
-      // The dialog is now burst-wide, so it stays open long enough for one of
-      // these entries to be deleted while the GM reads it. Writing the plan
-      // as-is would bake a link to a document that no longer exists into the
-      // page. Re-plan against the survivors instead of writing a dead link.
-      const survivors = live.filter(stillExists);
-      if (survivors.length !== live.length) {
-        // Re-plan only over entities the GM actually APPROVED, never merely
-        // the survivors. Deleting an entity can un-twin its same-named
-        // partner, and a bare re-plan would then promote that partner from
-        // "ambiguous - not written" (which is how the dialog described it) to
-        // written, putting a link in the page the GM was told they would not
-        // get. Restricting the entity set makes that impossible: nothing can
-        // enter the plan that was not already in it.
-        const keep = new Set(chosen.map((r) => r.pageUuid));
-        const approved = new Set(chosen.flatMap((r) => r.matches.map((m) => m.entityUuid)));
-        live = survivors.filter((e) => approved.has(e.uuid));
-        if (!live.length) return;
-        ({ rows } = planForBurst(live));
-        chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(r.pageUuid));
-      }
+      // The dialog waits on a human, so the content the GM approved can be
+      // minutes stale by the time it returns - and recaps are now
+      // collaboratively edited, so a stale write is not a corner case.
+      // Re-planning against CURRENT content, restricted to what the GM
+      // approved, means the write can neither clobber an edit made meanwhile
+      // nor add a link the GM was never shown. This always runs, not just
+      // when an entity was deleted while the dialog was open - see below for
+      // why the entity deletion case in particular needs it too.
+      //
+      // Re-plan only over entities the GM actually APPROVED, never merely
+      // the survivors. Deleting an entity can un-twin its same-named
+      // partner, and a bare re-plan would then promote that partner from
+      // "ambiguous - not written" (which is how the dialog described it) to
+      // written, putting a link in the page the GM was told they would not
+      // get. Restricting the entity set makes that impossible: nothing can
+      // enter the plan that was not already in it.
+      //
+      // Rows are per REGION, not per page - a session's recap and its GM
+      // notes are two separate rows sharing one pageUuid. Keying on pageUuid
+      // alone would keep both regions of a page the GM only half-approved
+      // (checked the recap, unchecked GM notes), writing the region the GM
+      // declined. Key on the (page, region) pair instead.
+      const rowKey = (r) => `${r.pageUuid} ${r.key}`;
+      const keep = new Set(chosen.map(rowKey));
+      const approved = new Set(chosen.flatMap((r) => r.matches.map((m) => m.entityUuid)));
+      live = live.filter(stillExists).filter((e) => approved.has(e.uuid));
+      if (!live.length) return;
+      ({ rows } = planForBurst(live));
+      chosen = rows.filter((r) => r.newHtml && r.matches.length && keep.has(rowKey(r)));
     }
-    // One write per page, carrying every entity that matched it - the reason
-    // the burst can share a single plan without passes clobbering each other.
-    const applied = [];
+    // One write per page carrying every region and every entity that matched
+    // it - a session whose recap and GM notes both matched is one update.
+    const byPage = new Map();
     for (const row of chosen) {
+      const w = byPage.get(row.pageUuid) ?? { update: {}, rows: [] };
+      w.update[row.key] = row.newHtml;
+      w.rows.push(row);
+      byPage.set(row.pageUuid, w);
+    }
+    const applied = [];
+    let failed = 0;
+    for (const [pageUuid, w] of byPage) {
       try {
-        const pageDoc = await fromUuid(row.pageUuid);
-        if (!pageDoc) continue;
-        await pageDoc.update({ "text.content": row.newHtml }, { [MODULE_ID]: { retroLink: true } });
-        applied.push(row);
+        const pageDoc = await fromUuid(pageUuid);
+        if (!pageDoc) { failed++; continue; }
+        await pageDoc.update(w.update, { [MODULE_ID]: { retroLink: true } });
+        applied.push(...w.rows);
       } catch (err) {
-        console.error(`${MODULE_ID} | retro-link write failed for ${row.pageUuid}`, err);
+        failed++;
+        console.error(`${MODULE_ID} | retro-link write failed for ${pageUuid}`, err);
       }
     }
-    if (mode === "silent") await whisperSummary(live, applied, rows);
+    notifyRetroResult(live, applied, rows, { failed, writable: writableCount });
   } catch (err) {
     console.error(`${MODULE_ID} | retro-link burst failed`, err);
   } finally {

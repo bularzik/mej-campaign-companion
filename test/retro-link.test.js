@@ -170,4 +170,69 @@ describe("buildRetroPlanBatch", () => {
       expect(rows[0].newHtml).not.toContain("@UUID[JournalEntry.short]");
     });
   }
+
+  it("copies the page's region key onto the row, defaulting to text.content", () => {
+    const { rows } = planOne(ENTITY, [
+      page("p1", "<p>Gandalf</p>"),
+      page("p2", "<p>Gandalf</p>", { key: "system.recap" })
+    ]);
+    expect(rows.map((r) => [r.pageUuid, r.key])).toEqual([["p1", "text.content"], ["p2", "system.recap"]]);
+  });
+
+  it("emits one row per region of the same page (recap and gmNotes share a pageUuid)", () => {
+    const { rows } = planOne(ENTITY, [
+      page("s1", "<p>Gandalf in recap</p>", { key: "system.recap" }),
+      page("s1", "<p>Gandalf in notes</p>", { key: "system.gmNotes", viewerIds: [] })
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.pageUuid === "s1")).toBe(true);
+    expect(rows.map((r) => r.key)).toEqual(["system.recap", "system.gmNotes"]);
+  });
+
+  it("links only pages in the entity's campaign scope", () => {
+    const inA = { ...ENTITY, campaignId: "A" };
+    const { rows } = planOne(inA, [
+      page("pa", "<p>Gandalf</p>", { campaignId: "A" }),
+      page("pb", "<p>Gandalf</p>", { campaignId: "B" }),
+      page("pu", "<p>Gandalf</p>", { campaignId: null })
+    ]);
+    expect(rows.map((r) => r.pageUuid)).toEqual(["pa", "pu"]);
+  });
+
+  it("an unfiled entity links into every campaign", () => {
+    const unfiled = { ...ENTITY, campaignId: null };
+    const { rows } = planOne(unfiled, [
+      page("pa", "<p>Gandalf</p>", { campaignId: "A" }),
+      page("pb", "<p>Gandalf</p>", { campaignId: "B" })
+    ]);
+    expect(rows.map((r) => r.pageUuid)).toEqual(["pa", "pb"]);
+  });
+
+  it("a same-named twin outside the page's scope does not make the name ambiguous", () => {
+    const inA = { ...ENTITY, campaignId: "A" };
+    const twinInB = { viewerIds: [], campaignId: "B" };
+    const { rows } = planOne(inA, [
+      page("pa", "<p>Gandalf</p>", { campaignId: "A" }),
+      page("pu", "<p>Gandalf</p>", { campaignId: null })
+    ], [twinInB]);
+    const byPage = Object.fromEntries(rows.map((r) => [r.pageUuid, r]));
+    expect(byPage.pa.matches).toHaveLength(1);
+    expect(byPage.pa.ambiguous).toEqual([]);
+    // The unfiled page is in reach of both Gandalfs: ambiguous there, as before.
+    expect(byPage.pu.matches).toEqual([]);
+    expect(byPage.pu.ambiguous).toHaveLength(1);
+    expect(byPage.pu.newHtml).toBeNull();
+  });
+
+  it("a mixed burst pairs each entity with pages in its own scope", () => {
+    const a = { uuid: "JournalEntry.a", name: "Aragorn", viewerIds: [], campaignId: "A" };
+    const u = { uuid: "JournalEntry.u", name: "Boromir", viewerIds: [], campaignId: null };
+    const { rows } = buildRetroPlanBatch({
+      entities: [a, u],
+      pages: [page("pb", "<p>Aragorn and Boromir</p>", { campaignId: "B" })]
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matches.map((m) => m.entityUuid)).toEqual(["JournalEntry.u"]);
+    expect(rows[0].newHtml).not.toContain("JournalEntry.a");
+  });
 });
