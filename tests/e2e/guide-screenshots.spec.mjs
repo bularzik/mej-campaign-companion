@@ -1175,14 +1175,18 @@ guideDescribe("guide screenshots", () => {
     // Settings window's module section — must show genuine defaults, not
     // whatever the seed test last left retroLinkMode/autoLink at (the seed
     // test sets retroLinkMode "off" for its own seeding hygiene, per its own
-    // comment — "off" is not the documented default). Restore both to their
-    // documented defaults (README's Settings table / gm-guide.md's Settings
-    // reference: autoLink off, retroLinkMode "confirm") immediately before
-    // this capture, not just at afterAll, so settings.png actually shows
-    // what a fresh install looks like.
+    // comment — "off" is not the documented default). Restore both to the
+    // defaults the module REGISTERS, read back from the registry rather than
+    // hard-coded here: a literal drifted once already (0.18.0 flipped both
+    // defaults and settings.png kept showing the old ones), so the shot now
+    // follows the code by construction. Done immediately before this capture,
+    // not just at afterAll, so settings.png shows what a fresh install looks
+    // like.
     await page.evaluate(async () => {
-      await game.settings.set("mej-campaign-companion", "autoLink", false);
-      await game.settings.set("mej-campaign-companion", "retroLinkMode", "confirm");
+      const M = "mej-campaign-companion";
+      for (const key of ["autoLink", "retroLinkMode"]) {
+        await game.settings.set(M, key, game.settings.settings.get(`${M}.${key}`).default);
+      }
     });
     await page.evaluate(() => game.settings.sheet.render(true));
     await settle(page, 500);
