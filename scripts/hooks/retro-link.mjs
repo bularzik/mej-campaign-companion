@@ -113,14 +113,14 @@ function matchLabel(row, single) {
   return `${esc(row.pageName)} — ${who}`;
 }
 
-function ambiguousList(rows, single) {
+function reportList(rows, single, bucket, headingKey) {
   const esc = foundry.utils.escapeHTML;
-  const items = rows.filter((r) => r.ambiguous.length).map((r) => {
-    const who = single ? "" : ` — ${r.ambiguous.map((m) => esc(m.entityName)).join(", ")}`;
+  const items = rows.filter((r) => r[bucket].length).map((r) => {
+    const who = single ? "" : ` — ${r[bucket].map((m) => esc(m.entityName)).join(", ")}`;
     return `<li>${esc(r.pageName)}${who}</li>`;
   });
   if (!items.length) return "";
-  return `<p>${game.i18n.localize(`${I18N}.retroLink.ambiguous`)}</p><ul>${items.join("")}</ul>`;
+  return `<p>${game.i18n.localize(`${I18N}.retroLink.${headingKey}`)}</p><ul>${items.join("")}</ul>`;
 }
 
 /** Returns the writable rows the GM checked, or null on cancel/skip. */
@@ -136,7 +136,8 @@ async function confirmDialog(entities, rows) {
     ? game.i18n.format(`${I18N}.retroLink.intro`, { name: esc(entities[0].name) })
     : game.i18n.format(`${I18N}.retroLink.introMany`, { count: entities.length });
   const content = `<div class="mej-cc-retro-link"><p>${intro}</p>`
-    + rowsHtml + ambiguousList(rows, single) + `</div>`;
+    + rowsHtml + reportList(rows, single, "ambiguous", "ambiguous") + reportList(rows, single, "hidden", "hidden")
+    + `</div>`;
   const result = await foundry.applications.api.DialogV2.wait({
     window: {
       title: game.i18n.localize(`${I18N}.retroLink.${single ? "title" : "titleMany"}`)
@@ -162,23 +163,27 @@ async function confirmDialog(entities, rows) {
  * anything was written; an error toast when `failed` (an actual write threw,
  * or its page had vanished by write time) is nonzero; a warn toast when
  * nothing was written and nothing failed, only because every match was
- * ambiguous; nothing at all when nothing matched. `writable` is the
- * pre-dialog matched-row count, gating only the ambiguous-only warn (never
- * "was anything actually wrong" - that's `failed`'s job) so a GM who
- * unchecked every row in confirm mode is not told "ambiguous" either: the
- * unconditional re-plan that follows the dialog restricts `live` to the
- * approved entities, which comes back empty, and `processBurst` returns
- * before calling here. The per-page detail goes to the console under the
- * module prefix.
+ * ambiguous; a warn toast naming the entity when nothing was written only
+ * because the page's readers cannot see it; nothing at all when nothing
+ * matched. `writable` is the pre-dialog matched-row count, gating only the
+ * ambiguous-only warn (never "was anything actually wrong" - that's
+ * `failed`'s job) so a GM who unchecked every row in confirm mode is not told
+ * "ambiguous" either: the unconditional re-plan that follows the dialog
+ * restricts `live` to the approved entities, which comes back empty, and
+ * `processBurst` returns before calling here. The per-page detail goes to the
+ * console under the module prefix.
  */
 function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   const single = entities.length === 1;
   const ambiguousRows = rows.filter((r) => r.ambiguous.length);
+  const hiddenRows = rows.filter((r) => r.hidden.length);
   const detail = {
     linked: applied.map((r) => ({ page: r.pageName, field: r.key,
       entities: r.matches.map((m) => `${m.entityName} (${m.count})`) })),
     ambiguous: ambiguousRows.map((r) => ({ page: r.pageName, field: r.key,
-      entities: r.ambiguous.map((m) => m.entityName) }))
+      entities: r.ambiguous.map((m) => m.entityName) })),
+    hidden: hiddenRows.map((r) => ({ page: r.pageName, field: r.key,
+      entities: r.hidden.map((m) => m.entityName) }))
   };
   if (applied.length) {
     const linkedCount = new Set(applied.flatMap((r) => r.matches.map((m) => m.entityUuid))).size;
@@ -197,6 +202,14 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   if (!writable && ambiguousRows.length) {
     const name = ambiguousRows[0].ambiguous[0].entityName;
     ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
+    console.info(`${MODULE_ID} | auto-link`, detail);
+  }
+  // Nothing written, nothing failed, no twin in the way: the only reason
+  // is that the page's readers cannot see the entity (spec 2026-09-06 §3).
+  if (!writable && hiddenRows.length) {
+    const name = hiddenRows[0].hidden[0].entityName;
+    const count = hiddenRows.filter((r) => r.hidden.some((m) => m.entityName === name)).length;
+    ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.hiddenOnly`, { name, count }));
     console.info(`${MODULE_ID} | auto-link`, detail);
   }
 }

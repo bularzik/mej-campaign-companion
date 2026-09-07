@@ -53,7 +53,8 @@ export function countEntityLinks(html, uuid) {
  * @param {number} [args.minLength=3]
  * @returns {{rows: {pageUuid:string, pageName:string, key:string, newHtml:string|null,
  *            matches:{entityUuid:string, entityName:string, count:number}[],
- *            ambiguous:{entityUuid:string, entityName:string, count:number}[]}[]}}
+ *            ambiguous:{entityUuid:string, entityName:string, count:number}[],
+ *            hidden:{entityUuid:string, entityName:string, count:number}[]}[]}}
  */
 export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minLength = 3 }) {
   const rows = [];
@@ -75,11 +76,15 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
     if (page.noAutoLink) continue;
     if (typeof page.content !== "string" || !page.content) continue;
 
-    const forPage = named.filter((e) =>
-      page.entryUuid !== e.uuid
-      && sameLinkScope(page.campaignId, e.campaignId)
-      && audienceContains(page.viewerIds, e.viewerIds));
-    if (!forPage.length) continue;
+    // Own-page and campaign-scope checks decide who is IN REACH of the
+    // page at all; audience containment then splits those into linkable
+    // and hidden (spec 2026-09-06 §3) - a hidden entity is reported, never
+    // written, so the GM learns why a mention stayed plain.
+    const inReach = named.filter((e) =>
+      page.entryUuid !== e.uuid && sameLinkScope(page.campaignId, e.campaignId));
+    const forPage = inReach.filter((e) => audienceContains(page.viewerIds, e.viewerIds));
+    const hiddenCandidates = inReach.filter((e) => !audienceContains(page.viewerIds, e.viewerIds));
+    if (!forPage.length && !hiddenCandidates.length) continue;
 
     // A twin only makes the name ambiguous where BOTH entities are in reach
     // of the page: campaign A's "Mira" is unambiguous inside A while B keeps
@@ -93,31 +98,35 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
       ? autoLinkAdded("", page.content, writable.map((e) => ({ name: e.name, uuid: e.uuid })))
       : page.content;
     const gained = (html, uuid) => countEntityLinks(html, uuid) - countEntityLinks(page.content, uuid);
+    // Would this entity, planned alone against the ORIGINAL content, have
+    // matched at all? Used for the two report-only buckets below.
+    const soloCount = (e) => gained(autoLinkAdded("", page.content, [{ name: e.name, uuid: e.uuid }]), e.uuid);
 
     const matches = writable
       .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: gained(linked, e.uuid) }))
       .filter((m) => m.count > 0);
 
     // An ambiguous entity is reported but never written, so it is planned on
-    // its own against the ORIGINAL content purely to find out whether it would
-    // have matched at all - a twin that matches nothing here is not worth
-    // telling the GM about.
+    // its own purely to find out whether it would have matched - a twin that
+    // matches nothing here is not worth telling the GM about.
     const ambiguous = forPage.filter(twinned)
-      .map((e) => ({
-        entityUuid: e.uuid,
-        entityName: e.name,
-        count: gained(autoLinkAdded("", page.content, [{ name: e.name, uuid: e.uuid }]), e.uuid)
-      }))
+      .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: soloCount(e) }))
       .filter((m) => m.count > 0);
 
-    if (!matches.length && !ambiguous.length) continue;
+    // Same for an entity the page's readers cannot see.
+    const hidden = hiddenCandidates
+      .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: soloCount(e) }))
+      .filter((m) => m.count > 0);
+
+    if (!matches.length && !ambiguous.length && !hidden.length) continue;
     rows.push({
       pageUuid: page.uuid,
       pageName: page.name,
       key: page.key ?? "text.content",
       newHtml: matches.length ? linked : null,
       matches,
-      ambiguous
+      ambiguous,
+      hidden
     });
   }
   return { rows };

@@ -396,6 +396,8 @@
       "skip": "Skip",
       "ambiguous": "Skipped as ambiguous (another entity shares this name):",
       "ambiguousOnly": "Skipped auto-linking \"{name}\": another entity in reach shares that name.",
+      "hidden": "Mentioned in pages their readers cannot see this entry from (reveal the entry to link it):",
+      "hiddenOnly": "\"{name}\" is mentioned in {count} page(s) whose readers cannot see it. Reveal \"{name}\" (or apply the campaign baseline) to link it.",
       "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
       "gmNotes": "GM notes",
       "summary": "Linked \"{name}\" in {count} place(s).",
