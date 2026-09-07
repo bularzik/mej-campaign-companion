@@ -99,7 +99,7 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 ![The journal sidebar header with Create Entry, Create Folder and the companion's New Campaign button](images/campaign-create-button.png)
 
-**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level, so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Index (or set its ownership by hand); entries created with an explicit ownership keep it.
+**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level (when a GM creates it — players' own entries keep Foundry's defaults), so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Index (or set its ownership by hand); entries created with an explicit ownership keep it.
 
 **Already have a folder?** Right-click any plain top-level journal folder and choose **Make this folder a campaign**. The same dialog appears with the folder's name filled in; confirming adds the flag, portal and timeline in place — the entries already in the folder stay exactly where they are. Nested folders can't become campaigns (campaigns never nest).
 
