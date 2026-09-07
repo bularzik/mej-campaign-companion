@@ -6,8 +6,11 @@
 // (players: NONE), so audience containment refused to link it into the
 // player-visible recaps that mention it. Container rule, not a type rule:
 // any JournalEntry filed in a campaign or one of its subfolders. GM seat
-// only, and the playersWriteSessions hook (campaign-companion.mjs) still
-// wins for sessions because OWNER is >= every baseline.
+// only. Registration order against playersWriteSessions (campaign-
+// companion.mjs) is NOT guaranteed - that hook may run first and already
+// grant a higher default (e.g. OWNER for a session) - so this hook reads
+// the pending document's own ownership.default and never lowers it; see
+// inheritedOwnership's currentDefault param for the mechanism.
 import { MODULE_ID } from "../constants.mjs";
 import { campaignOfFolder } from "../logic/campaigns.mjs";
 import { baselineOwnership } from "../data/campaign-store.mjs";
@@ -22,7 +25,10 @@ export function registerCampaignOwnership() {
       // hooks/campaign-guard.mjs).
       const folder = entry.folder ?? game.folders.get(data?.folder?.id ?? data?.folder) ?? null;
       const campaign = campaignOfFolder(folder);
-      const ownership = inheritedOwnership(data, campaign ? baselineOwnership(campaign) : null, { isGM: game.user.isGM });
+      const ownership = inheritedOwnership(data, campaign ? baselineOwnership(campaign) : null, {
+        isGM: game.user.isGM,
+        currentDefault: entry.ownership?.default ?? 0
+      });
       if (ownership) entry.updateSource({ ownership });
     } catch (err) {
       console.error(`${MODULE_ID} | campaign ownership inherit failed`, err);

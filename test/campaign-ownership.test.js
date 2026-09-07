@@ -24,4 +24,10 @@ describe("inheritedOwnership", () => {
   it("stamps a NONE baseline too (GM-only campaigns stay GM-only)", () => {
     expect(inheritedOwnership({}, 0, { isGM: true })).toEqual({ default: 0 });
   });
+  it("never lowers a level another hook already granted", () => {
+    expect(inheritedOwnership({}, OBSERVER, { isGM: true, currentDefault: 3 })).toBe(null);
+  });
+  it("stamps the baseline when the pending document is still at Foundry's default", () => {
+    expect(inheritedOwnership({}, OBSERVER, { isGM: true, currentDefault: 0 })).toEqual({ default: OBSERVER });
+  });
 });

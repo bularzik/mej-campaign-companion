@@ -12,15 +12,27 @@
  * macro) is never overridden. `ownership: null` counts as absent - that is
  * what `...(ownership ? { ownership } : {})` callers produce.
  *
+ * Never lowers a level already granted on the pending document: another
+ * preCreateJournalEntry listener (playersWriteSessions in
+ * campaign-companion.mjs) may already have called entry.updateSource() to
+ * grant a higher default before this planner runs - Foundry runs
+ * same-named hook listeners in registration order, and this module's own
+ * hook has no control over where in that order it lands. Foundry's own
+ * default is 0, so an untouched entry still gets the baseline; a higher
+ * `currentDefault` wins either way, whichever hook registers first.
+ *
  * @param {object} data           raw creation data (preCreateJournalEntry's 2nd arg)
  * @param {number|null|undefined} baseline  campaign baseline level, or null/undefined when
  *                                the target folder is not in a campaign
- * @param {{isGM:boolean}} opts   GM seat only, like the playersWriteSessions hook
+ * @param {{isGM:boolean, currentDefault?:number}} opts   GM seat only, like the
+ *                                playersWriteSessions hook; currentDefault is the
+ *                                pending document's own ownership.default so far
  * @returns {{default:number}|null}
  */
-export function inheritedOwnership(data, baseline, { isGM }) {
+export function inheritedOwnership(data, baseline, { isGM, currentDefault = 0 }) {
   if (!isGM) return null;
   if (baseline === null || baseline === undefined) return null;
   if (data?.ownership !== undefined && data?.ownership !== null) return null;
+  if (currentDefault > baseline) return null;
   return { default: baseline };
 }
