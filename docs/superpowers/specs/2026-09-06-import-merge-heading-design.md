@@ -130,3 +130,7 @@ regression check, plus v13 stock smoke.
 
 - Honouring an edited row title when merging.
 - Any change to how the initial split detects boundaries.
+
+## Deviations (final review, 2026-09-06)
+
+- `newRun` keeps a `|| "Untitled"` fallback when a consumed heading has no text (image-only or entity-only headings), while `splitSections` records `title: ""` for such a heading. The merge → split round-trip claim in §3 therefore holds for headings with text; a text-free heading comes back titled "Untitled". Kept deliberately — a blank row title is worse UX than "Untitled".

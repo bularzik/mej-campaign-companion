@@ -373,7 +373,23 @@ describe("splitSectionAt", () => {
     ]);
   });
 
+  it("uses the host DOMParser by default (the wizard passes no parser)", () => {
+    const sec = { ...base, blocks: ["<p>Alpha</p>", "<h2>Arc 2</h2>", "<p>Beta</p>"], html: "x", wordCount: 4 };
+    const saved = globalThis.DOMParser;
+    globalThis.DOMParser = new JSDOM("").window.DOMParser;
+    try {
+      const after = splitSectionAt([sec], 0, [1]);
+      expect(after[1]).toMatchObject({ title: "Arc 2", level: 2, headingHtml: "<h2>Arc 2</h2>", blocks: ["<p>Beta</p>"] });
+    } finally {
+      globalThis.DOMParser = saved;
+    }
+  });
+
   it("re-detects session/date on new runs and ignores invalid cuts", () => {
+    // No parser is injected and vitest's node environment has no DOMParser,
+    // so this documents the NO-DOM fallback: the session line stays in the
+    // body. In the browser (see "uses the host DOMParser by default") that
+    // same block is a section boundary and is consumed as the title.
     const sec = {
       ...base,
       blocks: ["<p>Intro</p>", "<p>Session Zero 10/6/2024</p>", "<p>We begin.</p>"],
