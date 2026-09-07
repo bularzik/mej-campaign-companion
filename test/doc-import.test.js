@@ -162,6 +162,23 @@ describe("splitSections", () => {
     expect(sections[0].html).toContain("<img");
     expect(sections[0].html).toContain("<video");
   });
+
+  it("records each section's heading element as headingHtml, outside its blocks", () => {
+    const { sections } = splitSections(body(`
+      <p>Lead-in.</p>
+      <h2>Arc 2</h2>
+      <p>Body two.</p>
+      <p><strong>Session 3 4/1/25</strong></p>
+      <p>Body three.</p>`));
+    expect(sections.map((s) => s.headingHtml)).toEqual([
+      null,
+      "<h2>Arc 2</h2>",
+      "<p><strong>Session 3 4/1/25</strong></p>"
+    ]);
+    expect(sections[1].blocks).toEqual(["<p>Body two.</p>"]);
+    expect(sections[1].html).toBe("<p>Body two.</p>");
+    expect(sections[2].blocks).toEqual(["<p>Body three.</p>"]);
+  });
 });
 
 import { suggestType, stripTypeMarker, buildImportPlan } from "../scripts/logic/doc-import.mjs";
@@ -270,13 +287,25 @@ describe("buildImportPlan", () => {
     ], KINDS);
     expect(pages[0].type).toBe("journalentry");
   });
+
+  it("a merge row carries its heading into the previous page", () => {
+    const { pages } = buildImportPlan([
+      sec({ title: "Intro" }),
+      sec({ title: "Part 2", html: "<p>more</p>", headingHtml: "<h2>Part 2</h2>" })
+    ], [
+      { title: "Intro", type: "journalentry", timepoint: false },
+      { title: "Part 2", type: "merge", timepoint: false }
+    ], KINDS);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].html).toBe("<p>x</p>\n<h2>Part 2</h2>\n<p>more</p>");
+  });
 });
 
 import { mergeSections, splitSectionAt } from "../scripts/logic/doc-import.mjs";
 
 describe("mergeSections", () => {
   const blk = (over = {}) => ({
-    title: "S", level: 1, date: null, isSession: false,
+    title: "S", level: 1, date: null, isSession: false, headingHtml: null,
     blocks: ["<p>x</p>"], html: "<p>x</p>", wordCount: 1, empty: false, ...over
   });
 
@@ -299,14 +328,33 @@ describe("mergeSections", () => {
     expect(mergeSections(before, 0)).toHaveLength(2);
     expect(mergeSections(before, 9)).toHaveLength(2);
   });
+
+  it("re-inserts the absorbed section's heading before its blocks and counts its words", () => {
+    const before = [
+      blk({ title: "One", headingHtml: "<h2>One</h2>", blocks: ["<p>a</p>"], html: "<p>a</p>", wordCount: 1 }),
+      blk({ title: "Two", headingHtml: "<h2>Two</h2>", blocks: ["<p>b</p>"], html: "<p>b</p>", wordCount: 1 })
+    ];
+    const after = mergeSections(before, 1);
+    expect(after[0].blocks).toEqual(["<p>a</p>", "<h2>Two</h2>", "<p>b</p>"]);
+    expect(after[0].html).toBe("<p>a</p>\n<h2>Two</h2>\n<p>b</p>");
+    expect(after[0].wordCount).toBe(3);
+    expect(after[0].headingHtml).toBe("<h2>One</h2>");
+  });
+
+  it("merges a heading-less section exactly as before", () => {
+    const before = [blk({ blocks: ["<p>a</p>"] }), blk({ headingHtml: null, blocks: ["<p>b</p>"] })];
+    expect(mergeSections(before, 1)[0].blocks).toEqual(["<p>a</p>", "<p>b</p>"]);
+  });
 });
 
 describe("splitSectionAt", () => {
   const base = {
-    title: "Big", level: 1, date: null, isSession: false,
+    title: "Big", level: 1, date: null, isSession: false, headingHtml: "<h1>Big</h1>",
     blocks: ["<p>Alpha</p>", "<p>Beta</p>", "<p>Gamma</p>"],
     html: "<p>Alpha</p>\n<p>Beta</p>\n<p>Gamma</p>", wordCount: 3, empty: false
   };
+
+  const parseBlock = (html) => new JSDOM(`<body>${html}</body>`).window.document.body.firstElementChild;
 
   it("splits blocks into contiguous runs at the cut indices", () => {
     const after = splitSectionAt([base], 0, [2]);
@@ -336,6 +384,51 @@ describe("splitSectionAt", () => {
     expect(after[1].title).toBe("Session Zero 10/6/2024");
     expect(after[1].isSession).toBe(true);
     expect(after[1].date).toBe("2024-10-06");
+  });
+
+  it("consumes a heading block as the new run's title when a parser is given", () => {
+    const sec = { ...base, blocks: ["<p>Alpha</p>", "<h2>Arc 2</h2>", "<p>Beta</p>"], html: "x", wordCount: 4 };
+    const after = splitSectionAt([sec], 0, [1], { parseBlock });
+    expect(after[0]).toMatchObject({ title: "Big", headingHtml: "<h1>Big</h1>", blocks: ["<p>Alpha</p>"] });
+    expect(after[1]).toMatchObject({
+      title: "Arc 2", level: 2, isSession: false, date: null,
+      headingHtml: "<h2>Arc 2</h2>", blocks: ["<p>Beta</p>"], html: "<p>Beta</p>", wordCount: 1
+    });
+  });
+
+  it("consumes a bold session-header paragraph with session/date detection", () => {
+    const sec = { ...base, blocks: ["<p>Alpha</p>", "<p><strong>Session 3 4/1/25</strong></p>", "<p>Beta</p>"], html: "x", wordCount: 5 };
+    const after = splitSectionAt([sec], 0, [1], { parseBlock });
+    expect(after[1]).toMatchObject({
+      title: "Session 3 4/1/25", level: 0, isSession: true, date: "2025-04-01",
+      headingHtml: "<p><strong>Session 3 4/1/25</strong></p>", blocks: ["<p>Beta</p>"]
+    });
+  });
+
+  it("leaves a non-heading first block in the body (title still derived from it)", () => {
+    const after = splitSectionAt([base], 0, [2], { parseBlock });
+    expect(after[1]).toMatchObject({ title: "Gamma", level: 1, headingHtml: null, blocks: ["<p>Gamma</p>"] });
+  });
+
+  it("a run that is only a consumed heading becomes an empty section", () => {
+    const sec = { ...base, blocks: ["<p>Alpha</p>", "<h2>Tail</h2>"], html: "x", wordCount: 2 };
+    const after = splitSectionAt([sec], 0, [1], { parseBlock });
+    expect(after[1]).toMatchObject({ title: "Tail", headingHtml: "<h2>Tail</h2>", blocks: [], empty: true, wordCount: 0 });
+  });
+
+  it("without a DOM parser, behaviour is unchanged", () => {
+    const sec = { ...base, blocks: ["<p>Alpha</p>", "<h2>Arc 2</h2>", "<p>Beta</p>"], html: "x", wordCount: 4 };
+    const after = splitSectionAt([sec], 0, [1], { parseBlock: () => null });
+    expect(after[1]).toMatchObject({ title: "Arc 2", level: 1, headingHtml: null, blocks: ["<h2>Arc 2</h2>", "<p>Beta</p>"] });
+  });
+
+  it("merge then split at the re-inserted heading is an exact round-trip", () => {
+    const { sections } = splitSections(body(`
+      <h2>One</h2><p>a</p>
+      <h2>Two</h2><p>b</p><p>c</p>`));
+    const merged = mergeSections(sections, 1);
+    const headingIndex = merged[0].blocks.indexOf("<h2>Two</h2>");
+    expect(splitSectionAt(merged, 0, [headingIndex], { parseBlock })).toEqual(sections);
   });
 });
 
