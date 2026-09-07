@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.19.2 (2026-09-06)
+
+Import wizard: merging keeps the heading.
+
+- **Fixed:** merging a section into the one above (the Adjust column's merge button, or the legacy merge row type) dropped the absorbed section's heading — the words the importer had used as its name vanished from the page. The heading now comes back as a line of the merged text, in its original form (h2/h3, or the bold session line).
+- **Changed:** splitting a section right before a heading-shaped block turns that block back into the new section's name (with session/date detection) instead of leaving it duplicated as the first line — so merge then split restores the original sections.
+
 ## 0.19.1 (2026-09-06)
 
 Auto-link scope fixes.

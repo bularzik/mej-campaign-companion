@@ -103,14 +103,20 @@ function measureBlocks(blocks) {
   return { html, wordCount, empty: blocks.length === 0 };
 }
 
-/** Merge sections[index] into sections[index-1] (blocks concatenated). */
+/**
+ * Merge sections[index] into sections[index-1]. The absorbed section's
+ * heading element comes back as a block between the two bodies - without
+ * it the words the importer used for that section's name would vanish
+ * from the page (spec 2026-09-06 §2).
+ */
 export function mergeSections(sections, index) {
   if (index <= 0 || index >= sections.length) return sections.slice();
   const prev = sections[index - 1];
   const cur = sections[index];
-  const blocks = [...prev.blocks, ...cur.blocks];
+  const blocks = [...prev.blocks, ...(cur.headingHtml ? [cur.headingHtml] : []), ...cur.blocks];
   const merged = {
     title: prev.title, level: prev.level, isSession: prev.isSession, date: prev.date,
+    headingHtml: prev.headingHtml ?? null,
     blocks, ...measureBlocks(blocks)
   };
   return [...sections.slice(0, index - 1), merged, ...sections.slice(index + 1)];
@@ -125,21 +131,43 @@ function firstBlockTitle(blocks) {
 function keepRun(blocks, orig) {
   return {
     title: orig.title, level: orig.level, isSession: orig.isSession, date: orig.date,
+    headingHtml: orig.headingHtml ?? null,
     blocks, ...measureBlocks(blocks)
   };
 }
 
-// Later runs derive title + detection from their own first block.
-function newRun(blocks) {
+// Later runs derive title + detection from their own first block. When
+// that block is itself a section boundary (a heading a merge put back, or
+// one the GM cut right before), it is consumed as the run's name and
+// metadata rather than duplicated into the body (spec 2026-09-06 §3).
+function newRun(blocks, parseBlock) {
+  const el = blocks.length ? parseBlock(blocks[0]) : null;
+  const boundary = el ? sectionBoundary(el) : null;
+  if (boundary) {
+    const text = el.textContent ?? "";
+    const rest = blocks.slice(1);
+    return {
+      title: cleanTitle(text) || "Untitled", level: boundary.level,
+      isSession: detectSessionHeader(text), date: parseSectionDate(text),
+      headingHtml: blocks[0], blocks: rest, ...measureBlocks(rest)
+    };
+  }
   const title = firstBlockTitle(blocks);
   return {
     title, level: 1, isSession: detectSessionHeader(title), date: parseSectionDate(title),
-    blocks, ...measureBlocks(blocks)
+    headingHtml: null, blocks, ...measureBlocks(blocks)
   };
 }
 
+/** Parse one block string to its root element with the host DOM, or null where there is none (pure node). */
+function defaultParseBlock(html) {
+  const Parser = globalThis.DOMParser;
+  if (!Parser) return null;
+  return new Parser().parseFromString(html, "text/html").body.firstElementChild;
+}
+
 /** Split sections[index] into contiguous runs at the given block cut indices. */
-export function splitSectionAt(sections, index, cutIndices) {
+export function splitSectionAt(sections, index, cutIndices, { parseBlock = defaultParseBlock } = {}) {
   const section = sections[index];
   if (!section) return sections.slice();
   const n = section.blocks.length;
@@ -150,7 +178,7 @@ export function splitSectionAt(sections, index, cutIndices) {
   const bounds = [0, ...cuts, n];
   const runs = [];
   for (let i = 0; i < bounds.length - 1; i++) runs.push(section.blocks.slice(bounds[i], bounds[i + 1]));
-  const rebuilt = runs.map((run, i) => (i === 0 ? keepRun(run, section) : newRun(run)));
+  const rebuilt = runs.map((run, i) => (i === 0 ? keepRun(run, section) : newRun(run, parseBlock)));
   return [...sections.slice(0, index), ...rebuilt, ...sections.slice(index + 1)];
 }
 
@@ -166,8 +194,8 @@ export function splitSections(root) {
 
   const sections = [];
   let current = null;
-  const open = (heading, level) => {
-    current = { title: cleanTitle(heading), level, htmlParts: [] };
+  const open = (heading, level, headingHtml) => {
+    current = { title: cleanTitle(heading), level, headingHtml, htmlParts: [] };
     current.isSession = detectSessionHeader(heading);
     current.date = parseSectionDate(heading);
     sections.push(current);
@@ -176,10 +204,12 @@ export function splitSections(root) {
   for (const el of nodes) {
     const boundary = sectionBoundary(el);
     if (boundary) {
-      open(el.textContent, boundary.level);
+      // The heading itself is metadata, not body: it lives in headingHtml
+      // so a later merge can put it back as a line of the merged text.
+      open(el.textContent, boundary.level, el.outerHTML);
       continue;
     }
-    if (!current) open("Introduction", 1), current.isSession = false, current.date = null;
+    if (!current) open("Introduction", 1, null), current.isSession = false, current.date = null;
     current.htmlParts.push(el.outerHTML);
   }
 
@@ -282,7 +312,8 @@ export function buildImportPlan(sections, rows, recordTypes) {
         warnings.push(`Section "${name}" had nothing to merge into and was skipped`);
         return;
       }
-      previous.html = [previous.html, html].filter(Boolean).join("\n");
+      // Keep the absorbed section's heading, as the wizard's Merge button does.
+      previous.html = [previous.html, section.headingHtml, html].filter(Boolean).join("\n");
       return;
     }
     // Normalize before validating: a stale form still posting the retired
