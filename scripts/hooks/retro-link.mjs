@@ -163,9 +163,10 @@ async function confirmDialog(entities, rows) {
  * anything was written; an error toast when `failed` (an actual write threw,
  * or its page had vanished by write time) is nonzero; a warn toast when
  * nothing was written and nothing failed, only because every match was
- * ambiguous; a warn toast naming the entity when nothing was written only
- * because the page's readers cannot see it; nothing at all when nothing
- * matched. `writable` is the pre-dialog matched-row count, gating only the
+ * ambiguous; a warn toast naming the entity when nothing was written, nothing
+ * failed, and no ambiguity was reported, only because the page's readers
+ * cannot see it; nothing at all when nothing matched. `writable` is the
+ * pre-dialog matched-row count, gating only the
  * ambiguous-only warn (never "was anything actually wrong" - that's
  * `failed`'s job) so a GM who unchecked every row in confirm mode is not told
  * "ambiguous" either: the unconditional re-plan that follows the dialog
@@ -203,10 +204,9 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
     const name = ambiguousRows[0].ambiguous[0].entityName;
     ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
     console.info(`${MODULE_ID} | auto-link`, detail);
-  }
-  // Nothing written, nothing failed, no twin in the way: the only reason
-  // is that the page's readers cannot see the entity (spec 2026-09-06 §3).
-  if (!writable && hiddenRows.length) {
+  } else if (!writable && hiddenRows.length) {
+    // Nothing written, nothing failed, no twin in the way: the only reason
+    // is that the page's readers cannot see the entity (spec 2026-09-06 §3).
     const first = hiddenRows[0].hidden[0];
     // Rows are per region (a session's recap and GM notes are two rows on
     // one page) - count distinct pages, and key on uuid so two same-named
