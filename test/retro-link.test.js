@@ -257,6 +257,22 @@ describe("buildRetroPlanBatch", () => {
     expect(planOne(gmOnly, [playerPage]).rows).toEqual([]);
   });
 
+  it("gates the hidden bucket on a cheap substring test without producing false positives", () => {
+    // First word entirely absent from the content: the substring gate itself
+    // rejects it, so soloCount never even runs.
+    const absent = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const noMention = page("p1", "<p>Nobody here.</p>", { viewerIds: ["u1"] });
+    expect(planOne(absent, [noMention]).rows).toEqual([]);
+
+    // First word appears only inside a longer word ("Eldinor" contains
+    // "Eldin"): the substring gate passes it through, but the real
+    // tokenizer inside soloCount still rejects the partial match, so the
+    // gate must not manufacture a false positive on its own.
+    const eldin = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const substringOnly = page("p1", "<p>Eldinor walks.</p>", { viewerIds: ["u1"] });
+    expect(planOne(eldin, [substringOnly]).rows).toEqual([]);
+  });
+
   it("keeps writable matches and hidden matches on the same row", () => {
     const visible = { uuid: "JournalEntry.beren", name: "Beren", viewerIds: ["u1"] };
     const gmOnly = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };

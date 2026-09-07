@@ -86,6 +86,13 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
     const hiddenCandidates = inReach.filter((e) => !audienceContains(page.viewerIds, e.viewerIds));
     if (!forPage.length && !hiddenCandidates.length) continue;
 
+    const lower = page.content.toLowerCase();
+    // A name can only match where its first word appears at all - a cheap
+    // substring test keeps the two report-only buckets from running a full
+    // tokenizer pass per entity per page (a GM-only import makes every
+    // entry "hidden" against every player-visible page).
+    const mightMatch = (e) => lower.includes(e.name.trim().split(/\s+/)[0].toLowerCase());
+
     // A twin only makes the name ambiguous where BOTH entities are in reach
     // of the page: campaign A's "Mira" is unambiguous inside A while B keeps
     // its own Mira, and only an unfiled page sees both (spec §1).
@@ -109,12 +116,12 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
     // An ambiguous entity is reported but never written, so it is planned on
     // its own purely to find out whether it would have matched - a twin that
     // matches nothing here is not worth telling the GM about.
-    const ambiguous = forPage.filter(twinned)
+    const ambiguous = forPage.filter(twinned).filter(mightMatch)
       .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: soloCount(e) }))
       .filter((m) => m.count > 0);
 
     // Same for an entity the page's readers cannot see.
-    const hidden = hiddenCandidates
+    const hidden = hiddenCandidates.filter(mightMatch)
       .map((e) => ({ entityUuid: e.uuid, entityName: e.name, count: soloCount(e) }))
       .filter((m) => m.count > 0);
 
