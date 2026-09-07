@@ -16,6 +16,7 @@ import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
 import { registerAutoCapture } from "../hooks/auto-capture.mjs";
+import { registerCampaignOwnership } from "../hooks/campaign-ownership.mjs";
 
 let handshakeFired = false;
 let mode = null;
@@ -82,6 +83,7 @@ export async function registerCore() {
   await step("search hooks", () => initSearchHooks());
   await step("auto-link", () => registerAutoLink());
   await step("retro-link", () => registerRetroLink());
+  await step("campaign ownership", () => registerCampaignOwnership());
   await step("auto-capture", () => registerAutoCapture());
 
   await step("knowledge panel", async () => {

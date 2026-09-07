@@ -16,7 +16,7 @@ function entry(id, { folder: f = null, timeline = false } = {}) {
 }
 
 describe("campaigns module", async () => {
-  const { campaignFlagOf, isCampaignFolder, campaignOf, campaignIdOf, isMemberOf, partitionByCampaign, isTimelineJournal, ownershipLevelFor, canAttachToTimeline, isCampaignPortal } = await import("../scripts/logic/campaigns.mjs");
+  const { campaignFlagOf, isCampaignFolder, campaignOf, campaignIdOf, isMemberOf, partitionByCampaign, isTimelineJournal, ownershipLevelFor, canAttachToTimeline, isCampaignPortal, isLinkableEntity } = await import("../scripts/logic/campaigns.mjs");
 
   describe("isCampaignFolder / campaignFlagOf", () => {
     it("detects the campaign flag", () => {
@@ -203,6 +203,35 @@ describe("campaigns module", async () => {
         flags: {}
       };
       expect(isCampaignPortal(flaggedEntry)).toBe(true);
+    });
+  });
+
+  describe("isLinkableEntity", () => {
+    const typed = (extra = {}) => ({
+      id: "e1", documentName: "JournalEntry", folder: null,
+      flags: { "monks-enhanced-journal": { type: "person" } },
+      pages: { contents: [{ documentName: "JournalEntryPage", type: "text", flags: {} }] },
+      ...extra
+    });
+    const mejTypeOf = (e) => e.flags?.["monks-enhanced-journal"]?.type ?? null;
+
+    it("accepts an MEJ-typed entry", () => {
+      expect(isLinkableEntity(typed(), mejTypeOf)).toBe(true);
+    });
+    it("rejects a campaign portal (page carries the portal marker)", () => {
+      const portal = typed({
+        flags: { "monks-enhanced-journal": { type: "campaign" } },
+        pages: { contents: [{ documentName: "JournalEntryPage", type: `${MODULE_ID}.campaign`, flags: { [MODULE_ID]: { campaignPortal: true } } }] }
+      });
+      expect(isLinkableEntity(portal, mejTypeOf)).toBe(false);
+    });
+    it("rejects a timeline journal", () => {
+      const timeline = typed({ flags: { "monks-enhanced-journal": { type: "journalentry" }, [MODULE_ID]: { timeline: { timepoints: [] } } } });
+      expect(isLinkableEntity(timeline, mejTypeOf)).toBe(false);
+    });
+    it("rejects an untyped entry and null", () => {
+      expect(isLinkableEntity(typed({ flags: {} }), mejTypeOf)).toBe(false);
+      expect(isLinkableEntity(null, mejTypeOf)).toBe(false);
     });
   });
 

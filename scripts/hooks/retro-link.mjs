@@ -14,16 +14,20 @@ import {
 } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
-import { campaignIdOf, isTimelineJournal, isCampaignPortal } from "../logic/campaigns.mjs";
+import { campaignIdOf, isTimelineJournal, isCampaignPortal, isLinkableEntity } from "../logic/campaigns.mjs";
 
 /**
  * MEJ's own New Entry dialog creates the entry FIRST (with
  * flags["monks-enhanced-journal"].pagetype) and its _onCreate patch adds the
  * typed page afterward — so at preCreate time getMEJType(entry) can still be
  * false for a dialog-created entry. Check both the constructed document and
- * the raw entry-level MEJ flags.
+ * the raw entry-level MEJ flags. A campaign portal (MEJ type "campaign",
+ * created with its marked page inline) and a timeline journal are never
+ * candidates (spec 2026-09-06 §1) — the pending document already carries
+ * its pages and flags, so both predicates work on it here.
  */
 function isMejCandidate(entry) {
+  if (isTimelineJournal(entry) || isCampaignPortal(entry)) return false;
   if (mejType(entry)) return true;
   const mejFlags = entry.flags?.["monks-enhanced-journal"];
   return !!(mejFlags?.pagetype || mejFlags?.type);
@@ -40,10 +44,12 @@ function isMejCandidate(entry) {
  */
 function planForBurst(entries) {
   const users = game.users.contents;
-  const entities = entries.map((entry) => ({
-    uuid: entry.uuid, name: entry.name, campaignId: campaignIdOf(entry),
-    viewerIds: viewerIds(entry, users, isVisibleToUser)
-  }));
+  const entities = entries
+    .filter((entry) => isLinkableEntity(entry, mejType))
+    .map((entry) => ({
+      uuid: entry.uuid, name: entry.name, campaignId: campaignIdOf(entry),
+      viewerIds: viewerIds(entry, users, isVisibleToUser)
+    }));
 
   // Same-named twins, resolved for every entity in the burst in one pass over
   // the journal rather than one pass each. An entity in the burst can be
@@ -52,7 +58,7 @@ function planForBurst(entries) {
   // reach (spec §1).
   const byName = new Map();
   for (const e of game.journal.contents) {
-    if (!mejType(e) || isTimelineJournal(e) || isCampaignPortal(e)) continue;
+    if (!isLinkableEntity(e, mejType)) continue;
     const norm = e.name.trim().toLowerCase();
     if (!byName.has(norm)) byName.set(norm, []);
     byName.get(norm).push(e);
@@ -107,14 +113,14 @@ function matchLabel(row, single) {
   return `${esc(row.pageName)} — ${who}`;
 }
 
-function ambiguousList(rows, single) {
+function reportList(rows, single, bucket, headingKey) {
   const esc = foundry.utils.escapeHTML;
-  const items = rows.filter((r) => r.ambiguous.length).map((r) => {
-    const who = single ? "" : ` — ${r.ambiguous.map((m) => esc(m.entityName)).join(", ")}`;
+  const items = rows.filter((r) => r[bucket].length).map((r) => {
+    const who = single ? "" : ` — ${r[bucket].map((m) => esc(m.entityName)).join(", ")}`;
     return `<li>${esc(r.pageName)}${who}</li>`;
   });
   if (!items.length) return "";
-  return `<p>${game.i18n.localize(`${I18N}.retroLink.ambiguous`)}</p><ul>${items.join("")}</ul>`;
+  return `<p>${game.i18n.localize(`${I18N}.retroLink.${headingKey}`)}</p><ul>${items.join("")}</ul>`;
 }
 
 /** Returns the writable rows the GM checked, or null on cancel/skip. */
@@ -130,7 +136,8 @@ async function confirmDialog(entities, rows) {
     ? game.i18n.format(`${I18N}.retroLink.intro`, { name: esc(entities[0].name) })
     : game.i18n.format(`${I18N}.retroLink.introMany`, { count: entities.length });
   const content = `<div class="mej-cc-retro-link"><p>${intro}</p>`
-    + rowsHtml + ambiguousList(rows, single) + `</div>`;
+    + rowsHtml + reportList(rows, single, "ambiguous", "ambiguous") + reportList(rows, single, "hidden", "hidden")
+    + `</div>`;
   const result = await foundry.applications.api.DialogV2.wait({
     window: {
       title: game.i18n.localize(`${I18N}.retroLink.${single ? "title" : "titleMany"}`)
@@ -156,23 +163,28 @@ async function confirmDialog(entities, rows) {
  * anything was written; an error toast when `failed` (an actual write threw,
  * or its page had vanished by write time) is nonzero; a warn toast when
  * nothing was written and nothing failed, only because every match was
- * ambiguous; nothing at all when nothing matched. `writable` is the
- * pre-dialog matched-row count, gating only the ambiguous-only warn (never
- * "was anything actually wrong" - that's `failed`'s job) so a GM who
- * unchecked every row in confirm mode is not told "ambiguous" either: the
- * unconditional re-plan that follows the dialog restricts `live` to the
- * approved entities, which comes back empty, and `processBurst` returns
- * before calling here. The per-page detail goes to the console under the
- * module prefix.
+ * ambiguous; a warn toast naming the entity when nothing was written, nothing
+ * failed, and no ambiguity was reported, only because the page's readers
+ * cannot see it; nothing at all when nothing matched. `writable` is the
+ * pre-dialog matched-row count, gating only the
+ * ambiguous-only warn (never "was anything actually wrong" - that's
+ * `failed`'s job) so a GM who unchecked every row in confirm mode is not told
+ * "ambiguous" either: the unconditional re-plan that follows the dialog
+ * restricts `live` to the approved entities, which comes back empty, and
+ * `processBurst` returns before calling here. The per-page detail goes to the
+ * console under the module prefix.
  */
 function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   const single = entities.length === 1;
   const ambiguousRows = rows.filter((r) => r.ambiguous.length);
+  const hiddenRows = rows.filter((r) => r.hidden.length);
   const detail = {
     linked: applied.map((r) => ({ page: r.pageName, field: r.key,
       entities: r.matches.map((m) => `${m.entityName} (${m.count})`) })),
     ambiguous: ambiguousRows.map((r) => ({ page: r.pageName, field: r.key,
-      entities: r.ambiguous.map((m) => m.entityName) }))
+      entities: r.ambiguous.map((m) => m.entityName) })),
+    hidden: hiddenRows.map((r) => ({ page: r.pageName, field: r.key,
+      entities: r.hidden.map((m) => m.entityName) }))
   };
   if (applied.length) {
     const linkedCount = new Set(applied.flatMap((r) => r.matches.map((m) => m.entityUuid))).size;
@@ -191,6 +203,18 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   if (!writable && ambiguousRows.length) {
     const name = ambiguousRows[0].ambiguous[0].entityName;
     ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.ambiguousOnly`, { name }));
+    console.info(`${MODULE_ID} | auto-link`, detail);
+  } else if (!writable && hiddenRows.length) {
+    // Nothing written, nothing failed, no twin in the way: the only reason
+    // is that the page's readers cannot see the entity (spec 2026-09-06 §3).
+    const first = hiddenRows[0].hidden[0];
+    // Rows are per region (a session's recap and GM notes are two rows on
+    // one page) - count distinct pages, and key on uuid so two same-named
+    // hidden entities cannot be conflated.
+    const count = new Set(hiddenRows
+      .filter((r) => r.hidden.some((m) => m.entityUuid === first.entityUuid))
+      .map((r) => r.pageUuid)).size;
+    ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.hiddenOnly`, { name: first.entityName, count }));
     console.info(`${MODULE_ID} | auto-link`, detail);
   }
 }
@@ -338,6 +362,7 @@ async function processBurst(queued, { modeOverride = null } = {}) {
     let live = queued.map((q) => q.entry).filter(stillExists);
     if (!live.length) return;
     let { rows } = planForBurst(live);
+    live = live.filter((e) => isLinkableEntity(e, mejType));
     if (!rows.length) return;
 
     let chosen = rows.filter((r) => r.newHtml && r.matches.length);

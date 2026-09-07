@@ -49,7 +49,9 @@ describe("buildRetroPlanBatch", () => {
       page("gmOnly", "<p>Gandalf</p>", { viewerIds: [] }),
       page("playerPage", "<p>Gandalf</p>", { viewerIds: ["a", "b"] })
     ]);
-    expect(rows.map((r) => r.pageUuid)).toEqual(["gmOnly"]);
+    // playerPage still surfaces as a row (reader "b" can't see the entity),
+    // but only under `hidden` - `matches` (what gets written) stays gmOnly-only.
+    expect(rows.filter((r) => r.matches.length).map((r) => r.pageUuid)).toEqual(["gmOnly"]);
   });
 
   it("marks a page ambiguous (newHtml null) when a same-named entity also passes containment there", () => {
@@ -86,11 +88,14 @@ describe("buildRetroPlanBatch", () => {
     expect(rows).toEqual([]);
   });
 
-  it("never links a GM-only entity (empty viewer set) into a page players can view", () => {
+  it("never links a GM-only entity (empty viewer set) into a page players can view - reports it hidden instead", () => {
     const { rows } = planOne({ ...ENTITY, viewerIds: [] }, [
       page("p1", "<p>Gandalf</p>", { viewerIds: ["a"] })
     ]);
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matches).toEqual([]);
+    expect(rows[0].newHtml).toBeNull();
+    expect(rows[0].hidden).toEqual([{ entityUuid: ENTITY.uuid, entityName: "Gandalf", count: 1 }]);
   });
 
   // The batch behaviour itself (C7).
@@ -234,5 +239,55 @@ describe("buildRetroPlanBatch", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].matches.map((m) => m.entityUuid)).toEqual(["JournalEntry.u"]);
     expect(rows[0].newHtml).not.toContain("JournalEntry.a");
+  });
+
+  it("reports an in-scope entity the page's readers cannot see under `hidden`, unwritten", () => {
+    const gmOnly = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const playerPage = page("p1", "<p>Eldin says hello. Eldin again.</p>", { viewerIds: ["u1"] });
+    const { rows } = planOne(gmOnly, [playerPage]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].newHtml).toBe(null);
+    expect(rows[0].matches).toEqual([]);
+    expect(rows[0].hidden).toEqual([{ entityUuid: "JournalEntry.eldin", entityName: "Eldin", count: 2 }]);
+  });
+
+  it("does not report a hidden entity that would not have matched anyway", () => {
+    const gmOnly = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const playerPage = page("p1", "<p>Nobody here.</p>", { viewerIds: ["u1"] });
+    expect(planOne(gmOnly, [playerPage]).rows).toEqual([]);
+  });
+
+  it("gates the hidden bucket on a cheap substring test without producing false positives", () => {
+    // First word entirely absent from the content: the substring gate itself
+    // rejects it, so soloCount never even runs.
+    const absent = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const noMention = page("p1", "<p>Nobody here.</p>", { viewerIds: ["u1"] });
+    expect(planOne(absent, [noMention]).rows).toEqual([]);
+
+    // First word appears only inside a longer word ("Eldinor" contains
+    // "Eldin"): the substring gate passes it through, but the real
+    // tokenizer inside soloCount still rejects the partial match, so the
+    // gate must not manufacture a false positive on its own.
+    const eldin = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const substringOnly = page("p1", "<p>Eldinor walks.</p>", { viewerIds: ["u1"] });
+    expect(planOne(eldin, [substringOnly]).rows).toEqual([]);
+  });
+
+  it("keeps writable matches and hidden matches on the same row", () => {
+    const visible = { uuid: "JournalEntry.beren", name: "Beren", viewerIds: ["u1"] };
+    const gmOnly = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [] };
+    const playerPage = page("p1", "<p>Beren met Eldin.</p>", { viewerIds: ["u1"] });
+    const { rows } = buildRetroPlanBatch({ entities: [visible, gmOnly], pages: [playerPage], otherSameNamed: {} });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matches.map((m) => m.entityUuid)).toEqual(["JournalEntry.beren"]);
+    expect(rows[0].hidden.map((m) => m.entityUuid)).toEqual(["JournalEntry.eldin"]);
+    expect(rows[0].newHtml).toContain("@UUID[JournalEntry.beren]");
+    expect(rows[0].newHtml).not.toContain("@UUID[JournalEntry.eldin]");
+  });
+
+  it("an entity out of campaign scope is neither written nor reported hidden", () => {
+    const inB = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [], campaignId: "B" };
+    const pageA = page("p1", "<p>Eldin.</p>", { viewerIds: ["u1"], campaignId: "A" });
+    expect(planOne(inB, [pageA]).rows).toEqual([]);
   });
 });

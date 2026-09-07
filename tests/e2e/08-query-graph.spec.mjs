@@ -398,7 +398,7 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
         flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
       });
       const member = await JournalEntry.create({
-        name: `${prefix}Scope-Member`, folder: folder.id,
+        name: `${prefix}Scope-Member`, folder: folder.id, ownership: { default: 0 },
         pages: [{ name: `${prefix}Scope-Member`, type: "text", flags: { "monks-enhanced-journal": { type: "person" } } }]
       });
       const loose = await JournalEntry.create({
@@ -440,7 +440,7 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
         flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
       });
       const member = await JournalEntry.create({
-        name: `${prefix}Ego-Member`, folder: folder.id,
+        name: `${prefix}Ego-Member`, folder: folder.id, ownership: { default: 0 },
         pages: [{ name: `${prefix}Ego-Member`, type: "text", flags: { "monks-enhanced-journal": { type: "person" } } }]
       });
       return { folderId: folder.id, memberId: member.id };

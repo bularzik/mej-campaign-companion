@@ -16,7 +16,7 @@ import {
   MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
-import { campaignOfFolder, campaignIdOf, destinationFolderOptions, resolveDestinationId, subfolderApplies } from "../logic/campaigns.mjs";
+import { campaignOfFolder, campaignIdOf, destinationFolderOptions, resolveDestinationId, subfolderApplies, isLinkableEntity } from "../logic/campaigns.mjs";
 import { importResultMessages } from "../logic/import-result.mjs";
 import { splitSections, suggestType, buildImportPlan, mergeSections, splitSectionAt, sessionsDetectedHint } from "../logic/doc-import.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
@@ -328,7 +328,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     const users = game.users.contents;
     const audienceViewers = audienceViewerIdsForImport(audience, users);
     const all = game.journal
-      .filter((e) => mejType(e) && sameLinkScope(campaignId, campaignIdOf(e)))
+      .filter((e) => isLinkableEntity(e, mejType) && sameLinkScope(campaignId, campaignIdOf(e)))
       .map((e) => ({ name: e.name, uuid: e.uuid, viewerIds: viewerIds(e, users, isVisibleToUser) }));
     const contained = filterCandidatesForAudience(all, audienceViewers)
       .filter((c) => (c.name?.trim().length ?? 0) >= 3)
@@ -554,10 +554,16 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     const audience = this.#formAudience();
+    // Every audience is explicit now: entries created in a campaign inherit
+    // its baseline when the creation data carries no ownership (spec
+    // 2026-09-06 §2), so a "GM only" import must say NONE rather than lean
+    // on Foundry's default. ("default" with no campaign cannot occur - the
+    // wizard always resolves or creates one above.)
     const ownership =
       audience === "players" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
-      : audience === "default" && campaign ? { default: baselineOwnership(campaign) }
-      : null;  // "gm", or "default" with no campaign -> Foundry default (GM-only)
+      : audience === "gm" ? { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE }
+      : campaign ? { default: baselineOwnership(campaign) }
+      : null;
     // Import-time auto-link (spec Part 2): same engine as the typing path,
     // empty baseline = whole document eligible. Gated on the same autoLink
     // world setting; failure never blocks the import (observer posture).

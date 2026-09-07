@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.1 (2026-09-06)
+
+Auto-link scope fixes.
+
+- **Fixed:** creating a campaign — from the sidebar, the Hub, an import or a stray upgrade — linked the campaign's own name into every page in scope, and a Word import linked its sections to the campaign it was creating. The portal entry and timeline journal are no longer link sources or candidates on any path.
+- **Changed:** an entry created inside a campaign (MEJ's New Entry dialog, a macro, anything that doesn't set ownership itself) now starts at the campaign's **Player access** baseline instead of GM-only. Hide a specific entry with the Hub's eye toggle as before. The import wizard's **GM only** audience is unchanged — it now says so explicitly.
+- **Added:** when a new entry is mentioned only in pages whose readers can't see it, the create-time pass says so — "*Eldin* is mentioned in 1 page(s) whose readers cannot see it…" — instead of staying silent; the review dialog lists those pages too.
+
 ## 0.19.0 (2026-09-06)
 
 Campaigns are created whole. Data migration: dataVersion 7 backfills
