@@ -207,9 +207,14 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
   // Nothing written, nothing failed, no twin in the way: the only reason
   // is that the page's readers cannot see the entity (spec 2026-09-06 §3).
   if (!writable && hiddenRows.length) {
-    const name = hiddenRows[0].hidden[0].entityName;
-    const count = hiddenRows.filter((r) => r.hidden.some((m) => m.entityName === name)).length;
-    ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.hiddenOnly`, { name, count }));
+    const first = hiddenRows[0].hidden[0];
+    // Rows are per region (a session's recap and GM notes are two rows on
+    // one page) - count distinct pages, and key on uuid so two same-named
+    // hidden entities cannot be conflated.
+    const count = new Set(hiddenRows
+      .filter((r) => r.hidden.some((m) => m.entityUuid === first.entityUuid))
+      .map((r) => r.pageUuid)).size;
+    ui.notifications.warn(game.i18n.format(`${I18N}.retroLink.hiddenOnly`, { name: first.entityName, count }));
     console.info(`${MODULE_ID} | auto-link`, detail);
   }
 }
