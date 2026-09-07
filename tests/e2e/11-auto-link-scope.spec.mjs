@@ -30,7 +30,15 @@ const N = {
   scopeHero: `TTScopeHero${RUN}`,
   quietHero: `TTQuietHero${RUN}`,
   ambPage: `TTAmbPage${RUN}`,
-  ambTwin: `TTAmbTwin${RUN}`
+  ambTwin: `TTAmbTwin${RUN}`,
+  portalPage: `TTPortalPage${RUN}`,
+  portalCamp: `TTPortalCamp${RUN}`,
+  inheritCamp: `TTInheritCamp${RUN}`,
+  inheritSession: `TTInheritSession${RUN}`,
+  inheritHero: `TTInheritHero${RUN}`,
+  hiddenCamp: `TTHiddenCamp${RUN}`,
+  hiddenSession: `TTHiddenSession${RUN}`,
+  hiddenHero: `TTHiddenHero${RUN}`
 };
 
 /** Create a MEJ place entry (native text page + MEJ type flag), returning ids. */
@@ -70,6 +78,23 @@ async function createMejPlaceIn(page, name, html, ownershipDefault, folderId) {
     return { id: entry.id, uuid: entry.uuid };
   }, { n: name, html, own: ownershipDefault, folderId });
 }
+
+/** A player-visible companion session in a folder; recap/gmNotes are the two linkable regions. */
+async function createSessionIn(page, name, recap, gmNotes, folderId) {
+  return page.evaluate(async ({ n, recap, gmNotes, folderId }) => {
+    const e = await JournalEntry.create({
+      name: n, folder: folderId, ownership: { default: 2 },
+      pages: [{
+        name: n, type: "mej-campaign-companion.session",
+        flags: { "monks-enhanced-journal": { type: "session" } },
+        system: { recap, gmNotes }
+      }]
+    });
+    return { id: e.id, uuid: e.uuid };
+  }, { n: name, recap, gmNotes, folderId });
+}
+const recapOf = (page, id) => page.evaluate((id) => game.journal.get(id)?.pages.contents[0]?.system?.recap ?? "", id);
+const notesOf = (page, id) => page.evaluate((id) => game.journal.get(id)?.pages.contents[0]?.system?.gmNotes ?? "", id);
 
 async function setSettings(page, { autoLink, retroLinkMode }) {
   await page.evaluate(async ({ autoLink, retroLinkMode }) => {
@@ -126,7 +151,11 @@ test.describe("11 auto-link scoping", () => {
     const dialog = page.locator(".mej-cc-retro-link-dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
     await expect(dialog).toContainText(N.gmPage);
-    await expect(dialog).not.toContainText(N.playerPage);
+    // Task 3 (spec 2026-09-06 §3) surfaces the player-visible page in the
+    // dialog's informational "hidden" list (the hero's readers can't see it,
+    // so it can never be linked there) - it must never appear as a checkable
+    // row, which is the only way it could get linked.
+    await expect(dialog.locator(".mej-cc-retro-row")).not.toContainText(N.playerPage);
     await dialog.locator('button[data-action="apply"]').click();
     await settle(page, 500);
 
@@ -275,6 +304,76 @@ test.describe("11 auto-link scoping", () => {
     await expect(page.locator("#notifications li.notification.warning", { hasText: N.ambTwin }))
       .toHaveCount(1, { timeout: 10_000 });
     expect(await pageContent(page, amb.id)).not.toContain("@UUID[");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("creating a campaign never links its own name (portal is not an entity)", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    await setSettings(page, { autoLink: false, retroLinkMode: "off" });
+    const mention = await createMejPlace(page, N.portalPage, `<p>Met at the gates of ${N.portalCamp}.</p>`, 0);
+    await setSettings(page, { retroLinkMode: "silent" });
+    // The real creation path: folder + portal + timeline in one call, the
+    // portal carrying MEJ type "campaign" - which 0.19.0 stamped as a
+    // retro-link candidate.
+    await page.evaluate(async (n) => {
+      const { createCampaign } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+      await createCampaign(n);
+    }, N.portalCamp);
+    await settle(page, 1500);
+    expect(await pageContent(page, mention.id)).not.toContain("@UUID[");
+    expect(await page.locator("#notifications li.notification", { hasText: /Linked/ }).count()).toBe(0);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("an entry created in a campaign inherits the baseline and links into its recaps", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    await setSettings(page, { autoLink: false, retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.inheritCamp); // baseline observer
+    const session = await createSessionIn(page, N.inheritSession,
+      `<p>${N.inheritHero} says hello.</p>`, `<p>${N.inheritHero} is a dragon.</p>`, folder);
+    await setSettings(page, { retroLinkMode: "silent" });
+    // No ownership in the creation data - exactly what MEJ's New Entry
+    // dialog sends. Before 0.19.1 this stayed GM-only and the recap was
+    // silently skipped.
+    const hero = await page.evaluate(async ({ n, folderId }) => {
+      const e = await JournalEntry.create({
+        name: n, folder: folderId,
+        pages: [{ name: n, type: "text", flags: { "monks-enhanced-journal": { type: "person" } }, text: { content: "<p>A hero.</p>" } }]
+      });
+      return { id: e.id, ownershipDefault: e.ownership.default };
+    }, { n: N.inheritHero, folderId: folder });
+    expect(hero.ownershipDefault).toBe(2);
+    // Recap and GM notes are two linkable regions of one page = two rows.
+    await expect(page.locator("#notifications li.notification.info", { hasText: /Linked .* in 2 place/ }))
+      .toHaveCount(1, { timeout: 10_000 });
+    await settle(page, 500);
+    expect(await recapOf(page, session.id)).toContain(`@UUID[JournalEntry.${hero.id}]`);
+    expect(await notesOf(page, session.id)).toContain(`@UUID[JournalEntry.${hero.id}]`);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("a GM-only entry mentioned in a player-visible recap is reported, not linked", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    await setSettings(page, { autoLink: false, retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.hiddenCamp);
+    const session = await createSessionIn(page, N.hiddenSession,
+      `<p>${N.hiddenHero} says hello.</p>`, `<p>Nothing here.</p>`, folder);
+    await setSettings(page, { retroLinkMode: "silent" });
+    const hero = await createMejPlaceIn(page, N.hiddenHero, "<p>Secret.</p>", 0, folder);
+    await expect(page.locator("#notifications li.notification.warning", { hasText: N.hiddenHero }))
+      .toHaveCount(1, { timeout: 10_000 });
+    await expect(page.locator("#notifications li.notification.warning", { hasText: /1 page\(s\) whose readers cannot see it/ }))
+      .toHaveCount(1);
+    expect(await recapOf(page, session.id)).not.toContain(`@UUID[JournalEntry.${hero.id}]`);
     assertNoConsoleErrors(errors);
   });
 });

@@ -186,7 +186,12 @@ test.describe("05 docx import", () => {
     // campaign (its folder is already named after the document) - greyed
     // out here, re-enabled the moment an existing folder is picked.
     await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
-    const existingOption = await wizard.locator('select[name="destination"] option:not([value="__new"])').first().getAttribute("value");
+    // count() first: getAttribute() on a zero-match locator auto-waits out
+    // the full timeout instead of resolving empty - a real risk here since a
+    // freshly-reset world (this run's actual state) has no existing campaign
+    // to offer.
+    const existingOptions = wizard.locator('select[name="destination"] option:not([value="__new"])');
+    const existingOption = (await existingOptions.count()) > 0 ? await existingOptions.first().getAttribute("value") : null;
     if (existingOption) {
       await wizard.locator('select[name="destination"]').selectOption(existingOption);
       await expect(wizard.locator('input[name="subfolder"]')).toBeEnabled();
@@ -223,6 +228,19 @@ test.describe("05 docx import", () => {
     expect(createdCampaignFolderIds).toHaveLength(1);
     expect(folderShape.childFolders).toBe(0);
     expect(folderShape.directEntries).toBeGreaterThan(10);
+
+    // Spec 2026-09-06 §1: the campaign the import creates is never a link
+    // candidate for its own sections - "Radiant Citadel" in the prose stays
+    // plain rather than pointing at the portal.
+    const portalLinks = await page.evaluate((ids) => {
+      const folder = game.folders.get(ids[0]);
+      const portal = folder.contents.find((e) => e.pages.contents.some((p) => p.getFlag("mej-campaign-companion", "campaignPortal")));
+      const needle = `@UUID[${portal.uuid}]`;
+      return folder.contents.flatMap((e) => e.pages.contents)
+        .filter((p) => (p.text?.content ?? "").includes(needle) || (p.system?.recap ?? "").includes(needle))
+        .map((p) => p.name);
+    }, createdCampaignFolderIds);
+    expect(portalLinks).toEqual([]);
 
     const summary = await page.evaluate((campaignFolderIds) => {
       const sessionZero = game.journal.find((j) => j.name?.startsWith("Session Zero"));

@@ -421,9 +421,17 @@ test.describe.serial("14 campaigns", () => {
     await login(page, "Gamemaster");
 
     const seeded = await page.evaluate(async ({ prefix, alphaId, token }) => {
+      // Explicit NONE ownership: spec 2026-09-06 §2's preCreateJournalEntry
+      // hook (scripts/hooks/campaign-ownership.mjs) now stamps the campaign
+      // baseline onto any entry created in a campaign folder with NO
+      // ownership key at all - so a create call left bare (as this one used
+      // to be) no longer lands at Foundry's raw NONE default, it lands at
+      // the baseline. Test 8 needs a genuinely-untouched NONE member to
+      // exercise "apply-to-all never un-hides a NONE member", so state it.
       const person = await JournalEntry.create({
         name: `${prefix}Alpha Person`,
         folder: alphaId,
+        ownership: { default: 0 },
         pages: [{
           name: `${prefix}Alpha Person`,
           type: "monks-enhanced-journal.person",
@@ -434,6 +442,7 @@ test.describe.serial("14 campaigns", () => {
       const plain = await JournalEntry.create({
         name: `${prefix}Alpha Plain`,
         folder: alphaId,
+        ownership: { default: 0 },
         pages: [{ name: `${prefix}Alpha Plain`, text: { content: "Untyped notes." } }]
       });
       const loose = await JournalEntry.create({
