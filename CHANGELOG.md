@@ -2,10 +2,16 @@
 
 ## Unreleased
 
-- **Verified** on Foundry VTT 14.368, dnd5e 6.0.3 and Monk's Enhanced Journal
-  14.01 — both stock (native mode) and with the extension API from upstream
-  MEJ pull request #823 (api mode). The manifest now records MEJ 14.01 as
-  verified; the floor stays 13.06.
+- **Tested** on Foundry VTT 14.368, dnd5e 6.0.3 and Monk's Enhanced Journal
+  14.01 in **api mode**, with known exceptions: the full e2e suite ran 115
+  passed / 13 failed against the MEJ fork line with 14.01 merged in, and 101
+  passed / 23 failed against stock 14.01 plus the extension API from upstream
+  MEJ pull request #823. The **native-mode stock gate failed** on this stack —
+  on bare 14.01 the Hub's New Session button does not open the standalone
+  session sheet — so native mode on 14.01 is **not** verified. Every failure
+  is listed and attributed in
+  `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`. The
+  manifest's MEJ relationship records 14.01; the floor stays 13.06.
 - **Harness:** the v14 e2e target finds the newest installed Foundry 14 build
   instead of a fixed directory; the v14 stock-gate recipe is rewritten for
   the worktree-based MEJ install.
