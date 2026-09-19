@@ -188,6 +188,40 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     expect(opened.shellOpen).toBe(false);
   });
 
+  // Regression net for the Hub-open race fixed 2026-09-19 (see openHub()'s
+  // comment in mej-adapter.mjs). Deliberately NO settle: Foundry registers
+  // the scene-controls Hub button from getSceneControlButtons, fired during
+  // initializeUI() — before game.ready flips, and well before our ready hook
+  // has awaited registerCore() and the mode wiring. A GM clicking in that
+  // window used to reach openHubWindow() before registerHubSheetClass() had
+  // run, and Foundry 13's DocumentSheetV2 constructor threw on the missing
+  // CONFIG.JournalEntryPage.sheetClasses["campaign-hub"] entry; the click was
+  // lost with nothing but a console error. Whether the race window is open on
+  // any given boot is timing-dependent (recorded as an annotation), but the
+  // assertion holds either way.
+  test("the Hub opens when clicked before the ready wiring has finished", async ({ page }) => {
+    await login(page, "Gamemaster");
+    await page.waitForFunction(() => game?.ready === true, null, { timeout: 60_000 });
+
+    const raced = await page.evaluate(async (p) => {
+      const adapter = await import(p);
+      // Read before openHub() so the annotation reports the state the click
+      // actually landed in, not the repaired one.
+      const hubTypeRegistered = !!CONFIG.JournalEntryPage.sheetClasses["campaign-hub"];
+      await adapter.openHub();
+      return { hubTypeRegistered, toolPresent: !!ui.controls?.controls?.notes?.tools?.["campaign-hub"] };
+    }, ADAPTER);
+    test.info().annotations.push({
+      type: "race-window",
+      description: raced.hubTypeRegistered
+        ? "wiring had already landed before the click (race window closed on this boot)"
+        : "clicked before registerHubSheetClass ran (the regression's exact conditions)"
+    });
+
+    expect(raced.toolPresent).toBe(true);
+    await page.waitForSelector('[id^="CampaignHubPage-"]', { timeout: 15_000 });
+  });
+
   test("New Session creates the fixture and auto-opens the standalone SessionSheet", async ({ page }) => {
     await bootAsRealUser(page);
     await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);

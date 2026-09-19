@@ -23,6 +23,13 @@ let mode = null;
 let coreRegistered = false;
 let wiringThrew = false;
 
+// Resolves once onReady() has finished wiring, whichever mode it resolved.
+// Created at module load rather than inside onReady() because the Hub's
+// entry points are already live in the UI before onReady() is even called -
+// see openHub(), which awaits it.
+let readyWired;
+const readyWiring = new Promise((resolve) => { readyWired = resolve; });
+
 /** @returns {"api"|"native"|"absent"|null} null until resolution happens. */
 export function currentMode() {
   return mode;
@@ -348,6 +355,18 @@ export async function onHandshake(api) {
  * @returns {Promise<"api"|"native"|"absent">}
  */
 export async function onReady() {
+  try {
+    return await wireForReady();
+  } finally {
+    // In a finally so a throw anywhere above still releases openHub() - a
+    // GM left with a Hub button that hangs forever would be worse than one
+    // that reports the failure the wiring already logged.
+    readyWired();
+  }
+}
+
+/** onReady()'s actual wiring; split out so onReady owns only the signalling. */
+async function wireForReady() {
   if (mode === MODE_API) {
     // game.ready is definitely true here, so registerSheet applies
     // immediately - this repairs anything onHandshake's registerSheet calls
@@ -374,6 +393,19 @@ export async function onReady() {
 /** Open the Campaign Hub: a shell tab in api mode, a window in native mode. */
 export async function openHub() {
   try {
+    // Wait for onReady()'s wiring before dispatching on `mode`. Every entry
+    // point to the Hub is live in the UI before that wiring finishes:
+    // Foundry fires getSceneControlButtons from initializeUI(), i.e. before
+    // game.ready flips, while our ready hook still has registerCore()'s
+    // dozen dynamic imports and the mode wiring ahead of it. A click landing
+    // in that window reached openHubWindow() before registerHubSheetClass()
+    // had run, and Foundry 13's DocumentSheetV2 constructor then threw on
+    // the missing CONFIG.JournalEntryPage.sheetClasses["campaign-hub"] entry
+    // (getSheetThemeForDocument -> getSheetClassesForSubType ->
+    // Object.values(undefined)) - the click was simply lost, and only a
+    // second click after the wiring landed worked. Reproduced live on
+    // 13.351 + stock MEJ 13.06. Free on every later click: already resolved.
+    await readyWiring;
     if (mode === MODE_ABSENT) return;
     if (mode === MODE_API) {
       await game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID);

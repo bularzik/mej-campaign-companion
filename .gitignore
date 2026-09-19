@@ -9,3 +9,6 @@ tests/e2e/.guide-shots-snapshot.json
 # session scratch
 .superpowers/
 .claude/
+
+# diagnostic probes (scratch)
+tests/e2e/probes/
