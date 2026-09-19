@@ -341,3 +341,14 @@ The full suite on Foundry 13 is the discovery instrument, not a gate.
   names each failed journal once with the first line of the cause, is shown
   as a warning after the success message when some pages were written, and
   as an error when none were. No change to the wizard's own flow.
+- **A3 — fourth wrap: `fixType`.** Live on 13.06, stock `fixType`
+  (`monks-enhanced-journal.js:4115-4150`) dereferences the Hub placeholder's
+  null `parent` and, for a Session page whose flag type is now known through
+  wrap 1, assigns `object.type = "session"` — rewriting the page's in-memory
+  Foundry subtype from `mej-campaign-companion.session` to the bare key, which
+  breaks `DocumentSheetV2` construction and `isSessionDoc`. A1's premise
+  ("wrap 1 makes fixType harmless") held only for the flag scrub. The shim
+  therefore also wraps `MonksEnhancedJournal.fixType` to restore the page's
+  source `type` after the stock body runs (the same carve-out the fork makes
+  for api-registered types, FORK `:4243-4248`), and the placeholder carries
+  the MEJ type flag as MEJ's own `BlankJournal` does. Four wraps in total.
