@@ -2,24 +2,11 @@
 
 ## 0.19.3 (2026-09-19)
 
-Official Monk's Enhanced Journal 14.01: documentation, harness and e2e sweep. No runtime change.
+Official Monk's Enhanced Journal 14.01: documentation and harness. No runtime change.
 
-- **Tested** on Foundry VTT 14.368, dnd5e 6.0.3 and Monk's Enhanced Journal
-  14.01 in **api mode**, with known exceptions: the full e2e suite ran 115
-  passed / 13 failed against the MEJ fork line with 14.01 merged in, and 101
-  passed / 23 failed against stock 14.01 plus the extension API from upstream
-  MEJ pull request #823 — mostly harness- or environment-level; exactly one has
-  a first stack frame in product code, and it is MEJ's. The **native-mode stock
-  gate failed** on this stack —
-  on bare 14.01 the Hub's New Session button does not open the standalone
-  session sheet — so native mode on 14.01 is **not** verified. Every failure
-  is listed and attributed in
-  `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`. The
-  manifest does not claim MEJ 14.01 as verified until native mode passes the
-  stock gate; the floor stays 13.06.
-- **Harness:** the v14 e2e target finds the newest installed Foundry 14 build
-  instead of a fixed directory; the v14 stock-gate recipe is rewritten for
-  the worktree-based MEJ install.
+- **Known issue:** on a stock MEJ 14.01 in native mode, the Campaign Hub's **New Session** button does not open the Session sheet. Native mode is verified on MEJ 13.06 (Foundry 13) and on the MEJ fork line; the manifest does not claim MEJ 14.01 as verified until this passes. Api mode with the extension API is unaffected.
+- **Changed:** the requirements now name MEJ 14.01 and upstream pull request #823 as the source of the extension API, and the e2e README's stock-gate recipe is rewritten for the worktree-based MEJ install.
+- **Changed:** the v14 e2e harness finds the newest installed Foundry 14 build instead of a fixed directory, and a run summariser turns Playwright's JSON report into a markdown table.
 
 ## 0.19.2 (2026-09-06)
 
