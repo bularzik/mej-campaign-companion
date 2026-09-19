@@ -1,20 +1,51 @@
 import os from "node:os";
 import path from "node:path";
+import fs from "node:fs";
 
 const HOME = os.homedir();
+
+/**
+ * Newest `FoundryVTT-Node-<major>.<build>` directory under `baseDir`, chosen
+ * by numeric build. `entries` is the directory listing (injected so tests
+ * need no filesystem). Returns null when nothing matches.
+ */
+export function newestFoundryApp(baseDir, major, entries) {
+  const re = new RegExp(`^FoundryVTT-Node-${major}\\.(\\d+)$`);
+  let best = null;
+  for (const name of entries) {
+    const m = re.exec(name);
+    if (!m) continue;
+    const build = Number(m[1]);
+    if (best === null || build > best.build) best = { name, build };
+  }
+  return best ? path.join(baseDir, best.name) : null;
+}
+
+function listDir(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+const V14_BASE = path.join(HOME, "FoundryVTT-14");
+// Fallback keeps the historical default on a machine with no 14.x dir at all.
+const V14_APP_FALLBACK = path.join(V14_BASE, "FoundryVTT-Node-14.365");
 
 /**
  * Harness targets. `v14` reproduces the defaults the harness has always had;
  * `v13` points at the Foundry 13.351 + stock MEJ 13.06 install used for the
  * v13 stock-smoke gate (tests/e2e/README.md, "Stock gate on v13"). Explicit
- * FOUNDRY_* variables always override the preset.
+ * FOUNDRY_* variables always override the preset. The v14 app dir is the
+ * newest `FoundryVTT-Node-14.*` under `~/FoundryVTT-14`.
  */
 export const TARGETS = {
   v14: {
     generation: 14,
     FOUNDRY_URL: "http://localhost:30000",
     FOUNDRY_TEST_WORLD: "world-a",
-    FOUNDRY_APP: path.join(HOME, "FoundryVTT-14", "FoundryVTT-Node-14.365"),
+    FOUNDRY_APP: newestFoundryApp(V14_BASE, 14, listDir(V14_BASE)) ?? V14_APP_FALLBACK,
     FOUNDRY_DATA: path.join(HOME, "FoundryVTT-14", "Data"),
     FOUNDRY_NODE: "/opt/homebrew/bin/node"
   },

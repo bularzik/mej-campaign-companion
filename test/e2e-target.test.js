@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import os from "node:os";
-import { resolveTarget, generationOf } from "../tests/e2e/helpers/target.mjs";
+import { resolveTarget, generationOf, newestFoundryApp } from "../tests/e2e/helpers/target.mjs";
 
 const HOME = os.homedir();
 
@@ -13,7 +13,7 @@ describe("resolveTarget", () => {
       url: "http://localhost:30000",
       port: "30000",
       world: "world-a",
-      app: `${HOME}/FoundryVTT-14/FoundryVTT-Node-14.365`,
+      app: expect.stringMatching(/\/FoundryVTT-14\/FoundryVTT-Node-14\.\d+$/),
       data: `${HOME}/FoundryVTT-14/Data`,
       node: "/opt/homebrew/bin/node",
       moduleLink: `${HOME}/FoundryVTT-14/Data/Data/modules/mej-campaign-companion`,
@@ -70,5 +70,19 @@ describe("generationOf", () => {
     expect(generationOf(undefined)).toBeNull();
     expect(generationOf("")).toBeNull();
     expect(generationOf("dev")).toBeNull();
+  });
+});
+
+describe("newestFoundryApp", () => {
+  it("picks the highest build of the requested major from a mixed listing", () => {
+    const entries = ["Data", "FoundryVTT-Node-14.365", "FoundryVTT-Node-14.368", "start-foundry.command"];
+    expect(newestFoundryApp("/f", 14, entries)).toBe("/f/FoundryVTT-Node-14.368");
+  });
+  it("ignores zips and other majors", () => {
+    const entries = ["FoundryVTT-Node-14.365.zip", "FoundryVTT-Node-13.351"];
+    expect(newestFoundryApp("/f", 14, entries)).toBeNull();
+  });
+  it("returns null on an empty listing", () => {
+    expect(newestFoundryApp("/f", 14, [])).toBeNull();
   });
 });

@@ -80,6 +80,8 @@ not announced with a warning. What differs:
   reachable — the graph from the Hub toolbar, the prep board from the button
   on the Session sheet itself.
 
+Known issue as of 2026-09-19: on bare MEJ 14.01 in native mode the Hub's New Session button does not open the Session sheet — see `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`; native mode is verified on MEJ 13.06 / Foundry 13 and on the MEJ fork line.
+
 Sessions are identified by their native Foundry page type
 (`mej-campaign-companion.session`), never by MEJ's type flag, so they stay
 first-class in search, auto-linking, the Hub index, export and the graph in
@@ -99,7 +101,7 @@ stock MEJ install.
 ## Requirements
 
 - Foundry VTT **v13 or v14** (verified on 13.351 and 14.x).
-- **Monk's Enhanced Journal** — **13.06 or later on Foundry 13, 14.01 or later on Foundry 14**. A build that includes the extension API (the API lands on MEJ's `feat/extension-api` branch, not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
+- **Monk's Enhanced Journal** — **13.06 or later on Foundry 13, 14.01 or later on Foundry 14**. A build that includes the extension API (upstream MEJ pull request #823, rebased onto MEJ 14.01 and not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Known issue as of 2026-09-19: on bare MEJ 14.01 in native mode the Hub's New Session button does not open the Session sheet — see `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`; native mode is verified on MEJ 13.06 / Foundry 13 and on the MEJ fork line. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
 - A `dnd5e`-first companion whose core (search, timeline, docx, auto-link/capture, Session sheet itself) makes no `dnd5e`-specific assumptions — see [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for what to manually verify on other game systems.
 
 ## Installation
