@@ -52,9 +52,13 @@ lines, so a checkout across lines needs Foundry stopped and the flags cleared:
    git checkout -f --detach 14.01
    git ls-files packs | grep -E 'CURRENT|LOG|MANIFEST|\.log$' | xargs git update-index --skip-worktree
    ```
-   then relaunch Foundry on World A from the app dir:
-   `node main.js --dataPath=~/FoundryVTT-14/Data --world=world-a --port=30000`
-   (background it; write its pid to `~/FoundryVTT-14/Data/.pid`).
+   then relaunch Foundry on World A from
+   `~/FoundryVTT-14/FoundryVTT-Node-14.368` (the newest `FoundryVTT-Node-14.*`
+   dir):
+   `node main.js --dataPath=/Users/danbularzik/FoundryVTT-14/Data --world=world-a --port=30000`
+   (background it; write its pid to `~/FoundryVTT-14/Data/.pid`). Do not write
+   `--dataPath=~/...` — neither bash nor zsh expands `~` after `=`, so the
+   server would come up on an empty data directory.
 4. `STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
    — the file argument keeps the rest of the suite (written for the API
    build) from running against stock.
@@ -88,3 +92,7 @@ deletes the fixture instead.
 
 The v14 server on port 30000 is untouched throughout. Run the v14 full suite
 separately (`npm run test:e2e`, default target).
+
+Summarise a JSON report: `node tests/e2e/helpers/summarize-run.mjs <report.json> [label]`
+(run Playwright with `--reporter=list,json` and
+`PLAYWRIGHT_JSON_OUTPUT_NAME=<path>`).

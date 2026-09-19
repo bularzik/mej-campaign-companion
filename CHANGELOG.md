@@ -6,7 +6,9 @@
   14.01 in **api mode**, with known exceptions: the full e2e suite ran 115
   passed / 13 failed against the MEJ fork line with 14.01 merged in, and 101
   passed / 23 failed against stock 14.01 plus the extension API from upstream
-  MEJ pull request #823. The **native-mode stock gate failed** on this stack —
+  MEJ pull request #823 — mostly harness- or environment-level; exactly one has
+  a first stack frame in product code, and it is MEJ's. The **native-mode stock
+  gate failed** on this stack —
   on bare 14.01 the Hub's New Session button does not open the standalone
   session sheet — so native mode on 14.01 is **not** verified. Every failure
   is listed and attributed in
