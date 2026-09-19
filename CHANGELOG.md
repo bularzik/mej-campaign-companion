@@ -11,7 +11,8 @@
   session sheet — so native mode on 14.01 is **not** verified. Every failure
   is listed and attributed in
   `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`. The
-  manifest's MEJ relationship records 14.01; the floor stays 13.06.
+  manifest does not claim MEJ 14.01 as verified until native mode passes the
+  stock gate; the floor stays 13.06.
 - **Harness:** the v14 e2e target finds the newest installed Foundry 14 build
   instead of a fixed directory; the v14 stock-gate recipe is rewritten for
   the worktree-based MEJ install.
