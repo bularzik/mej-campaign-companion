@@ -322,3 +322,22 @@ The full suite on Foundry 13 is the discovery instrument, not a gate.
   the gate passes.
 - Follow-ups recorded in the sweep report: upstream issues for MEJ 13.06
   defects; harness items surfaced on v13.
+
+## 10. Amendments (plan-writing, 2026-09-19)
+
+- **A1 — wrap 3 withdrawn.** With wrap 1 in place a single-page session entry
+  passes the shell's demotion gate, so MEJ's own `addTab` parent swap ends
+  where it should (the page becomes the tab entity and `SessionSheet` the
+  subsheet), exactly as for MEJ's built-in types. The Hub placeholder's uuid
+  `shellpage:campaign-hub` contains no "." and no real document id, so
+  `open`'s `includes(entity.id)` matches only the Hub's own tab. The shim
+  therefore installs three wraps (`getDocumentTypes`, `findEntity`,
+  `onConfigureSheet`); §4.1's row 3 and §7's `addTab`/`open` unit test do not
+  apply.
+- **A2 — import already completes.** `processBurst` in `hooks/retro-link.mjs`
+  already catches each page write. What the user saw is its "Auto-link could
+  not write N page(s)" error notification, shown only when no page was
+  written; partial failures are silent. §5.3 becomes: the retro-link report
+  names each failed journal once with the first line of the cause, is shown
+  as a warning after the success message when some pages were written, and
+  as an error when none were. No change to the wizard's own flow.
