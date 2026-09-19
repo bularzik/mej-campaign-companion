@@ -73,4 +73,42 @@ describe("installWraps (libWrapper branch)", () => {
     expect(obj.f()).toBe(2);
     expect(e.warn).toHaveBeenCalled();
   });
+
+  it("tolerates env.warn throwing during rollback when install fails", () => {
+    const throwingWarn = vi.fn(() => { throw new Error("warn failed"); });
+    const e = { libWrapperModule: { active: false }, libWrapper: null, moduleId: "mej-campaign-companion", warn: throwingWarn };
+    const obj = { a() { return "a"; } };
+    const original = obj.a;
+    const res = installWraps([
+      { name: "a", object: obj, key: "a", wrapper(wrapped) { return wrapped() + "!"; } },
+      { name: "missing", object: obj, key: "nope", wrapper(wrapped) { return wrapped(); } }
+    ], e);
+    // Even though warn threw, the rollback should have completed and restored obj.a
+    expect(res.installed).toEqual([]);
+    expect(res.failed).toBe("missing");
+    expect(obj.a).toBe(original);
+    expect(throwingWarn).toHaveBeenCalled();
+  });
+
+  it("tolerates missing env.warn during rollback when install fails", () => {
+    const e = { libWrapperModule: { active: false }, libWrapper: null, moduleId: "mej-campaign-companion" };
+    // Note: no warn at all
+    const obj = { a() { return "a"; } };
+    const original = obj.a;
+    const res = installWraps([
+      { name: "a", object: obj, key: "a", wrapper(wrapped) { return wrapped() + "!"; } },
+      { name: "missing", object: obj, key: "nope", wrapper(wrapped) { return wrapped(); } }
+    ], e);
+    // Even though env.warn is missing, the rollback should still work and restore obj.a
+    expect(res.installed).toEqual([]);
+    expect(res.failed).toBe("missing");
+    expect(obj.a).toBe(original);
+  });
+
+  it("warns when uninstalling a libwrapper record but env.libWrapper is missing", () => {
+    const e = { libWrapperModule: { active: false }, libWrapper: null, moduleId: "mej-campaign-companion", warn: vi.fn() };
+    const records = [{ name: "f", kind: "libwrapper", path: "game.X.f" }];
+    uninstallWraps(records, e);
+    expect(e.warn).toHaveBeenCalledWith(expect.stringContaining("game.X.f"), undefined);
+  });
 });

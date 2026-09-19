@@ -10,6 +10,15 @@
 // and the wrapper's return value is returned as-is (a promise from an async
 // original stays a promise; a plain value stays plain).
 
+/** Internal: tolerates a missing or throwing env.warn; no-op when absent. */
+function safeWarn(env, msg, err) {
+  try {
+    env.warn?.(msg, err);
+  } catch {
+    // Silently ignore if warn throws or is missing; don't break rollback/uninstall.
+  }
+}
+
 /**
  * @param {Array<{name:string, object:object, key:string, path?:string, wrapper:Function}>} specs
  * @param {{libWrapperModule?:{active?:boolean}, libWrapper?:object, moduleId:string, warn:(msg:string, err?:any)=>void}} env
@@ -21,7 +30,7 @@ export function installWraps(specs, env) {
     try {
       records.push(installOne(spec, env));
     } catch (err) {
-      env.warn(`wrap "${spec.name}" could not be installed; uninstalling ${records.length} already installed`, err);
+      safeWarn(env, `wrap "${spec.name}" could not be installed; uninstalling ${records.length} already installed`, err);
       uninstallWraps(records, env);
       return { installed: [], failed: spec.name, records: [] };
     }
@@ -39,7 +48,7 @@ function installOne(spec, env) {
       env.libWrapper.register(env.moduleId, path, wrapper, "WRAPPER");
       return { name, kind: "libwrapper", path };
     } catch (err) {
-      env.warn(`libWrapper.register failed for ${path}; falling back to manual patch`, err);
+      safeWarn(env, `libWrapper.register failed for ${path}; falling back to manual patch`, err);
     }
   }
   const original = object[key];
@@ -53,7 +62,11 @@ function installOne(spec, env) {
 export function uninstallWraps(records, env) {
   for (const r of [...records].reverse()) {
     if (r.kind === "libwrapper") {
-      try { env.libWrapper?.unregister(env.moduleId, r.path); } catch (err) { env.warn(`libWrapper.unregister failed for ${r.path}`, err); }
+      if (!env.libWrapper) {
+        safeWarn(env, `libWrapper is unavailable; path ${r.path} stays registered`, undefined);
+      } else {
+        try { env.libWrapper.unregister(env.moduleId, r.path); } catch (err) { safeWarn(env, `libWrapper.unregister failed for ${r.path}`, err); }
+      }
     } else {
       r.object[r.key] = r.original;
     }
