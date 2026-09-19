@@ -98,12 +98,24 @@ export class HubShellDocument extends foundry.abstract.Document {
   }
 }
 
-/** The one Hub placeholder this client uses, in both hosting paths. */
+/**
+ * The one Hub placeholder this client uses, in both hosting paths.
+ *
+ * The MEJ type flag is not decoration: renderSubSheet hands every non-blank
+ * document to MonksEnhancedJournal.fixType, which reads
+ * `object.parent.documentName` whenever that flag is missing
+ * (monks-enhanced-journal.js, 13.06 :4115-4120) and throws "Cannot read
+ * properties of null (reading 'documentName')" on a placeholder that has no
+ * parent - confirmed live on 13.06 before it was stamped. MEJ's own
+ * BlankJournal carries the same flag for the same reason. With it, and with
+ * the shim's getDocumentTypes wrap registering the type, fixType's tail
+ * re-asserts the type it already has instead of unsetting the flag.
+ */
 export function hubShellDocument() {
   singleton ??= new HubShellDocument({
     name: game.i18n.localize(`${I18N}.hub.title`),
     type: HUB_PAGE_ID,
-    flags: {},
+    flags: { "monks-enhanced-journal": { type: HUB_PAGE_ID } },
     content: ""
   });
   return singleton;

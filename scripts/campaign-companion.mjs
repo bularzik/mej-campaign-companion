@@ -1,7 +1,7 @@
 import {
   MODULE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, TIMELINE_JOURNAL_SETTING, AUTO_LINK_SETTING,
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
-  RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
+  RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
   KNOWLEDGE_COLLAPSED_SETTING
 } from "./constants.mjs";
@@ -116,6 +116,18 @@ Hooks.once("init", () => {
     config: false,
     type: Boolean,
     default: false
+  });
+
+  // Hidden client setting: in native mode, host the Hub and Session sheets
+  // inside MEJ's shell (spec 2026-09-19 §4). Off falls back to standalone
+  // windows - also the automatic fallback when a shim wrap won't install.
+  game.settings.register(MODULE_ID, SHELL_HOSTING_SETTING, {
+    name: `${I18N}.settings.shellHosting.name`,
+    hint: `${I18N}.settings.shellHosting.hint`,
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: true
   });
 
   game.settings.register(MODULE_ID, DATA_VERSION_SETTING, {
@@ -281,7 +293,8 @@ Hooks.once("ready", async () => {
 
   // A world that spent time on a stock MEJ install comes back with the MEJ
   // type flag scrubbed off its Session pages; put it back so MEJ's shell
-  // routes them again. No-op in native mode and for non-active-GM clients.
+  // routes them again. No-op unless a shell is hosting us (api mode, or
+  // native mode with the shim) and for non-active-GM clients.
   await healSessionFlags();
 
   // Spec §6 (campaign-container) + spec C §1: versioned migrations. Gated on

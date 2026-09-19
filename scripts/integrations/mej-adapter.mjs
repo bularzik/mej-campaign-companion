@@ -6,7 +6,7 @@
 import {
   MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE,
   CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES,
-  FORCE_NATIVE_MODE_SETTING, I18N
+  FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N
 } from "../constants.mjs";
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
@@ -35,6 +35,15 @@ export function currentMode() {
   return mode;
 }
 
+// Native-mode hosting, set by wireNativeMode(). Never "shell" in api mode
+// (MEJ's own shell hosts us there) nor in absent mode (nothing to host in).
+let hosting = null;
+
+/** @returns {"shell"|"window"|null} native-mode hosting; null until native mode is wired. */
+export function currentHosting() {
+  return hosting;
+}
+
 /** True when a wiring step threw - the ready hook surfaces this to the GM. */
 export function wiringFailed() {
   return wiringThrew;
@@ -58,6 +67,15 @@ function forceNative() {
     return !!game.settings.get(MODULE_ID, FORCE_NATIVE_MODE_SETTING);
   } catch (err) {
     return false;
+  }
+}
+
+/** Same defensive read as forceNative(), but shell hosting is the default. */
+function shellHostingWanted() {
+  try {
+    return game.settings.get(MODULE_ID, SHELL_HOSTING_SETTING) !== false;
+  } catch (err) {
+    return true;
   }
 }
 
@@ -324,6 +342,15 @@ async function wireNativeMode() {
   // Native pdf/video pages: same registration as api mode, standing alone
   // rather than shell-hosted (spec E §1).
   registerMediaSheetClass(MediaPageSheet);
+
+  // Shell hosting (spec 2026-09-19 §4): wraps installed as a unit; window
+  // hosting is the fallback whether the setting is off or a wrap failed.
+  hosting = "window";
+  if (shellHostingWanted()) {
+    const { installShellShim } = await import("./shell-shim.mjs");
+    const result = installShellShim({ SessionSheet, CampaignHubPage });
+    hosting = result.hosting;
+  }
 }
 
 /** Called from MEJ's setupMonksEnhancedJournal hook. */
@@ -390,7 +417,10 @@ async function wireForReady() {
   return mode;
 }
 
-/** Open the Campaign Hub: a shell tab in api mode, a window in native mode. */
+/**
+ * Open the Campaign Hub: a shell tab in api mode, and in native mode too
+ * when the shim installed; a standalone window otherwise.
+ */
 export async function openHub() {
   try {
     // Wait for onReady()'s wiring before dispatching on `mode`. Every entry
@@ -411,6 +441,11 @@ export async function openHub() {
       await game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID);
       return;
     }
+    if (hosting === "shell") {
+      const { openHubInShell } = await import("./shell-shim.mjs");
+      await openHubInShell();
+      return;
+    }
     const { openHubWindow } = await import("../apps/hub-window.mjs");
     await openHubWindow();
   } catch (err) {
@@ -419,13 +454,30 @@ export async function openHub() {
 }
 
 /**
+ * Open a Session page the way the current mode hosts it: MEJ's own open
+ * path when a shell can host it (api mode, or native mode with shell
+ * hosting), the page's standalone sheet otherwise.
+ */
+export async function openSessionPage(page) {
+  if (mode === MODE_API || (mode === MODE_NATIVE && hosting === "shell")) {
+    await game.MonksEnhancedJournal.openJournalEntry(page);
+    return;
+  }
+  await page.sheet.render(true);
+}
+
+/**
  * Re-stamp the MEJ type flag on Session pages that lost it to a stock MEJ
  * install (its fixType unsets flags for types its registry does not know).
- * API mode only, active GM only, silent. Returns how many pages were fixed.
+ * Shell-hosted modes only (api, or native with the shim), active GM only,
+ * silent. Returns how many pages were fixed.
  * @returns {Promise<number>}
  */
 export async function healSessionFlags() {
-  if (mode !== MODE_API) return 0;
+  // Api mode, or native mode with shell hosting (wrap 1 keeps stock MEJ's
+  // fixType from scrubbing the flag again). Window hosting: stock MEJ would
+  // scrub it back on the next open, so re-stamping is pointless there.
+  if (!(mode === MODE_API || (mode === MODE_NATIVE && hosting === "shell"))) return 0;
   if (game.users.activeGM !== game.user) return 0;
 
   try {

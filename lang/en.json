@@ -24,6 +24,10 @@
         "applied": "Updated ownership on {count} session entries.",
         "applyFailed": "Granting session ownership failed — see the console."
       },
+      "shellHosting": {
+        "name": "Host the Campaign Hub and Sessions inside Monk's Enhanced Journal",
+        "hint": "Native mode only. Off: the Hub and Session sheets open as standalone windows."
+      },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
         "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM notes. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",

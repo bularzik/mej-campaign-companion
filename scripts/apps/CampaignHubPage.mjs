@@ -43,7 +43,7 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
-import { mejType, openHub } from "../integrations/mej-adapter.mjs";
+import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
@@ -1074,7 +1074,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         pages: [buildSessionPageData(name, "", null, null)]
       });
       const page = entry?.pages?.contents?.[0];
-      if (page) await page.sheet.render(true);
+      if (page) await openSessionPage(page);
       this.render();
     } catch (err) {
       console.error(`${MODULE_ID} | creating a session failed`, err);
