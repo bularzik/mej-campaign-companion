@@ -441,7 +441,7 @@ export async function openHub() {
       await game.MonksEnhancedJournal.openShellPage(HUB_PAGE_ID);
       return;
     }
-    if (hosting === "shell") {
+    if (mode === MODE_NATIVE && hosting === "shell") {
       const { openHubInShell } = await import("./shell-shim.mjs");
       await openHubInShell();
       return;
@@ -454,14 +454,19 @@ export async function openHub() {
 }
 
 /**
- * Open a Session page the way the current mode hosts it: MEJ's own open
- * path when a shell can host it (api mode, or native mode with shell
- * hosting), the page's standalone sheet otherwise.
+ * Open a Session page the way the current mode hosts it.
+ *
+ * Native mode with shell hosting is the only case that needs MEJ's own open
+ * path, and even there MEJ may refuse: openJournalEntry returns false for a
+ * non-GM without allow-player, a LIMITED user, monks-common-display /
+ * conversation-hud, and a vetoed hook (13.06 monks-enhanced-journal.js's
+ * openJournalEntry head). Fall back to the page's own sheet whenever it
+ * says no. Api mode is unchanged from before shell hosting existed: MEJ's
+ * shell picks the sheet up from a plain render.
  */
 export async function openSessionPage(page) {
-  if (mode === MODE_API || (mode === MODE_NATIVE && hosting === "shell")) {
-    await game.MonksEnhancedJournal.openJournalEntry(page);
-    return;
+  if (mode === MODE_NATIVE && hosting === "shell") {
+    if (await game.MonksEnhancedJournal.openJournalEntry(page)) return;
   }
   await page.sheet.render(true);
 }

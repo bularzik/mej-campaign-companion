@@ -86,6 +86,20 @@ export class HubShellDocument extends foundry.abstract.Document {
     return null;
   }
 
+  // fixType's else-branch calls unsetFlag on a document whose type MEJ's
+  // registry does not know - which is exactly the Hub placeholder whenever
+  // the shim is NOT installed (window hosting). Document#setFlag/#unsetFlag
+  // route through update(), which this parentless, collection-less stub
+  // cannot survive. The placeholder's flags are fixed at construction, so
+  // both writes are no-ops; getFlag stays inherited and reads them.
+  async setFlag() {
+    return this;
+  }
+
+  async unsetFlag() {
+    return this;
+  }
+
   testUserPermission() {
     return true;
   }

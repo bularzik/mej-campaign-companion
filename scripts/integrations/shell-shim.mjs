@@ -1,5 +1,6 @@
 // Native-mode shell hosting on a stock Monk's Enhanced Journal (spec
-// 2026-09-19 §4). Four wraps, installed as a unit; any failure uninstalls
+// 2026-09-19 §4). Four wraps (five when a shell is already open), installed
+// as a unit; any failure uninstalls
 // the lot and reports window hosting. Line numbers cite MEJ 13.06
 // apps/enhanced-journal.js / monks-enhanced-journal.js; 14.01 is identical
 // at the points used (docs/superpowers/triage/2026-09-19-mej-shell-hosting-survey.md).
@@ -44,6 +45,10 @@ function install({ SessionSheet, CampaignHubPage }) {
   const mej = game.MonksEnhancedJournal;
   const hubDoc = () => hubShellDocument();
   const additions = { [SESSION_TYPE]: SessionSheet, [HUB_PAGE_ID]: CampaignHubPage };
+  function configureSheetWrapper(wrapped, ...args) {
+    if (this?.document === hubDoc()) return;
+    return wrapped(...args);
+  }
 
   const specs = [
     {
@@ -65,9 +70,10 @@ function install({ SessionSheet, CampaignHubPage }) {
       // registration hang off it, and Foundry's own DocumentSheetV2
       // constructor throws on the bare key ("Cannot convert undefined or
       // null to object" out of getSheetClassesForSubType - seen live on
-      // 13.06 before this wrap). The fork's fixType carves external types
-      // out for exactly this reason (14.0x monks-enhanced-journal.js
-      // :1054-1076); on stock we put the type back afterwards.
+      // 13.06 before this wrap). The fork's own fixType carve-out (14.0x
+      // monks-enhanced-journal.js :4347-4352) does not help here: it guards
+      // only the unsetFlag branch, leaving the `object.type = type` rewrite
+      // in place. So on stock we put the real subtype back afterwards.
       name: "fixType", object: mej, key: "fixType",
       wrapper(wrapped, object, settype) {
         const before = object?.type;
@@ -89,13 +95,29 @@ function install({ SessionSheet, CampaignHubPage }) {
       // 14.01 builds core's DocumentSheetConfig for the shell's document and
       // it throws on a synthetic type; 13.06 opens MEJ's own dialog, which is
       // meaningless for the Hub. Same early return on both.
-      name: "onConfigureSheet", object: EnhancedJournal, key: "onConfigureSheet",
-      wrapper(wrapped, ...args) {
-        if (this?.document === hubDoc()) return;
-        return wrapped(...args);
-      }
+      //
+      // Target the CAPTURED slot, not the static: MEJ stores the handler by
+      // value at class-definition time (`actions: { configureSheet:
+      // EnhancedJournal.onConfigureSheet }`, :76) and ApplicationV2
+      // dispatches `this.options.actions[action]`, so patching
+      // EnhancedJournal.onConfigureSheet itself is inert. ApplicationV2
+      // calls the handler with the app as `this`, so `this.document` is the
+      // shell's current document either way.
+      name: "configureSheet", object: EnhancedJournal.DEFAULT_OPTIONS.actions, key: "configureSheet",
+      wrapper: configureSheetWrapper
     }
   ];
+
+  // A shell opened before the shim installed carries its own merged copy of
+  // DEFAULT_OPTIONS.actions, made at construction - patching the class
+  // default cannot reach it, so patch that copy too when one exists.
+  const liveActions = mej.journal?.options?.actions;
+  if (typeof liveActions?.configureSheet === "function") {
+    specs.push({
+      name: "configureSheet(open shell)", object: liveActions, key: "configureSheet",
+      wrapper: configureSheetWrapper
+    });
+  }
 
   const result = installWraps(specs, env());
   records = result.records;
