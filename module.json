@@ -21,7 +21,8 @@
         "id": "monks-enhanced-journal",
         "type": "module",
         "compatibility": {
-          "minimum": "13.06"
+          "minimum": "13.06",
+          "verified": "14.01"
         }
       }
     ]

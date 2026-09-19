@@ -14,28 +14,30 @@
 //   npm run e2e:stock:v13:cleanup    (FOUNDRY_TARGET=v13 STOCK_PHASE=cleanup)
 // Global setup starts the v13 server on port 30013 itself if it is not up.
 //
-// v14 stock gate (swap the MEJ symlink to a stock build):
+// v14 stock gate (point the MEJ module worktree at a stock build):
 //
-// Procedure (also in tests/e2e/README.md). From the MEJ repo:
-//   1. git worktree add --detach /tmp/mej-stock-smoke maint/14.00-sync
-//   2. Stop Foundry:  kill $(lsof -ti :30000 -sTCP:LISTEN)
-//   3. Back up World A:
+// The MEJ install at ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
+// is a git worktree of the MEJ repo. Stock = tag 14.01; API build = the fork
+// line (integration-14.08) or upstream PR #823's head. Foundry must be
+// stopped and the pack skip-worktree flags cleared before a checkout that
+// crosses between a 14.01-based and a fork-based commit (the pack
+// bookkeeping files differ) — see tests/e2e/README.md for the exact
+// commands. Procedure:
+//   1. Stop Foundry:  ~/FoundryVTT-14/stop-foundry.command
+//   2. Back up World A:
 //      mkdir -p ~/FoundryVTT-14/backups
 //      cp -R ~/FoundryVTT-14/Data/Data/worlds/world-a \
 //            ~/FoundryVTT-14/backups/world-a-pre-stock-smoke-<date>
-//   4. Repoint the module symlink (rm + ln -s; never ln -sfn onto a dir symlink):
-//      rm ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
-//      ln -s /tmp/mej-stock-smoke ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
-//   5. STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs
-//      (global setup boots World A itself; the file argument keeps the rest
-//      of the suite, written for the API build, from running against stock)
-//   6. Stop Foundry again; repoint the symlink back:
-//      rm ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
-//      ln -s ~/Claude/Projects/monks-enhanced-journal \
-//            ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
-//   7. STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs
-//   8. git worktree remove --force /tmp/mej-stock-smoke   (pack churn dirties it)
-//   9. Delete the World A backup once the run is judged clean.
+//   3. Check out tag 14.01 in the module worktree (flags cleared, then
+//      re-set) and relaunch Foundry on world-a.
+//   4. STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs
+//      (global setup boots World A itself if needed; the file argument keeps
+//      the rest of the suite, written for the API build, from running
+//      against stock)
+//   5. Stop Foundry; check out the API build in the module worktree the
+//      same way; relaunch.
+//   6. STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs
+//   7. Delete the World A backup once the run is judged clean.
 import { test, expect } from "@playwright/test";
 import {
   login,

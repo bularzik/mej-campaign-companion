@@ -35,24 +35,36 @@ never executes it. The two phases are separate invocations bridged by a
 fixed-name fixture (`TT-STOCKSMOKE Session`) that phase 1 creates and phase 2
 verifies (heal) and deletes.
 
-Procedure — from the MEJ repo:
+Procedure. The MEJ install at
+`~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal` is a git worktree
+of the MEJ repo; the stock build is tag `14.01`, the API build is the fork
+line (`integration-14.08`) or the head of upstream PR #823. Its `packs/*`
+bookkeeping files carry `skip-worktree` flags and differ between the two
+lines, so a checkout across lines needs Foundry stopped and the flags cleared:
 
-1. `git worktree add --detach /tmp/mej-stock-smoke maint/14.00-sync`
-2. Stop Foundry: `kill $(lsof -ti :30000 -sTCP:LISTEN)`
-3. Back up World A:
+1. Stop Foundry: `~/FoundryVTT-14/stop-foundry.command`
+2. Back up World A:
    `mkdir -p ~/FoundryVTT-14/backups && cp -R ~/FoundryVTT-14/Data/Data/worlds/world-a ~/FoundryVTT-14/backups/world-a-pre-stock-smoke-<date>`
-4. Repoint the module symlink (`rm` + `ln -s`; never `ln -sfn` onto an
-   existing directory symlink, which can create the link *inside* the target):
-   `rm ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal && ln -s /tmp/mej-stock-smoke ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`
-5. `STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
-   — global setup boots World A itself; the file argument keeps the rest of
-   the suite (written for the API build) from running against stock.
-6. Stop Foundry again; repoint the symlink back:
-   `rm ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal && ln -s ~/Claude/Projects/monks-enhanced-journal ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`
-7. `STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
-8. `git worktree remove --force /tmp/mej-stock-smoke` (Foundry's LevelDB pack
-   churn dirties the worktree; the noise is discardable).
-9. Delete the World A backup once the run is judged clean.
+3. Check out the stock build in the module worktree:
+   ```
+   cd ~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal
+   git ls-files -v packs | grep '^S' | cut -c3- | xargs git update-index --no-skip-worktree
+   git checkout -f --detach 14.01
+   git ls-files packs | grep -E 'CURRENT|LOG|MANIFEST|\.log$' | xargs git update-index --skip-worktree
+   ```
+   then relaunch Foundry on World A from the app dir:
+   `node main.js --dataPath=~/FoundryVTT-14/Data --world=world-a --port=30000`
+   (background it; write its pid to `~/FoundryVTT-14/Data/.pid`).
+4. `STOCK_PHASE=stock npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
+   — the file argument keeps the rest of the suite (written for the API
+   build) from running against stock.
+5. Stop Foundry; repeat step 3 with the API build's ref in place of `14.01`;
+   relaunch.
+6. `STOCK_PHASE=return npx playwright test tests/e2e/13-stock-smoke.spec.mjs`
+7. Delete the World A backup once the run is judged clean.
+
+Never commit in the module worktree: Foundry's LevelDB pack churn shows there
+as modified `packs/*` files and is discardable noise.
 
 Failure policy: companion defects ship as a new patch release from a new
 branch — published release assets are never modified in place. Breakage

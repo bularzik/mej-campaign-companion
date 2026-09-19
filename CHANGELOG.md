@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Verified** on Foundry VTT 14.368, dnd5e 6.0.3 and Monk's Enhanced Journal
+  14.01 — both stock (native mode) and with the extension API from upstream
+  MEJ pull request #823 (api mode). The manifest now records MEJ 14.01 as
+  verified; the floor stays 13.06.
+- **Harness:** the v14 e2e target finds the newest installed Foundry 14 build
+  instead of a fixed directory; the v14 stock-gate recipe is rewritten for
+  the worktree-based MEJ install.
+
 ## 0.19.2 (2026-09-06)
 
 Import wizard: merging keeps the heading.
