@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.19.3 (2026-09-19)
+
+Official Monk's Enhanced Journal 14.01: documentation, harness and e2e sweep. No runtime change.
 
 - **Tested** on Foundry VTT 14.368, dnd5e 6.0.3 and Monk's Enhanced Journal
   14.01 in **api mode**, with known exceptions: the full e2e suite ran 115
