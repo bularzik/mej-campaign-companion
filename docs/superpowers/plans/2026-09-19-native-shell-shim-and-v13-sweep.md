@@ -1094,7 +1094,7 @@ git commit -m "fix(retro-link): name the journal and cause when a write fails; r
 - Environment: the v13 module install becomes a symlink.
 
 **Interfaces:**
-- Produces: `npm run e2e:v13` (full suite), `npm run e2e:v13:stock` alias kept as `e2e:stock:v13`.
+- Produces: `npm run e2e:v13` (full suite); the v13 stock gate keeps its existing `e2e:stock:v13` script (an `e2e:v13:stock` alias was added and later dropped in the final fix wave as redundant).
 
 - [ ] **Step 1: Per-target auth state**
 
