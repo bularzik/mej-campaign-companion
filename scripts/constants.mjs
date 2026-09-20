@@ -50,6 +50,9 @@ export const RETRO_LINK_PENDING_FLAG = "retroLinkPending";
 /** Client setting (hidden): pretend the MEJ extension API is absent, for testing native mode. */
 export const FORCE_NATIVE_MODE_SETTING = "forceNativeMode";
 
+/** Client setting (hidden): host the Hub and Sessions in MEJ's shell in native mode. Off = standalone windows. Used by the stock gate's fallback test. */
+export const SHELL_HOSTING_SETTING = "shellHosting";
+
 /** World setting: auto-capture ended combats as Encounter entries. */
 export const AUTO_CAPTURE_SETTING = "autoCaptureEncounters";
 

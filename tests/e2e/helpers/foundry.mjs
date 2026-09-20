@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import { lockStatus, UNLOCK_HINT } from "./env-lock.mjs";
 import { TARGET } from "./target.mjs";
+import { strandedTestFolderIds, autoCaptureNeedsReset } from "./sweep-rules.mjs";
+import { formatConsoleError, appendStack } from "./console-format.mjs";
 
 export const BASE_URL = TARGET.url;
 export const TEST_WORLD = TARGET.world;
@@ -21,8 +23,9 @@ export const TT_PREFIX = "TT-";
 // session file per test-world user. The "setup" Playwright project
 // (tests/e2e/auth.setup.mjs) populates these once per run; login() below
 // fast-paths from them. Git-ignored (tests/e2e/.auth/) since cookies are
-// host-local and short-lived.
-const AUTH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".auth");
+// host-local and short-lived. Namespaced by TARGET.name so a v13 run and a
+// v14 run never overwrite each other's saved cookies.
+const AUTH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".auth", TARGET.name);
 export const AUTH_STATE_FILES = {
   Gamemaster: path.join(AUTH_DIR, "gm.json"),
   "User 1": path.join(AUTH_DIR, "user1.json"),
@@ -141,6 +144,79 @@ export async function ensureTestWorld() {
 const SESSION_BOUND = () =>
   globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId;
 
+/**
+ * `game.ready` is NOT "the companion is usable". In native mode every piece
+ * of the companion's wiring runs from the ready hook - registerCore()'s ten
+ * dynamic imports, then wireNativeMode()'s own three, then the sheet
+ * registrations (mej-adapter.mjs wireForReady()) - so for roughly the first
+ * second of a native-mode client CONFIG.JournalEntryPage.sheetClasses holds
+ * the companion's type KEYS with empty values, and Foundry's _getSheetClass()
+ * falls back to core's BaseSheet. Measured live on Foundry 13.351 + stock MEJ
+ * 13.06: `{session: [], hub: []}` immediately after ready,
+ * `{session: ["mej-campaign-companion.SessionSheet"], ...}` three seconds
+ * later (tests/e2e/probes/page-sheet-v13.mjs).
+ *
+ * A spec that opens a Session in that window gets BaseSheet, and MEJ's own
+ * v1/v2 fork test then misclassifies it and throws
+ * "sheet.getData is not a function" (13.06 JournalEntrySheet.js:590/379) -
+ * which is how it surfaced in the 2026-09-19 sweep: 10-secrets-hub:130/:167,
+ * 09-secrets:528 (and :590 as a flake), 20-timeline-journal-open:112.
+ *
+ * In api mode the handshake wires everything at MEJ's setup hook, so the
+ * predicate is usually already true and the wait costs nothing - but not
+ * always: Foundry drains its pre-ready registerSheet queue exactly once, and a
+ * registration that lands after that drain is silently dropped until
+ * ensureSheetRegistrations() repairs it from the ready hook (see
+ * mej-adapter.mjs onHandshake's comment). So api mode can wait here too, and
+ * should.
+ *
+ * Two short-circuits, both vacuous rather than wrong: the companion inactive
+ * (nothing to wire), and MEJ inactive (the adapter resolves mode "absent" and
+ * deliberately registers NOTHING, so waiting on a registration would burn the
+ * full timeout on every single login).
+ *
+ * Native mode has a SECOND thing to wait for. wireNativeMode() registers the
+ * sheet classes and only then imports and installs the shell shim, so the
+ * registration lands 0-130 ms before MEJ's getDocumentTypes() carries
+ * "session" (measured 2026-09-20 on four fresh seats). A Session opened in
+ * that gap fails MEJ's demotion gate (enhanced-journal.js:430-441 needs the
+ * type in that map) and renders as MEJ's JournalEntrySheet wrapper — the
+ * whole of 06-player-collab's "instability" on Foundry 13 (sweep report,
+ * cause J): every failed open had the shim absent, every passing one had it
+ * present or arriving mid-call. So without the extension API the predicate
+ * also waits for the wrap's observable effect, unless the shellHosting
+ * client setting is off (13-stock-smoke's window-fallback test), in which
+ * case no shim is coming. A shim that FAILED to install is not observable
+ * from here and is not a harness scenario: the wait times out with its own
+ * message. Exported for test/e2e-wired-predicate.test.js; it runs inside
+ * page.waitForFunction, so it must stay self-contained.
+ */
+export const COMPANION_WIRED = (moduleId) => {
+  const game = globalThis.game;
+  if (game?.modules?.get(moduleId)?.active !== true) return true;
+  if (game?.modules?.get("monks-enhanced-journal")?.active !== true) return true;
+  const registered = Object.keys(globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${moduleId}.session`] ?? {}).length > 0;
+  if (!registered) return false;
+  const MEJ = game.MonksEnhancedJournal;
+  if (typeof MEJ?.getApi === "function" || !!MEJ?.externalTypes) return true;
+  let shellWanted = true;
+  try { shellWanted = game.settings.get(moduleId, "shellHosting") !== false; } catch { shellWanted = true; }
+  if (!shellWanted) return true;
+  try { return !!MEJ?.getDocumentTypes?.()?.session; } catch { return false; }
+};
+
+/** Wait until the companion's sheet registrations are actually in CONFIG. */
+export async function waitCompanionWired(page, { timeout = 30_000 } = {}) {
+  try {
+    await page.waitForFunction(COMPANION_WIRED, MODULE_ID, { timeout });
+  } catch {
+    throw new Error(
+      `companion sheet registrations for "${MODULE_ID}.session" never appeared after ${timeout}ms — ` +
+      `the module's ready-time wiring did not finish (url=${page.url()})`
+    );
+  }
+}
+
 async function waitSessionBound(page, timeout) {
   try {
     await page.waitForFunction(SESSION_BOUND, null, { timeout });
@@ -149,6 +225,8 @@ async function waitSessionBound(page, timeout) {
     // whole timeout with no clue; name what we actually landed on.
     throw new Error(`no session-bound /game document after ${timeout}ms (url=${page.url()})`);
   }
+  // Outside the catch above so its own, more specific message survives.
+  await waitCompanionWired(page, { timeout });
 }
 
 /** Navigate to /game and wait for a session-bound document (never a bare game.ready). */
@@ -192,7 +270,10 @@ async function loginFromSavedState(page, userName) {
 
 /** Log a page in as the named user (no passwords in the test worlds). */
 export async function login(page, userName) {
-  if (await loginFromSavedState(page, userName)) return;
+  if (await loginFromSavedState(page, userName)) {
+    await waitCompanionWired(page);
+    return;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE_URL}/join`);
     // Foundry ≤14.365 renders a user <select>; 14.367+ renders a free-text
@@ -226,6 +307,7 @@ export async function login(page, userName) {
     }
   }
   await page.waitForFunction(SESSION_BOUND, null, { timeout: 60_000 });
+  await waitCompanionWired(page);
 }
 
 /**
@@ -320,12 +402,75 @@ export async function ensureModuleDisabled(page, moduleId = MODULE_ID) {
   if (nowActive) throw new Error(`module "${moduleId}" could not be disabled in the test world`);
 }
 
+/**
+ * Turn on MEJ's "allow-player" world setting if it is off.
+ *
+ * `MonksEnhancedJournal.openJournalEntry()` opens with
+ * `if (!game.user.isGM && !setting('allow-player')) return false;` (13.06
+ * monks-enhanced-journal.js:2311, same on 14.x), and the setting's registered
+ * default is `false` (settings.js:135). So on a world where nobody ever
+ * ticked it, EVERY player seat in this suite gets an empty
+ * `#MonksEnhancedJournal` — no shell, no subsheet, no Hub nav button, no
+ * knowledge panel — and the failure reads like a companion bug rather than a
+ * world-configuration one. World A has had it on for a long time; the v13
+ * world-b had never been told, which cost the 2026-09-19 Foundry 13 sweep 17
+ * failures across six specs (03, 06, 07, 08, 09, 15) before it was found
+ * (proved by re-running the player arm with the companion module disabled
+ * entirely: still empty).
+ *
+ * World-scoped, so this is a one-line world edit, not per-client state.
+ * @param {import("@playwright/test").Page} page a logged-in GM page
+ */
+export async function ensureMejPlayerAccess(page) {
+  return page.evaluate(async (mejId) => {
+    if (!game.modules.get(mejId)?.active) return "mej-inactive";
+    if (game.settings.get(mejId, "allow-player") === true) return "already-on";
+    await game.settings.set(mejId, "allow-player", true);
+    return "enabled";
+  }, MEJ_MODULE_ID);
+}
+
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */
 export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
   await page.evaluate(async (p) => {
     const ids = game.journal.filter((e) => e.name.startsWith(p)).map((e) => e.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
   }, prefix);
+}
+
+/**
+ * Reclaim the folders a crashed run strands: every JournalEntry folder whose
+ * name starts with the prefix goes, contents and subfolders included, and
+ * the world-scoped autoCaptureCampaign setting is cleared when it names a
+ * folder that no longer exists. The campaign-portal gate in
+ * 13-stock-smoke.spec.mjs creates a real campaign (folder + portal +
+ * timeline) and restores the setting in its own finally; a run that dies
+ * mid-test leaves the folder behind after the journal sweep has emptied it,
+ * and leaves the setting pointing at the id the next sweep deletes. Decision
+ * rules live in sweep-rules.mjs so vitest can cover them.
+ *
+ * @returns {Promise<{ folders: string[], autoCaptureReset: boolean }>}
+ */
+export async function cleanupStrandedTestFolders(page, { prefix = TT_PREFIX } = {}) {
+  const folders = await page.evaluate(() => game.folders.map((f) => ({ id: f.id, type: f.type, name: f.name })));
+  const doomed = strandedTestFolderIds(folders, prefix);
+  const names = await page.evaluate(async (ids) => {
+    const out = [];
+    for (const id of ids) {
+      const f = game.folders.get(id);
+      if (!f) continue;
+      out.push(f.name);
+      await f.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+    return out;
+  }, doomed);
+  const { value, remaining } = await page.evaluate((id) => ({
+    value: game.settings.get(id, "autoCaptureCampaign"),
+    remaining: game.folders.map((f) => f.id)
+  }), MODULE_ID);
+  const reset = autoCaptureNeedsReset(value, remaining);
+  if (reset) await page.evaluate((id) => game.settings.set(id, "autoCaptureCampaign", ""), MODULE_ID);
+  return { folders: names, autoCaptureReset: reset };
 }
 
 /** Delete all actors whose name starts with the prefix (crashed-run artifacts). */
@@ -414,6 +559,47 @@ export async function cleanupTimelineJournals(page, preexisting = null, { prefix
       if (game.settings.get(id, "hubTimelineSelection") === deletedId) await game.settings.set(id, "hubTimelineSelection", "");
     }
   }, { id: MODULE_ID, TT: prefix, keep: preexisting });
+}
+
+/**
+ * Delete timeline journals this suite stranded: the module's timeline flag,
+ * an empty (or TT--only) timepoint list, AND a `TT-` NAME.
+ *
+ * This is deliberately NOT `cleanupTimelineJournals(page, [])`. That helper's
+ * contract is "delete every empty timeline outside the caller's ledger", which
+ * is right inside a spec that snapshotted the world first and wrong for a
+ * blanket sweep: a real campaign's freshly created timeline is legitimately
+ * empty, so on the v14 target - whose world IS the user's campaign - an
+ * un-ledgered empty sweep would delete real content. The name filter is the
+ * whole difference, and it is what makes this safe to run unconditionally from
+ * global setup.
+ *
+ * Why global setup needs it at all: a companion timeline journal is not TT-
+ * prefixed when the MODULE creates it (it is named "Campaign Timeline"), but
+ * one created by a spec's own fixture IS, and the world-scoped
+ * `timelineJournalId` setting outlives the run either way. A TT- leftover then
+ * sits in the next run's pre-run ledger and 02-hub-timeline's
+ * ensureWorldTimeline() refuses to touch it - see the v13 sweep report.
+ *
+ * @param {import("@playwright/test").Page} page a logged-in GM page
+ * @returns {Promise<string[]>} the names deleted
+ */
+export async function cleanupStrandedTestTimelines(page, { prefix = TT_PREFIX } = {}) {
+  return page.evaluate(async ({ id, TT }) => {
+    const deleted = [];
+    const doomed = game.journal.filter((e) => e.name?.startsWith(TT) && !!e.getFlag(id, "timeline"));
+    for (const j of doomed) {
+      const tps = j.getFlag(id, "timeline")?.timepoints ?? [];
+      if (tps.some((t) => !t.label?.startsWith(TT))) continue;
+      const deletedId = j.id;
+      const name = j.name;
+      await JournalEntry.implementation.deleteDocuments([deletedId]);
+      if (game.settings.get(id, "timelineJournalId") === deletedId) await game.settings.set(id, "timelineJournalId", "");
+      if (game.settings.get(id, "hubTimelineSelection") === deletedId) await game.settings.set(id, "hubTimelineSelection", "");
+      deleted.push(name);
+    }
+    return deleted;
+  }, { id: MODULE_ID, TT: prefix });
 }
 
 /**
@@ -612,7 +798,19 @@ export const EXPECTED_INVALID_TYPE_WHILE_DISABLED = /is not a valid type for the
 // non-GM client without it (verified live).
 export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document must implement this getter/;
 
-/** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */
+/**
+ * Collect console errors on a page; call assertNoConsoleErrors() at spec end.
+ *
+ * Entries are strings (specs split them by substring) but carry more than
+ * the message: the source location on a second line, the stack for a page
+ * error, and — once the handle resolves — the stack of any Error object a
+ * console.error was called with. The 2026-09-19 Foundry 13 sweep lost a
+ * whole run to eight one-line "TypeError: sheet.getData is not a function"
+ * entries with no file and no document; the 14.01 sweep hit the same wall
+ * on a 404 URL. Consequence for callers that classify by `.includes(id)`:
+ * an error whose location or stack names a module now counts as that
+ * module's, not only one whose text does.
+ */
 export function trackConsoleErrors(page, { ignore = [] } = {}) {
   const allIgnore = [KNOWN_LOW_RESOLUTION_WARNING, KNOWN_V13_COMPUTE_PRESSURE_POLICY, ...ignore];
   const errors = [];
@@ -624,14 +822,24 @@ export function trackConsoleErrors(page, { ignore = [] } = {}) {
     // — the actual URL only lives on msg.location().url, so ignore patterns
     // matching a resource path (like KNOWN_MEJ_SESSION_ICON_404) need that
     // checked too, not just the message text.
-    const location = msg.location()?.url ?? "";
+    const loc = msg.location() ?? {};
+    const location = loc.url ?? "";
     if (allIgnore.some((re) => re.test(text) || re.test(location))) return;
-    errors.push(text);
+    const index = errors.push(formatConsoleError({ text, url: location, line: loc.lineNumber, column: loc.columnNumber })) - 1;
+    // Console arguments are JSHandles: an Error's stack is only readable
+    // asynchronously, so it is folded into the entry when it arrives. A
+    // spec that asserts before then sees the location line at least; a
+    // handle disposed by navigation just yields nothing.
+    for (const arg of msg.args()) {
+      arg.evaluate((v) => (v instanceof Error ? v.stack : null))
+        .then((stack) => { if (stack && errors[index] !== undefined) errors[index] = appendStack(errors[index], stack); })
+        .catch(() => {});
+    }
   });
   page.on("pageerror", (err) => {
     const text = String(err);
     if (allIgnore.some((re) => re.test(text))) return;
-    errors.push(text);
+    errors.push(formatConsoleError({ text, stack: err?.stack || null }));
   });
   return errors;
 }

@@ -2,8 +2,9 @@ import { chromium } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ensureTestWorld, login, ensureModuleEnabled, serverStatus,
+  ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
+  cleanupStrandedTestTimelines, cleanupStrandedTestFolders,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
@@ -55,12 +56,34 @@ export default async function globalSetup() {
       await login(page, "Gamemaster");
       await ensureModuleEnabled(page, MEJ_MODULE_ID);
       await ensureModuleEnabled(page, MODULE_ID);
+      // Player seats need MEJ's "allow-player" world setting on, and its
+      // registered default is off - see ensureMejPlayerAccess()'s comment.
+      await ensureMejPlayerAccess(page);
       // The stock-smoke return phase (13-stock-smoke.spec.mjs) depends on a
       // TT- fixture created by the PREVIOUS invocation (its stock phase) —
       // sweeping journals here would delete the very document whose heal the
       // phase exists to verify (this happened; see the spec's header). Any
       // later normal run still reclaims stock-smoke leftovers.
       if (process.env.STOCK_PHASE !== "return") await deleteJournalsByPrefix(page);
+      // Timeline journals are not covered by the TT- journal sweep above when
+      // a crashed run strands one, and the world-scoped `timelineJournalId`
+      // setting outlives the run that made it - a leftover then sits in the
+      // next run's pre-run ledger and 02-hub-timeline's ensureWorldTimeline()
+      // refuses to touch it, failing all three of its timepoint tests before
+      // they do any work (seen on v13 world-b, 2026-09-19 sweep).
+      //
+      // NAME-filtered, deliberately: this helper deletes only TT--named
+      // timelines. cleanupTimelineJournals(page, []) would have been shorter
+      // and is wrong here - its "every empty timeline outside the ledger"
+      // rule is safe only for a caller that snapshotted the world first,
+      // because a real campaign's freshly created timeline is legitimately
+      // empty. The v14 target's world IS the user's campaign.
+      if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestTimelines(page);
+      // Folders are not documents the two sweeps above see either: a run that
+      // dies inside the stock gate's campaign-portal test leaves its (now
+      // empty) TT- campaign folder and an autoCaptureCampaign setting that
+      // names it. Same guard, same reason as the journal sweep.
+      if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestFolders(page);
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);

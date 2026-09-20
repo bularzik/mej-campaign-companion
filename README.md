@@ -61,8 +61,8 @@ a build carrying the extension API. It resolves one of three modes at startup:
 | Mode | When | What you get |
 |------|------|--------------|
 | `api` | MEJ fires `setupMonksEnhancedJournal` | Everything, with the Session sheet and Campaign Hub inside MEJ's tabbed shell |
-| `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub as standalone windows |
-| `native` on Foundry 13 | MEJ 13.06 carries no extension API, so Foundry 13 always runs this mode | As `native` above, except that a Session or Hub page opened from the journal sidebar renders inside MEJ's shell tab rather than as a standalone window |
+| `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub hosted inside MEJ's tabbed shell by default (shell hosting); standalone windows only if shell hosting can't install |
+| `native` on Foundry 13 | The only MEJ release for Foundry 13 is 13.06, which carries no extension API, so a Foundry 13 world is *always* in native mode — there is no `api` mode to fall back from | Same as `native` above: shell hosting by default, standalone windows plus a `shell hosting unavailable` console warning if the adaptation cannot install |
 | `absent` | MEJ is not active | The module stays inert — MEJ is a hard dependency |
 
 Native mode is a supported configuration, not a degraded fallback, and it is
@@ -75,12 +75,18 @@ not announced with a warning. What differs:
   sidebar in both modes, and never appear as a page type in that dialog.
 - Session pages cannot be MEJ *relationship* targets (MEJ's picker only
   enumerates its own registry). Companion relationships are unaffected.
-- The Hub opens as its own window rather than a shell tab.
+- In native mode the companion hosts the Campaign Hub and Session sheets
+  inside Monk's Enhanced Journal's own tabbed window by adapting four of
+  MEJ's functions at start-up; if that adaptation cannot be installed (a
+  future MEJ release renaming one of them), the companion logs
+  `shell hosting unavailable` and falls back to standalone windows. The
+  companion registers its sheets at init and holds an early open of a
+  Session or campaign portal until its ready-time wiring (shell adaptation
+  and features) is complete, so clicking a Session in the first second
+  after login no longer opens a broken or wrapped sheet.
 - The "open graph" and "prep board" header buttons are absent; both remain
   reachable — the graph from the Hub toolbar, the prep board from the button
   on the Session sheet itself.
-
-Known issue as of 2026-09-19: on bare MEJ 14.01 in native mode the Hub's New Session button does not open the Session sheet — see `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`; native mode is verified on MEJ 13.06 / Foundry 13 and on the MEJ fork line.
 
 Sessions are identified by their native Foundry page type
 (`mej-campaign-companion.session`), never by MEJ's type flag, so they stay
@@ -101,7 +107,7 @@ stock MEJ install.
 ## Requirements
 
 - Foundry VTT **v13 or v14** (verified on 13.351 and 14.x).
-- **Monk's Enhanced Journal** — **13.06 or later on Foundry 13, 14.01 or later on Foundry 14**. A build that includes the extension API (upstream MEJ pull request #823, rebased onto MEJ 14.01 and not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, with the Session sheet and Hub as standalone windows — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Known issue as of 2026-09-19: on bare MEJ 14.01 in native mode the Hub's New Session button does not open the Session sheet — see `docs/superpowers/triage/2026-09-19-mej-14.01-companion-sweep.md`; native mode is verified on MEJ 13.06 / Foundry 13 and on the MEJ fork line. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
+- **Monk's Enhanced Journal** — **13.06 or later on Foundry 13, 14.01 or later on Foundry 14**. A build that includes the extension API (upstream MEJ pull request #823, rebased onto MEJ 14.01 and not yet in a tagged MEJ release as of this writing) gives the fullest integration — the Session sheet and Campaign Hub mount inside MEJ's own tabbed shell (`api` mode). A stock MEJ build without the API is fully supported too: Campaign Companion detects this at startup and runs in `native` mode instead, hosting the Session sheet and Hub inside MEJ's own tabbed shell the same way — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above. Only a genuinely missing/inactive MEJ, or an internal wiring failure, produces a startup notification; see [Error handling](#error-handling-and-troubleshooting) below.
 - A `dnd5e`-first companion whose core (search, timeline, docx, auto-link/capture, Session sheet itself) makes no `dnd5e`-specific assumptions — see [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md) for what to manually verify on other game systems.
 
 ## Installation
@@ -159,6 +165,7 @@ Players without file-upload permission still get inline images into a recap they
 - If Monk's Enhanced Journal isn't installed or isn't active, Campaign Companion disables itself at `ready` (`absent` mode) and shows one permanent error notification rather than half-loading with silent failures.
 - If MEJ is active but this module's own registration throws in any mode (a bug in this module), a second, more specific `init-failed` error notification is shown instead, and the error is logged to the console.
 - A stock MEJ build without the extension API is not an error condition: Campaign Companion runs in `native` mode with no warning — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050) above.
+- If native mode's shell hosting can't install (a future MEJ release renaming one of the functions it adapts), the console logs `mej-campaign-companion | shell hosting unavailable (wrap "<name>" not installable); using standalone windows` and the module falls back to standalone windows automatically — no user action needed. This is controlled by a hidden, client-scoped `shellHosting` setting (`config: false`, on by default); a GM can force standalone windows for troubleshooting from the console with `game.settings.set("mej-campaign-companion", "shellHosting", false)`.
 - Auto-link and auto-capture are pure observers: a failure in either logs to the console and is skipped, and never blocks the underlying page-save or combat-end operation it hooked.
 - Docx import is transactional per wizard run — documents are only created on final confirmation, and a failure reports per-section errors with no partial writes.
 

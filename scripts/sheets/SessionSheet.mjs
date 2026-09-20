@@ -17,6 +17,7 @@ import { sessionData } from "./session-data.mjs";
 import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
+import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions } from "../logic/campaign-calendar.mjs";
@@ -25,6 +26,30 @@ import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
+
+// Commit the GM-notes editor through the element's PUBLIC value property.
+// `get value` is the live editor content while the editor is active (core's
+// own _getValue, foundry.mjs 13.351:72762 / 14.368:97393) and the stored
+// value otherwise; `set value` stores it and fires the bubbling "change"
+// that MEJ's submit-on-change form turns into a submit with this element as
+// event.target (AbstractFormInputElement 13.351:70329 / 14.368:41256), which
+// SessionSheet._prepareSubmitData's stale-field guard keeps because the
+// target names system.gmNotes. Those are the same two steps core's own
+// save() performs for a non-toggled editor - but save() is private (#save)
+// on Foundry 13, where calling it threw and the notes were never written
+// (v13 sweep report, cause I). _refresh() after the set is a no-op while
+// the editor is active. A throw here is a real defect, so it is logged and
+// shown; the caller's .editing toggle runs regardless.
+function commitGmNotes(editor, stored) {
+  if (!editor) return;
+  try {
+    const live = editor.value;
+    if (shouldCommitGmNotes(live, stored)) editor.value = live;
+  } catch (err) {
+    console.error(`${MODULE_ID} | GM notes could not be saved`, err);
+    ui.notifications.error(game.i18n.localize(`${I18N}.session.gmNotesSaveFailed`));
+  }
+}
 
 export class SessionSheet extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
@@ -368,16 +393,14 @@ export class SessionSheet extends EnhancedJournalSheet {
     // Unlike the recap editor, gmNotes is not toggled (no collaborative
     // join to manage) - it activates at render time and just stays active,
     // so the pencil here is purely a CSS show/hide. That means the pencil is
-    // ALSO this editor's only commit point: nothing else ever calls this
-    // element's own save() for it (no toggle -> no open=false -> save()
-    // chain the way the recap editor gets from onEditRecap below). Call it
-    // explicitly, BEFORE removing .editing, while closing - core's save()
-    // fires "change" (event.target = this element) only when the value
-    // actually changed, which MEJ's submitOnChange turns into a submit the
-    // stale-field guard already keeps (session-submit.mjs's activeFields).
+    // ALSO this editor's only commit point: nothing else ever saves it (no
+    // toggle -> no open=false -> save() chain the way the recap editor gets
+    // from onEditRecap above). Commit explicitly, BEFORE removing .editing,
+    // while closing - see commitGmNotes above for why that goes through the
+    // element's public `value` and not its save() (private on Foundry 13).
     if (editing) {
       const editor = this.trueElement?.querySelector?.("prose-mirror[name='system.gmNotes']");
-      editor?.save();
+      commitGmNotes(editor, this.document?.system?.gmNotes);
     }
     $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).toggleClass("editing", !editing);
   }

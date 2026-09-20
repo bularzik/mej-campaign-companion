@@ -75,3 +75,63 @@ export function missingOwnRegistration(sheetClasses, type, ownerScope) {
   if (!ownerScope) return true;
   return !Object.keys((sheetClasses ?? {})[type] ?? {}).some((key) => key.startsWith(`${ownerScope}.`));
 }
+
+/**
+ * Everything the companion must (re)register, in one answer: the page-sheet
+ * checks above plus the timeline redirect sheet on CONFIG.JournalEntry. The
+ * adapter's single registration site (registerCompanionSheets) performs
+ * exactly what this returns, so init-time registration, the mode wiring and
+ * the ready-time repair can all call it without double-registering.
+ * @param {object} pageSheetClasses  CONFIG.JournalEntryPage.sheetClasses (or a lookalike)
+ * @param {object} entrySheetClasses CONFIG.JournalEntry.sheetClasses (or a lookalike)
+ * @param {{sessionType:string, hubType:string, campaignType:string, mediaTypes:string[], ownerScope:string}} types
+ * @returns {{session:boolean, hub:boolean, campaign:boolean, media:boolean, timeline:boolean}} true = register
+ */
+export function planSheetRegistrations(pageSheetClasses, entrySheetClasses, { sessionType, hubType, campaignType, mediaTypes, ownerScope }) {
+  const missing = missingSheetRegistrations(pageSheetClasses, sessionType, hubType, campaignType, mediaTypes, ownerScope);
+  missing.timeline = missingOwnRegistration(entrySheetClasses, "base", ownerScope);
+  return missing;
+}
+
+/**
+ * The registerSheet calls registerCompanionSheets must make for a `missing`
+ * report, with exactly the option objects the companion has always used.
+ * Pure so the collapse of four registration sites into one is pinned by a
+ * unit test; the adapter performs each entry.
+ *
+ * Rationale carried over from the per-type registration helpers this
+ * function replaces (formerly registerHubSheetClass / registerMediaSheetClass
+ * / registerTimelineSheetClass in mej-adapter.mjs):
+ * - hub: the Hub's synthetic page type must resolve in
+ *   CONFIG.JournalEntryPage.sheetClasses; routed through the real
+ *   DocumentSheetConfig.registerSheet so it survives the rebuild Foundry
+ *   does when game.ready flips.
+ * - media: routes Foundry's native pdf/video pages to the companion's
+ *   viewer sheet so they open inside the MEJ shell (spec E §1); makeDefault
+ *   claims them as the default sheet, canConfigure stays true so a GM can
+ *   opt an individual page back to core's sheet; registered in BOTH modes -
+ *   the shell hosts it in api mode, and it stands alone in native mode.
+ * - timeline: timeline journals (spec 2026-09-03 §C) resolve to a sheet
+ *   that never draws and hands off to the Hub's Timeline tab, against
+ *   CONFIG.JournalEntry (not JournalEntryPage) and the native "base" type -
+ *   so it is NEVER the default (that would hijack every plain journal entry
+ *   in the world); only a document carrying
+ *   flags.core.sheetClass === TIMELINE_SHEET_CLASS resolves to it;
+ *   canConfigure stays true so a GM can opt one back to a real sheet.
+ * @returns {Array<{documentClass:"JournalEntryPage"|"JournalEntry", sheetClass:Function, options:object}>}
+ */
+export function sheetRegistrationEntries(missing, { SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet },
+  { sessionType, hubType, campaignType, mediaTypes, i18n }) {
+  const out = [];
+  if (missing.session) out.push({ documentClass: "JournalEntryPage", sheetClass: SessionSheet,
+    options: { types: [sessionType], makeDefault: true, label: `${i18n}.sheettype.session` } });
+  if (missing.hub) out.push({ documentClass: "JournalEntryPage", sheetClass: CampaignHubPage,
+    options: { types: [hubType], makeDefault: false, canBeDefault: false, canConfigure: false, label: `${i18n}.hub.title` } });
+  if (missing.campaign) out.push({ documentClass: "JournalEntryPage", sheetClass: CampaignHubPage,
+    options: { types: [campaignType], makeDefault: true, canBeDefault: true, canConfigure: false, label: `${i18n}.sheettype.campaign` } });
+  if (missing.media) out.push({ documentClass: "JournalEntryPage", sheetClass: MediaPageSheet,
+    options: { types: mediaTypes, makeDefault: true, canBeDefault: true, canConfigure: true, label: `${i18n}.sheettype.media` } });
+  if (missing.timeline) out.push({ documentClass: "JournalEntry", sheetClass: TimelineJournalSheet,
+    options: { types: ["base"], makeDefault: false, canBeDefault: false, label: `${i18n}.sheettype.timelineJournal` } });
+  return out;
+}

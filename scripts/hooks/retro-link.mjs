@@ -7,6 +7,7 @@
 // clears the flag, either immediately (createJournalEntry broadcast) or at
 // login (ready sweep) for entities created while no GM was connected.
 import { buildRetroPlanBatch } from "../logic/retro-link.mjs";
+import { retroFailureMessage, describeError } from "../logic/retro-report.mjs";
 import { viewerIds } from "../logic/link-audience.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import {
@@ -159,14 +160,17 @@ async function confirmDialog(entities, rows) {
 }
 
 /**
- * Report a finished pass (spec §3): an info toast with the counts when
- * anything was written; an error toast when `failed` (an actual write threw,
- * or its page had vanished by write time) is nonzero; a warn toast when
- * nothing was written and nothing failed, only because every match was
- * ambiguous; a warn toast naming the entity when nothing was written, nothing
- * failed, and no ambiguity was reported, only because the page's readers
- * cannot see it; nothing at all when nothing matched. `writable` is the
- * pre-dialog matched-row count, gating only the
+ * Report a finished pass (spec §3, §5.3): an info toast with the counts when
+ * anything was written, followed by a second warn toast naming each failed
+ * journal and its cause (`retroFailureMessage`) when `failed` (one entry per
+ * page whose write threw, or that had vanished by write time) is non-empty
+ * too - a burst that partially fails is no longer silent; an error toast
+ * with that same per-journal detail when NOTHING was written and `failed` is
+ * non-empty; a warn toast when nothing was written and nothing failed, only
+ * because every match was ambiguous; a warn toast naming the entity when
+ * nothing was written, nothing failed, and no ambiguity was reported, only
+ * because the page's readers cannot see it; nothing at all when nothing
+ * matched. `writable` is the pre-dialog matched-row count, gating only the
  * ambiguous-only warn (never "was anything actually wrong" - that's
  * `failed`'s job) so a GM who unchecked every row in confirm mode is not told
  * "ambiguous" either: the unconditional re-plan that follows the dialog
@@ -193,11 +197,12 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
       : game.i18n.format(`${I18N}.retroLink.summaryMany`, { entities: linkedCount, count: applied.length });
     ui.notifications.info(message);
     console.info(`${MODULE_ID} | auto-link`, detail);
+    if (failed?.length) ui.notifications.warn(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d), { partial: true }), { permanent: true });
     return;
   }
-  if (failed) {
-    ui.notifications.error(game.i18n.format(`${I18N}.retroLink.writeFailed`, { count: failed }));
-    console.error(`${MODULE_ID} | auto-link — ${failed} page write(s) failed`, detail);
+  if (failed?.length) {
+    ui.notifications.error(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d), { partial: false }), { permanent: true });
+    console.error(`${MODULE_ID} | auto-link — ${failed.length} page write(s) failed`, { failed, ...detail });
     return;
   }
   if (!writable && ambiguousRows.length) {
@@ -413,15 +418,30 @@ async function processBurst(queued, { modeOverride = null } = {}) {
       byPage.set(row.pageUuid, w);
     }
     const applied = [];
-    let failed = 0;
+    const failed = [];
     for (const [pageUuid, w] of byPage) {
+      // `pageDoc` is hoisted above the try so the catch can name the page
+      // WITHOUT a second fromUuid round trip - the old catch re-fetched, which
+      // is a wasted lookup on every failure and returns nothing anyway in the
+      // one case it was meant for (a document that went away mid-update).
+      // `planForBurst` already put a human-readable "Journal: Page" name on
+      // every row, so the vanished-page branch has a journal name to report
+      // too, instead of a bare uuid.
+      let pageDoc = null;
+      const known = w.rows[0]?.pageName ?? pageUuid;
       try {
-        const pageDoc = await fromUuid(pageUuid);
-        if (!pageDoc) { failed++; continue; }
+        pageDoc = await fromUuid(pageUuid);
+        if (!pageDoc) {
+          failed.push({
+            page: known, journal: known,
+            reason: game.i18n.localize(`${I18N}.retroLink.pageVanished`)
+          });
+          continue;
+        }
         await pageDoc.update(w.update, { [MODULE_ID]: { retroLink: true } });
         applied.push(...w.rows);
       } catch (err) {
-        failed++;
+        failed.push({ page: pageDoc?.name ?? known, journal: pageDoc?.parent?.name ?? known, reason: describeError(err) });
         console.error(`${MODULE_ID} | retro-link write failed for ${pageUuid}`, err);
       }
     }

@@ -24,6 +24,10 @@
         "applied": "Updated ownership on {count} session entries.",
         "applyFailed": "Granting session ownership failed — see the console."
       },
+      "shellHosting": {
+        "name": "Host the Campaign Hub and Sessions inside Monk's Enhanced Journal",
+        "hint": "Native mode only. Off: the Hub and Session sheets open as standalone windows."
+      },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
         "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM notes. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",
@@ -85,6 +89,7 @@
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
       "editGmNotes": "Edit GM Notes",
+      "gmNotesSaveFailed": "GM notes could not be saved. See the console for details.",
       "addImage": "Add Image"
     },
     "campaign": {
@@ -400,11 +405,13 @@
       "hiddenOnly": "\"{name}\" is mentioned in {count} page(s) whose readers cannot see it. Reveal \"{name}\" (or apply the campaign baseline) to link it.",
       "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
       "gmNotes": "GM notes",
+      "pageVanished": "the page no longer exists",
       "summary": "Linked \"{name}\" in {count} place(s).",
       "titleMany": "Auto-Link Entries",
       "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",
       "summaryMany": "Linked {entities} entries in {count} place(s).",
-      "writeFailed": "Auto-link could not write {count} page(s) — see the browser console (F12)."
+      "writeFailedDetail": "Auto-link could not update {count} page(s): {list}. The other pages were updated. See the browser console (F12) for details.",
+      "writeFailedAll": "Auto-link could not update {count} page(s): {list}. No pages were updated. See the browser console (F12) for details."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",
