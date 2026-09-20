@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
+  cleanupTimelineJournals,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
@@ -64,6 +65,17 @@ export default async function globalSetup() {
       // phase exists to verify (this happened; see the spec's header). Any
       // later normal run still reclaims stock-smoke leftovers.
       if (process.env.STOCK_PHASE !== "return") await deleteJournalsByPrefix(page);
+      // A companion timeline journal is NOT TT- prefixed (the module names it
+      // "Campaign Timeline"), and the world-scoped `timelineJournalId` setting
+      // outlives any run that made one - so an empty leftover survives every
+      // sweep and then poisons the next run: 02-hub-timeline's
+      // ensureWorldTimeline() refuses to touch a timeline whose id was already
+      // in the pre-run ledger, which is exactly what a leftover is, so all
+      // three of its timepoint tests fail before doing anything (seen on v13
+      // world-b, 2026-09-19 sweep). An empty keep-list reuses the helper's own
+      // safety rule - a timeline holding any non-TT- timepoint is never
+      // deleted, only trimmed - so a world with real content is untouched.
+      if (process.env.STOCK_PHASE !== "return") await cleanupTimelineJournals(page, []);
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);
