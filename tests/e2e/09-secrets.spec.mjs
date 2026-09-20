@@ -990,6 +990,16 @@ test.describe("09 secrets", () => {
     await expect(dialog).toBeVisible();
     await dialog.locator(`input[name="user-${u1Id}"]`).check();
     await dialog.locator('button[data-action="ok"]').click();
+    // The reveal lands after two awaited document writes (editAudience:
+    // applyBlockReveal's body update, then the flag update) - about 40 ms
+    // on Foundry 14 - so reading the flags the instant the dialog closes
+    // saw `undefined` on every stack since 2026-09-05 (the "09 dup-id"
+    // known-environmental entry; sub-project 4 spike, 2026-09-20). Wait for
+    // page 2's record, then read all three so a cross-page write still fails.
+    await page.waitForFunction(({ e, b, u }) => {
+      const users = game.journal.get(e)?.pages.get(b)?.getFlag("mej-campaign-companion", "secretReveals")?.["secret-dup"]?.users;
+      return Array.isArray(users) && users.includes(u);
+    }, { e: id, b: p2Id, u: u1Id }, { timeout: 10_000 });
 
     const flags = await page.evaluate(({ e, a, b }) => {
       const entry = game.journal.get(e);

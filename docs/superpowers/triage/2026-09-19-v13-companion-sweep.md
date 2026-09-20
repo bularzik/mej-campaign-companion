@@ -404,12 +404,13 @@ GM and player alike and carries no information either way. The module already
 treats it as optional (`scripts/logic/secret-reveal-toggles.mjs:17`,
 `if ("revealable" in block)`); only the assertion did not.
 
-**H. Carried in from the v14 line (1 test).**
-`09-secrets:970` "duplicate section id on two pages" fails with the same symptom
-on Foundry 14.368 + MEJ 14.01 + the fork line — the 14.01 sweep
-(`2026-09-19-mej-14.01-companion-sweep.md`) records it as a `baseline` failure
-there, matched to a 2026-09-05 known-environmental entry ("09 dup-id"). Not
-introduced by this stack, and no v13-specific evidence separates it further.
+**H. Carried in from the v14 line (1 test) — corrected 2026-09-20.**
+`09-secrets:970` "duplicate section id on two pages" was recorded here as the
+same failure the 14.01 sweep carries as `baseline` ("09 dup-id"). The v14
+failure was a harness race and is fixed (follow-up 4). On this stack, however,
+the test never reaches that read: it fails at `openPoppedPage` because the
+popped MEJ place page renders with no body — stock 13.06 resolves it to
+`BaseSheet` (cause B, follow-up 1). Reclassified `mej-13.06`.
 
 ### Table
 
@@ -930,9 +931,18 @@ suite on v13) is not a gate and is not expected to be green.
    the argument for that PR. Nothing to do beyond noting that these three skips
    would become real assertions the day #823 lands. Owner: none.
 
-4. **`09-secrets:970` — shared with the v14 line.** Same test, same symptom, on
-   both stacks; the 14.01 sweep carries it as `baseline`. It needs one
-   investigation that serves both lines, not a v13 one. Owner: sub-project.
+4. **`09-secrets:970` — shared with the v14 line — closed 2026-09-20.** The
+   spike (a throwaway copy of the test that waited for the reveal flag instead
+   of reading it the instant the dialog closed) showed the flag landing on page
+   2 after 38–48 ms on Foundry 14.368, three of three, with page 1 and the
+   entry untouched: a harness race — `editAudience` performs two awaited
+   document writes before the flag exists, and the test read synchronously
+   after the click (every sibling test settles first). The test now waits for
+   page 2's record; 3/3 on 14.368. On Foundry 13 the same test fails EARLIER
+   and for a different reason — `openPoppedPage` finds no body on the popped
+   MEJ place page (cause B / follow-up 1: stock 13.06 resolves it to
+   `BaseSheet`) — so its v13 row is `mej-13.06`, not "carried in" as cause H
+   said; cause H is corrected below.
 
 5. **`assertNoConsoleErrors` still records only message text — closed
    2026-09-20** (entries now carry `msg.location()` and, for an Error
