@@ -11,10 +11,22 @@ import {
  * exactly as documented in API.md — this spec is the one gate that would
  * catch an MEJ-side regression before it silently corrupts companion data.
  */
+/**
+ * Whether this world's MEJ carries the extension API at all. A stock build
+ * (13.06, 14.01 - the v13 target) has no `externalTypes` registry and never
+ * fires the handshake, so every assertion in this file is unreachable there
+ * by design, not by regression. The real-stock equivalent of this gate is
+ * 13-stock-smoke.spec.mjs, which detects the API the same way.
+ */
+async function mejApiPresent(page) {
+  return page.evaluate(() => typeof game.MonksEnhancedJournal?.registerSheetType === "function");
+}
+
 test.describe("00 MEJ extension API — stage-1 regression", () => {
   test("registers the session type; person/shop/session entries open with their MEJ sheets", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: [KNOWN_MEJ_SESSION_ICON_404] });
     await login(page, "Gamemaster");
+    test.skip(!(await mejApiPresent(page)), "MEJ on this stack has no extension API — see 13-stock-smoke.spec.mjs");
 
     // (a) externalTypes.session exists once the companion has registered.
     const externalType = await page.evaluate(() => {
@@ -106,6 +118,7 @@ test.describe("00 MEJ extension API — stage-1 regression", () => {
       ignore: [KNOWN_MEJ_SESSION_ICON_404, EXPECTED_INVALID_TYPE_WHILE_DISABLED]
     });
     await login(page, "Gamemaster");
+    test.skip(!(await mejApiPresent(page)), "MEJ on this stack has no extension API — see 13-stock-smoke.spec.mjs");
     await ensureModuleEnabled(page, MEJ_MODULE_ID);
     await ensureModuleEnabled(page, MODULE_ID);
 
