@@ -147,15 +147,6 @@ export async function registerCore() {
     registerPortalSync();
   });
 
-  // Timeline journals open the Hub (spec 2026-09-03 §C). Registered but
-  // never default: only documents carrying flags.core.sheetClass ===
-  // TIMELINE_SHEET_CLASS resolve to it (data/timeline-journal.mjs stamps
-  // creations; campaign-companion.mjs's v5 migration stamps older ones).
-  await step("timeline redirect sheet", async () => {
-    const { TimelineJournalSheet } = await import("../sheets/TimelineJournalSheet.mjs");
-    registerTimelineSheetClass(TimelineJournalSheet);
-  });
-
   // Folder context menu ("Open Campaign Hub") is registered at "init" now,
   // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
   // registering this late (registerCore only ever runs from "setup"/"ready")
@@ -164,10 +155,12 @@ export async function registerCore() {
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */
 async function wireApiMode(api) {
-  // Deferred imports: these files statically import MEJ's
-  // EnhancedJournalSheet.js, and our script tag runs BEFORE MEJ's. Importing
-  // them at top level would re-enter MEJ's own import chain mid-evaluation
-  // and take both modules down - see campaign-companion.mjs's header comment.
+  // The classes come from the init-time import (registerSheetsEarly), or a
+  // fresh dynamic import here if that one failed. Deferred either way: these
+  // files statically import MEJ's EnhancedJournalSheet.js, and our script tag
+  // runs BEFORE MEJ's - importing them at top level would re-enter MEJ's own
+  // import chain mid-evaluation and take both modules down, see
+  // campaign-companion.mjs's header comment.
   const { SessionSheet, CampaignHubPage } = await companionSheetClasses();
 
   api.registerSheetType({
@@ -247,11 +240,14 @@ export function registerTimelineSheetClass(TimelineJournalSheet) {
 }
 
 /**
- * The one place companion sheet classes are registered. Idempotent: performs
- * only what planSheetRegistrations() reports missing, so init-time
- * registration, the mode wiring and the ready-time repair can all call it.
- * Pre-ready calls queue in Foundry's one-time drain; post-ready calls apply
- * immediately (spec 2026-09-20-ready-wiring-window §3.1).
+ * The one place companion sheet classes are registered. Idempotent against
+ * CONFIG once game.ready is true: performs only what planSheetRegistrations()
+ * reports missing there, so the ready-time repair can call it safely no
+ * matter how many times it runs. Before ready, CONFIG does not yet reflect a
+ * queued registerSheet call, so planSheetRegistrations() cannot see it either
+ * - a second pre-ready caller would queue a full duplicate set. Exactly one
+ * caller may call this before ready: registerSheetsEarly(), from the init
+ * hook (spec 2026-09-20-ready-wiring-window §3.1).
  * @param {{SessionSheet:Function, CampaignHubPage:Function, MediaPageSheet:Function, TimelineJournalSheet:Function}} classes
  * @returns {{session:boolean, hub:boolean, campaign:boolean, media:boolean, timeline:boolean}} what was registered
  */
@@ -329,11 +325,13 @@ export function registerSheetsEarly() {
 
 /**
  * Repair sheet registrations Foundry's pre-ready registerSheet queue may
- * have silently dropped (see onHandshake's comment for the mechanism). Safe
- * to call any time after game.ready is true, in either mode: registerSheet
+ * have silently dropped (see sheet-registration.mjs's header comment for the
+ * mechanism). Safe to call any time after game.ready is true, in either mode: registerSheet
  * applies immediately once ready, so a repair here always sticks. Cheap and
- * idempotent when nothing was dropped - the CONFIG lookup is synchronous and
- * the dynamic imports only happen when something actually needs fixing.
+ * idempotent when nothing was dropped - companionSheetClasses() is awaited
+ * unconditionally (usually just the already-settled earlySheets promise),
+ * but the CONFIG lookup and registerSheet calls inside registerCompanionSheets
+ * only fire for what planSheetRegistrations() actually reports missing.
  */
 async function ensureSheetRegistrations() {
   const classes = await companionSheetClasses();
@@ -345,8 +343,10 @@ async function ensureSheetRegistrations() {
 
 /** Standalone Session sheet + Hub window, for a stock MEJ install. */
 async function wireNativeMode() {
-  // Same deferred-import discipline as api mode: these files statically
-  // import MEJ's EnhancedJournalSheet.js.
+  // Same as api mode: the classes come from the init-time import
+  // (registerSheetsEarly), or a fresh dynamic import here if that one
+  // failed - deferred either way, since these files statically import MEJ's
+  // EnhancedJournalSheet.js.
   const { SessionSheet, CampaignHubPage } = await companionSheetClasses();
 
   // Shell hosting (spec 2026-09-19 §4): wraps installed as a unit; window
@@ -378,16 +378,16 @@ export async function onHandshake(api) {
   if (forceNative()) return;
 
   mode = MODE_API;
-  // wireApiMode first, registerCore second: Foundry's DocumentSheetConfig
-  // drains its pre-ready registerSheet queue exactly once, at some point
-  // during setupGame() before game.ready flips - see initializeSheets() in
-  // Foundry's document-sheet-config.mjs. registerCore() pulls in several
-  // more dynamic imports than wireApiMode does; running it first risked
-  // pushing wireApiMode's registerSheet calls past that one-time drain into
-  // a window nothing will ever empty again (confirmed live: sheetClasses
-  // stayed permanently empty for our types when registerCore ran first).
-  // onReady()'s ensureSheetRegistrations() is the safety net if this order
-  // ever loses the race again.
+  // wireApiMode first, registerCore second: wireApiMode is cheap (a handful
+  // of api.register* calls plus the already-resolving companionSheetClasses()
+  // promise), while registerCore() pulls in a dozen sequential dynamic
+  // imports - running the cheap step first gets the shell tab and sheet types
+  // registered sooner. This ordering has no bearing on sheet registrations
+  // surviving Foundry's one-time pre-ready registerSheet drain: wireApiMode
+  // itself performs none. Sheet classes are registered at init
+  // (registerSheetsEarly, see its own comment for the drain mechanism), with
+  // ensureSheetRegistrations() at ready as the repair - so neither this
+  // order nor registerCore's imports can cause a registration to be lost.
   await step("api-mode wiring", () => wireApiMode(api));
   await registerCore();
   console.log(`${MODULE_ID} | mode: ${mode}`);
