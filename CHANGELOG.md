@@ -8,6 +8,7 @@ Shell hosting without the extension API, Foundry 13 fixes, and a Foundry 13 test
 - **Fixed:** the Campaign Hub button did nothing on Foundry 13.
 - **Fixed:** Sessions opened from the sidebar on Foundry 13 rendered inside MEJ's page index with unreadable text.
 - **Fixed:** when auto-link cannot update a journal, the message now names the journal and the reason, and distinguishes a partial failure from a total one.
+- **Changed:** the 0.19.3 known issue (New Session on stock MEJ 14.01) is withdrawn. It was two defects in the test, not in the companion. The gate passes and the manifest again lists MEJ 14.01 as verified.
 - **Changed:** the e2e suite runs in full against Foundry 13; the stock-MEJ gate checks shell hosting, text contrast under both colour schemes, tab persistence and the window fallback.
 
 ## 0.19.3 (2026-09-19)
