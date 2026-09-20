@@ -408,7 +408,8 @@
       "titleMany": "Auto-Link Entries",
       "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",
       "summaryMany": "Linked {entities} entries in {count} place(s).",
-      "writeFailedDetail": "Auto-link could not update {count} page(s): {list}. The other pages were updated. See the browser console (F12) for details."
+      "writeFailedDetail": "Auto-link could not update {count} page(s): {list}. The other pages were updated. See the browser console (F12) for details.",
+      "writeFailedAll": "Auto-link could not update {count} page(s): {list}. No pages were updated. See the browser console (F12) for details."
     },
     "media": {
       "missingSrc": "This page has no file attached yet.",

@@ -9,13 +9,18 @@ export function describeError(err) {
 }
 
 /**
- * One message naming each failed journal once with the reason.
+ * One message naming each failed journal once with the reason. `partial`
+ * (default true) picks the wording: true when some pages DID write
+ * successfully ("the other pages were updated" is true), false when nothing
+ * wrote at all (that sentence would be false, so a separate key says so).
  * @param {Array<{page:string, journal:string, reason:string}>} failures
  * @param {(key:string, data:object)=>string} format
+ * @param {{partial?: boolean}} [options]
  */
-export function retroFailureMessage(failures, format) {
+export function retroFailureMessage(failures, format, { partial = true } = {}) {
   const byJournal = new Map();
   for (const f of failures) if (!byJournal.has(f.journal)) byJournal.set(f.journal, f.reason);
   const list = [...byJournal].map(([journal, reason]) => `${journal} (${reason})`).join("; ");
-  return format(`${I18N}.retroLink.writeFailedDetail`, { count: failures.length, list });
+  const key = partial ? "writeFailedDetail" : "writeFailedAll";
+  return format(`${I18N}.retroLink.${key}`, { count: failures.length, list });
 }

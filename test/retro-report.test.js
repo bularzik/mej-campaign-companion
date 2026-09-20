@@ -21,4 +21,11 @@ describe("retroFailureMessage", () => {
     ], format);
     expect(msg).toBe('MEJCampaignCompanion.retroLink.writeFailedDetail|{"count":3,"list":"Radiant Citadel (campaign-record.place is not a valid type); Other (boom)"}');
   });
+
+  it("uses the total-failure key when partial is false", () => {
+    const msg = retroFailureMessage([
+      { page: "Intro", journal: "Radiant Citadel", reason: "campaign-record.place is not a valid type" }
+    ], format, { partial: false });
+    expect(msg).toBe('MEJCampaignCompanion.retroLink.writeFailedAll|{"count":1,"list":"Radiant Citadel (campaign-record.place is not a valid type)"}');
+  });
 });

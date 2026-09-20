@@ -197,11 +197,11 @@ function notifyRetroResult(entities, applied, rows, { failed, writable } = {}) {
       : game.i18n.format(`${I18N}.retroLink.summaryMany`, { entities: linkedCount, count: applied.length });
     ui.notifications.info(message);
     console.info(`${MODULE_ID} | auto-link`, detail);
-    if (failed?.length) ui.notifications.warn(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d)), { permanent: true });
+    if (failed?.length) ui.notifications.warn(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d), { partial: true }), { permanent: true });
     return;
   }
   if (failed?.length) {
-    ui.notifications.error(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d)), { permanent: true });
+    ui.notifications.error(retroFailureMessage(failed, (k, d) => game.i18n.format(k, d), { partial: false }), { permanent: true });
     console.error(`${MODULE_ID} | auto-link — ${failed.length} page write(s) failed`, { failed, ...detail });
     return;
   }
