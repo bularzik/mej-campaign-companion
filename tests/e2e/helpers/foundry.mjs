@@ -142,6 +142,44 @@ export async function ensureTestWorld() {
 const SESSION_BOUND = () =>
   globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId;
 
+/**
+ * `game.ready` is NOT "the companion is usable". In native mode every piece
+ * of the companion's wiring runs from the ready hook - registerCore()'s ten
+ * dynamic imports, then wireNativeMode()'s own three, then the sheet
+ * registrations (mej-adapter.mjs wireForReady()) - so for roughly the first
+ * second of a native-mode client CONFIG.JournalEntryPage.sheetClasses holds
+ * the companion's type KEYS with empty values, and Foundry's _getSheetClass()
+ * falls back to core's BaseSheet. Measured live on Foundry 13.351 + stock MEJ
+ * 13.06: `{session: [], hub: []}` immediately after ready,
+ * `{session: ["mej-campaign-companion.SessionSheet"], ...}` three seconds
+ * later (tests/e2e/probes/page-sheet-v13.mjs).
+ *
+ * A spec that opens a Session in that window gets BaseSheet, and MEJ's own
+ * v1/v2 fork test then misclassifies it and throws
+ * "sheet.getData is not a function" (13.06 JournalEntrySheet.js:590/379) -
+ * which is how it surfaced in the 2026-09-19 sweep: 10-secrets-hub:130/:167,
+ * 09-secrets:528 (and :590 as a flake), 20-timeline-journal-open:112.
+ *
+ * In api mode the handshake wires everything at MEJ's setup hook, before
+ * ready, so this predicate is already true and the wait costs nothing. With
+ * the companion inactive it is vacuously true.
+ */
+const COMPANION_WIRED = (moduleId) =>
+  globalThis.game?.modules?.get(moduleId)?.active !== true
+  || Object.keys(globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${moduleId}.session`] ?? {}).length > 0;
+
+/** Wait until the companion's sheet registrations are actually in CONFIG. */
+export async function waitCompanionWired(page, { timeout = 30_000 } = {}) {
+  try {
+    await page.waitForFunction(COMPANION_WIRED, MODULE_ID, { timeout });
+  } catch {
+    throw new Error(
+      `companion sheet registrations for "${MODULE_ID}.session" never appeared after ${timeout}ms — ` +
+      `the module's ready-time wiring did not finish (url=${page.url()})`
+    );
+  }
+}
+
 async function waitSessionBound(page, timeout) {
   try {
     await page.waitForFunction(SESSION_BOUND, null, { timeout });
@@ -150,6 +188,8 @@ async function waitSessionBound(page, timeout) {
     // whole timeout with no clue; name what we actually landed on.
     throw new Error(`no session-bound /game document after ${timeout}ms (url=${page.url()})`);
   }
+  // Outside the catch above so its own, more specific message survives.
+  await waitCompanionWired(page, { timeout });
 }
 
 /** Navigate to /game and wait for a session-bound document (never a bare game.ready). */
@@ -193,7 +233,10 @@ async function loginFromSavedState(page, userName) {
 
 /** Log a page in as the named user (no passwords in the test worlds). */
 export async function login(page, userName) {
-  if (await loginFromSavedState(page, userName)) return;
+  if (await loginFromSavedState(page, userName)) {
+    await waitCompanionWired(page);
+    return;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE_URL}/join`);
     // Foundry ≤14.365 renders a user <select>; 14.367+ renders a free-text
@@ -227,6 +270,7 @@ export async function login(page, userName) {
     }
   }
   await page.waitForFunction(SESSION_BOUND, null, { timeout: 60_000 });
+  await waitCompanionWired(page);
 }
 
 /**
