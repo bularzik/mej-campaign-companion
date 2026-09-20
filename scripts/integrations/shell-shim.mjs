@@ -13,17 +13,9 @@ import { MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, CAMPAIGN_TYPE } from "../constant
 import { installWraps, uninstallWraps } from "../logic/mej-wraps.mjs";
 import { withCompanionTypes, isShellPageId, isCompanionPageType } from "../logic/shell-shim-logic.mjs";
 import { hubShellDocument, setHubSheetClass } from "../apps/hub-shell-document.mjs";
+import { wrapEnv } from "./wrap-env.mjs";
 
 let records = [];
-
-function env() {
-  return {
-    libWrapperModule: game.modules.get("lib-wrapper"),
-    libWrapper: globalThis.libWrapper,
-    moduleId: MODULE_ID,
-    warn: (msg, err) => console.warn(`${MODULE_ID} | shell shim: ${msg}`, err ?? "")
-  };
-}
 
 /**
  * Install the wraps. Returns the hosting the caller should use. Never throws:
@@ -133,7 +125,7 @@ function install({ SessionSheet, CampaignHubPage }) {
     });
   }
 
-  const result = installWraps(specs, env());
+  const result = installWraps(specs, wrapEnv("shell shim"));
   records = result.records;
   if (result.failed) {
     console.warn(`${MODULE_ID} | shell hosting unavailable (wrap "${result.failed}" not installable); using standalone windows`);
@@ -144,7 +136,7 @@ function install({ SessionSheet, CampaignHubPage }) {
 }
 
 export function uninstallShellShim() {
-  uninstallWraps(records, env());
+  uninstallWraps(records, wrapEnv("shell shim"));
   records = [];
 }
 
