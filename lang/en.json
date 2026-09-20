@@ -89,6 +89,7 @@
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
       "editGmNotes": "Edit GM Notes",
+      "gmNotesSaveFailed": "GM notes could not be saved. See the console for details.",
       "addImage": "Add Image"
     },
     "campaign": {

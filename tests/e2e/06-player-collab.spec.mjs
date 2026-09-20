@@ -341,9 +341,12 @@ test.describe("06 player collaboration", () => {
     const editor = shell.locator(".editor-parent[data-editor-id='gmNotes'] prose-mirror");
     await expect(editor).toHaveClass(/active/, { timeout: 10_000 });
     // Same clipped-scroll-container interception as the pencil above -
-    // focus the element directly (HTMLProseMirrorElement.focus() delegates
-    // to the live ProseMirror view) rather than a pointer click.
-    await editor.evaluate((el) => el.focus());
+    // focus the element directly rather than a pointer click.
+    // HTMLProseMirrorElement.focus() delegates to the live ProseMirror view
+    // on Foundry 14 (foundry.mjs:97554) but has no override on Foundry 13,
+    // where it is a no-op, so the contenteditable .ProseMirror is focused
+    // directly, which is what 14's override does anyway.
+    await editor.evaluate((el) => (el.querySelector(".ProseMirror") ?? el).focus());
     await page.keyboard.press("End");
     await page.keyboard.type("Notes for next week.");
     await settle(page, 200);

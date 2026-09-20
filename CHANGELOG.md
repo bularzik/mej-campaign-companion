@@ -7,6 +7,7 @@ Shell hosting without the extension API, Foundry 13 fixes, and a Foundry 13 test
 - **Added:** in native mode the Campaign Hub, Session sheets and a campaign's portal entry now open inside Monk's Enhanced Journal's tabbed window on stock MEJ 13.06 and 14.01, the same as with the extension API; if the adaptation cannot be installed the companion falls back to standalone windows and says so in the console.
 - **Fixed:** the Campaign Hub button did nothing on Foundry 13.
 - **Fixed:** Sessions opened from the sidebar on Foundry 13 rendered inside MEJ's page index with unreadable text.
+- **Fixed:** GM notes typed on Foundry 13 were never saved (the pencil's commit used an editor method that is private there); the commit now goes through the editor's public value on both Foundry 13 and 14.
 - **Fixed:** when auto-link cannot update a journal, the message now names the journal and the reason, and distinguishes a partial failure from a total one.
 - **Changed:** the 0.19.3 known issue (New Session on stock MEJ 14.01) is withdrawn. It was two defects in the test, not in the companion. The gate passes and the manifest again lists MEJ 14.01 as verified.
 - **Changed:** the e2e suite runs in full against Foundry 13; the stock-MEJ gate checks shell hosting, text contrast under both colour schemes, tab persistence and the window fallback.

@@ -493,7 +493,7 @@ Neither of these is in the table above, and neither is counted in it: they are
 **not** run-1 attributions. Run 1 could not see them because cause A failed
 `06-player-collab` at the player seat before either could be reached.
 
-**I. `HTMLProseMirrorElement#save()` does not exist on Foundry 13 (1 test) — `platform`.**
+**I. `HTMLProseMirrorElement#save()` does not exist on Foundry 13 (1 test) — `companion`, fixed 2026-09-20.**
 Masked in run 1 by cause A (the whole spec failed at the player seat), visible
 only once that was fixed. `SessionSheet.onEditGmNotes` commits the GM-notes
 editor by calling `editor?.save()`: unlike the recap editor, gmNotes is not a
@@ -508,6 +508,14 @@ receives the text. `06-player-collab:328` failed in run 3 and again on an
 isolated rerun of the spec. No contained fix: the honest ones are to make the
 gmNotes editor `toggled` like the recap editor, or to give the companion its own
 v13 commit path — both design work. Follow-up 7.
+Fixed on `feat/native-shell-shim` (spec
+`docs/superpowers/specs/2026-09-20-gm-notes-commit-design.md`): the commit
+now reads and re-assigns the element's public `value`, which stores the live
+content and fires the same `change` core's private save fires. `:328` passes
+on Foundry 13 and 14.
+The sweep's :328 failure had a second layer the fix exposed: the test focused
+the <prose-mirror> element itself, which is a no-op on Foundry 13, so no text
+was ever typed; the test now focuses the .ProseMirror descendant.
 
 **J. `06-player-collab` is unstable on this stack — `harness`, diagnosed
 2026-09-20.**
@@ -923,7 +931,8 @@ suite on v13) is not a gate and is not expected to be green.
    gate's description implies; worth stating in `tests/e2e/README.md`. Owner:
    harness backlog.
 
-7. **`SessionSheet.onEditGmNotes` has no commit path on Foundry 13.**
+7. **`SessionSheet.onEditGmNotes` has no commit path on Foundry 13 — closed
+   2026-09-20** (cause I above; commit through the editor's public `value`).
    It calls `editor?.save()`, which exists only from Foundry 14
    (`HTMLProseMirrorElement#save()`, public at 14.368; private `#save()` at
    13.351). On v13 the call throws, the editor never closes, and the notes are
