@@ -152,6 +152,24 @@ async function textContrast(page, selector) {
   }, { selector, contrastPath: CONTRAST });
 }
 
+/**
+ * Remove the gate's own shell tabs from the GM's MEJ tab flag.
+ *
+ * The Hub is a synthetic shell page, so a tab pointing at it survives in
+ * `monks-enhanced-journal.tabs` after the run and would be re-resolved on the
+ * user's next real shell open — a leftover this gate has no business leaving
+ * behind. Only entries whose entityId is one of OUR shell pages are dropped;
+ * the user's real journal tabs are untouched.
+ */
+async function removeShellTabs(page) {
+  return page.evaluate(async () => {
+    const tabs = game.user.getFlag("monks-enhanced-journal", "tabs") ?? [];
+    const kept = tabs.filter((t) => !String(t?.entityId ?? "").startsWith("shellpage:"));
+    if (kept.length !== tabs.length) await game.user.setFlag("monks-enhanced-journal", "tabs", kept);
+    return { before: tabs.length, after: kept.length };
+  });
+}
+
 /** Set the client colour scheme (client-scoped, so only this test browser sees it) and re-boot. */
 async function setColorScheme(page, scheme) {
   await page.evaluate(async (scheme) => {
@@ -354,25 +372,31 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);
     await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
 
-    await page.locator('.mej-cc-hub-container button[data-action="newSession"]').click();
-
     // On a world that has campaigns, onNewSession ALWAYS prompts for the
     // destination campaign before creating anything (a deliberate RULING —
     // see CampaignHubPage.onNewSession); a zero-campaign world creates
     // straight away. Both stock targets run this file (world-b on v13 has no
-    // campaigns, World A on v14 does), so confirm the prompt when it appears
-    // instead of assuming either shape. Confirming takes the dialog's own
-    // default selection, which is what a GM pressing Enter would get.
+    // campaigns, World A on v14 does), so which shape appears is asserted
+    // against the world, not merely recorded.
+    const worldHasCampaigns = await page.evaluate(async (id) => {
+      const { getCampaigns } = await import(`/modules/${id}/scripts/data/campaign-store.mjs`);
+      return getCampaigns().length > 0;
+    }, MODULE_ID);
+
+    await page.locator('.mej-cc-hub-container button[data-action="newSession"]').click();
+
     const campaignPrompt = page.locator('dialog button[data-action="ok"]').first();
     const prompted = await campaignPrompt
       .waitFor({ state: "visible", timeout: 5_000 })
       .then(() => true, () => false);
     test.info().annotations.push({
       type: "new-session-campaign-prompt",
-      description: prompted
-        ? "prompted for a destination campaign (this world has campaigns) — confirmed the default"
-        : "no prompt (zero-campaign world) — created directly"
+      description: `world has campaigns: ${worldHasCampaigns}; prompted: ${prompted}`
     });
+    expect(prompted, "New Session prompts for a destination campaign iff the world has campaigns")
+      .toBe(worldHasCampaigns);
+    // Confirming takes the dialog's own default selection, which is what a GM
+    // pressing Enter would get.
     if (prompted) await campaignPrompt.click();
 
     // The creation handler opens the page itself (CampaignHubPage.onNewSession
@@ -529,59 +553,97 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
 
   test("session and Hub text stay readable under both colour schemes", async ({ page }) => {
     await bootAsRealUser(page);
-    for (const scheme of ["light", "dark"]) {
-      await setColorScheme(page, scheme);
-      // Opened through the adapter rather than a sidebar click: this test is
-      // about what the hosted session LOOKS like, and the sidebar row is not
-      // reliably clickable here — MEJ collapses Foundry's directory when its
-      // shell opens and that collapse persists across the reload above, so a
-      // row click waits forever on a zero-width sidebar. openSessionPage is
-      // the same call the sidebar path ends in.
-      await page.waitForFunction((f) => !!game.journal.getName(f), FIXTURE, { timeout: 15_000 });
-      await page.evaluate(async ({ p, fixture }) => {
-        const a = await import(p);
-        const entry = game.journal.getName(fixture);
-        await a.openSessionPage(entry.pages.contents[0]);
-      }, { p: ADAPTER, fixture: FIXTURE });
-      await expect(page.locator(".session-container").first()).toBeAttached({ timeout: 15_000 });
-      const session = await textContrast(page, ".session-container .editor-content, .session-container p");
-      await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);
-      await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
-      const hub = await textContrast(page, ".mej-cc-hub-container .mej-cc-index-row, .mej-cc-hub-container");
-      test.info().annotations.push({ type: `contrast-${scheme}`, description: JSON.stringify({ session, hub }) });
-      expect(session.ratio, `session text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
-      expect(hub.ratio, `hub text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+    try {
+      for (const scheme of ["light", "dark"]) {
+        await setColorScheme(page, scheme);
+        // Opened through the adapter rather than a sidebar click: this test is
+        // about what the hosted session LOOKS like, and the sidebar row is not
+        // reliably clickable here — MEJ collapses Foundry's directory when its
+        // shell opens and that collapse persists across the reload above, so a
+        // row click waits forever on a zero-width sidebar. openSessionPage is
+        // the same call the sidebar path ends in.
+        await page.waitForFunction((f) => !!game.journal.getName(f), FIXTURE, { timeout: 15_000 });
+        await page.evaluate(async ({ p, fixture }) => {
+          const a = await import(p);
+          const entry = game.journal.getName(fixture);
+          await a.openSessionPage(entry.pages.contents[0]);
+        }, { p: ADAPTER, fixture: FIXTURE });
+        await expect(page.locator(".session-container").first()).toBeAttached({ timeout: 15_000 });
+        const session = await textContrast(page, ".session-container .editor-content, .session-container p");
+
+        await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);
+        // The ROW, never the container: querySelector with a selector list
+        // returns the first element in DOCUMENT ORDER matching any of them,
+        // and the container is an ancestor of every row, so a
+        // "row, container" list would always measure the container and never
+        // the row's own .theme-dark styling. Wait for a row (the fixture
+        // session is in the index) so a missing row fails here rather than
+        // silently degrading the measurement.
+        await page.waitForSelector(".mej-cc-hub-container .mej-cc-index-row", { timeout: 15_000 });
+        const hub = await textContrast(page, ".mej-cc-hub-container .mej-cc-index-row");
+
+        test.info().annotations.push({ type: `contrast-${scheme}`, description: JSON.stringify({ session, hub }) });
+        // NaN means nothing was measured (no element, or no painted surface
+        // found); reject it explicitly rather than leaning on NaN comparisons.
+        expect(Number.isNaN(session.ratio), `session text unmeasurable, ${scheme}: ${session.surface}`).toBe(false);
+        expect(Number.isNaN(hub.ratio), `hub row unmeasurable, ${scheme}: ${hub.surface}`).toBe(false);
+        expect(session.ratio, `session text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+        expect(hub.ratio, `hub row text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    } finally {
+      await setColorScheme(page, "");
     }
-    await setColorScheme(page, "");
   });
 
-  test("the Hub tab survives a reload", async ({ page }) => {
+  test("the Hub tab survives a reload and re-resolves to the Hub", async ({ page }) => {
     await bootAsRealUser(page);
     await page.evaluate(async (p) => { const a = await import(p); await a.openHub(); }, ADAPTER);
     await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
     await reloadGame(page);
     await settle(page, 3000);
-    const after = await page.evaluate(() => {
-      const shell = game.MonksEnhancedJournal?.journal;
-      // Stock MEJ does not re-instantiate its shell at ready — on a cold boot
-      // game.MonksEnhancedJournal.journal is simply absent, and the tab list
-      // it will restore from when the shell next opens lives in this user
-      // flag. That flag is therefore where "the Hub tab survived" is true or
-      // false; read the live shell instead whenever there is one.
-      const live = Array.isArray(shell?.tabs) ? shell.tabs : null;
-      const tabs = live ?? game.user.getFlag("monks-enhanced-journal", "tabs") ?? [];
-      const tab = tabs.find((t) => t.entityId === "shellpage:campaign-hub") ?? null;
+
+    // Stock MEJ does not re-instantiate its shell at ready, so first check
+    // the Hub tab is still in the persisted tab list a cold boot restores from.
+    const persisted = await page.evaluate(() => {
+      const tabs = game.user.getFlag("monks-enhanced-journal", "tabs") ?? [];
       return {
-        source: live ? "live shell" : "persisted user flag",
-        tab: !!tab,
-        active: !!tab?.active,
-        subsheet: shell?.subsheet?.constructor?.name ?? null,
-        rendered: !!shell?.rendered
+        shellLive: !!game.MonksEnhancedJournal?.journal,
+        hubTabs: tabs.filter((t) => t.entityId === "shellpage:campaign-hub").length,
+        active: tabs.some((t) => t.entityId === "shellpage:campaign-hub" && t.active)
       };
     });
-    test.info().annotations.push({ type: "hub-tab-after-reload", description: JSON.stringify(after) });
-    expect(after.tab).toBe(true);
-    if (after.rendered) expect(after.subsheet).toBe("CampaignHubPage");
+    expect(persisted.hubTabs).toBe(1);
+
+    // Then render the shell WITHOUT asking for the Hub. MEJ restores the tab
+    // list and resolves the ACTIVE tab's entityId through findEntity
+    // (13.06 apps/enhanced-journal.js:419-421) — and for the Hub's synthetic
+    // "shellpage:campaign-hub" id, wrap 3 of the shim is the only thing that
+    // can resolve it. If that wrap regresses the restored tab resolves to
+    // nothing and the shell comes up on some other document, so these
+    // assertions are unconditional. openHub() is deliberately NOT used here:
+    // it would hand MEJ the Hub document itself and prove nothing about the
+    // persisted id.
+    const after = await page.evaluate(async () => {
+      const { EnhancedJournal } = await import("/modules/monks-enhanced-journal/apps/enhanced-journal.js");
+      const shell = new EnhancedJournal();
+      await shell.render(true);
+      game.MonksEnhancedJournal.journal = shell;
+      await new Promise((r) => setTimeout(r, 1000));
+      return {
+        rendered: !!shell.rendered,
+        subsheet: shell.subsheet?.constructor?.name ?? null,
+        hubTabs: shell.tabs.filter((t) => t.entityId === "shellpage:campaign-hub").length,
+        hubInDom: !!shell.element?.querySelector(".mej-cc-hub-container")
+      };
+    });
+    test.info().annotations.push({
+      type: "hub-tab-after-reload",
+      description: JSON.stringify({ persisted, after })
+    });
+    expect(after.rendered).toBe(true);
+    expect(after.hubTabs).toBe(1);
+    expect(after.subsheet).toBe("CampaignHubPage");
+    expect(after.hubInDom).toBe(true);
   });
 
   test("with shell hosting off the standalone windows still work", async ({ page }) => {
@@ -648,11 +710,14 @@ returnDescribe("stock smoke phase 2 — back on the API-carrying MEJ", () => {
     }, { fixture: FIXTURE, id: MODULE_ID });
     expect(found).toBe(true);
 
-    // The run is complete — remove the cross-phase fixture.
+    // The run is complete — remove the cross-phase fixture and the shell
+    // tabs the stock phase left in the GM's MEJ tab flag.
     await page.evaluate(async () => {
       const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
       for (const e of doomed) await e.delete();
     });
+    const tabs = await removeShellTabs(page);
+    test.info().annotations.push({ type: "shell-tabs-removed", description: JSON.stringify(tabs) });
   });
 });
 
@@ -663,7 +728,7 @@ returnDescribe("stock smoke phase 2 — back on the API-carrying MEJ", () => {
 const cleanupDescribe = PHASE === "cleanup" ? test.describe : test.describe.skip;
 
 cleanupDescribe("stock smoke cleanup — remove the fixture", () => {
-  test("no TT-STOCKSMOKE journal remains", async ({ page }) => {
+  test("no TT-STOCKSMOKE journal and no companion shell tab remain", async ({ page }) => {
     await login(page, "Gamemaster");
     const remaining = await page.evaluate(async () => {
       const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
@@ -671,5 +736,12 @@ cleanupDescribe("stock smoke cleanup — remove the fixture", () => {
       return game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE")).map((e) => e.id);
     });
     expect(remaining).toEqual([]);
+
+    const tabs = await removeShellTabs(page);
+    test.info().annotations.push({ type: "shell-tabs-removed", description: JSON.stringify(tabs) });
+    const leftover = await page.evaluate(() =>
+      (game.user.getFlag("monks-enhanced-journal", "tabs") ?? [])
+        .filter((t) => String(t?.entityId ?? "").startsWith("shellpage:")).length);
+    expect(leftover).toBe(0);
   });
 });

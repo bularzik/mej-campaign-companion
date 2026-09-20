@@ -119,7 +119,7 @@ test.describe("native mode (no extension API)", () => {
     expect(result.pending).toBe(false);
   });
 
-  test("opens the Hub as a standalone window with working tabs", async ({ page }) => {
+  test("opens the Hub as a shell tab with working tabs", async ({ page }) => {
     await login(page, "Gamemaster");
     await setForceNative(page, true);
 
@@ -127,9 +127,17 @@ test.describe("native mode (no extension API)", () => {
       const adapter = await import("/modules/mej-campaign-companion/scripts/integrations/mej-adapter.mjs");
       await adapter.openHub();
       await new Promise((r) => setTimeout(r, 800));
-      const el = document.querySelector('[id^="CampaignHubPage-"]');
+      // Native mode is shell-hosted since the shell shim (spec 2026-09-19 §4):
+      // there is ONE native mode, and it puts the Hub in MEJ's shell as a
+      // subsheet. Standalone windows survive only as the fallback for the
+      // shellHosting client setting being off, which 13-stock-smoke.spec.mjs
+      // covers. `.mej-cc-hub-container`, not hub.hbs's outer `.mej-cc-hub`:
+      // that root PART element is flattened into the application root and
+      // never reaches the DOM.
+      const shell = game.MonksEnhancedJournal.journal;
+      const el = shell?.element?.querySelector(".mej-cc-hub-container") ?? null;
       const tabs = el ? el.querySelectorAll("[data-tab]") : [];
-      // Clicking a tab proves activateListeners bound outside MEJ's shell.
+      // Clicking a tab proves the Hub's own listeners bound inside the shell.
       // The nav link is an <a data-tab>; the tab-content panel is a
       // <div class="tab" data-tab> (hub.hbs) — exclude the panel so the
       // click lands on the clickable nav element.
@@ -137,21 +145,24 @@ test.describe("native mode (no extension API)", () => {
       timeline?.click();
       await new Promise((r) => setTimeout(r, 400));
       return {
+        hosting: adapter.currentHosting(),
         rendered: !!el,
         tabCount: tabs.length,
         activeTab: el?.querySelector("div.tab.active")?.dataset?.tab ?? null,
-        // No MEJ shell tab was created for the hub in this mode.
-        shellOpen: !!game.MonksEnhancedJournal.journal?.rendered
+        shellOpen: !!shell?.rendered,
+        subsheet: shell?.subsheet?.constructor?.name ?? null
       };
     });
 
+    expect(opened.hosting).toBe("shell");
     expect(opened.rendered).toBe(true);
     expect(opened.tabCount).toBeGreaterThan(0);
     expect(opened.activeTab).toBe("timeline");
-    expect(opened.shellOpen).toBe(false);
+    expect(opened.shellOpen).toBe(true);
+    expect(opened.subsheet).toBe("CampaignHubPage");
   });
 
-  test("a Session page is first-class: native sheet and indexed by type", async ({ page }) => {
+  test("a Session page is first-class: native sheet, shell-hosted open, indexed by type", async ({ page }) => {
     await login(page, "Gamemaster");
     await setForceNative(page, true);
 
@@ -167,18 +178,38 @@ test.describe("native mode (no extension API)", () => {
       const stockAnswer = game.MonksEnhancedJournal.getMEJType(pageDoc);
       const adapterAnswer = adapter.mejType(pageDoc);
 
+      // The page's own sheet still stands alone when rendered directly —
+      // that is the sheet-class registration, independent of hosting.
+      const nativeType = pageDoc.type;
       await pageDoc.sheet.render(true);
       await new Promise((r) => setTimeout(r, 800));
-      const sheetEl = document.querySelector('[id^="SessionSheet-"]');
-      const rendered = !!sheetEl;
+      const rendered = !!document.querySelector('[id^="SessionSheet-"]');
       await pageDoc.sheet.close();
 
-      return { stockAnswer, adapterAnswer, rendered, nativeType: pageDoc.type };
+      // How the companion actually opens a session in native mode: through
+      // the adapter, which with the shell shim hands it to MEJ's shell as a
+      // subsheet rather than opening a window.
+      await adapter.openSessionPage(pageDoc);
+      await new Promise((r) => setTimeout(r, 1200));
+      const shell = game.MonksEnhancedJournal.journal;
+      const hosted = {
+        shellOpen: !!shell?.rendered,
+        subsheet: shell?.subsheet?.constructor?.name ?? null,
+        inShell: !!shell?.element?.querySelector(".session-container")
+      };
+
+      return { stockAnswer, adapterAnswer, rendered, hosted, nativeType, typeAfterShellOpen: pageDoc.type };
     }, RUN);
 
     expect(result.nativeType).toBe("mej-campaign-companion.session");
     expect(result.adapterAnswer).toBe("session");
     expect(result.rendered).toBe(true);
+    expect(result.hosted.shellOpen).toBe(true);
+    expect(result.hosted.subsheet).toBe("SessionSheet");
+    expect(result.hosted.inShell).toBe(true);
+    // Wrap 2 of the shim: MEJ's fixType must not leave the page's in-memory
+    // type rewritten to the bare MEJ key after a shell open.
+    expect(result.typeAfterShellOpen).toBe("mej-campaign-companion.session");
   });
 
   test("api mode still resolves when forceNativeMode is off", async ({ page }) => {

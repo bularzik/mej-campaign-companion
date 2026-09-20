@@ -43,9 +43,10 @@ async function clickSidebarRow(page, id) {
 }
 
 /**
- * Where the Hub is (shell subsheet in api mode, standalone window in native),
- * which tab is active, what the picker shows, and whether any sheet for `id`
- * rendered. `.mej-cc-hub-container`, not hub.hbs's outer `.mej-cc-hub`: that
+ * Where the Hub is (a shell subsheet in api mode and, since the shell shim,
+ * in native mode too; the standalone window only survives for the
+ * shellHosting-off fallback), which tab is active, what the picker shows,
+ * and whether any sheet for `id` rendered. `.mej-cc-hub-container`, not hub.hbs's outer `.mej-cc-hub`: that
  * outer div is the root PART element, which Foundry (and MEJ's own
  * renderSubSheet) flattens into the application root - it never reaches the
  * DOM. Same selector every other Hub spec uses.
@@ -201,7 +202,7 @@ test.describe("20 timeline journal open", () => {
     assertNoConsoleErrors(errors);
   });
 
-  test("7. native mode: sidebar click opens the standalone Hub window on the timeline; icon present", async ({ page }) => {
+  test("7. native mode: sidebar click opens the Hub in the shell on the timeline; icon present", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     await page.evaluate(async () => { await game.settings.set("mej-campaign-companion", "forceNativeMode", true); });
@@ -213,7 +214,11 @@ test.describe("20 timeline journal open", () => {
       await expect.poll(() => rowIconClass(page, timelineId, "core"), { timeout: 15_000 }).toContain("fa-timeline");
       await clickSidebarRow(page, timelineId);
       const state = await expectHubOnTimeline(page, timelineId);
-      expect(state.viaShell).toBe(false);
+      // Native mode is shell-hosted since the shell shim (spec 2026-09-19 §4),
+      // so the redirect lands in MEJ's shell here exactly as it does in api
+      // mode. The standalone window is now only the shellHosting-off
+      // fallback, which 13-stock-smoke.spec.mjs covers.
+      expect(state.viaShell).toBe(true);
     } finally {
       await page.evaluate(async () => { await game.settings.set("mej-campaign-companion", "forceNativeMode", false); });
     }
