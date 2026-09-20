@@ -396,7 +396,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     // ALSO this editor's only commit point: nothing else ever saves it (no
     // toggle -> no open=false -> save() chain the way the recap editor gets
     // from onEditRecap above). Commit explicitly, BEFORE removing .editing,
-    // while closing - see commitGmNotes below for why that goes through the
+    // while closing - see commitGmNotes above for why that goes through the
     // element's public `value` and not its save() (private on Foundry 13).
     if (editing) {
       const editor = this.trueElement?.querySelector?.("prose-mirror[name='system.gmNotes']");

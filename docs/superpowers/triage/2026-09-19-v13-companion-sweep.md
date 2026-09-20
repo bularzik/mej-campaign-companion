@@ -514,7 +514,7 @@ now reads and re-assigns the element's public `value`, which stores the live
 content and fires the same `change` core's private save fires. `:328` passes
 on Foundry 13 and 14.
 The sweep's :328 failure had a second layer the fix exposed: the test focused
-the <prose-mirror> element itself, which is a no-op on Foundry 13, so no text
+the `<prose-mirror>` element itself, which is a no-op on Foundry 13, so no text
 was ever typed; the test now focuses the .ProseMirror descendant.
 
 **J. `06-player-collab` is unstable on this stack — `harness`, diagnosed

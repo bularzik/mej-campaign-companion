@@ -94,6 +94,8 @@ failure never leaves the editor hidden.
 
 Doc comment on `onEditGmNotes` updated: it no longer says "call save()".
 
+Note (final review, 2026-09-20): the comparison basis is the document's stored value, not the element's own `_value` as core's `save()` uses. They diverge only when the document is fresher than the rendered element (MEJ subsheets get no automatic re-render on document update), and then an idle pencil open/close writes the rendered HTML back where core would have been a no-op. Accepted: the field is GM-only, the stale-field guard already resubmits this always-active field on every other submit, and reading `_value` would mean a protected member.
+
 ### 3.3 Strings
 
 `lang/en.json`, under `session`: `"gmNotesSaveFailed": "GM notes could not be

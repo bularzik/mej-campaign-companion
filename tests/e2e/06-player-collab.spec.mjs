@@ -322,9 +322,11 @@ test.describe("06 player collaboration", () => {
 
   // Final-review fix wave, spec 2026-09-04 §A: the stale-field guard must not
   // remove GM Notes' only save path. gmNotes has no toggle/collaborative join
-  // (unlike recap) - the pencil is purely a CSS show/hide, so onEditGmNotes
-  // has to call the editor's own save() itself on close, or nothing ever
-  // fires the "change" MEJ's submitOnChange needs to persist it.
+  // (unlike recap) - the pencil is purely a CSS show/hide, so on close,
+  // onEditGmNotes reads the editor's public `value` and assigns it back through
+  // the public setter, which stores it and fires the `change` that MEJ's
+  // submit-on-change form turns into the write (the editor's `save()` is
+  // private on Foundry 13, so it is not used).
   test("GM notes commit on pencil close", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
@@ -343,9 +345,11 @@ test.describe("06 player collaboration", () => {
     // Same clipped-scroll-container interception as the pencil above -
     // focus the element directly rather than a pointer click.
     // HTMLProseMirrorElement.focus() delegates to the live ProseMirror view
-    // on Foundry 14 (foundry.mjs:97554) but has no override on Foundry 13,
-    // where it is a no-op, so the contenteditable .ProseMirror is focused
-    // directly, which is what 14's override does anyway.
+    // on Foundry 14 (foundry.mjs:97553) but has no override on Foundry 13,
+    // where it is a no-op. Close to what 14's override does (it calls the
+    // view's focus(), which also re-syncs the ProseMirror selection);
+    // equivalent for typing here. Foundry 13 has no override and the clipped
+    // scroll container.
     await editor.evaluate((el) => (el.querySelector(".ProseMirror") ?? el).focus());
     await page.keyboard.press("End");
     await page.keyboard.type("Notes for next week.");
