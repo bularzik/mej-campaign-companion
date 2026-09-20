@@ -28,12 +28,13 @@
 // wrappers is exactly the change that can leave dark-on-dark text behind.
 //
 // The two stock targets run against different worlds, and the gate must
-// hold on both: world-b (v13) has no campaigns and no folders of its own,
-// World A (v14) has both. (The campaign-portal test creates its own campaign
-// and removes it again, restoring the auto-capture target it seeds on a world
-// whose first campaign it is.) That is why New Session confirms a destination-campaign
-// prompt when one appears, and why sidebar rows are matched on
-// [data-entry-id] instead of a bare .directory-item.
+// hold on both. Both hold real campaigns today (world-b carries a copy of a
+// user campaign; World A is the user's campaign), but the assertions are
+// written for a fresh sandbox too: New Session confirms a destination-campaign
+// prompt only when one appears, sidebar rows are matched on [data-entry-id]
+// instead of a bare .directory-item, and the campaign-portal test creates its
+// own campaign and removes it again, restoring the auto-capture target it
+// would seed on a world whose first campaign it is.
 //
 // v13 gate (Foundry 13.351 + stock MEJ 13.06 at ~/FoundryVTT, world-b; no
 // symlink swap needed because that MEJ is stock already):
