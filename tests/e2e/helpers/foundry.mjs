@@ -321,6 +321,33 @@ export async function ensureModuleDisabled(page, moduleId = MODULE_ID) {
   if (nowActive) throw new Error(`module "${moduleId}" could not be disabled in the test world`);
 }
 
+/**
+ * Turn on MEJ's "allow-player" world setting if it is off.
+ *
+ * `MonksEnhancedJournal.openJournalEntry()` opens with
+ * `if (!game.user.isGM && !setting('allow-player')) return false;` (13.06
+ * monks-enhanced-journal.js:2311, same on 14.x), and the setting's registered
+ * default is `false` (settings.js:135). So on a world where nobody ever
+ * ticked it, EVERY player seat in this suite gets an empty
+ * `#MonksEnhancedJournal` — no shell, no subsheet, no Hub nav button, no
+ * knowledge panel — and the failure reads like a companion bug rather than a
+ * world-configuration one. World A has had it on for a long time; the v13
+ * world-b had never been told, which cost the 2026-09-19 Foundry 13 sweep 14
+ * failures across five specs before it was found (proved by re-running the
+ * player arm with the companion module disabled entirely: still empty).
+ *
+ * World-scoped, so this is a one-line world edit, not per-client state.
+ * @param {import("@playwright/test").Page} page a logged-in GM page
+ */
+export async function ensureMejPlayerAccess(page) {
+  return page.evaluate(async (mejId) => {
+    if (!game.modules.get(mejId)?.active) return "mej-inactive";
+    if (game.settings.get(mejId, "allow-player") === true) return "already-on";
+    await game.settings.set(mejId, "allow-player", true);
+    return "enabled";
+  }, MEJ_MODULE_ID);
+}
+
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */
 export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
   await page.evaluate(async (p) => {

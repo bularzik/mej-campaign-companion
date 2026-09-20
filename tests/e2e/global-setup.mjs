@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ensureTestWorld, login, ensureModuleEnabled, serverStatus,
+  ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
@@ -55,6 +55,9 @@ export default async function globalSetup() {
       await login(page, "Gamemaster");
       await ensureModuleEnabled(page, MEJ_MODULE_ID);
       await ensureModuleEnabled(page, MODULE_ID);
+      // Player seats need MEJ's "allow-player" world setting on, and its
+      // registered default is off - see ensureMejPlayerAccess()'s comment.
+      await ensureMejPlayerAccess(page);
       // The stock-smoke return phase (13-stock-smoke.spec.mjs) depends on a
       // TT- fixture created by the PREVIOUS invocation (its stock phase) —
       // sweeping journals here would delete the very document whose heal the
