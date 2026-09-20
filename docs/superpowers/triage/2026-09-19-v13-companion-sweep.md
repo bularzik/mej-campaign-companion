@@ -881,7 +881,7 @@ suite on v13) is not a gate and is not expected to be green.
    Owner: MEJ backlog / upstream issue against 13.06 (and 14.01, where the same
    code stands).
 
-2. **Native mode wires itself after `game.ready`, and the gap is user-visible.**
+2. **Native mode wires itself after `game.ready`, and the gap is user-visible — closed 2026-09-20.**
    Measured: sheet registrations land 1–3s after ready on this stack, and
    anything opened before then resolves to `BaseSheet` and trips follow-up 1.
    Addendum 2026-09-20: there is a second, shorter window inside the first —
@@ -889,7 +889,8 @@ suite on v13) is not a gate and is not expected to be green.
    and an open in it gets MEJ's entry wrapper rather than `BaseSheet`. The
    harness now waits for both; a spec for this item should decide whether the
    shim is installed before the registrations or the whole wiring is made
-   atomic from the user's point of view.
+   atomic from the user's point of view. Closed by follow-up 2's spec (the
+   gate).
    The harness now waits for the real condition, so the suite is honest about it,
    but a GM who clicks a Session in the first second of a native-mode client
    still gets a broken render and a console TypeError. The cause is structural:
@@ -900,6 +901,16 @@ suite on v13) is not a gate and is not expected to be green.
    registration does not need the MEJ-importing module body; or hold a
    user-visible "still starting" state. Not attempted here — it is design work,
    not a contained fix. Owner: **sub-project, spec first.**
+   Spec `docs/superpowers/specs/2026-09-20-ready-wiring-window-design.md`:
+   sheets registered at init, shim installed before `registerCore()`, and a
+   setup-time gate holds MEJ opens until the ready wiring resolves. Before:
+   ready hook → sheet registration 430–924 ms, → shim +20–35 ms (2026-09-20,
+   four seats). After: v13 stock (tag `14.01`-equivalent MEJ 13.06) — ready
+   hook → sheet registered -111 ms, → shim visible 209 ms; Foundry 14 stock
+   (MEJ tag `14.01`) — ready hook → sheet registered -182 ms, → shim visible
+   161 ms (both runs 2026-09-20, `boot-timing` annotation on
+   `tests/e2e/13-stock-smoke.spec.mjs`'s Hub-open race test; negative means
+   the sheet was registered before the ready hook fired).
 
 3. **The three `mej-13.06` rows that are not issue candidates.**
    `00-mej-api:15`, `00-mej-api:103` and `01-session:57` are classed

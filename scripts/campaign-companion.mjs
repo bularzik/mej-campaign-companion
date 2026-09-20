@@ -8,7 +8,8 @@ import {
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
-import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly } from "./integrations/mej-adapter.mjs";
+import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly, readyWiring } from "./integrations/mej-adapter.mjs";
+import { installReadyGate } from "./integrations/ready-gate.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
@@ -184,6 +185,14 @@ Hooks.once("init", () => {
   // Session opened in the first second after login resolves to our sheet
   // instead of core's BaseSheet. Absent mode stays inert.
   if (game.modules.get("monks-enhanced-journal")?.active) registerSheetsEarly();
+});
+
+// Every MEJ openJournalEntry call is held until onReady() has finished
+// wiring (spec 2026-09-20-ready-wiring-window §3.3). Setup, not init: MEJ
+// assigns game.MonksEnhancedJournal in its own init hook. Both modes: in
+// api mode the wiring also completes at ready. Absent mode installs nothing.
+Hooks.once("setup", () => {
+  if (game.modules.get("monks-enhanced-journal")?.active) installReadyGate(readyWiring);
 });
 
 // Grants player-writable default ownership to Session entries created

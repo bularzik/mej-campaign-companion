@@ -95,7 +95,8 @@ deletes the fixture instead.
 1. `npm run e2e:stock:v13` — global setup starts Foundry 13 on port 30013
    with world-b if it is not already up, links the module, and runs the
    `stock` phase (boot, Hub, New Session, search, the asserted sidebar open of
-   the session, and the sidebar open of a campaign portal).
+   the session, the sidebar open of a campaign portal, and an open issued the
+   instant the client is ready).
 2. `npm run e2e:stock:v13:cleanup` — deletes `TT-STOCKSMOKE Session` and any
    leftover `TT-STOCKSMOKE Campaign` folder.
 

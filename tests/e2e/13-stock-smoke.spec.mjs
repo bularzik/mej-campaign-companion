@@ -18,6 +18,10 @@
 // (.journal-entry-pages) to be absent around a hosted session or portal. Standalone
 // windows remain a supported fallback and have a test of their own, which
 // turns the shellHosting client setting off and asserts the window path.
+// A dedicated test, "an open issued the instant the client is ready lands
+// as the shell subsheet", proves the ready gate (spec
+// 2026-09-20-ready-wiring-window): an openJournalEntry fired the instant
+// game.ready flips still resolves to the shell's SessionSheet.
 // (The Hub's DOM selector is .mej-cc-hub-container: hub.hbs's outer
 // .mej-cc-hub is the root PART element, which Foundry flattens into the
 // application root, so it never reaches the DOM in EITHER hosting.)
@@ -449,6 +453,19 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
   // any given boot is timing-dependent (recorded as an annotation), but the
   // assertion holds either way.
   test("the Hub opens when clicked before the ready wiring has finished", async ({ page }) => {
+    await page.addInitScript((id) => {
+      const t = { start: performance.now() };
+      globalThis.__bootTiming = t;
+      let hooked = false;
+      const iv = setInterval(() => {
+        const H = globalThis.Hooks;
+        if (H && !hooked) { hooked = true; H.once("ready", () => { t.readyHook = performance.now(); }); }
+        const sc = globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${id}.session`];
+        if (sc && Object.keys(sc).length && t.sheetRegistered === undefined) t.sheetRegistered = performance.now();
+        try { if (globalThis.game?.MonksEnhancedJournal?.getDocumentTypes?.()?.session && t.shimVisible === undefined) t.shimVisible = performance.now(); } catch {}
+        if (t.readyHook !== undefined && t.sheetRegistered !== undefined && t.shimVisible !== undefined) clearInterval(iv);
+      }, 5);
+    }, MODULE_ID);
     await login(page, "Gamemaster");
     await page.waitForFunction(() => game?.ready === true, null, { timeout: 60_000 });
 
@@ -471,6 +488,21 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     // Hosting-agnostic: the assertion is that the click produced a rendered
     // Hub, wherever this build hosts it (shell subsheet or standalone window).
     await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
+
+    // Spec 2026-09-20-ready-wiring-window §5: the session sheet registration
+    // is in CONFIG by the time the ready wiring resolves (registered at
+    // init, or repaired at ready); the timings are the run report's record.
+    const timing = await page.evaluate(async (p) => {
+      await (await import(p)).readyWiring;
+      const t = globalThis.__bootTiming;
+      const rel = (k) => (t[k] === undefined || t.readyHook === undefined) ? null : Math.round(t[k] - t.readyHook);
+      return { registered: t.sheetRegistered !== undefined, sheetAfterReadyHookMs: rel("sheetRegistered"), shimAfterReadyHookMs: rel("shimVisible") };
+    }, ADAPTER);
+    expect(timing.registered).toBe(true);
+    test.info().annotations.push({
+      type: "boot-timing",
+      description: `ready hook → session sheet registered: ${timing.sheetAfterReadyHookMs} ms; → shim visible: ${timing.shimAfterReadyHookMs} ms (negative = before the ready hook)`
+    });
   });
 
   test("New Session creates the fixture and auto-opens it as the shell's SessionSheet", async ({ page }) => {
@@ -557,6 +589,55 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     });
     expect(tabs.clicked).not.toBeNull();
     expect(tabs.active).toBe(tabs.clicked);
+  });
+
+  // Spec 2026-09-20-ready-wiring-window: an open issued the instant
+  // game.ready flips - before the companion's ready hook has installed the
+  // shim - must be held by the ready gate and then land as the shell's
+  // SessionSheet, never as MEJ's JournalEntrySheet wrapper. The init script
+  // runs on every navigation login() performs; it fires once, on the /game
+  // document, when the fixture is visible in game.journal.
+  test("an open issued the instant the client is ready lands as the shell subsheet", async ({ page }) => {
+    await page.addInitScript((fixture) => {
+      const iv = setInterval(() => {
+        const g = globalThis.game;
+        if (!g?.ready) return;
+        clearInterval(iv);
+        const entry = g.journal?.find((e) => e.name === fixture);
+        const MEJ = g.MonksEnhancedJournal;
+        const shimAtCall = !!MEJ?.getDocumentTypes?.()?.session;
+        const calledAt = performance.now();
+        const record = { entryFound: !!entry, shimAtCall, calledAt, resolvedAt: null, error: null };
+        globalThis.__earlyOpen = record;
+        if (!entry) return;
+        Promise.resolve(MEJ.openJournalEntry(entry))
+          .then(() => { record.resolvedAt = performance.now(); })
+          .catch((err) => { record.error = String(err); record.resolvedAt = performance.now(); });
+      }, 5);
+    }, FIXTURE);
+    const errors = trackConsoleErrors(page, { ignore: [KNOWN_MEJ_SESSION_ICON_404, EXPECTED_INVALID_TYPE_WHILE_DISABLED] });
+    await login(page, "Gamemaster");
+
+    await page.waitForFunction(() => globalThis.__earlyOpen?.resolvedAt !== null, null, { timeout: 30_000 });
+    const early = await page.evaluate(() => globalThis.__earlyOpen);
+    expect(early.entryFound).toBe(true);
+    expect(early.error).toBeNull();
+    test.info().annotations.push({
+      type: "early-open",
+      description: `shim visible at call: ${early.shimAtCall}; held ${Math.round(early.resolvedAt - early.calledAt)} ms`
+    });
+
+    await page.waitForFunction(() => {
+      const s = game.MonksEnhancedJournal?.journal?.subsheet;
+      return s?.constructor?.name === "SessionSheet" && s._state === s.constructor.RENDER_STATES.RENDERED;
+    }, null, { timeout: 15_000 });
+    const shell = page.locator("#MonksEnhancedJournal");
+    await expect(shell.locator(".journal-entry-pages")).toHaveCount(0);
+    await expect(shell.locator(".editor-parent[data-editor-id='recap']")).toHaveCount(1);
+
+    const companionErrors = errors.filter((t) => t.includes(MODULE_ID));
+    expect(companionErrors).toEqual([]);
+    await removeShellTabs(page);
   });
 
   test("Hub search finds the stock-created session", async ({ page }) => {

@@ -79,7 +79,10 @@ not announced with a warning. What differs:
   inside Monk's Enhanced Journal's own tabbed window by adapting four of
   MEJ's functions at start-up; if that adaptation cannot be installed (a
   future MEJ release renaming one of them), the companion logs
-  `shell hosting unavailable` and falls back to standalone windows.
+  `shell hosting unavailable` and falls back to standalone windows. The
+  companion registers its sheets at init and holds an early open until its
+  shell adaptation is in place, so clicking a Session in the first second
+  after login no longer opens a broken or wrapped sheet.
 - The "open graph" and "prep board" header buttons are absent; both remain
   reachable — the graph from the Hub toolbar, the prep board from the button
   on the Session sheet itself.
