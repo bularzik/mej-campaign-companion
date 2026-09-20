@@ -740,6 +740,11 @@ console-error locations), so the gates were re-run rather than re-argued.
 | 2026-09-20 | `06-player-collab` ×3, isolated, before the predicate fix | 13.351 | stock 13.06 | world-b | 4/4, 5/3, 6/2 failed — every non-`:328` failure a player seat opening pre-shim (cause J) |
 | 2026-09-20 | `06-player-collab` ×3, isolated, after the predicate fix | 13.351 | stock 13.06 | world-b | 7/1, 7/1, 6/2 — `:328` (follow-up 7) every run; `:231` once (see below) |
 | 2026-09-20 | api-mode spot check (`00-mej-api`, `12-native-mode`) | 14.368 | fork line `9569984` | world-a | **11/11 passed** — the predicate short-circuits on the extension API |
+| 2026-09-20 | stock gate, native mode (ready gate + early registration; 11 tests) | 13.351 | stock 13.06 | world-b | **11/11 passed**; cleanup 1/1 |
+| 2026-09-20 | stock gate, native mode (ready gate + early registration; 11 tests) | 14.368 | stock, module worktree at tag `14.01` | world-a | **11/11 passed** |
+| 2026-09-20 | stock gate return phase | 14.368 | fork line `9569984` | world-a | **3/3 passed** |
+| 2026-09-20 | Foundry 13 full suite after the ready-wiring change | 13.351 | stock 13.06 | world-b | 133 passed, 5 failed, 23 skipped — `10-secrets-hub:167` (mej-13.06) and `09-secrets` (baseline) as attributed; `02-hub-timeline:155/:215/:288` environmental: a stray empty "Campaign Timeline" world timeline left in world-b by an earlier crashed run (group-1 documented nuisance), not a code regression |
+| 2026-09-20 | Foundry 14 api-mode full suite after the ready-wiring change | 14.368 | fork line `9569984` | world-a | **139 passed, 1 failed (`09-secrets:970`, baseline), 21 skipped** |
 
 Residual from the post-fix runs: `06-player-collab:231` ("two owners edit at
 once") failed once in three — the second owner's `prose-mirror` came back with
@@ -905,12 +910,13 @@ suite on v13) is not a gate and is not expected to be green.
    sheets registered at init, shim installed before `registerCore()`, and a
    setup-time gate holds MEJ opens until the ready wiring resolves. Before:
    ready hook → sheet registration 430–924 ms, → shim +20–35 ms (2026-09-20,
-   four seats). After: v13 stock (tag `14.01`-equivalent MEJ 13.06) — ready
-   hook → sheet registered -111 ms, → shim visible 209 ms; Foundry 14 stock
-   (MEJ tag `14.01`) — ready hook → sheet registered -182 ms, → shim visible
-   161 ms (both runs 2026-09-20, `boot-timing` annotation on
-   `tests/e2e/13-stock-smoke.spec.mjs`'s Hub-open race test; negative means
-   the sheet was registered before the ready hook fired).
+   four seats). After: v13 stock (Foundry 13.351, stock MEJ 13.06) — ready
+   hook → session sheet registered −111 ms, → shim visible +209 ms, early
+   open held 911 ms; Foundry 14 stock (14.368, MEJ at tag `14.01`) —
+   registered −182 ms, shim +161 ms, held 571 ms (both runs 2026-09-20,
+   `boot-timing` and `early-open` annotations on
+   `tests/e2e/13-stock-smoke.spec.mjs`'s Hub-open race and early-open tests;
+   negative means the sheet was registered before the ready hook fired).
 
 3. **The three `mej-13.06` rows that are not issue candidates.**
    `00-mej-api:15`, `00-mej-api:103` and `01-session:57` are classed
