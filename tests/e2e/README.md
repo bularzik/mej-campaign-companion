@@ -136,6 +136,17 @@ regressions.
   (including world-a) — that switch is expected and not a harness bug. Test
   documents are prefixed `TT-`, as elsewhere in this suite.
 
+- **world-b is a module-rich world, not a two-module one.** As of
+  2026-09-20 it runs 22 active modules on dnd5e 5.3.3 besides the
+  companion and MEJ 13.06 — lib-wrapper, campaign-record 1.8.1,
+  omnipresence (which reconciles its macros on every login), levels,
+  wall-height, monks-active-tiles, multi-token-edit, scene-packer, quench
+  and the D&D premium content among them. Nothing in the 2026-09-19 sweep
+  was attributed to any of them, but a failure that only reproduces there
+  should be re-run with the extras off before it is called a companion or
+  MEJ defect. List them from a client console with
+  `game.modules.filter((m) => m.active).map((m) => \`${m.id}@${m.version}\`)`.
+
 - **Before a sweep run**, back up world-b and clear any known stray fixture
   state (see the sweep's own triage doc, e.g.
   `docs/superpowers/triage/<date>-v13-companion-sweep.md`, "Environment
