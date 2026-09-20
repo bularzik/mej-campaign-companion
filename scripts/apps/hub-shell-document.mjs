@@ -100,6 +100,26 @@ export class HubShellDocument extends foundry.abstract.Document {
     return this;
   }
 
+  // The same reasoning one level down, and load-bearing for shell hosting:
+  // MEJ's shell submits its subsheet's form on every change
+  // (EnhancedJournal._onChangeForm -> _onSubmitForm ->
+  // EnhancedJournalSheet.onSubmit, 13.06 sheets/EnhancedJournalSheet.js:1460,
+  // which ends in `return this.document.update(submitData)`). On a real page
+  // that persists the edit; on this parentless, collection-less stub it
+  // reaches Foundry's ClientDatabaseBackend, whose #preUpdateDocumentArray
+  // dereferences the document's collection unconditionally (Foundry 13.351
+  // foundry.mjs:58726) and rejects with "Cannot read properties of undefined
+  // (reading 'get')". The rejection is unhandled, so the Hub kept working and
+  // only the console said anything - which is exactly how it surfaced: eight
+  // v13 sweep tests failed on assertNoConsoleErrors, not on behaviour, every
+  // one of them right after touching a Hub form control (the campaign-scope
+  // select, a filter chip). Every Hub control persists through the
+  // companion's own client settings and through flags on real documents, so
+  // there is nothing here to write.
+  async update() {
+    return this;
+  }
+
   testUserPermission() {
     return true;
   }
