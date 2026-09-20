@@ -230,8 +230,15 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
         mejActive: game.modules.get(mejId)?.active === true,
         mejVersion: game.modules.get(mejId)?.version ?? null,
         // Present only on the API-carrying fork — the whole point of this
-        // suite is that THIS build must not have it.
-        apiPresent: typeof game.MonksEnhancedJournal?.registerSheetType === "function",
+        // suite is that THIS build must not have it. `getApi`/`externalTypes`,
+        // NOT `registerSheetType`: that name lives on the object getApi()
+        // RETURNS and is handed to the setupMonksEnhancedJournal hook, never on
+        // game.MonksEnhancedJournal — so the old check read false on the fork
+        // too and this assertion was passing vacuously (caught 2026-09-19 when
+        // the same wrong predicate, copied into three specs' skip gates, made
+        // them skip on the v14 fork line).
+        apiPresent: typeof game.MonksEnhancedJournal?.getApi === "function"
+          || !!game.MonksEnhancedJournal?.externalTypes,
         mode: adapter.currentMode(),
         wiringFailed: adapter.wiringFailed(),
         companionErrorNotifications: notifications.filter((t) =>

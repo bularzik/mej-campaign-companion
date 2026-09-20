@@ -160,12 +160,22 @@ const SESSION_BOUND = () =>
  * which is how it surfaced in the 2026-09-19 sweep: 10-secrets-hub:130/:167,
  * 09-secrets:528 (and :590 as a flake), 20-timeline-journal-open:112.
  *
- * In api mode the handshake wires everything at MEJ's setup hook, before
- * ready, so this predicate is already true and the wait costs nothing. With
- * the companion inactive it is vacuously true.
+ * In api mode the handshake wires everything at MEJ's setup hook, so the
+ * predicate is usually already true and the wait costs nothing - but not
+ * always: Foundry drains its pre-ready registerSheet queue exactly once, and a
+ * registration that lands after that drain is silently dropped until
+ * ensureSheetRegistrations() repairs it from the ready hook (see
+ * mej-adapter.mjs onHandshake's comment). So api mode can wait here too, and
+ * should.
+ *
+ * Two short-circuits, both vacuous rather than wrong: the companion inactive
+ * (nothing to wire), and MEJ inactive (the adapter resolves mode "absent" and
+ * deliberately registers NOTHING, so waiting on a registration would burn the
+ * full timeout on every single login).
  */
 const COMPANION_WIRED = (moduleId) =>
   globalThis.game?.modules?.get(moduleId)?.active !== true
+  || globalThis.game?.modules?.get("monks-enhanced-journal")?.active !== true
   || Object.keys(globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${moduleId}.session`] ?? {}).length > 0;
 
 /** Wait until the companion's sheet registrations are actually in CONFIG. */
@@ -376,9 +386,10 @@ export async function ensureModuleDisabled(page, moduleId = MODULE_ID) {
  * `#MonksEnhancedJournal` — no shell, no subsheet, no Hub nav button, no
  * knowledge panel — and the failure reads like a companion bug rather than a
  * world-configuration one. World A has had it on for a long time; the v13
- * world-b had never been told, which cost the 2026-09-19 Foundry 13 sweep 14
- * failures across five specs before it was found (proved by re-running the
- * player arm with the companion module disabled entirely: still empty).
+ * world-b had never been told, which cost the 2026-09-19 Foundry 13 sweep 17
+ * failures across six specs (03, 06, 07, 08, 09, 15) before it was found
+ * (proved by re-running the player arm with the companion module disabled
+ * entirely: still empty).
  *
  * World-scoped, so this is a one-line world edit, not per-client state.
  * @param {import("@playwright/test").Page} page a logged-in GM page
@@ -486,6 +497,47 @@ export async function cleanupTimelineJournals(page, preexisting = null, { prefix
       if (game.settings.get(id, "hubTimelineSelection") === deletedId) await game.settings.set(id, "hubTimelineSelection", "");
     }
   }, { id: MODULE_ID, TT: prefix, keep: preexisting });
+}
+
+/**
+ * Delete timeline journals this suite stranded: the module's timeline flag,
+ * an empty (or TT--only) timepoint list, AND a `TT-` NAME.
+ *
+ * This is deliberately NOT `cleanupTimelineJournals(page, [])`. That helper's
+ * contract is "delete every empty timeline outside the caller's ledger", which
+ * is right inside a spec that snapshotted the world first and wrong for a
+ * blanket sweep: a real campaign's freshly created timeline is legitimately
+ * empty, so on the v14 target - whose world IS the user's campaign - an
+ * un-ledgered empty sweep would delete real content. The name filter is the
+ * whole difference, and it is what makes this safe to run unconditionally from
+ * global setup.
+ *
+ * Why global setup needs it at all: a companion timeline journal is not TT-
+ * prefixed when the MODULE creates it (it is named "Campaign Timeline"), but
+ * one created by a spec's own fixture IS, and the world-scoped
+ * `timelineJournalId` setting outlives the run either way. A TT- leftover then
+ * sits in the next run's pre-run ledger and 02-hub-timeline's
+ * ensureWorldTimeline() refuses to touch it - see the v13 sweep report.
+ *
+ * @param {import("@playwright/test").Page} page a logged-in GM page
+ * @returns {Promise<string[]>} the names deleted
+ */
+export async function cleanupStrandedTestTimelines(page, { prefix = TT_PREFIX } = {}) {
+  return page.evaluate(async ({ id, TT }) => {
+    const deleted = [];
+    const doomed = game.journal.filter((e) => e.name?.startsWith(TT) && !!e.getFlag(id, "timeline"));
+    for (const j of doomed) {
+      const tps = j.getFlag(id, "timeline")?.timepoints ?? [];
+      if (tps.some((t) => !t.label?.startsWith(TT))) continue;
+      const deletedId = j.id;
+      const name = j.name;
+      await JournalEntry.implementation.deleteDocuments([deletedId]);
+      if (game.settings.get(id, "timelineJournalId") === deletedId) await game.settings.set(id, "timelineJournalId", "");
+      if (game.settings.get(id, "hubTimelineSelection") === deletedId) await game.settings.set(id, "hubTimelineSelection", "");
+      deleted.push(name);
+    }
+    return deleted;
+  }, { id: MODULE_ID, TT: prefix });
 }
 
 /**

@@ -220,7 +220,8 @@ test.describe("native mode (no extension API)", () => {
     // is no API to resolve, not because anything regressed. Detected the same
     // way 13-stock-smoke.spec.mjs detects it.
     const apiPresent = await page.evaluate(
-      () => typeof game.MonksEnhancedJournal?.registerSheetType === "function"
+      () => typeof game.MonksEnhancedJournal?.getApi === "function"
+        || !!game.MonksEnhancedJournal?.externalTypes
     );
     test.skip(!apiPresent, "MEJ on this stack has no extension API; api mode is unreachable");
     await setForceNative(page, false);

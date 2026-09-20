@@ -16,9 +16,15 @@ const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
  * create path would in any case write a plain "text" page carrying the bare
  * MEJ flag rather than a real `mej-campaign-companion.session` subtype
  * (13.06 :939 vs the fork's externalType carve-out at :1054-1073).
+ *
+ * Detected through `getApi`/`externalTypes`, the statics the fork puts on
+ * `MonksEnhancedJournal` - NOT `registerSheetType`, which lives on the object
+ * `getApi()` returns and is therefore absent from `game.MonksEnhancedJournal`
+ * on both lines.
  */
 async function mejApiPresent(page) {
-  return page.evaluate(() => typeof game.MonksEnhancedJournal?.registerSheetType === "function");
+  return page.evaluate(() => typeof game.MonksEnhancedJournal?.getApi === "function"
+    || !!game.MonksEnhancedJournal?.externalTypes);
 }
 
 /** Open the journal sidebar and MEJ's "Create Entry" dialog, choose type

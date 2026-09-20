@@ -5,7 +5,7 @@
 // at all, so they leaked.
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, timelineJournalIds, cleanupTimelineJournals,
+  login, TT_PREFIX, timelineJournalIds, cleanupTimelineJournals, cleanupStrandedTestTimelines,
   gotoGame, reloadGame, trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -87,6 +87,47 @@ test.describe("18 harness cleanup", () => {
         if (doomed.length) await JournalEntry.implementation.deleteDocuments(doomed);
       }, createdIds);
     }
+    assertNoConsoleErrors(errors);
+  });
+
+  // Global setup runs an UNLEDGERED timeline sweep on every target, including
+  // the v14 one whose world is the user's real campaign - so the only thing
+  // standing between that sweep and real content is the TT- name filter.
+  // A real campaign's freshly created default timeline is empty, carries the
+  // module's timeline flag, and is named by the module, so it matches every
+  // other condition the sweep tests. This is the assertion that it survives.
+  test("the global-setup sweep deletes TT- timelines and spares a user-named empty one", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const made = await page.evaluate(async (id) => {
+      const mk = async (name) => (await JournalEntry.create({
+        name, flags: { [id]: { timeline: { timepoints: [] } } }
+      })).id;
+      return {
+        // What a real campaign's brand-new timeline looks like: empty, flagged,
+        // module-named. Not TT- prefixed, so not this suite's to delete.
+        userNamed: await mk("Campaign Timeline"),
+        // ... and a TT- stray, which is.
+        ttNamed: await mk(`${"TT-"}Stranded Sweep Fixture Timeline`)
+      };
+    }, MODULE_ID);
+
+    try {
+      const deleted = await cleanupStrandedTestTimelines(page);
+      const alive = await page.evaluate(
+        (m) => ({ userNamed: !!game.journal.get(m.userNamed), ttNamed: !!game.journal.get(m.ttNamed) }), made
+      );
+      expect(alive.userNamed).toBe(true);
+      expect(alive.ttNamed).toBe(false);
+      expect(deleted).toContain(`${"TT-"}Stranded Sweep Fixture Timeline`);
+    } finally {
+      await page.evaluate(async (m) => {
+        const doomed = Object.values(m).filter((i) => game.journal.get(i));
+        if (doomed.length) await JournalEntry.implementation.deleteDocuments(doomed);
+      }, made);
+    }
+
     assertNoConsoleErrors(errors);
   });
 

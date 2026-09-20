@@ -17,9 +17,16 @@ import {
  * fires the handshake, so every assertion in this file is unreachable there
  * by design, not by regression. The real-stock equivalent of this gate is
  * 13-stock-smoke.spec.mjs, which detects the API the same way.
+ *
+ * `getApi`/`externalTypes`, not `registerSheetType`: that name lives on the
+ * object `getApi()` RETURNS and hands to the setupMonksEnhancedJournal hook,
+ * never on `game.MonksEnhancedJournal`. Testing for it reads false on the fork
+ * too, which made this gate skip on the v14 line - caught by running the
+ * api-mode suite after the v13 sweep's harness changes.
  */
 async function mejApiPresent(page) {
-  return page.evaluate(() => typeof game.MonksEnhancedJournal?.registerSheetType === "function");
+  return page.evaluate(() => typeof game.MonksEnhancedJournal?.getApi === "function"
+    || !!game.MonksEnhancedJournal?.externalTypes);
 }
 
 test.describe("00 MEJ extension API — stage-1 regression", () => {

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
-  cleanupTimelineJournals,
+  cleanupStrandedTestTimelines,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
@@ -65,17 +65,20 @@ export default async function globalSetup() {
       // phase exists to verify (this happened; see the spec's header). Any
       // later normal run still reclaims stock-smoke leftovers.
       if (process.env.STOCK_PHASE !== "return") await deleteJournalsByPrefix(page);
-      // A companion timeline journal is NOT TT- prefixed (the module names it
-      // "Campaign Timeline"), and the world-scoped `timelineJournalId` setting
-      // outlives any run that made one - so an empty leftover survives every
-      // sweep and then poisons the next run: 02-hub-timeline's
-      // ensureWorldTimeline() refuses to touch a timeline whose id was already
-      // in the pre-run ledger, which is exactly what a leftover is, so all
-      // three of its timepoint tests fail before doing anything (seen on v13
-      // world-b, 2026-09-19 sweep). An empty keep-list reuses the helper's own
-      // safety rule - a timeline holding any non-TT- timepoint is never
-      // deleted, only trimmed - so a world with real content is untouched.
-      if (process.env.STOCK_PHASE !== "return") await cleanupTimelineJournals(page, []);
+      // Timeline journals are not covered by the TT- journal sweep above when
+      // a crashed run strands one, and the world-scoped `timelineJournalId`
+      // setting outlives the run that made it - a leftover then sits in the
+      // next run's pre-run ledger and 02-hub-timeline's ensureWorldTimeline()
+      // refuses to touch it, failing all three of its timepoint tests before
+      // they do any work (seen on v13 world-b, 2026-09-19 sweep).
+      //
+      // NAME-filtered, deliberately: this helper deletes only TT--named
+      // timelines. cleanupTimelineJournals(page, []) would have been shorter
+      // and is wrong here - its "every empty timeline outside the ledger"
+      // rule is safe only for a caller that snapshotted the world first,
+      // because a real campaign's freshly created timeline is legitimately
+      // empty. The v14 target's world IS the user's campaign.
+      if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestTimelines(page);
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);
