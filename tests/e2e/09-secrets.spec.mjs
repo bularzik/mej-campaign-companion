@@ -794,9 +794,21 @@ test.describe("09 secrets", () => {
 
     const gmShell = await openEntry(page, id);
     // The GM owns the entry and keeps the control.
+    //
+    // `revealable` is a Foundry 14 addition to HTMLSecretBlockElement; Foundry
+    // 13.351's class has no such property (13.351 foundry.mjs:34600 defines
+    // only `secret`/`revealed`/`toggleRevealed`), so on a v13 stack it reads
+    // `undefined` for everyone and carries no information either way. The
+    // module already treats it as optional (`if ("revealable" in block)`,
+    // logic/secret-reveal-toggles.mjs:17); the assertions do too, and fall back
+    // to `button.reveal`'s hidden state, which is the user-visible effect and
+    // is asserted on both platforms.
+    const hasRevealable = await contentPreview(gmShell).locator("secret-block").first()
+      .evaluate((el) => "revealable" in el);
     const gmState = await contentPreview(gmShell).locator("secret-block").first()
       .evaluate((el) => ({ revealable: el.revealable, buttonHidden: el.querySelector("button.reveal")?.hidden ?? null }));
-    expect(gmState).toEqual({ revealable: true, buttonHidden: false });
+    expect(gmState.buttonHidden).toBe(false);
+    if (hasRevealable) expect(gmState.revealable).toBe(true);
 
     const p1Ctx = await browser.newContext(VIEW);
     const p1 = await p1Ctx.newPage();
@@ -817,7 +829,7 @@ test.describe("09 secrets", () => {
       (els) => els.map((el) => ({ revealable: el.revealable, buttonHidden: el.querySelector("button.reveal")?.hidden ?? null })));
     expect(p1States.length).toBe(2);
     for (const state of p1States) {
-      expect(state.revealable).toBe(false);
+      if (hasRevealable) expect(state.revealable).toBe(false);
       expect(state.buttonHidden).not.toBe(false);
     }
 
