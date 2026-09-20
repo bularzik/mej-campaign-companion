@@ -11,7 +11,7 @@ import {
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
 import { planFlagHeal } from "../logic/session-flag-heal.mjs";
-import { missingSheetRegistrations, missingOwnRegistration } from "../logic/sheet-registration.mjs";
+import { planSheetRegistrations } from "../logic/sheet-registration.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -28,7 +28,13 @@ let wiringThrew = false;
 // entry points are already live in the UI before onReady() is even called -
 // see openHub(), which awaits it.
 let readyWired;
-const readyWiring = new Promise((resolve) => { readyWired = resolve; });
+/** Resolves when onReady() has finished wiring (success or failure). The ready gate (ready-gate.mjs) holds MEJ opens on it. */
+export const readyWiring = new Promise((resolve) => { readyWired = resolve; });
+
+// The sheet classes, imported once at init (registerSheetsEarly). Resolves to
+// the class map, or to null when the import failed - every later consumer
+// falls back to a fresh import then.
+let earlySheets = null;
 
 /** @returns {"api"|"native"|"absent"|null} null until resolution happens. */
 export function currentMode() {
@@ -162,11 +168,7 @@ async function wireApiMode(api) {
   // EnhancedJournalSheet.js, and our script tag runs BEFORE MEJ's. Importing
   // them at top level would re-enter MEJ's own import chain mid-evaluation
   // and take both modules down - see campaign-companion.mjs's header comment.
-  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
-    import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs"),
-    import("../sheets/MediaPageSheet.mjs")
-  ]);
+  const { SessionSheet, CampaignHubPage } = await companionSheetClasses();
 
   api.registerSheetType({
     key: SESSION_TYPE,
@@ -192,14 +194,6 @@ async function wireApiMode(api) {
     icon: "fa-timeline",
     appClass: CampaignHubPage
   });
-
-  // Foundry's DocumentSheetV2 machinery needs an entry in
-  // CONFIG.JournalEntryPage.sheetClasses for the Hub's synthetic type or
-  // getSheetThemeForDocument throws while constructing the sheet. See the
-  // long comment this replaced in campaign-companion.mjs for why poking
-  // CONFIG directly does not stick.
-  registerHubSheetClass(CampaignHubPage);
-  registerMediaSheetClass(MediaPageSheet);
 }
 
 /**
@@ -253,34 +247,23 @@ export function registerTimelineSheetClass(TimelineJournalSheet) {
 }
 
 /**
- * Repair sheet registrations Foundry's pre-ready registerSheet queue may
- * have silently dropped (see onHandshake's comment for the mechanism). Safe
- * to call any time after game.ready is true, in either mode: registerSheet
- * applies immediately once ready, so a repair here always sticks. Cheap and
- * idempotent when nothing was dropped - the CONFIG lookup is synchronous and
- * the dynamic imports only happen when something actually needs fixing.
+ * The one place companion sheet classes are registered. Idempotent: performs
+ * only what planSheetRegistrations() reports missing, so init-time
+ * registration, the mode wiring and the ready-time repair can all call it.
+ * Pre-ready calls queue in Foundry's one-time drain; post-ready calls apply
+ * immediately (spec 2026-09-20-ready-wiring-window §3.1).
+ * @param {{SessionSheet:Function, CampaignHubPage:Function, MediaPageSheet:Function, TimelineJournalSheet:Function}} classes
+ * @returns {{session:boolean, hub:boolean, campaign:boolean, media:boolean, timeline:boolean}} what was registered
  */
-async function ensureSheetRegistrations() {
-  const missing = missingSheetRegistrations(
-    CONFIG.JournalEntryPage.sheetClasses, SESSION_DOCUMENT_TYPE, HUB_PAGE_ID, CAMPAIGN_DOCUMENT_TYPE, MEDIA_PAGE_TYPES, MODULE_ID
-  );
-  // The timeline redirect sheet lives on CONFIG.JournalEntry, so it needs
-  // its own check - and it needs one: in api mode registerCore() runs from
-  // MEJ's setup-time handshake, exactly the window Foundry's one-time
-  // pre-ready drain leaves unemptied (confirmed live - the registration was
-  // silently absent from CONFIG.JournalEntry.sheetClasses.base and every
-  // timeline journal fell back to the system's JournalEntry sheet).
-  missing.timeline = missingOwnRegistration(CONFIG.JournalEntry.sheetClasses, "base", MODULE_ID);
-  if (!missing.session && !missing.hub && !missing.campaign && !missing.media && !missing.timeline) return;
-
-  console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, missing);
-  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
-    import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs"),
-    import("../sheets/MediaPageSheet.mjs")
-  ]);
-
+export function registerCompanionSheets({ SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet }) {
+  const missing = planSheetRegistrations(CONFIG.JournalEntryPage.sheetClasses, CONFIG.JournalEntry.sheetClasses, {
+    sessionType: SESSION_DOCUMENT_TYPE, hubType: HUB_PAGE_ID, campaignType: CAMPAIGN_DOCUMENT_TYPE,
+    mediaTypes: MEDIA_PAGE_TYPES, ownerScope: MODULE_ID
+  });
   if (missing.session) {
+    // Pure core Foundry - no MEJ involvement. The subtype itself comes from
+    // module.json's documentTypes declaration, so this only says "when
+    // Foundry opens a page of that type, use our sheet".
     foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, SessionSheet, {
       types: [SESSION_DOCUMENT_TYPE],
       makeDefault: true,
@@ -289,6 +272,8 @@ async function ensureSheetRegistrations() {
   }
   if (missing.hub) registerHubSheetClass(CampaignHubPage);
   if (missing.campaign) {
+    // Campaign portal pages: the portal's sheet IS the Hub - makeDefault /
+    // canBeDefault so a core sidebar click opens it directly.
     foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
       types: [CAMPAIGN_DOCUMENT_TYPE],
       makeDefault: true,
@@ -298,9 +283,63 @@ async function ensureSheetRegistrations() {
     });
   }
   if (missing.media) registerMediaSheetClass(MediaPageSheet);
-  if (missing.timeline) {
-    const { TimelineJournalSheet } = await import("../sheets/TimelineJournalSheet.mjs");
-    registerTimelineSheetClass(TimelineJournalSheet);
+  if (missing.timeline) registerTimelineSheetClass(TimelineJournalSheet);
+  return missing;
+}
+
+/** The four sheet classes: from the init-time import when it succeeded, else imported now. */
+async function companionSheetClasses() {
+  const early = earlySheets ? await earlySheets : null;
+  if (early) return early;
+  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }, { TimelineJournalSheet }] = await Promise.all([
+    import("../sheets/SessionSheet.mjs"),
+    import("../apps/CampaignHubPage.mjs"),
+    import("../sheets/MediaPageSheet.mjs"),
+    import("../sheets/TimelineJournalSheet.mjs")
+  ]);
+  return { SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet };
+}
+
+/**
+ * Called from the init hook when MEJ is active (spec §3.2). Starts the sheet
+ * imports and registers the classes the moment they resolve - on a normal
+ * boot well before Foundry's one-time pre-ready drain, so the registrations
+ * exist when game.ready flips; if the imports resolve after the drain the
+ * ready-time repair (ensureSheetRegistrations) picks them up as before. Not
+ * awaited by the hook: Foundry does not await hook handlers. Dynamic, not
+ * static, imports: these files statically import MEJ's EnhancedJournalSheet.js,
+ * which is safe to load only after MEJ's own module has been evaluated - true
+ * for every hook, never at our script's top level.
+ */
+export function registerSheetsEarly() {
+  earlySheets = Promise.all([
+    import("../sheets/SessionSheet.mjs"),
+    import("../apps/CampaignHubPage.mjs"),
+    import("../sheets/MediaPageSheet.mjs"),
+    import("../sheets/TimelineJournalSheet.mjs")
+  ]).then(([{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }, { TimelineJournalSheet }]) => {
+    const classes = { SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet };
+    registerCompanionSheets(classes);
+    return classes;
+  }).catch((err) => {
+    console.warn(`${MODULE_ID} | early sheet registration failed; the ready-time repair will retry`, err);
+    return null;
+  });
+}
+
+/**
+ * Repair sheet registrations Foundry's pre-ready registerSheet queue may
+ * have silently dropped (see onHandshake's comment for the mechanism). Safe
+ * to call any time after game.ready is true, in either mode: registerSheet
+ * applies immediately once ready, so a repair here always sticks. Cheap and
+ * idempotent when nothing was dropped - the CONFIG lookup is synchronous and
+ * the dynamic imports only happen when something actually needs fixing.
+ */
+async function ensureSheetRegistrations() {
+  const classes = await companionSheetClasses();
+  const registered = registerCompanionSheets(classes);
+  if (Object.values(registered).some(Boolean)) {
+    console.log(`${MODULE_ID} | re-registering sheet classes Foundry dropped before ready`, registered);
   }
 }
 
@@ -308,40 +347,7 @@ async function ensureSheetRegistrations() {
 async function wireNativeMode() {
   // Same deferred-import discipline as api mode: these files statically
   // import MEJ's EnhancedJournalSheet.js.
-  const [{ SessionSheet }, { CampaignHubPage }, { MediaPageSheet }] = await Promise.all([
-    import("../sheets/SessionSheet.mjs"),
-    import("../apps/CampaignHubPage.mjs"),
-    import("../sheets/MediaPageSheet.mjs")
-  ]);
-
-  // Pure core Foundry - no MEJ involvement. The subtype itself comes from
-  // module.json's documentTypes declaration, so this only says "when Foundry
-  // opens a page of that type, use our sheet". SessionSheet needs no changes
-  // to work outside MEJ's shell: EnhancedJournalSheet._onRender already calls
-  // activateListeners/subRender, and trueElement falls back to this.element.
-  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, SessionSheet, {
-    types: [SESSION_DOCUMENT_TYPE],
-    makeDefault: true,
-    label: `${I18N}.sheettype.session`
-  });
-
-  // Campaign portal pages: same story, but the portal's sheet IS the Hub -
-  // makeDefault/canBeDefault so a core sidebar click opens it directly.
-  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
-    types: [CAMPAIGN_DOCUMENT_TYPE],
-    makeDefault: true,
-    canBeDefault: true,
-    canConfigure: false,
-    label: `${I18N}.sheettype.campaign`
-  });
-
-  // The Hub's synthetic type needs its sheetClasses entry in this mode too -
-  // getSheetThemeForDocument does the same lookup however the sheet is hosted.
-  registerHubSheetClass(CampaignHubPage);
-
-  // Native pdf/video pages: same registration as api mode, standing alone
-  // rather than shell-hosted (spec E §1).
-  registerMediaSheetClass(MediaPageSheet);
+  const { SessionSheet, CampaignHubPage } = await companionSheetClasses();
 
   // Shell hosting (spec 2026-09-19 §4): wraps installed as a unit; window
   // hosting is the fallback whether the setting is off or a wrap failed.
@@ -422,9 +428,15 @@ async function wireForReady() {
   console.log(`${MODULE_ID} | mode: ${mode}`);
   if (mode === MODE_ABSENT) return mode;
 
-  await registerCore();
+  // Shim first, core features second (spec 2026-09-20-ready-wiring-window
+  // §3.4): registerCore() awaits a dozen sequential dynamic imports, and
+  // the shim used to wait behind all of them - 430-924 ms after the ready
+  // hook on 2026-09-20's measurement. The sheet classes are registered at
+  // init (registerSheetsEarly) and repaired here if that import lost the
+  // race with Foundry's pre-ready drain.
   await step("native-mode wiring", () => wireNativeMode());
   await step("sheet registration check", () => ensureSheetRegistrations());
+  await registerCore();
   return mode;
 }
 

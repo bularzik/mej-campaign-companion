@@ -1,6 +1,6 @@
 // test/sheet-registration.test.js
 import { describe, it, expect } from "vitest";
-import { missingSheetRegistrations, missingOwnRegistration } from "../scripts/logic/sheet-registration.mjs";
+import { missingSheetRegistrations, missingOwnRegistration, planSheetRegistrations } from "../scripts/logic/sheet-registration.mjs";
 
 const SESSION_TYPE = "mej-campaign-companion.session";
 const HUB_TYPE = "campaign-hub";
@@ -153,5 +153,35 @@ describe("missingOwnRegistration", () => {
     // must not satisfy a "mej-campaign-companion" registration.
     const classes = { base: { "mej-campaign-companion-extra.SomeSheet": {} } };
     expect(missingOwnRegistration(classes, "base", SCOPE)).toBe(true);
+  });
+});
+
+const TYPES = { sessionType: "mej-campaign-companion.session", hubType: "campaign-hub", campaignType: "mej-campaign-companion.campaign", mediaTypes: ["pdf", "video"], ownerScope: "mej-campaign-companion" };
+
+describe("planSheetRegistrations", () => {
+  it("registers everything on an empty registry", () => {
+    expect(planSheetRegistrations({}, {}, TYPES)).toEqual({ session: true, hub: true, campaign: true, media: true, timeline: true });
+  });
+
+  it("registers nothing when every companion registration is present", () => {
+    const pages = {
+      "mej-campaign-companion.session": { "mej-campaign-companion.SessionSheet": {} },
+      "campaign-hub": { "mej-campaign-companion.CampaignHubPage": {} },
+      "mej-campaign-companion.campaign": { "mej-campaign-companion.CampaignHubPage": {} },
+      pdf: { "core.JournalEntryPagePDFSheet": {}, "mej-campaign-companion.MediaPageSheet": {} },
+      video: { "core.JournalEntryPageVideoSheet": {}, "mej-campaign-companion.MediaPageSheet": {} }
+    };
+    const entries = { base: { "core.JournalEntrySheet": {}, "mej-campaign-companion.TimelineJournalSheet": {} } };
+    expect(planSheetRegistrations(pages, entries, TYPES)).toEqual({ session: false, hub: false, campaign: false, media: false, timeline: false });
+  });
+
+  it("registers only what is missing on a partial registry (core's own media and base entries do not count)", () => {
+    const pages = {
+      "mej-campaign-companion.session": { "mej-campaign-companion.SessionSheet": {} },
+      pdf: { "core.JournalEntryPagePDFSheet": {} },
+      video: { "core.JournalEntryPageVideoSheet": {}, "mej-campaign-companion.MediaPageSheet": {} }
+    };
+    const entries = { base: { "core.JournalEntrySheet": {} } };
+    expect(planSheetRegistrations(pages, entries, TYPES)).toEqual({ session: false, hub: true, campaign: true, media: true, timeline: true });
   });
 });

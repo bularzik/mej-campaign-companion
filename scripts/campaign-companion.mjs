@@ -8,7 +8,7 @@ import {
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
-import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags } from "./integrations/mej-adapter.mjs";
+import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly } from "./integrations/mej-adapter.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
 import { getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
@@ -178,6 +178,12 @@ Hooks.once("init", () => {
 
   // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
   registerRecapRefresh();
+
+  // Sheet classes at init, not ready (spec 2026-09-20-ready-wiring-window
+  // §3.2): the imports start now and register the moment they resolve, so a
+  // Session opened in the first second after login resolves to our sheet
+  // instead of core's BaseSheet. Absent mode stays inert.
+  if (game.modules.get("monks-enhanced-journal")?.active) registerSheetsEarly();
 });
 
 // Grants player-writable default ownership to Session entries created

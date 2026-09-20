@@ -75,3 +75,20 @@ export function missingOwnRegistration(sheetClasses, type, ownerScope) {
   if (!ownerScope) return true;
   return !Object.keys((sheetClasses ?? {})[type] ?? {}).some((key) => key.startsWith(`${ownerScope}.`));
 }
+
+/**
+ * Everything the companion must (re)register, in one answer: the page-sheet
+ * checks above plus the timeline redirect sheet on CONFIG.JournalEntry. The
+ * adapter's single registration site (registerCompanionSheets) performs
+ * exactly what this returns, so init-time registration, the mode wiring and
+ * the ready-time repair can all call it without double-registering.
+ * @param {object} pageSheetClasses  CONFIG.JournalEntryPage.sheetClasses (or a lookalike)
+ * @param {object} entrySheetClasses CONFIG.JournalEntry.sheetClasses (or a lookalike)
+ * @param {{sessionType:string, hubType:string, campaignType:string, mediaTypes:string[], ownerScope:string}} types
+ * @returns {{session:boolean, hub:boolean, campaign:boolean, media:boolean, timeline:boolean}} true = register
+ */
+export function planSheetRegistrations(pageSheetClasses, entrySheetClasses, { sessionType, hubType, campaignType, mediaTypes, ownerScope }) {
+  const missing = missingSheetRegistrations(pageSheetClasses, sessionType, hubType, campaignType, mediaTypes, ownerScope);
+  missing.timeline = missingOwnRegistration(entrySheetClasses, "base", ownerScope);
+  return missing;
+}
