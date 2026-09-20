@@ -96,3 +96,55 @@ separately (`npm run test:e2e`, default target).
 Summarise a JSON report: `node tests/e2e/helpers/summarize-run.mjs <report.json> [label]`
 (run Playwright with `--reporter=list,json` and
 `PLAYWRIGHT_JSON_OUTPUT_NAME=<path>`).
+
+## Full suite on v13
+
+Running the whole suite (not just the stock gate) against Foundry 13 is a
+defect sweep, not a release gate — it exercises the same specs written for
+the v14/fork stack against 13.351 + dnd5e 5.3.3 + stock MEJ 13.06 and expects
+some failures, which get triaged and attributed rather than assumed to be
+regressions.
+
+- **The module install is a symlink.**
+  `~/FoundryVTT/Data/Data/modules/mej-campaign-companion` is a symlink to
+  the main checkout (`~/Claude/Projects/mej-campaign-companion`), the same
+  arrangement `global-teardown.mjs` restores after a v14 run
+  (`pinSymlink(MAIN_CHECKOUT)`). A sweep against a branch runs it by
+  repointing that symlink at the worktree for the run and letting teardown
+  re-pin it at the main checkout afterwards — never leave it pointed at a
+  worktree. Verify with `readlink ~/FoundryVTT/Data/Data/modules/mej-campaign-companion`.
+  If it is ever a real directory instead of a symlink (e.g. a fresh 0.19.x
+  release copy), move it aside first:
+  `mkdir -p ~/FoundryVTT/backups && mv ~/FoundryVTT/Data/Data/modules/mej-campaign-companion ~/FoundryVTT/backups/mej-campaign-companion-<label>-$(date +%Y%m%d)`
+  then `ln -s ~/Claude/Projects/mej-campaign-companion ~/FoundryVTT/Data/Data/modules/mej-campaign-companion`.
+
+- **world-b is the sweep target; world-a on Foundry 13 is not.** Foundry
+  13's `world-a` is the user's own test copy of their campaign, not a
+  disposable sandbox — never point a sweep at it. `world-b` is the e2e
+  sandbox and `helpers/target.mjs`'s `v13` preset's `FOUNDRY_TEST_WORLD`.
+  Global setup's `ensureTestWorld()` stops and restarts the Foundry 13
+  server onto world-b whenever a different world is currently active
+  (including world-a) — that switch is expected and not a harness bug. Test
+  documents are prefixed `TT-`, as elsewhere in this suite.
+
+- **Before a sweep run**, back up world-b and clear any known stray fixture
+  state (see the sweep's own triage doc, e.g.
+  `docs/superpowers/triage/<date>-v13-companion-sweep.md`, "Environment
+  prep" — for example two hidden legacy journal pages with invalid document
+  ids that predate the sweep and would otherwise show up as boot noise
+  unrelated to the companion under test).
+
+- **Run it**: `npm run e2e:v13` (full suite, `--trace off`, no spec filter).
+  `npm run e2e:v13:stock` remains an alias for the stock-only gate above
+  (`e2e:stock:v13`) — it does not run the full suite.
+
+- **Relaunch Foundry 13 manually** if it needs to come up from cold (global
+  setup normally does this itself):
+  ```bash
+  cd /Users/danbularzik/FoundryVTT/FoundryVTT-Node-13.351 && /opt/homebrew/opt/node@22/bin/node main.js --dataPath=/Users/danbularzik/FoundryVTT/Data --world=world-b --port=30013
+  ```
+  (background it; do not use `~` after `--dataPath=` — see the v14 note
+  above for why.)
+
+The Foundry 14 server on port 30000 must not be touched while running a v13
+sweep.

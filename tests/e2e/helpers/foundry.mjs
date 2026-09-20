@@ -21,8 +21,9 @@ export const TT_PREFIX = "TT-";
 // session file per test-world user. The "setup" Playwright project
 // (tests/e2e/auth.setup.mjs) populates these once per run; login() below
 // fast-paths from them. Git-ignored (tests/e2e/.auth/) since cookies are
-// host-local and short-lived.
-const AUTH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".auth");
+// host-local and short-lived. Namespaced by TARGET.name so a v13 run and a
+// v14 run never overwrite each other's saved cookies.
+const AUTH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".auth", TARGET.name);
 export const AUTH_STATE_FILES = {
   Gamemaster: path.join(AUTH_DIR, "gm.json"),
   "User 1": path.join(AUTH_DIR, "user1.json"),
