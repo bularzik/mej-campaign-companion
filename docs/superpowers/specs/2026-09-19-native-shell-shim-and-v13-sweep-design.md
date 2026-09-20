@@ -352,3 +352,13 @@ The full suite on Foundry 13 is the discovery instrument, not a gate.
   source `type` after the stock body runs (the same carve-out the fork makes
   for api-registered types, FORK `:4243-4248`), and the placeholder carries
   the MEJ type flag as MEJ's own `BlankJournal` does. Four wraps in total.
+- **A4 — the legacy-page write does not fail.** Live on 13.351 (Task 6 live
+  check, and the controller's revert of that check's side effects), updating a
+  page inside a journal that holds invalid `campaign-record.*` sibling pages
+  succeeds. What surfaces is Foundry re-logging the two "Failed to initialize
+  JournalEntryPage … is not a valid type" console errors when the journal
+  re-initialises after the retro-link write, at the end of the import. §1.3's
+  "updating that journal re-validates it and fails" is withdrawn. §5.3's
+  reporting change stands as hardening for genuine write failures; the remedy
+  for the user's world is the hidden-page deletion in §6.2 step 1, applied to
+  Foundry 13's world-a (where that journal lives), not world-b.
