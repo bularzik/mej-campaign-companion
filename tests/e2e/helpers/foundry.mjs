@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import { lockStatus, UNLOCK_HINT } from "./env-lock.mjs";
 import { TARGET } from "./target.mjs";
+import { strandedTestFolderIds, autoCaptureNeedsReset } from "./sweep-rules.mjs";
 
 export const BASE_URL = TARGET.url;
 export const TEST_WORLD = TARGET.world;
@@ -409,6 +410,41 @@ export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
     const ids = game.journal.filter((e) => e.name.startsWith(p)).map((e) => e.id);
     if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
   }, prefix);
+}
+
+/**
+ * Reclaim the folders a crashed run strands: every JournalEntry folder whose
+ * name starts with the prefix goes, contents and subfolders included, and
+ * the world-scoped autoCaptureCampaign setting is cleared when it names a
+ * folder that no longer exists. The campaign-portal gate in
+ * 13-stock-smoke.spec.mjs creates a real campaign (folder + portal +
+ * timeline) and restores the setting in its own finally; a run that dies
+ * mid-test leaves the folder behind after the journal sweep has emptied it,
+ * and leaves the setting pointing at the id the next sweep deletes. Decision
+ * rules live in sweep-rules.mjs so vitest can cover them.
+ *
+ * @returns {Promise<{ folders: string[], autoCaptureReset: boolean }>}
+ */
+export async function cleanupStrandedTestFolders(page, { prefix = TT_PREFIX } = {}) {
+  const folders = await page.evaluate(() => game.folders.map((f) => ({ id: f.id, type: f.type, name: f.name })));
+  const doomed = strandedTestFolderIds(folders, prefix);
+  const names = await page.evaluate(async (ids) => {
+    const out = [];
+    for (const id of ids) {
+      const f = game.folders.get(id);
+      if (!f) continue;
+      out.push(f.name);
+      await f.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+    return out;
+  }, doomed);
+  const { value, remaining } = await page.evaluate((id) => ({
+    value: game.settings.get(id, "autoCaptureCampaign"),
+    remaining: game.folders.map((f) => f.id)
+  }), MODULE_ID);
+  const reset = autoCaptureNeedsReset(value, remaining);
+  if (reset) await page.evaluate((id) => game.settings.set(id, "autoCaptureCampaign", ""), MODULE_ID);
+  return { folders: names, autoCaptureReset: reset };
 }
 
 /** Delete all actors whose name starts with the prefix (crashed-run artifacts). */

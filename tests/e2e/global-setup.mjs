@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
-  cleanupStrandedTestTimelines,
+  cleanupStrandedTestTimelines, cleanupStrandedTestFolders,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
@@ -79,6 +79,11 @@ export default async function globalSetup() {
       // because a real campaign's freshly created timeline is legitimately
       // empty. The v14 target's world IS the user's campaign.
       if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestTimelines(page);
+      // Folders are not documents the two sweeps above see either: a run that
+      // dies inside the stock gate's campaign-portal test leaves its (now
+      // empty) TT- campaign folder and an autoCaptureCampaign setting that
+      // names it. Same guard, same reason as the journal sweep.
+      if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestFolders(page);
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);
