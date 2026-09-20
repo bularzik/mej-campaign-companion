@@ -13,6 +13,11 @@ prefixed `TT-`. Monk's Enhanced Journal is expected at
 `~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal`, a symlink to a
 checkout of the MEJ repo.
 
+Global setup also turns MEJ's `allow-player` world setting on for the test
+world (`ensureMejPlayerAccess()`): without it MEJ refuses to open a journal
+for any non-GM, which fails every player-facing spec for a reason that has
+nothing to do with the companion.
+
 A `GUIDE_SHOTS=1` run of `guide-screenshots.spec.mjs` assumes a swept World A
 — no stray player-visible journals left behind by other manual or crashed
 runs — since shot cleanliness (e.g. a clean Hub index, an uncluttered
@@ -33,7 +38,10 @@ release that claims stock compatibility.
 The file is skipped entirely unless `STOCK_PHASE` is set; a normal suite run
 never executes it. The two phases are separate invocations bridged by a
 fixed-name fixture (`TT-STOCKSMOKE Session`) that phase 1 creates and phase 2
-verifies (heal) and deletes.
+verifies (heal) and deletes. A second fixture, the campaign
+`TT-STOCKSMOKE Campaign` (folder + portal entry + timeline journal), is
+created and removed inside its own test; every phase sweeps it too, in case
+that test died mid-way.
 
 Procedure. The MEJ install at
 `~/FoundryVTT-14/Data/Data/modules/monks-enhanced-journal` is a git worktree
@@ -86,9 +94,10 @@ deletes the fixture instead.
 
 1. `npm run e2e:stock:v13` — global setup starts Foundry 13 on port 30013
    with world-b if it is not already up, links the module, and runs the
-   `stock` phase (boot, Hub, New Session, search, and the asserted sidebar
-   open of the session).
-2. `npm run e2e:stock:v13:cleanup` — deletes `TT-STOCKSMOKE Session`.
+   `stock` phase (boot, Hub, New Session, search, the asserted sidebar open of
+   the session, and the sidebar open of a campaign portal).
+2. `npm run e2e:stock:v13:cleanup` — deletes `TT-STOCKSMOKE Session` and any
+   leftover `TT-STOCKSMOKE Campaign` folder.
 
 The v14 server on port 30000 is untouched throughout. Run the v14 full suite
 separately (`npm run test:e2e`, default target).
@@ -135,8 +144,8 @@ regressions.
   unrelated to the companion under test).
 
 - **Run it**: `npm run e2e:v13` (full suite, `--trace off`, no spec filter).
-  `npm run e2e:v13:stock` remains an alias for the stock-only gate above
-  (`e2e:stock:v13`) — it does not run the full suite.
+  The stock-only gate is `npm run e2e:stock:v13` (see above) — a separate
+  script that runs one spec file, not the full suite.
 
 - **Relaunch Foundry 13 manually** if it needs to come up from cold (global
   setup normally does this itself):

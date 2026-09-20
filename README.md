@@ -62,7 +62,7 @@ a build carrying the extension API. It resolves one of three modes at startup:
 |------|------|--------------|
 | `api` | MEJ fires `setupMonksEnhancedJournal` | Everything, with the Session sheet and Campaign Hub inside MEJ's tabbed shell |
 | `native` | MEJ is installed without the extension API | Everything, with the Session sheet and Hub hosted inside MEJ's tabbed shell by default (shell hosting); standalone windows only if shell hosting can't install |
-| `native` on Foundry 13 | MEJ 13.06 carries no extension API, so Foundry 13 always runs this mode | The Hub and Sessions still open inside MEJ's shell |
+| `native` on Foundry 13 | The only MEJ release for Foundry 13 is 13.06, which carries no extension API, so a Foundry 13 world is *always* in native mode — there is no `api` mode to fall back from | Same as `native` above: shell hosting by default, standalone windows plus a `shell hosting unavailable` console warning if the adaptation cannot install |
 | `absent` | MEJ is not active | The module stays inert — MEJ is a hard dependency |
 
 Native mode is a supported configuration, not a degraded fallback, and it is

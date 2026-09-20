@@ -675,6 +675,72 @@ v13. The same wrong predicate was already in `13-stock-smoke.spec.mjs:234`,
 where it asserts `apiPresent === false` — so that assertion had been passing
 vacuously, on either build, and is fixed in the same commit.
 
+## Release gates
+
+The sweep above is a discovery instrument. These are the gates the release
+actually turns on (spec §6.3), recorded here because the sweep and the gates
+were run from the same branch and the verdict below depends on both.
+
+Each gate is `tests/e2e/13-stock-smoke.spec.mjs`, which runs only when
+`STOCK_PHASE` is set — a normal suite run skips it, which is why the sweep's own
+runs never exercised it.
+
+### 2026-09-19 — the gates as first passed
+
+| date | gate | Foundry build | MEJ build | world | result |
+|---|---|---|---|---|---|
+| 2026-09-19 | stock gate, native mode | 13.351 | stock 13.06 (upstream release, no extension API) | world-b | **9/9 passed** |
+| 2026-09-19 | stock gate, native mode | 14.368 | stock, module worktree at tag `14.01` | world-a | **9/9 passed**, New Session (Task 5) included |
+| 2026-09-19 | full api-mode suite (release regression net) | 14.368 | fork line `9569984` (`integration-14.08`) | world-a | **135 passed, 1 failed, 23 skipped** — the failure is the known `09-secrets:970` (see Run 4) |
+
+So the MEJ 14.01 native stock gate passed on 2026-09-19, including New Session.
+An earlier draft of the Verdict below said it was "still owed"; that was wrong,
+and is corrected there.
+
+### 2026-09-20 — re-run after the final fix wave (these supersede)
+
+The final fix wave added a type to the shim (`additions` gained the campaign
+portal type) and a tenth test to the gate, so both stock gates were re-run from
+`feat/native-shell-shim`. These runs are the release's record.
+
+| date | gate | Foundry build | MEJ build | world | result |
+|---|---|---|---|---|---|
+| 2026-09-20 | stock gate, native mode | 13.351 | stock 13.06 | world-b | **10/10 passed** (+3 auth setup; 4 other-phase tests skipped) |
+| 2026-09-20 | stock gate cleanup phase | 13.351 | stock 13.06 | world-b | **1/1 passed** — fixtures and shell tabs gone |
+| 2026-09-20 | stock gate, native mode | 14.368 | stock, module worktree at tag `14.01` (`9d66fb9`) | world-a | **10/10 passed** |
+| 2026-09-20 | stock gate return phase | 14.368 | fork line `9569984` | world-a | **3/3 passed** — `api` mode resolves, the GM ready-sweep re-stamped the MEJ type flag, search finds the roundtripped session, fixture deleted |
+
+Both stock phases ran the same ten tests: clean boot (native mode, no API, no
+companion error notification), Hub from the scene-controls button with working
+tabs and an inert configure-sheet control, the Hub-open race, New Session
+creating and auto-opening the fixture as the shell's `SessionSheet`, Hub search,
+the sidebar-opened session (shell subsheet, no `.journal-entry-pages` wrapper,
+contrast ≥ 4.5:1), **the sidebar-opened campaign portal (new in this wave:
+subsheet `CampaignHubPage`, no page wrapper)**, contrast under both colour
+schemes, the persisted Hub tab surviving a reload, and the shell-hosting-off
+window fallback.
+
+Observed identically on both builds, recorded as annotations rather than
+asserted (they are stock MEJ's surfaces, not ours):
+
+- `getDocumentTypes()` gains exactly `session`, `campaign`, `campaign-hub`;
+  `getTypeLabels()` gains none of them, so MEJ's create-page dialog does **not**
+  list them as MEJ page types. That dialog's `renderDialogV2` handler
+  (13.06 `monks-enhanced-journal.js`:2169) uses `getDocumentTypes()` only to
+  *filter out* core types whose key matches an MEJ key after stripping the
+  `monks-enhanced-journal.` prefix — our keys are prefixed with our own module
+  id, so nothing new is filtered and nothing new is offered. The companion's own
+  `mej-campaign-companion.session` entry still appears there as core's
+  unlocalized `TYPES.JournalEntryPage.…` row, exactly as the README describes.
+- `MonksEnhancedJournal.getIcon()` is a hard-coded switch with a default, so
+  `session` and `campaign` both resolve to its fallback `fa-book-open`
+  (`person` → `fa-user` for contrast). No new icon or asset request comes from
+  the widening; the known `assets/session.png` 404 is driven by the entry-level
+  `flags.monks-enhanced-journal.pagetype` paths (`:945`, `:4378`,
+  compendium index `:5091`), which the companion never sets.
+- Session and Hub text measured 11.23:1 against MEJ's parchment on
+  `SECTION.window-content` under both colour schemes, on both builds.
+
 ## Verdict
 
 **The companion runs on Foundry 13.351 with a genuinely stock MEJ 13.06, in
@@ -724,13 +790,21 @@ shares were re-run as the api-mode suite on Foundry 14.368 / MEJ `9569984`:
 and fixed (`949f07b`): a wrong API-presence predicate had made four api-mode
 tests skip on the fork line. See Run 4.
 
-**What this does NOT establish.** The suite runs in native mode on stock MEJ
-13.06, which is what the shim was built for — it says nothing about MEJ 14.01 in
-native mode, whose stock gate the 14.01 sweep left failing. `13-stock-smoke`
-is skipped in a normal run (it needs `STOCK_PHASE`), so this sweep did not
-exercise it; that gate is still owed. And nothing here was run against a fork
-MEJ on Foundry 13, so no A/B separates "Foundry 13" from "stock MEJ" for any row
-attributed to the platform.
+**What this SWEEP does not establish, and what the gates do.** `13-stock-smoke`
+only runs with `STOCK_PHASE` set, so no sweep run exercised it: nothing in Runs
+1-4 says anything about MEJ 14.01 in native mode, nor about the Hub, the Session
+sheet or a campaign portal opened from the sidebar on a *genuinely* stock build.
+Those claims belong to the stock gates, and the gates have them — see **Release
+gates** above: 10/10 on stock MEJ 13.06 / Foundry 13.351 / world-b and 10/10 on
+stock MEJ 14.01 / Foundry 14.368 / world-a on 2026-09-20 (9/9 on 2026-09-19,
+before this wave added the campaign-portal test), plus the return phase proving
+`api` mode and the flag heal on the fork line. The 14.01 native stock gate is
+**passed, not owed**.
+
+What remains genuinely unestablished is narrower: nothing here was run against a
+*fork* MEJ on Foundry 13, so no A/B separates "Foundry 13" from "stock MEJ" for
+any row attributed to the platform; and the sweep's own instrument (the full
+suite on v13) is not a gate and is not expected to be green.
 
 ## Follow-ups
 
@@ -829,3 +903,29 @@ attributed to the platform.
    slower on this stack (a timeout question) or whether something is really
    racing. Until then no single run's failure set from this file should be read
    as a signal. Owner: harness backlog / sub-project.
+
+9. **In api mode on the fork, `fixType` rewrites an opened Session page's
+   in-memory `type` to the bare `"session"` key.** The fork's `fixType`
+   (`monks-enhanced-journal.js`:4344-4346) does
+   `type = type || object.type; if (types[type]) object.type = type;` — and in
+   api mode `types` DOES contain `"session"`, because that is exactly what
+   `registerSheetType` put there. So every time MEJ normalizes an opened Session
+   page, that page instance's `type` stops being
+   `mej-campaign-companion.session`. The persisted `_source.type` is untouched
+   (Foundry never writes `type` from this assignment), so nothing is corrupted on
+   disk and a reload reads the right subtype back — but for the life of that
+   instance `isSessionDoc(page)` (`scripts/logic/mej-type.mjs`, which tests
+   `doc.type`) is **false**, and every consumer that goes through it (search,
+   auto-link, the Hub index, export, the graph) would miss that page.
+   Nothing observable came of it in this wave's runs — the api-mode suite is at
+   its baseline and the gates are green — which is precisely why it is worth
+   recording before it bites: it is a live, silent divergence between the
+   document on disk and the document in memory.
+   The fork's existing carve-out at `:4347-4352` guards only the `unsetFlag`
+   branch; the fix is to carve foreign (module-prefixed, non-MEJ) subtypes out of
+   the `object.type = type` assignment too — which is exactly what the
+   companion's shim wrap 2 now does on stock, for every type the companion
+   declares (`scripts/integrations/shell-shim.mjs`, wrap "fixType", after the
+   2026-09-20 fix wave generalized it from the session type alone to
+   `isCompanionPageType`). Owner: **MEJ backlog** (fork side; PR #821 is frozen,
+   so not there).

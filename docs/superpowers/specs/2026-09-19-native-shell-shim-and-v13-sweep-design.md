@@ -362,3 +362,27 @@ The full suite on Foundry 13 is the discovery instrument, not a gate.
   reporting change stands as hardening for genuine write failures; the remedy
   for the user's world is the hidden-page deletion in §6.2 step 1, applied to
   Foundry 13's world-a (where that journal lives), not world-b.
+- **A5 — wrap 1 adds the campaign portal type too, and wrap 2's carve-out is
+  general (final fix wave, 2026-09-20).** §4.1 row 1 listed only
+  `session: SessionSheet` and `[HUB_PAGE_ID]: CampaignHubPage`. That left the
+  third document the shell has to host out: a campaign *portal* entry holds
+  exactly one page whose MEJ flag type is `campaign`, so without `campaign` in
+  MEJ's registry the portal failed the shell's single-page demotion gate and the
+  Hub rendered inside MEJ's `JournalEntrySheet` page wrapper. `additions` now
+  also carries `[CAMPAIGN_TYPE]: CampaignHubPage`, mirroring api mode's
+  `registerSheetType({ key: "campaign" })`. A3's `fixType` carve-out had to
+  generalize with it: written against `SESSION_DOCUMENT_TYPE` alone it left a
+  portal page's in-memory `type` rewritten to the bare `"campaign"`, which threw
+  out of Foundry's `getSheetClassesForSubType` the moment anything touched
+  `page.sheet` (reproduced live on 13.06, 2026-09-20). It now restores any
+  subtype the companion declares (`isCompanionPageType`).
+  §9's widening consequences, checked live on both stock builds (13.06 and
+  14.01) and recorded as gate annotations: `getTypeLabels()` gains none of the
+  three keys, so MEJ's create-page dialog does not offer them — its
+  `renderDialogV2` handler uses `getDocumentTypes()` only to filter out core
+  types whose key matches an MEJ key after stripping the
+  `monks-enhanced-journal.` prefix, and the companion's keys carry its own
+  prefix; and `getIcon()` is a hard-coded switch with a default, so `session`
+  and `campaign` resolve to `fa-book-open` with no new asset request (the known
+  `assets/session.png` 404 comes from the entry-level `pagetype` flag paths,
+  which the companion never sets).
