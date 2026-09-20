@@ -460,10 +460,17 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
       const iv = setInterval(() => {
         const H = globalThis.Hooks;
         if (H && !hooked) { hooked = true; H.once("ready", () => { t.readyHook = performance.now(); }); }
+        if (globalThis.game?.ready && t.wiringResolved === undefined && !t.wiringWatched) {
+          t.wiringWatched = true;
+          import(`/modules/${id}/scripts/integrations/mej-adapter.mjs`)
+            .then((a) => a.readyWiring)
+            .then(() => { t.wiringResolved = performance.now(); })
+            .catch(() => {});
+        }
         const sc = globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${id}.session`];
         if (sc && Object.keys(sc).length && t.sheetRegistered === undefined) t.sheetRegistered = performance.now();
         try { if (globalThis.game?.MonksEnhancedJournal?.getDocumentTypes?.()?.session && t.shimVisible === undefined) t.shimVisible = performance.now(); } catch {}
-        if (t.readyHook !== undefined && t.sheetRegistered !== undefined && t.shimVisible !== undefined) clearInterval(iv);
+        if (t.readyHook !== undefined && t.sheetRegistered !== undefined && t.shimVisible !== undefined && t.wiringResolved !== undefined) clearInterval(iv);
       }, 5);
     }, MODULE_ID);
     await login(page, "Gamemaster");
@@ -489,19 +496,29 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     // Hub, wherever this build hosts it (shell subsheet or standalone window).
     await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
 
-    // Spec 2026-09-20-ready-wiring-window §5: the session sheet registration
-    // is in CONFIG by the time the ready wiring resolves (registered at
-    // init, or repaired at ready); the timings are the run report's record.
+    // Spec 2026-09-20-ready-wiring-window §5: the assertion is that the
+    // session sheet registration lands no later than the moment the ready
+    // wiring resolves (registered at init, or repaired at ready) - today it
+    // is registered before the ready hook even fires; the timings are the
+    // run report's record.
     const timing = await page.evaluate(async (p) => {
       await (await import(p)).readyWiring;
       const t = globalThis.__bootTiming;
       const rel = (k) => (t[k] === undefined || t.readyHook === undefined) ? null : Math.round(t[k] - t.readyHook);
-      return { registered: t.sheetRegistered !== undefined, sheetAfterReadyHookMs: rel("sheetRegistered"), shimAfterReadyHookMs: rel("shimVisible") };
+      return {
+        registered: t.sheetRegistered !== undefined,
+        sheetAfterReadyHookMs: rel("sheetRegistered"),
+        shimAfterReadyHookMs: rel("shimVisible"),
+        wiringAfterReadyHookMs: rel("wiringResolved"),
+        sheetRegisteredAt: t.sheetRegistered,
+        wiringResolvedAt: t.wiringResolved
+      };
     }, ADAPTER);
     expect(timing.registered).toBe(true);
+    expect(timing.sheetRegisteredAt).toBeLessThanOrEqual(timing.wiringResolvedAt);
     test.info().annotations.push({
       type: "boot-timing",
-      description: `ready hook → session sheet registered: ${timing.sheetAfterReadyHookMs} ms; → shim visible: ${timing.shimAfterReadyHookMs} ms (negative = before the ready hook)`
+      description: `ready hook → session sheet registered: ${timing.sheetAfterReadyHookMs} ms; → shim visible: ${timing.shimAfterReadyHookMs} ms; → ready wiring resolved: ${timing.wiringAfterReadyHookMs} ms (negative = before the ready hook)`
     });
   });
 

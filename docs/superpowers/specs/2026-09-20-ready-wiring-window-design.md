@@ -224,3 +224,13 @@ shim visible under 100 ms on all seats.
   first, and holds an early open until it is ready.`
 - Sweep report: follow-up 2 closed with the before/after timings; cause J's
   addendum points here.
+
+## 7. Amendments
+
+A1 (final review, 2026-09-20): §3.3's gate holds only companion documents — a
+module-prefixed page, an entry holding one, or an argument that is not a
+document — via `needsReadyGate` (scripts/logic/ready-gate-logic.mjs); plain
+MEJ documents pass straight through. Reason: the window only ever
+mis-rendered companion content, and holding MEJ-only pages for the whole
+ready wiring (571–911 ms measured) was a pure regression. Reverting to
+hold-everything is a one-line change in the wrapper.

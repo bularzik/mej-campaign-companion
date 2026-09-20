@@ -11,7 +11,7 @@ import {
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
 import { planFlagHeal } from "../logic/session-flag-heal.mjs";
-import { planSheetRegistrations } from "../logic/sheet-registration.mjs";
+import { planSheetRegistrations, sheetRegistrationEntries } from "../logic/sheet-registration.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -190,56 +190,6 @@ async function wireApiMode(api) {
 }
 
 /**
- * Shared by both modes: the Hub's synthetic page type must resolve in
- * CONFIG.JournalEntryPage.sheetClasses. Route through the real
- * DocumentSheetConfig.registerSheet so it survives the rebuild Foundry does
- * when game.ready flips.
- */
-export function registerHubSheetClass(CampaignHubPage) {
-  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
-    types: [HUB_PAGE_ID],
-    makeDefault: false,
-    canBeDefault: false,
-    canConfigure: false,
-    label: `${I18N}.hub.title`
-  });
-}
-
-/**
- * Route Foundry's native pdf/video pages to the companion's viewer sheet so
- * they open inside the MEJ shell (spec E §1). makeDefault claims them as the
- * default sheet; canConfigure stays true so a GM can opt an individual page
- * back to core's sheet. Registered in BOTH modes - the shell hosts it in api
- * mode, and it stands alone in native mode.
- */
-export function registerMediaSheetClass(MediaPageSheet) {
-  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, MediaPageSheet, {
-    types: MEDIA_PAGE_TYPES,
-    makeDefault: true,
-    canBeDefault: true,
-    canConfigure: true,
-    label: `${I18N}.sheettype.media`
-  });
-}
-
-/**
- * Timeline journals (spec 2026-09-03 §C) resolve to a sheet that never draws
- * and hands off to the Hub's Timeline tab. Against CONFIG.JournalEntry, not
- * JournalEntryPage, and against the native "base" type - so it is NEVER the
- * default (that would hijack every plain journal entry in the world); only a
- * document carrying flags.core.sheetClass === TIMELINE_SHEET_CLASS resolves
- * to it. canConfigure stays true so a GM can opt one back to a real sheet.
- */
-export function registerTimelineSheetClass(TimelineJournalSheet) {
-  foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntry, MODULE_ID, TimelineJournalSheet, {
-    types: ["base"],
-    makeDefault: false,
-    canBeDefault: false,
-    label: `${I18N}.sheettype.timelineJournal`
-  });
-}
-
-/**
  * The one place companion sheet classes are registered. Idempotent against
  * CONFIG once game.ready is true: performs only what planSheetRegistrations()
  * reports missing there, so the ready-time repair can call it safely no
@@ -251,35 +201,25 @@ export function registerTimelineSheetClass(TimelineJournalSheet) {
  * @param {{SessionSheet:Function, CampaignHubPage:Function, MediaPageSheet:Function, TimelineJournalSheet:Function}} classes
  * @returns {{session:boolean, hub:boolean, campaign:boolean, media:boolean, timeline:boolean}} what was registered
  */
-export function registerCompanionSheets({ SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet }) {
+export function registerCompanionSheets(classes) {
   const missing = planSheetRegistrations(CONFIG.JournalEntryPage.sheetClasses, CONFIG.JournalEntry.sheetClasses, {
     sessionType: SESSION_DOCUMENT_TYPE, hubType: HUB_PAGE_ID, campaignType: CAMPAIGN_DOCUMENT_TYPE,
     mediaTypes: MEDIA_PAGE_TYPES, ownerScope: MODULE_ID
   });
-  if (missing.session) {
-    // Pure core Foundry - no MEJ involvement. The subtype itself comes from
-    // module.json's documentTypes declaration, so this only says "when
-    // Foundry opens a page of that type, use our sheet".
-    foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, SessionSheet, {
-      types: [SESSION_DOCUMENT_TYPE],
-      makeDefault: true,
-      label: `${I18N}.sheettype.session`
-    });
+  const entries = sheetRegistrationEntries(missing, classes, {
+    sessionType: SESSION_DOCUMENT_TYPE, hubType: HUB_PAGE_ID, campaignType: CAMPAIGN_DOCUMENT_TYPE,
+    mediaTypes: MEDIA_PAGE_TYPES, i18n: I18N
+  });
+  for (const entry of entries) {
+    // Pure core Foundry - no MEJ involvement. Route through the real
+    // DocumentSheetConfig.registerSheet (against JournalEntry for the
+    // timeline redirect, JournalEntryPage for everything else) so each
+    // registration survives the rebuild Foundry does when game.ready flips.
+    foundry.applications.apps.DocumentSheetConfig.registerSheet(
+      entry.documentClass === "JournalEntry" ? JournalEntry : JournalEntryPage,
+      MODULE_ID, entry.sheetClass, entry.options
+    );
   }
-  if (missing.hub) registerHubSheetClass(CampaignHubPage);
-  if (missing.campaign) {
-    // Campaign portal pages: the portal's sheet IS the Hub - makeDefault /
-    // canBeDefault so a core sidebar click opens it directly.
-    foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, MODULE_ID, CampaignHubPage, {
-      types: [CAMPAIGN_DOCUMENT_TYPE],
-      makeDefault: true,
-      canBeDefault: true,
-      canConfigure: false,
-      label: `${I18N}.sheettype.campaign`
-    });
-  }
-  if (missing.media) registerMediaSheetClass(MediaPageSheet);
-  if (missing.timeline) registerTimelineSheetClass(TimelineJournalSheet);
   return missing;
 }
 
@@ -308,6 +248,7 @@ async function companionSheetClasses() {
  * for every hook, never at our script's top level.
  */
 export function registerSheetsEarly() {
+  if (earlySheets) return; // a second pre-ready call would queue a duplicate set (§3.1's comment above)
   earlySheets = Promise.all([
     import("../sheets/SessionSheet.mjs"),
     import("../apps/CampaignHubPage.mjs"),
@@ -413,9 +354,9 @@ export async function onReady() {
 async function wireForReady() {
   if (mode === MODE_API) {
     // game.ready is definitely true here, so registerSheet applies
-    // immediately - this repairs anything onHandshake's registerSheet calls
-    // lost to Foundry's pre-ready drain (see onHandshake's comment). Not
-    // hoisted above mode resolution: an absent-mode world must stay
+    // immediately - this repairs a registration the init-time import lost to
+    // Foundry's pre-ready drain (registerSheetsEarly), in api mode as in
+    // native. Not hoisted above mode resolution: an absent-mode world must stay
     // completely inert, and this dynamically imports SessionSheet/
     // CampaignHubPage, both of which extend MEJ's own EnhancedJournalSheet -
     // safe once we know MEJ actually wired us up, not before.

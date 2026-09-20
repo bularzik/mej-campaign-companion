@@ -1,6 +1,6 @@
 // test/sheet-registration.test.js
 import { describe, it, expect } from "vitest";
-import { missingSheetRegistrations, missingOwnRegistration, planSheetRegistrations } from "../scripts/logic/sheet-registration.mjs";
+import { missingSheetRegistrations, missingOwnRegistration, planSheetRegistrations, sheetRegistrationEntries } from "../scripts/logic/sheet-registration.mjs";
 
 const SESSION_TYPE = "mej-campaign-companion.session";
 const HUB_TYPE = "campaign-hub";
@@ -183,5 +183,51 @@ describe("planSheetRegistrations", () => {
     };
     const entries = { base: { "core.JournalEntrySheet": {} } };
     expect(planSheetRegistrations(pages, entries, TYPES)).toEqual({ session: false, hub: true, campaign: true, media: true, timeline: true });
+  });
+});
+
+describe("sheetRegistrationEntries", () => {
+  // Stub classes: sheetRegistrationEntries never inspects them, just carries
+  // them through into each entry's sheetClass.
+  function SessionSheet() {}
+  function CampaignHubPage() {}
+  function MediaPageSheet() {}
+  function TimelineJournalSheet() {}
+  const CLASSES = { SessionSheet, CampaignHubPage, MediaPageSheet, TimelineJournalSheet };
+  const OPTS = {
+    sessionType: "mej-campaign-companion.session", hubType: "campaign-hub",
+    campaignType: "mej-campaign-companion.campaign", mediaTypes: ["pdf", "video"],
+    i18n: "MEJCampaignCompanion"
+  };
+
+  it("returns all five entries, in order, with exactly the option objects the adapter has always used", () => {
+    const missing = { session: true, hub: true, campaign: true, media: true, timeline: true };
+    expect(sheetRegistrationEntries(missing, CLASSES, OPTS)).toEqual([
+      { documentClass: "JournalEntryPage", sheetClass: SessionSheet,
+        options: { types: ["mej-campaign-companion.session"], makeDefault: true, label: "MEJCampaignCompanion.sheettype.session" } },
+      { documentClass: "JournalEntryPage", sheetClass: CampaignHubPage,
+        options: { types: ["campaign-hub"], makeDefault: false, canBeDefault: false, canConfigure: false, label: "MEJCampaignCompanion.hub.title" } },
+      { documentClass: "JournalEntryPage", sheetClass: CampaignHubPage,
+        options: { types: ["mej-campaign-companion.campaign"], makeDefault: true, canBeDefault: true, canConfigure: false, label: "MEJCampaignCompanion.sheettype.campaign" } },
+      { documentClass: "JournalEntryPage", sheetClass: MediaPageSheet,
+        options: { types: ["pdf", "video"], makeDefault: true, canBeDefault: true, canConfigure: true, label: "MEJCampaignCompanion.sheettype.media" } },
+      { documentClass: "JournalEntry", sheetClass: TimelineJournalSheet,
+        options: { types: ["base"], makeDefault: false, canBeDefault: false, label: "MEJCampaignCompanion.sheettype.timelineJournal" } }
+    ]);
+  });
+
+  it("returns nothing missing when nothing is missing", () => {
+    const missing = { session: false, hub: false, campaign: false, media: false, timeline: false };
+    expect(sheetRegistrationEntries(missing, CLASSES, OPTS)).toEqual([]);
+  });
+
+  it("returns only the missing entries on a partial report (media + timeline)", () => {
+    const missing = { session: false, hub: false, campaign: false, media: true, timeline: true };
+    const entries = sheetRegistrationEntries(missing, CLASSES, OPTS);
+    expect(entries).toHaveLength(2);
+    expect(entries[0].documentClass).toBe("JournalEntryPage");
+    expect(entries[0].sheetClass).toBe(MediaPageSheet);
+    expect(entries[1].documentClass).toBe("JournalEntry");
+    expect(entries[1].sheetClass).toBe(TimelineJournalSheet);
   });
 });
