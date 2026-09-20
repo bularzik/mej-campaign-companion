@@ -313,7 +313,7 @@ Campaign Companion works against a stock Monk's Enhanced Journal install, not ju
 
 - **Session** appears in MEJ's own "New Entry" dialog only in API mode; on stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…` entry instead — use the **New Session** button in the Hub's header bar either way. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
-- The Hub opens as its own standalone window rather than as a tab inside MEJ's shell.
+- The Hub and Session sheets normally still open inside MEJ's shell, the same as API mode — the companion adapts MEJ's own functions to make that work. If a future MEJ update ever breaks that adaptation, they fall back to their own standalone window instead; a `shell hosting unavailable` warning in the browser console is the tell.
 
 Header buttons are not one of the differences, because they aren't there in either mode: as of this writing, MEJ v14 builds don't render a companion "open graph" or "prep board" button on an entry sheet's window header at all, due to an upstream MEJ header-injection bug. Both surfaces stay reachable regardless — the graph from the Hub's **Graph** tab, the prep board from its button in the Session tab's Secrets block.
 
