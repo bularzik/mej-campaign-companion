@@ -214,6 +214,15 @@ test.describe("native mode (no extension API)", () => {
 
   test("api mode still resolves when forceNativeMode is off", async ({ page }) => {
     await login(page, "Gamemaster");
+    // api mode needs an MEJ that actually fires the handshake. On a stock
+    // build (the v13 target: MEJ 13.06, no extension API) turning
+    // forceNativeMode off changes nothing - the mode is native because there
+    // is no API to resolve, not because anything regressed. Detected the same
+    // way 13-stock-smoke.spec.mjs detects it.
+    const apiPresent = await page.evaluate(
+      () => typeof game.MonksEnhancedJournal?.registerSheetType === "function"
+    );
+    test.skip(!apiPresent, "MEJ on this stack has no extension API; api mode is unreachable");
     await setForceNative(page, false);
 
     // Regression coverage for a real bug found live: Foundry drains its

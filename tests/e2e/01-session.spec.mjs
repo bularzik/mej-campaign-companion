@@ -7,6 +7,20 @@ import {
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 
+/**
+ * True when this world's MEJ carries the extension API. Stock MEJ builds
+ * (13.06, 14.01) do not, and the New Entry dialog then cannot offer
+ * "Session" at all: its "Single Sheet" optgroup is built from
+ * MonksEnhancedJournal.getTypeLabels() (13.06 monks-enhanced-journal.js:4934),
+ * which only the fork's externalTypes registry feeds (fork :181-197), and its
+ * create path would in any case write a plain "text" page carrying the bare
+ * MEJ flag rather than a real `mej-campaign-companion.session` subtype
+ * (13.06 :939 vs the fork's externalType carve-out at :1054-1073).
+ */
+async function mejApiPresent(page) {
+  return page.evaluate(() => typeof game.MonksEnhancedJournal?.registerSheetType === "function");
+}
+
 /** Open the journal sidebar and MEJ's "Create Entry" dialog, choose type
  * "Session", submit, and return the created entry's id once MEJ has
  * finished opening it. */
@@ -28,6 +42,27 @@ async function createSessionViaDialog(page, name) {
   await dialog.locator('button[data-action="ok"]').click();
   await settle(page, 800);
   return page.evaluate((n) => game.journal.find((j) => j.name === n)?.id, name);
+}
+
+/**
+ * A Session entry for the tests that only need one to exist. Routes through
+ * MEJ's New Entry dialog where that is possible (the fork's extension API
+ * registers the type into the dialog, and the dialog path is worth exercising
+ * whenever it is available) and creates the same document directly through
+ * the module's own page builder on a stock MEJ, where the dialog cannot offer
+ * the type. Everything downstream - the subtype, the MEJ flag, the sheet -
+ * is identical either way; only the affordance differs.
+ */
+async function createSessionEntry(page, name) {
+  if (await mejApiPresent(page)) return createSessionViaDialog(page, name);
+  const id = await page.evaluate(async (n) => {
+    const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
+    const entry = await JournalEntry.create({ name: n, pages: [buildSessionPageData(n, "", null, null)] });
+    await game.MonksEnhancedJournal.openJournalEntry(entry);
+    return entry.id;
+  }, name);
+  await settle(page, 800);
+  return id;
 }
 
 /** Dispatch a synthetic native drop of a document onto `selector`, matching
@@ -58,6 +93,9 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Create`;
+    // The dialog affordance itself is what this test is about, and a stock
+    // MEJ cannot offer it - see mejApiPresent().
+    test.skip(!(await mejApiPresent(page)), "MEJ on this stack has no extension API; the New Entry dialog cannot offer Session");
     const entryId = await createSessionViaDialog(page, name);
     expect(entryId).toBeTruthy();
 
@@ -89,7 +127,7 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Persist`;
-    const entryId = await createSessionViaDialog(page, name);
+    const entryId = await createSessionEntry(page, name);
     const shell = page.locator("#MonksEnhancedJournal");
     await shell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(page, 200);
@@ -167,7 +205,7 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Recap Editor`;
-    const entryId = await createSessionViaDialog(page, name);
+    const entryId = await createSessionEntry(page, name);
     const shell = page.locator("#MonksEnhancedJournal");
 
     // ⚠️ parked item: header edit button opens the recap editor.
@@ -207,7 +245,7 @@ test.describe("01 session entries", () => {
     const personUuid = await page.evaluate((id) => game.journal.get(id).uuid, personId);
 
     const sessionName = `${TT_PREFIX}Relationship Session`;
-    const sessionId = await createSessionViaDialog(page, sessionName);
+    const sessionId = await createSessionEntry(page, sessionName);
     const shell = page.locator("#MonksEnhancedJournal");
     await shell.locator('a[data-action="tab"][data-tab="relationships"]').click();
     await settle(page, 200);
@@ -234,7 +272,7 @@ test.describe("01 session entries", () => {
     await login(gmPage, "Gamemaster");
 
     const name = `${TT_PREFIX}Session Player View`;
-    const entryId = await createSessionViaDialog(gmPage, name);
+    const entryId = await createSessionEntry(gmPage, name);
     const gmShell = gmPage.locator("#MonksEnhancedJournal");
     await gmShell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(gmPage, 200);
@@ -309,7 +347,7 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Header`;
-    const entryId = await createSessionViaDialog(page, name);
+    const entryId = await createSessionEntry(page, name);
     const shell = page.locator("#MonksEnhancedJournal");
     await expect(shell.locator(".session-container .journal-sheet-header")).toHaveCount(0);
     await expect(shell.locator(".session-container .journal-sheet-header .form-group")).toHaveCount(0);
@@ -407,7 +445,7 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Image Header`;
-    const entryId = await createSessionViaDialog(page, name);
+    const entryId = await createSessionEntry(page, name);
     // A path Foundry actually ships, so the header's <img> resolves and the
     // partial's onerror fallback (assets/session.png, which MEJ does not ship)
     // never fires.
