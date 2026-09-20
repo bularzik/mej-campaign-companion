@@ -404,6 +404,7 @@
       "hiddenOnly": "\"{name}\" is mentioned in {count} page(s) whose readers cannot see it. Reveal \"{name}\" (or apply the campaign baseline) to link it.",
       "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
       "gmNotes": "GM notes",
+      "pageVanished": "the page no longer exists",
       "summary": "Linked \"{name}\" in {count} place(s).",
       "titleMany": "Auto-Link Entries",
       "introMany": "{count} entries are mentioned in the pages below. Link the checked pages?",

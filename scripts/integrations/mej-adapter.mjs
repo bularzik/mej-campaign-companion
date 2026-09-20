@@ -347,9 +347,20 @@ async function wireNativeMode() {
   // hosting is the fallback whether the setting is off or a wrap failed.
   hosting = "window";
   if (shellHostingWanted()) {
-    const { installShellShim } = await import("./shell-shim.mjs");
-    const result = installShellShim({ SessionSheet, CampaignHubPage });
-    hosting = result.hosting;
+    // Its OWN try/catch, not step()'s: window hosting is a supported
+    // configuration, so a shim that cannot even be imported (a stock MEJ
+    // that moved apps/enhanced-journal.js, say) must leave `hosting` at
+    // "window" and warn - never set wiringThrew, which would put the
+    // "initialisation failed" error notification in front of a GM whose
+    // module is in fact working. installShellShim itself never throws
+    // (spec §4.1); this covers the import that reaches it.
+    try {
+      const { installShellShim } = await import("./shell-shim.mjs");
+      const result = installShellShim({ SessionSheet, CampaignHubPage });
+      hosting = result.hosting;
+    } catch (err) {
+      console.warn(`${MODULE_ID} | shell hosting unavailable (the adaptation could not be loaded); using standalone windows`, err);
+    }
   }
 }
 
@@ -463,10 +474,21 @@ export async function openHub() {
  * openJournalEntry head). Fall back to the page's own sheet whenever it
  * says no. Api mode is unchanged from before shell hosting existed: MEJ's
  * shell picks the sheet up from a plain render.
+ *
+ * MEJ's open path can THROW as well as return false (13.06's own
+ * _renderPageViews is the crash this module already carries
+ * sheets/awaitable-render.mjs for), and a throw here would lose the click
+ * entirely - the caller is usually a UI handler. Treat it exactly like a
+ * refusal and fall through to the page's own sheet, which is the supported
+ * window-hosting path anyway.
  */
 export async function openSessionPage(page) {
   if (mode === MODE_NATIVE && hosting === "shell") {
-    if (await game.MonksEnhancedJournal.openJournalEntry(page)) return;
+    try {
+      if (await game.MonksEnhancedJournal.openJournalEntry(page)) return;
+    } catch (err) {
+      console.warn(`${MODULE_ID} | MEJ's open path threw for "${page?.name}"; opening the session in its own window`, err);
+    }
   }
   await page.sheet.render(true);
 }

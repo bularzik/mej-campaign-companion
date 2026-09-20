@@ -9,9 +9,9 @@
 // statically imports MEJ's own apps/enhanced-journal.js, so it must only ever
 // be reached through a dynamic import from the adapter, never at top level.
 import { EnhancedJournal } from "/modules/monks-enhanced-journal/apps/enhanced-journal.js";
-import { MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SESSION_TYPE, CAMPAIGN_TYPE } from "../constants.mjs";
 import { installWraps, uninstallWraps } from "../logic/mej-wraps.mjs";
-import { withCompanionTypes, isShellPageId } from "../logic/shell-shim-logic.mjs";
+import { withCompanionTypes, isShellPageId, isCompanionPageType } from "../logic/shell-shim-logic.mjs";
 import { hubShellDocument, setHubSheetClass } from "../apps/hub-shell-document.mjs";
 
 let records = [];
@@ -44,7 +44,18 @@ function install({ SessionSheet, CampaignHubPage }) {
   setHubSheetClass(CampaignHubPage);
   const mej = game.MonksEnhancedJournal;
   const hubDoc = () => hubShellDocument();
-  const additions = { [SESSION_TYPE]: SessionSheet, [HUB_PAGE_ID]: CampaignHubPage };
+  // The three types the shell must "know" about. CAMPAIGN_TYPE mirrors api
+  // mode's registerSheetType({ key: "campaign" }): a campaign portal entry
+  // holds exactly one page, whose MEJ flag type is "campaign", so without an
+  // entry here the portal fails the shell's single-page demotion gate
+  // (:430-441) and the Hub renders inside MEJ's JournalEntrySheet page
+  // wrapper instead of as the subsheet (seen live on 13.06 from a sidebar
+  // click before this entry existed).
+  const additions = {
+    [SESSION_TYPE]: SessionSheet,
+    [CAMPAIGN_TYPE]: CampaignHubPage,
+    [HUB_PAGE_ID]: CampaignHubPage
+  };
   function configureSheetWrapper(wrapped, ...args) {
     if (this?.document === hubDoc()) return;
     return wrapped(...args);
@@ -53,32 +64,35 @@ function install({ SessionSheet, CampaignHubPage }) {
   const specs = [
     {
       // Opens the shell's single-page demotion gate (:430-441) for session
-      // entries, makes getMEJType recognise sessions, and stops fixType
-      // (:4139-4141) unsetting the session flag.
+      // entries AND campaign portals, makes getMEJType recognise both, and
+      // stops fixType (:4139-4141) unsetting their type flag.
       name: "getDocumentTypes", object: mej, key: "getDocumentTypes",
       path: "game.MonksEnhancedJournal.getDocumentTypes",
       wrapper(wrapped, ...args) { return withCompanionTypes(wrapped(...args), additions); }
     },
     {
       // Wrap 1 has a side effect stock MEJ never had to think about: with
-      // "session" in the registry, fixType's tail (:4139-4141) now takes the
-      // `object.type = type` branch and rewrites a Session page's in-memory
-      // type to the bare MEJ key. That is harmless for MEJ's own types (all
-      // of them are native "text" pages carrying a flag), but a Session
-      // page's real Foundry subtype IS mej-campaign-companion.session: the
-      // companion's whole identity test (logic/mej-type.mjs) and its sheet
-      // registration hang off it, and Foundry's own DocumentSheetV2
-      // constructor throws on the bare key ("Cannot convert undefined or
-      // null to object" out of getSheetClassesForSubType - seen live on
-      // 13.06 before this wrap). The fork's own fixType carve-out (14.0x
-      // monks-enhanced-journal.js :4347-4352) does not help here: it guards
-      // only the unsetFlag branch, leaving the `object.type = type` rewrite
-      // in place. So on stock we put the real subtype back afterwards.
+      // our keys in the registry, fixType's tail (:4139-4141) now takes the
+      // `object.type = type` branch and rewrites the page's in-memory type to
+      // the bare MEJ key. That is harmless for MEJ's own types (all of them
+      // are native "text" pages carrying a flag), but a companion page's real
+      // Foundry subtype IS mej-campaign-companion.<key>: the companion's whole
+      // identity test (logic/mej-type.mjs) and its sheet registration hang off
+      // it, and Foundry's own DocumentSheetV2 constructor throws on the bare
+      // key ("Cannot convert undefined or null to object" out of
+      // getSheetClassesForSubType - seen live on 13.06 for a Session before
+      // this wrap existed, and again for a campaign portal on 2026-09-20 when
+      // the carve-out below still named only the session type). The fork's own
+      // fixType carve-out (14.0x monks-enhanced-journal.js :4347-4352) does not
+      // help here: it guards only the unsetFlag branch, leaving the
+      // `object.type = type` rewrite in place. So on stock we put the real
+      // subtype back afterwards, for EVERY type we declare.
       name: "fixType", object: mej, key: "fixType",
+      path: "game.MonksEnhancedJournal.fixType",
       wrapper(wrapped, object, settype) {
         const before = object?.type;
         const result = wrapped(object, settype);
-        if (before === SESSION_DOCUMENT_TYPE && object.type !== before) object.type = before;
+        if (isCompanionPageType(before, MODULE_ID) && object.type !== before) object.type = before;
         return result;
       }
     },

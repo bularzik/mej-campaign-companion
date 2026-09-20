@@ -10,12 +10,12 @@
 //
 // What the stock phase asserts since the native shell shim (spec 2026-09-19
 // §4): on a stock MEJ the companion no longer settles for standalone
-// windows — it installs the shim and hosts the Hub and the Session sheet as
-// MEJ shell subsheets, exactly as api mode does. So the gate reads
-// adapter.currentHosting() === "shell", looks for the Hub and the session
-// inside game.MonksEnhancedJournal.journal.element rather than by a
+// windows — it installs the shim and hosts the Hub, the Session sheet and a
+// campaign portal as MEJ shell subsheets, exactly as api mode does. So the
+// gate reads adapter.currentHosting() === "shell", looks for the Hub and the
+// session inside game.MonksEnhancedJournal.journal.element rather than by a
 // standalone window id, and requires MEJ's JournalEntry page wrapper
-// (.journal-entry-pages) to be absent around a hosted session. Standalone
+// (.journal-entry-pages) to be absent around a hosted session or portal. Standalone
 // windows remain a supported fallback and have a test of their own, which
 // turns the shellHosting client setting off and asserts the window path.
 // (The Hub's DOM selector is .mej-cc-hub-container: hub.hbs's outer
@@ -28,8 +28,10 @@
 // wrappers is exactly the change that can leave dark-on-dark text behind.
 //
 // The two stock targets run against different worlds, and the gate must
-// hold on both: world-b (v13) has no campaigns and no folders, World A
-// (v14) has both. That is why New Session confirms a destination-campaign
+// hold on both: world-b (v13) has no campaigns and no folders of its own,
+// World A (v14) has both. (The campaign-portal test creates its own campaign
+// and removes it again, restoring the auto-capture target it seeds on a world
+// whose first campaign it is.) That is why New Session confirms a destination-campaign
 // prompt when one appears, and why sidebar rows are matched on
 // [data-entry-id] instead of a bare .directory-item.
 //
@@ -83,6 +85,10 @@ const PHASE = process.env.STOCK_PHASE ?? "";
 // STOCK_PHASE=return — the fixture must survive from the stock invocation
 // into the return one (the first live run lost it to that sweep).
 const FIXTURE = "TT-STOCKSMOKE Session";
+// The campaign fixture (folder + portal entry + timeline journal) is created
+// and removed inside a single test, but it is named here because every phase's
+// teardown has to be able to sweep it if that test died mid-way.
+const CAMPAIGN_FIXTURE = "TT-STOCKSMOKE Campaign";
 const ADAPTER = `/modules/${MODULE_ID}/scripts/integrations/mej-adapter.mjs`;
 const CONTRAST = `/modules/${MODULE_ID}/scripts/logic/contrast.mjs`;
 
@@ -170,6 +176,32 @@ async function removeShellTabs(page) {
   });
 }
 
+/**
+ * Remove the campaign fixture: everything inside the folder (portal entry and
+ * timeline journal) and then the folder itself. Idempotent, so it doubles as
+ * the phases' leftover sweep. `restoreAutoCapture` (when not undefined) puts
+ * the world's auto-capture target back — createCampaign seeds it to the new
+ * folder when the world had no campaign before, which world-b does not.
+ */
+async function deleteCampaignFixture(page, restoreAutoCapture) {
+  return page.evaluate(async ({ name, id, restore }) => {
+    const folders = game.folders.filter((f) => f.type === "JournalEntry" && f.name === name);
+    let entries = 0;
+    for (const f of folders) {
+      for (const e of [...f.contents]) { await e.delete(); entries++; }
+      await f.delete();
+    }
+    // A portal that somehow ended up outside the folder still has the name.
+    for (const e of game.journal.filter((e) => e.name === name)) { await e.delete(); entries++; }
+    let autoCapture = null;
+    if (restore !== undefined && game.settings.get(id, "autoCaptureCampaign") !== restore) {
+      await game.settings.set(id, "autoCaptureCampaign", restore);
+      autoCapture = restore;
+    }
+    return { folders: folders.length, entries, autoCaptureRestoredTo: autoCapture };
+  }, { name: CAMPAIGN_FIXTURE, id: MODULE_ID, restore: restoreAutoCapture });
+}
+
 /** Set the client colour scheme (client-scoped, so only this test browser sees it) and re-boot. */
 async function setColorScheme(page, scheme) {
   await page.evaluate(async (scheme) => {
@@ -209,6 +241,10 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
       const doomed = game.journal.filter((e) => e.name === fixture || e.name === defName);
       for (const e of doomed) await e.delete();
     }, FIXTURE);
+    // …and the campaign fixture, whose folder a crashed run would otherwise
+    // leave behind as a real campaign on the test world (which would then
+    // change what the New Session test below asserts).
+    await deleteCampaignFixture(page);
     await context.close();
   });
 
@@ -320,11 +356,20 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     // sheet" control, and the Hub's document is a synthetic in-memory page
     // with no sheet to configure — invoking the action while the Hub is the
     // subsheet must open nothing at all (it threw before the wrap existed).
+    //
+    // Counted as "did ANY new application appear", not "did a
+    // DocumentSheetConfig appear": the two stock builds open DIFFERENT config
+    // apps (14.01 builds core's `DocumentSheetConfig`, 13.06 MEJ's own
+    // `ApplicationSheetConfig`), so a constructor-name filter on
+    // "DocumentSheetConfig" could never fail on 13.06 — the test was vacuous
+    // there. V1 and V2 apps live in different registries, so both are counted.
+    const appCount = async (page) => page.evaluate(() => ({
+      v2: foundry.applications.instances.size,
+      v1: Object.keys(ui.windows ?? {}).length
+    }));
+    const beforeCounts = await appCount(page);
     const configured = await page.evaluate(async () => {
       const shell = game.MonksEnhancedJournal.journal;
-      const count = () => Array.from(foundry.applications.instances.values())
-        .filter((app) => app.constructor?.name?.includes("DocumentSheetConfig")).length;
-      const before = count();
       let threw = null;
       try {
         await shell.options.actions.configureSheet.call(shell, new Event("click"), shell.element);
@@ -332,10 +377,60 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
         threw = String(err?.message ?? err);
       }
       await new Promise((r) => setTimeout(r, 400));
-      return { before, after: count(), threw };
+      return { threw };
     });
+    const afterCounts = await appCount(page);
     expect(configured.threw).toBeNull();
-    expect(configured.after).toBe(configured.before);
+    expect(afterCounts, "no application of any kind may open for the Hub's synthetic document")
+      .toEqual(beforeCounts);
+
+    // Control: the same action on a NORMAL journal tab must still open exactly
+    // one configure app — otherwise "nothing opened" above would also pass if
+    // the wrap had swallowed the action for every document, which would be a
+    // regression against stock MEJ's own behaviour rather than a fix.
+    const normalEntry = await page.evaluate(async () => {
+      const entry = game.journal.find((e) => e.pages.size > 0
+        && !e.pages.contents.some((p) => p.type?.startsWith("mej-campaign-companion.")));
+      if (!entry) return null;
+      await game.MonksEnhancedJournal.openJournalEntry(entry);
+      await new Promise((r) => setTimeout(r, 800));
+      return entry.name;
+    });
+    test.info().annotations.push({
+      type: "configure-sheet-control-entry",
+      description: normalEntry ?? "(no plain journal entry on this world — control skipped)"
+    });
+    if (normalEntry) {
+      const beforeNormal = await appCount(page);
+      const normalThrew = await page.evaluate(async () => {
+        const shell = game.MonksEnhancedJournal.journal;
+        let threw = null;
+        try {
+          await shell.options.actions.configureSheet.call(shell, new Event("click"), shell.element);
+        } catch (err) {
+          threw = String(err?.message ?? err);
+        }
+        await new Promise((r) => setTimeout(r, 600));
+        return threw;
+      });
+      const afterNormal = await appCount(page);
+      const opened = (afterNormal.v1 - beforeNormal.v1) + (afterNormal.v2 - beforeNormal.v2);
+      test.info().annotations.push({
+        type: "configure-sheet-normal-tab",
+        description: JSON.stringify({ beforeNormal, afterNormal, threw: normalThrew })
+      });
+      expect(normalThrew).toBeNull();
+      expect(opened, "a normal journal tab still opens exactly one configure app").toBe(1);
+      // Close whatever it opened so it cannot leak into a later test.
+      await page.evaluate(async () => {
+        for (const app of foundry.applications.instances.values()) {
+          if (/SheetConfig/.test(app.constructor?.name ?? "")) await app.close().catch(() => {});
+        }
+        for (const app of Object.values(ui.windows ?? {})) {
+          if (/SheetConfig/.test(app.constructor?.name ?? "")) await app.close?.();
+        }
+      });
+    }
   });
 
   // Regression net for the Hub-open race fixed 2026-09-19 (see openHub()'s
@@ -558,6 +653,101 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
     });
   });
 
+  // A campaign portal is the OTHER document the shell has to host, and it
+  // needed its own entry in the shim's `additions` map: a portal entry holds
+  // exactly one page whose MEJ flag type is "campaign", and without
+  // "campaign" in MEJ's type registry that entry fails the shell's
+  // single-page demotion gate — the Hub then renders inside MEJ's
+  // JournalEntrySheet page wrapper instead of as the subsheet. api mode has
+  // always had this (registerSheetType for "campaign"); native mode did not.
+  test("a campaign portal opened from the sidebar hosts the Hub as the shell's subsheet", async ({ page }) => {
+    const errors = trackConsoleErrors(page, {
+      ignore: [KNOWN_MEJ_SESSION_ICON_404, EXPECTED_INVALID_TYPE_WHILE_DISABLED]
+    });
+    await bootAsRealUser(page);
+
+    // Through the real entry point: createCampaign builds the folder, the
+    // portal entry and the timeline journal together.
+    const created = await page.evaluate(async ({ id, name }) => {
+      const { createCampaign } = await import(`/modules/${id}/scripts/data/campaign-store.mjs`);
+      const autoCaptureBefore = game.settings.get(id, "autoCaptureCampaign");
+      const folder = await createCampaign(name, { ownershipDefault: "observer" });
+      const portal = (folder?.contents ?? [])
+        .find((e) => e.pages.contents.some((p) => p.type === `${id}.campaign`)) ?? null;
+      return {
+        folderId: folder?.id ?? null,
+        portalId: portal?.id ?? null,
+        portalPageType: portal?.pages?.contents?.[0]?.type ?? null,
+        portalFlagType: portal?.pages?.contents?.[0]?.getFlag("monks-enhanced-journal", "type") ?? null,
+        autoCaptureBefore
+      };
+    }, { id: MODULE_ID, name: CAMPAIGN_FIXTURE });
+
+    try {
+      expect(created.folderId).not.toBeNull();
+      expect(created.portalId).not.toBeNull();
+      expect(created.portalPageType).toBe("mej-campaign-companion.campaign");
+
+      // Spec §9's widening: what MEJ now "knows" once wrap 1 adds our three
+      // keys. Recorded, not asserted — these are stock MEJ's surfaces.
+      const widening = await page.evaluate(() => {
+        const MEJ = game.MonksEnhancedJournal;
+        const types = Object.keys(MEJ.getDocumentTypes());
+        const labels = Object.keys(MEJ.getTypeLabels?.() ?? {});
+        return {
+          documentTypes: types.filter((t) => ["session", "campaign", "campaign-hub"].includes(t)),
+          // MEJ's create-page dialog is built from getTypeLabels(), which the
+          // shim does NOT wrap — so our keys must NOT appear as MEJ page types
+          // there. getDocumentTypes is only used in that handler to FILTER core
+          // types, and our keys are module-prefixed so no filtering changes.
+          inTypeLabels: labels.filter((t) => ["session", "campaign", "campaign-hub"].includes(t)),
+          // MEJ.getIcon is a hard-coded switch with a default, so the new
+          // keys simply fall through to it — no new asset request.
+          icons: {
+            session: MEJ.getIcon?.("session") ?? null,
+            campaign: MEJ.getIcon?.("campaign") ?? null,
+            knownType: MEJ.getIcon?.("person") ?? null
+          }
+        };
+      });
+      test.info().annotations.push({ type: "shim-widening", description: JSON.stringify(widening) });
+
+      const row = page.locator(`#journal .directory-item[data-entry-id="${created.portalId}"]`);
+      await expect(row).toHaveCount(1, { timeout: 15_000 });
+      // Same in-page click the session test uses: the row can sit inside a
+      // collapsed folder or outside the headless viewport.
+      await row.evaluate((el) => el.querySelector("a.entry-name").click());
+
+      await page.waitForSelector(".mej-cc-hub-container", { timeout: 15_000 });
+      const host = await page.evaluate(() => {
+        const shell = game.MonksEnhancedJournal?.journal;
+        return {
+          shellRendered: !!shell?.rendered,
+          subsheet: shell?.subsheet?.constructor?.name ?? null,
+          hubInShell: !!shell?.element?.querySelector(".mej-cc-hub-container"),
+          wrapper: !!shell?.element?.querySelector(".journal-entry-pages")
+        };
+      });
+      test.info().annotations.push({ type: "campaign-portal-host", description: JSON.stringify(host) });
+      expect(host.shellRendered).toBe(true);
+      expect(host.subsheet).toBe("CampaignHubPage");
+      expect(host.hubInShell).toBe(true);
+      expect(host.wrapper).toBe(false);
+
+      const companionErrors = errors.filter((t) => t.includes(MODULE_ID));
+      expect(companionErrors).toEqual([]);
+    } finally {
+      // The fixture leaves nothing behind: the portal, the timeline journal,
+      // the folder, and (on a world whose first campaign this was) the
+      // auto-capture target createCampaign seeded to it.
+      await page.evaluate(async (id) => {
+        try { await game.MonksEnhancedJournal.journal?.close(); } catch { /* not open */ }
+      }, MODULE_ID);
+      const removed = await deleteCampaignFixture(page, created.autoCaptureBefore);
+      test.info().annotations.push({ type: "campaign-fixture-removed", description: JSON.stringify(removed) });
+    }
+  });
+
   test("session and Hub text stay readable under both colour schemes", async ({ page }) => {
     await bootAsRealUser(page);
     try {
@@ -723,6 +913,8 @@ returnDescribe("stock smoke phase 2 — back on the API-carrying MEJ", () => {
       const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
       for (const e of doomed) await e.delete();
     });
+    const campaign = await deleteCampaignFixture(page);
+    test.info().annotations.push({ type: "campaign-fixture-swept", description: JSON.stringify(campaign) });
     const tabs = await removeShellTabs(page);
     test.info().annotations.push({ type: "shell-tabs-removed", description: JSON.stringify(tabs) });
   });
@@ -735,12 +927,17 @@ returnDescribe("stock smoke phase 2 — back on the API-carrying MEJ", () => {
 const cleanupDescribe = PHASE === "cleanup" ? test.describe : test.describe.skip;
 
 cleanupDescribe("stock smoke cleanup — remove the fixture", () => {
-  test("no TT-STOCKSMOKE journal and no companion shell tab remain", async ({ page }) => {
+  test("no TT-STOCKSMOKE journal, campaign folder or companion shell tab remains", async ({ page }) => {
     await login(page, "Gamemaster");
+    const campaign = await deleteCampaignFixture(page);
+    test.info().annotations.push({ type: "campaign-fixture-swept", description: JSON.stringify(campaign) });
     const remaining = await page.evaluate(async () => {
       const doomed = game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE"));
       for (const e of doomed) await e.delete();
-      return game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE")).map((e) => e.id);
+      return [
+        ...game.journal.filter((e) => e.name.includes("TT-STOCKSMOKE")).map((e) => e.id),
+        ...game.folders.filter((f) => f.name.includes("TT-STOCKSMOKE")).map((f) => f.id)
+      ];
     });
     expect(remaining).toEqual([]);
 

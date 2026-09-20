@@ -420,14 +420,28 @@ async function processBurst(queued, { modeOverride = null } = {}) {
     const applied = [];
     const failed = [];
     for (const [pageUuid, w] of byPage) {
+      // `pageDoc` is hoisted above the try so the catch can name the page
+      // WITHOUT a second fromUuid round trip - the old catch re-fetched, which
+      // is a wasted lookup on every failure and returns nothing anyway in the
+      // one case it was meant for (a document that went away mid-update).
+      // `planForBurst` already put a human-readable "Journal: Page" name on
+      // every row, so the vanished-page branch has a journal name to report
+      // too, instead of a bare uuid.
+      let pageDoc = null;
+      const known = w.rows[0]?.pageName ?? pageUuid;
       try {
-        const pageDoc = await fromUuid(pageUuid);
-        if (!pageDoc) { failed.push({ page: pageUuid, journal: pageUuid, reason: "page no longer exists" }); continue; }
+        pageDoc = await fromUuid(pageUuid);
+        if (!pageDoc) {
+          failed.push({
+            page: known, journal: known,
+            reason: game.i18n.localize(`${I18N}.retroLink.pageVanished`)
+          });
+          continue;
+        }
         await pageDoc.update(w.update, { [MODULE_ID]: { retroLink: true } });
         applied.push(...w.rows);
       } catch (err) {
-        const pageDoc = await fromUuid(pageUuid).catch(() => null);
-        failed.push({ page: pageDoc?.name ?? pageUuid, journal: pageDoc?.parent?.name ?? pageUuid, reason: describeError(err) });
+        failed.push({ page: pageDoc?.name ?? known, journal: pageDoc?.parent?.name ?? known, reason: describeError(err) });
         console.error(`${MODULE_ID} | retro-link write failed for ${pageUuid}`, err);
       }
     }
