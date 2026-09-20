@@ -292,6 +292,9 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
 
     // Companion console errors fail the test; stock MEJ's own noise is the
     // run report's business, not an assertion (we don't own stock MEJ).
+    // Entries carry their source location and stack (trackConsoleErrors),
+    // so an error is the companion's when any of that names the module —
+    // a stock-MEJ throw that passed through a companion wrap counts too.
     const companionErrors = errors.filter((t) => t.includes(MODULE_ID));
     const otherErrors = errors.filter((t) => !t.includes(MODULE_ID));
     test.info().annotations.push({

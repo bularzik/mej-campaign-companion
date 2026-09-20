@@ -6,6 +6,7 @@ import { expect } from "@playwright/test";
 import { lockStatus, UNLOCK_HINT } from "./env-lock.mjs";
 import { TARGET } from "./target.mjs";
 import { strandedTestFolderIds, autoCaptureNeedsReset } from "./sweep-rules.mjs";
+import { formatConsoleError, appendStack } from "./console-format.mjs";
 
 export const BASE_URL = TARGET.url;
 export const TEST_WORLD = TARGET.world;
@@ -173,11 +174,36 @@ const SESSION_BOUND = () =>
  * (nothing to wire), and MEJ inactive (the adapter resolves mode "absent" and
  * deliberately registers NOTHING, so waiting on a registration would burn the
  * full timeout on every single login).
+ *
+ * Native mode has a SECOND thing to wait for. wireNativeMode() registers the
+ * sheet classes and only then imports and installs the shell shim, so the
+ * registration lands 0-130 ms before MEJ's getDocumentTypes() carries
+ * "session" (measured 2026-09-20 on four fresh seats). A Session opened in
+ * that gap fails MEJ's demotion gate (enhanced-journal.js:430-441 needs the
+ * type in that map) and renders as MEJ's JournalEntrySheet wrapper — the
+ * whole of 06-player-collab's "instability" on Foundry 13 (sweep report,
+ * cause J): every failed open had the shim absent, every passing one had it
+ * present or arriving mid-call. So without the extension API the predicate
+ * also waits for the wrap's observable effect, unless the shellHosting
+ * client setting is off (13-stock-smoke's window-fallback test), in which
+ * case no shim is coming. A shim that FAILED to install is not observable
+ * from here and is not a harness scenario: the wait times out with its own
+ * message. Exported for test/e2e-wired-predicate.test.js; it runs inside
+ * page.waitForFunction, so it must stay self-contained.
  */
-const COMPANION_WIRED = (moduleId) =>
-  globalThis.game?.modules?.get(moduleId)?.active !== true
-  || globalThis.game?.modules?.get("monks-enhanced-journal")?.active !== true
-  || Object.keys(globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${moduleId}.session`] ?? {}).length > 0;
+export const COMPANION_WIRED = (moduleId) => {
+  const game = globalThis.game;
+  if (game?.modules?.get(moduleId)?.active !== true) return true;
+  if (game?.modules?.get("monks-enhanced-journal")?.active !== true) return true;
+  const registered = Object.keys(globalThis.CONFIG?.JournalEntryPage?.sheetClasses?.[`${moduleId}.session`] ?? {}).length > 0;
+  if (!registered) return false;
+  const MEJ = game.MonksEnhancedJournal;
+  if (typeof MEJ?.getApi === "function" || !!MEJ?.externalTypes) return true;
+  let shellWanted = true;
+  try { shellWanted = game.settings.get(moduleId, "shellHosting") !== false; } catch { shellWanted = true; }
+  if (!shellWanted) return true;
+  try { return !!MEJ?.getDocumentTypes?.()?.session; } catch { return false; }
+};
 
 /** Wait until the companion's sheet registrations are actually in CONFIG. */
 export async function waitCompanionWired(page, { timeout = 30_000 } = {}) {
@@ -772,7 +798,19 @@ export const EXPECTED_INVALID_TYPE_WHILE_DISABLED = /is not a valid type for the
 // non-GM client without it (verified live).
 export const KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG = /A subclass of Document must implement this getter/;
 
-/** Collect console errors on a page; call assertNoConsoleErrors() at spec end. */
+/**
+ * Collect console errors on a page; call assertNoConsoleErrors() at spec end.
+ *
+ * Entries are strings (specs split them by substring) but carry more than
+ * the message: the source location on a second line, the stack for a page
+ * error, and — once the handle resolves — the stack of any Error object a
+ * console.error was called with. The 2026-09-19 Foundry 13 sweep lost a
+ * whole run to eight one-line "TypeError: sheet.getData is not a function"
+ * entries with no file and no document; the 14.01 sweep hit the same wall
+ * on a 404 URL. Consequence for callers that classify by `.includes(id)`:
+ * an error whose location or stack names a module now counts as that
+ * module's, not only one whose text does.
+ */
 export function trackConsoleErrors(page, { ignore = [] } = {}) {
   const allIgnore = [KNOWN_LOW_RESOLUTION_WARNING, KNOWN_V13_COMPUTE_PRESSURE_POLICY, ...ignore];
   const errors = [];
@@ -784,14 +822,24 @@ export function trackConsoleErrors(page, { ignore = [] } = {}) {
     // — the actual URL only lives on msg.location().url, so ignore patterns
     // matching a resource path (like KNOWN_MEJ_SESSION_ICON_404) need that
     // checked too, not just the message text.
-    const location = msg.location()?.url ?? "";
+    const loc = msg.location() ?? {};
+    const location = loc.url ?? "";
     if (allIgnore.some((re) => re.test(text) || re.test(location))) return;
-    errors.push(text);
+    const index = errors.push(formatConsoleError({ text, url: location, line: loc.lineNumber, column: loc.columnNumber })) - 1;
+    // Console arguments are JSHandles: an Error's stack is only readable
+    // asynchronously, so it is folded into the entry when it arrives. A
+    // spec that asserts before then sees the location line at least; a
+    // handle disposed by navigation just yields nothing.
+    for (const arg of msg.args()) {
+      arg.evaluate((v) => (v instanceof Error ? v.stack : null))
+        .then((stack) => { if (stack && errors[index] !== undefined) errors[index] = appendStack(errors[index], stack); })
+        .catch(() => {});
+    }
   });
   page.on("pageerror", (err) => {
     const text = String(err);
     if (allIgnore.some((re) => re.test(text))) return;
-    errors.push(text);
+    errors.push(formatConsoleError({ text, stack: err?.stack || null }));
   });
   return errors;
 }

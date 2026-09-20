@@ -509,14 +509,24 @@ isolated rerun of the spec. No contained fix: the honest ones are to make the
 gmNotes editor `toggled` like the recap editor, or to give the companion its own
 v13 commit path — both design work. Follow-up 7.
 
-**J. `06-player-collab` is unstable on this stack (observation, not a class).**
+**J. `06-player-collab` is unstable on this stack — `harness`, diagnosed
+2026-09-20.**
 Its eight tests are the collaborative-ProseMirror ones, and after cause A was
-fixed they do not agree with themselves: run 3 failed `:328` and `:366`
+fixed they did not agree with themselves: run 3 failed `:328` and `:366`
 (6 passed / 2 failed), while an isolated rerun of the same file minutes later
 failed `:147`, `:205`, `:288` and `:328` (4 passed / 4 failed). Only `:328`
-fails in both, and it has a cause (I). The other three are timing-sensitive on
-Foundry 13 / dnd5e 5.3.3 and no single run's set of them is meaningful.
-Follow-up 8.
+fails in both, and it has a cause (I). The rest turned out to be one race:
+every one of those failures was a PLAYER seat whose `openSession` never saw a
+`SessionSheet` subsheet — MEJ held the entry as its `JournalEntrySheet`
+wrapper. `login()`'s wired predicate returned once the session sheet class was
+registered, but `wireNativeMode()` installs the shell shim *after* that
+registration (a dynamic import away, 0–130 ms on four fresh seats), and an
+`openJournalEntry` in that gap fails MEJ's demotion gate (`getDocumentTypes()`
+has no `session` yet). Instrumented runs: 5 of 5 failed opens had the shim
+absent before and after the call, 4 of 4 passing opens had it present or
+arriving mid-call. Fix: the predicate also waits for the wrap's observable
+effect in native mode (`tests/e2e/helpers/foundry.mjs` `COMPANION_WIRED`,
+unit-tested). Follow-up 8 (closed).
 
 ## Fixes
 
@@ -710,6 +720,29 @@ portal type) and a tenth test to the gate, so both stock gates were re-run from
 | 2026-09-20 | stock gate, native mode | 14.368 | stock, module worktree at tag `14.01` (`9d66fb9`) | world-a | **10/10 passed** |
 | 2026-09-20 | stock gate return phase | 14.368 | fork line `9569984` | world-a | **3/3 passed** — `api` mode resolves, the GM ready-sweep re-stamped the MEJ type flag, search finds the roundtripped session, fixture deleted |
 
+### 2026-09-20 — follow-up wave (groups 1 and 2 of the post-review follow-ups)
+
+Harness-only changes (stranded-folder sweep, the wired predicate's shim wait,
+console-error locations), so the gates were re-run rather than re-argued.
+
+| date | gate | Foundry build | MEJ build | world | result |
+|---|---|---|---|---|---|
+| 2026-09-20 | stock gate, native mode (after the folder sweep) | 13.351 | stock 13.06 | world-b | **10/10 passed**; cleanup phase 1/1 |
+| 2026-09-20 | stock gate, native mode (after the predicate + console changes) | 13.351 | stock 13.06 | world-b | **10/10 passed**; cleanup phase 1/1 |
+| 2026-09-20 | `06-player-collab` ×3, isolated, before the predicate fix | 13.351 | stock 13.06 | world-b | 4/4, 5/3, 6/2 failed — every non-`:328` failure a player seat opening pre-shim (cause J) |
+| 2026-09-20 | `06-player-collab` ×3, isolated, after the predicate fix | 13.351 | stock 13.06 | world-b | 7/1, 7/1, 6/2 — `:328` (follow-up 7) every run; `:231` once (see below) |
+| 2026-09-20 | api-mode spot check (`00-mej-api`, `12-native-mode`) | 14.368 | fork line `9569984` | world-a | **11/11 passed** — the predicate short-circuits on the extension API |
+
+Residual from the post-fix runs: `06-player-collab:231` ("two owners edit at
+once") failed once in three — the second owner's `prose-mirror` came back with
+no body text at all, not even its own sentence, i.e. the shared collaborative
+session was torn down under it (the file's own `commitRecap` comment describes
+exactly that teardown when one owner saves). Never seen in the three pre-fix
+runs; not the demotion-gate race, which is a different symptom (wrapper, no
+`SessionSheet`). Recorded, not chased: one occurrence, no companion code in the
+path, and a Foundry 13.351 collaborative-editing behaviour. Class `platform`,
+provisional.
+
 Both stock phases ran the same ten tests: clean boot (native mode, no API, no
 companion error notification), Hub from the scene-controls button with working
 tabs and an inert configure-sheet control, the Hub-open race, New Session
@@ -843,6 +876,12 @@ suite on v13) is not a gate and is not expected to be green.
 2. **Native mode wires itself after `game.ready`, and the gap is user-visible.**
    Measured: sheet registrations land 1–3s after ready on this stack, and
    anything opened before then resolves to `BaseSheet` and trips follow-up 1.
+   Addendum 2026-09-20: there is a second, shorter window inside the first —
+   the shell shim installs 0–130 ms *after* the sheet registrations (cause J),
+   and an open in it gets MEJ's entry wrapper rather than `BaseSheet`. The
+   harness now waits for both; a spec for this item should decide whether the
+   shim is installed before the registrations or the whole wiring is made
+   atomic from the user's point of view.
    The harness now waits for the real condition, so the suite is honest about it,
    but a GM who clicks a Session in the first second of a native-mode client
    still gets a broken render and a console TypeError. The cause is structural:
@@ -867,14 +906,17 @@ suite on v13) is not a gate and is not expected to be green.
    both stacks; the 14.01 sweep carries it as `baseline`. It needs one
    investigation that serves both lines, not a v13 one. Owner: sub-project.
 
-5. **`assertNoConsoleErrors` still records only message text.** Root cause B was
+5. **`assertNoConsoleErrors` still records only message text — closed
+   2026-09-20** (entries now carry `msg.location()` and, for an Error
+   argument or a page error, the stack; `tests/e2e/helpers/console-format.mjs`). Root cause B was
    invisible for a whole sweep because the harness stores `msg.text()` and
    nothing else: eight tests failed with a one-line TypeError and no stack, no
    source location, and no clue which document was involved. The 14.01 sweep
    raised the same gap for a 404 URL. Worth recording `msg.location()` and, where
    the console argument is an `Error`, its `stack`. Owner: harness backlog.
 
-6. **`world-b` is a module-rich world.** lib-wrapper, campaign-record,
+6. **`world-b` is a module-rich world — closed 2026-09-20** (stated in
+   `tests/e2e/README.md` with the active-module list). lib-wrapper, campaign-record,
    omnipresence, monks-active-tiles, levels and others are active, and
    omnipresence runs a macro-sync reconcile on every login. Nothing in this sweep
    was attributed to them, but it is not the clean two-module world the v13 stock
@@ -895,14 +937,14 @@ suite on v13) is not a gate and is not expected to be green.
    spec first.** Worth confirming first whether this affects v14 users at all
    (it should not) and therefore whether it is v13-support work or a real bug.
 
-8. **`06-player-collab` is unstable on Foundry 13 / dnd5e 5.3.3.** With cause A
-   fixed, run 3 failed `:328` + `:366` and an isolated rerun minutes later failed
-   `:147`, `:205`, `:288` + `:328` — different sets, same file, all of them
-   collaborative-ProseMirror tests. `:328` has a cause (follow-up 7); the rest
-   need someone to decide whether the editor's collaborative join is genuinely
-   slower on this stack (a timeout question) or whether something is really
-   racing. Until then no single run's failure set from this file should be read
-   as a signal. Owner: harness backlog / sub-project.
+8. **`06-player-collab` is unstable on Foundry 13 / dnd5e 5.3.3 — closed
+   2026-09-20.** Neither a timeout question nor an editor race: the harness's
+   login wait returned before the shell shim was installed, and a player seat
+   opening a Session in that 0–130 ms gap got MEJ's entry wrapper (cause J,
+   updated above). `COMPANION_WIRED` now waits for the shim's type-map wrap in
+   native mode. Three isolated runs after the fix are recorded in the "Release
+   gates" section; `:328` (follow-up 7) is the only expected failure, and one
+   run also lost `:231` to a collaborative-session teardown (residual there).
 
 9. **In api mode on the fork, `fixType` rewrites an opened Session page's
    in-memory `type` to the bare `"session"` key.** The fork's `fixType`
