@@ -249,13 +249,17 @@ rerun. It shares its shape with `09-secrets:528` and is attributed to the same
 ready-time wiring window (see class `companion` below) — which is exactly the
 kind of cause that produces an intermittent result.
 
-Every other failure reproduced: **45 failures to attribute.**
+Every other failure reproduced. The attribution below covers all **46** of run
+1's failures — 45 reproduced plus the one flake, which is attributed like the
+rest because its cause is known.
 
 ## Attribution
 
-Eight root causes account for all 45 — six of them visible in run 1, and two
-more (I and J) that only became visible once the largest cluster was out of the
-way. Classes are the brief's: `platform`,
+**Eight root causes, A–H, account for all 46 of run 1's failures** (45 of which
+reproduced on the isolated rerun; `09-secrets:590` is the one flake, and it is
+row 46). Two further findings, **I and J, are not run-1 causes at all** — they
+only became visible once cause A stopped masking the spec they live in, and they
+are reported after the table under "Causes that appeared after the fixes". Classes are the brief's: `platform`,
 `mej-13.06`, `shim`, `companion`, `harness`.
 
 ### Method
@@ -278,7 +282,7 @@ way. Classes are the brief's: `platform`,
 
 ### Root causes
 
-**A. MEJ's `allow-player` world setting was off (14 tests) — `harness`.**
+**A. MEJ's `allow-player` world setting was off (17 tests) — `harness`.**
 `MonksEnhancedJournal.openJournalEntry()` opens with
 `if (!game.user.isGM && !setting('allow-player')) return false;`
 (13.06 `monks-enhanced-journal.js:2311`), and the setting's registered default
@@ -400,31 +404,6 @@ GM and player alike and carries no information either way. The module already
 treats it as optional (`scripts/logic/secret-reveal-toggles.mjs:17`,
 `if ("revealable" in block)`); only the assertion did not.
 
-**I. `HTMLProseMirrorElement#save()` does not exist on Foundry 13 (1 test) — `platform`.**
-Masked in run 1 by cause A (the whole spec failed at the player seat), visible
-only once that was fixed. `SessionSheet.onEditGmNotes` commits the GM-notes
-editor by calling `editor?.save()`: unlike the recap editor, gmNotes is not a
-`toggled` editor, so the pencil is its only commit point and nothing else ever
-saves it. Foundry **14**.368 exposes a public `save()` on
-`HTMLProseMirrorElement` (`foundry.mjs:97241` + `:275` of that class body);
-Foundry **13**.351 has only a private `#save()` (`foundry.mjs:72613`, `#save()`
-at `:269` of the class body), reachable from outside only through the `open`
-attribute — and `set open()` returns early for a non-toggled editor. So on v13
-the call throws, `.editing` is never removed, and `system.gmNotes` never
-receives the text. `06-player-collab:328` failed in run 3 and again on an
-isolated rerun of the spec. No contained fix: the honest ones are to make the
-gmNotes editor `toggled` like the recap editor, or to give the companion its own
-v13 commit path — both design work. Follow-up 6.
-
-**J. `06-player-collab` is unstable on this stack (observation, not a class).**
-Its eight tests are the collaborative-ProseMirror ones, and after cause A was
-fixed they do not agree with themselves: run 3 failed `:328` and `:366`
-(6 passed / 2 failed), while an isolated rerun of the same file minutes later
-failed `:147`, `:205`, `:288` and `:328` (4 passed / 4 failed). Only `:328`
-fails in both, and it has a cause (I). The other three are timing-sensitive on
-Foundry 13 / dnd5e 5.3.3 and no single run's set of them is meaningful.
-Follow-up 7.
-
 **H. Carried in from the v14 line (1 test).**
 `09-secrets:970` "duplicate section id on two pages" fails with the same symptom
 on Foundry 14.368 + MEJ 14.01 + the fork line — the 14.01 sweep
@@ -447,8 +426,8 @@ next.
 | `06-player-collab` | two owners edit at once | 231 | `harness` | A | `4f94527` | done |
 | `06-player-collab` | relayed image lands in the shared recap | 264 | `harness` | A | `4f94527` | done |
 | `06-player-collab` | viewer's session refreshes on another owner's save | 288 | `harness` | A | `4f94527` | done |
-| `06-player-collab` | GM notes commit on pencil close | 328 | `harness`, then `platform` | A in run 1; once that was fixed, I — no public `HTMLProseMirrorElement#save()` on 13.351 | `4f94527`, then none | follow-up 6 |
-| `06-player-collab` | recap survives closing the shell with the editor open | 366 | `harness`, then flaky | A in run 1; failed run 3, passed the isolated rerun — J | `4f94527` | follow-up 7 |
+| `06-player-collab` | GM notes commit on pencil close | 328 | `harness` | A; and once A was fixed this test failed again for an unrelated reason — cause I below, which run 1 could not see | `4f94527`, then none | follow-up 7 |
+| `06-player-collab` | recap survives closing the shell with the editor open | 366 | `harness` | A; failed again in run 3 and passed on an isolated rerun of the file — cause J below | `4f94527` | follow-up 8 |
 | `07-knowledge` | playerHidden values never leak to a player | 185 | `harness` | A | `4f94527` | done |
 | `07-knowledge` | backlink permission leak | 417 | `harness` | A | `4f94527` | done |
 | `08-query-graph` | dashboard CRUD, hidden/shown per showPlayers | 137 | `harness` | A (fails at the player seat's `openHub`) | `4f94527` | done |
@@ -498,10 +477,46 @@ the isolated rerun, `09-secrets:590` being the one flake):
 | `mej-13.06` | 4 | D (1), F (3) |
 | `platform` | 1 | G |
 
+Every row carries exactly one class, and the table covers run 1 only, so the
+`platform` row counts G alone. Cause I is also `platform`, but it is not a run-1
+failure and is deliberately not counted here — see "Causes that appeared after
+the fixes" below.
+
 Root cause F splits across two classes on purpose: the three rows whose
 *subject* is the extension API or MEJ's dialog are `mej-13.06` (the thing under
 test is genuinely absent on stock), while the seven that merely needed a Session
 document to exist are `harness` (the test chose an api-only way to make one).
+
+### Causes that appeared after the fixes
+
+Neither of these is in the table above, and neither is counted in it: they are
+**not** run-1 attributions. Run 1 could not see them because cause A failed
+`06-player-collab` at the player seat before either could be reached.
+
+**I. `HTMLProseMirrorElement#save()` does not exist on Foundry 13 (1 test) — `platform`.**
+Masked in run 1 by cause A (the whole spec failed at the player seat), visible
+only once that was fixed. `SessionSheet.onEditGmNotes` commits the GM-notes
+editor by calling `editor?.save()`: unlike the recap editor, gmNotes is not a
+`toggled` editor, so the pencil is its only commit point and nothing else ever
+saves it. Foundry **14**.368 exposes a public `save()` on
+`HTMLProseMirrorElement` (`foundry.mjs:97241` + `:275` of that class body);
+Foundry **13**.351 has only a private `#save()` (`foundry.mjs:72613`, `#save()`
+at `:269` of the class body), reachable from outside only through the `open`
+attribute — and `set open()` returns early for a non-toggled editor. So on v13
+the call throws, `.editing` is never removed, and `system.gmNotes` never
+receives the text. `06-player-collab:328` failed in run 3 and again on an
+isolated rerun of the spec. No contained fix: the honest ones are to make the
+gmNotes editor `toggled` like the recap editor, or to give the companion its own
+v13 commit path — both design work. Follow-up 7.
+
+**J. `06-player-collab` is unstable on this stack (observation, not a class).**
+Its eight tests are the collaborative-ProseMirror ones, and after cause A was
+fixed they do not agree with themselves: run 3 failed `:328` and `:366`
+(6 passed / 2 failed), while an isolated rerun of the same file minutes later
+failed `:147`, `:205`, `:288` and `:328` (4 passed / 4 failed). Only `:328`
+fails in both, and it has a cause (I). The other three are timing-sensitive on
+Foundry 13 / dnd5e 5.3.3 and no single run's set of them is meaningful.
+Follow-up 8.
 
 ## Fixes
 
@@ -512,10 +527,11 @@ Seven commits, each with its test.
 | `e2fe738` | `HubShellDocument.update()` is a local no-op, like `setFlag`/`unsetFlag` | `test/hub-shell-document.test.js` (new, 2 unit tests; red before the change with "doc.update is not a function") |
 | `4f94527` | global setup turns MEJ's `allow-player` world setting on (`ensureMejPlayerAccess()`) | `03-search.spec.mjs` on v13: was 2 passed / 2 failed, now 7/7 |
 | `02a9858` | `login()`/`gotoGame()`/`reloadGame()` wait for the companion's sheet registrations (`waitCompanionWired()`) | `10-secrets-hub` + `20-timeline-journal-open` on v13: was 3 failed + 5 never-run, now 12 passed / 1 failed |
-| `6b1e1e9` | global setup sweeps an empty leftover timeline journal, reusing `cleanupTimelineJournals(page, [])` | `02-hub-timeline.spec.mjs` on v13: was 2 passed / 3 failed, now 8/8 |
+| `6b1e1e9`, narrowed by `949f07b` | global setup sweeps a stranded timeline journal — `cleanupStrandedTestTimelines()`, TT--named only | `02-hub-timeline.spec.mjs` on v13: was 2 passed / 3 failed, now 8/8; plus a new `18-harness-cleanup` test that an empty "Campaign Timeline" survives the sweep and a TT- one beside it does not |
 | `391fdba` | `createSessionEntry()` routes around MEJ's New Entry dialog on a stock build; the dialog-specific test and `12-native-mode:215` skip | `01-session` + `12-native-mode` on v13: was 8 failed, now 14 passed / 2 skipped |
 | `49cb24b` | `00-mej-api.spec.mjs` skips with no extension API | `00-mej-api` on v13: was 2 failed, now 2 skipped |
 | `22dd94d` | `secret-block` assertions fall back to `button.reveal`'s hidden state where `revealable` does not exist | `09-secrets` on v13: `:773` green; the file went 6/8 → 16 passed / 1 failed |
+| `949f07b` | review round: the sweep above narrowed to TT- names; `waitCompanionWired` short-circuits `absent` mode; the API-presence predicate corrected in four specs | v14 full suite 135/1/23; `00`+`01`+`12` on v14 18/18 and on v13 14 passed / 4 skipped; v13 `02`+`18` 12/12 |
 
 No change was made under `monks-enhanced-journal`.
 
@@ -576,6 +592,89 @@ Failures:
 
 `npm test`: 77 files, 868 tests, all passing. `npm run check:links`: OK.
 
+## Run 4 — the api-mode suite on Foundry 14, after the harness changes
+
+Four of this sweep's seven fixes touch shared harness code that every target
+uses — `ensureMejPlayerAccess()`, the global-setup timeline sweep,
+`waitCompanionWired()` inside `login`/`gotoGame`/`reloadGame`, and the
+API-presence gates. The v14 api-mode suite is the release regression net, so it
+had to be re-run before any of this could be called done.
+
+Stack: Foundry 14.368, dnd5e 6.0.3, world-a, MEJ worktree at `9569984`
+(`integration-14.08`, the fork line, extension API present), companion served
+from this worktree by global setup and re-pinned to the main checkout by
+teardown.
+
+```
+PLAYWRIGHT_JSON_OUTPUT_NAME=$OUT/api-after-harness.json \
+  npx playwright test --trace off --reporter=list,json
+```
+
+| Spec | passed | failed | skipped |
+|---|---|---|---|
+| 00-mej-api.spec.mjs | 0 | 0 | 2 |
+| 01-session.spec.mjs | 6 | 0 | 1 |
+| 02-hub-timeline.spec.mjs | 5 | 0 | 0 |
+| 03-search.spec.mjs | 4 | 0 | 0 |
+| 04-auto-capture.spec.mjs | 2 | 0 | 0 |
+| 05-docx-import.spec.mjs | 1 | 0 | 0 |
+| 06-player-collab.spec.mjs | 8 | 0 | 0 |
+| 07-knowledge.spec.mjs | 8 | 0 | 0 |
+| 08-query-graph.spec.mjs | 9 | 0 | 0 |
+| 09-secrets.spec.mjs | 13 | 1 | 0 |
+| 10-secrets-hub.spec.mjs | 3 | 0 | 0 |
+| 11-auto-link-scope.spec.mjs | 9 | 0 | 0 |
+| 12-native-mode.spec.mjs | 5 | 0 | 1 |
+| 13-stock-smoke.spec.mjs | 0 | 0 | 13 |
+| 14-campaigns.spec.mjs | 12 | 0 | 2 |
+| 15-campaign-portal.spec.mjs | 7 | 0 | 0 |
+| 16-multi-timeline.spec.mjs | 8 | 0 | 0 |
+| 17-media-routing.spec.mjs | 5 | 0 | 0 |
+| 18-harness-cleanup.spec.mjs | 4 | 0 | 0 |
+| 19-reveal-migration.spec.mjs | 2 | 0 | 0 |
+| 20-timeline-journal-open.spec.mjs | 7 | 0 | 0 |
+| 21-players-write-sessions.spec.mjs | 1 | 0 | 0 |
+| 22-auto-link-sessions.spec.mjs | 3 | 0 | 0 |
+| 23-campaign-creation.spec.mjs | 10 | 0 | 0 |
+| auth.setup.mjs | 3 | 0 | 0 |
+| guide-screenshots.spec.mjs | 0 | 0 | 4 |
+| **total (api-mode after harness fixes)** | 135 | 1 | 23 |
+
+Failures:
+- `09-secrets.spec.mjs:982` "duplicate section id on two pages: reveal from page 2 touches only page 2" — Error: expect(received).toEqual(expected) // deep equality
+
+**135 passed, 1 failed, 23 skipped — the Task 5 baseline exactly**, and the one
+failure is the known `09-secrets:970` (here `:982`), which reproduced on its
+isolated rerun rather than flaking. No new failure was introduced on the v14
+line by any harness change.
+
+Read-only audit of world-a before the run, so the record says what the
+(now-replaced) unledgered sweep would have met there:
+
+| journal | name TT-? | timepoints | non-TT timepoints | old sweep would delete | new sweep would delete |
+|---|---|---|---|---|---|
+| `rBipLpGbbqbYfIx4` | no — "Radiant Citadel — Timeline" (folder "Radiant Citadel") | 34 | 34 | no | no |
+
+That is world-a's only timeline journal, and `timelineJournalId` /
+`hubTimelineSelection` were both `""`. So the unledgered sweep would not in fact
+have deleted anything on this world — the hazard it created was latent (a real
+timeline before its first timepoint, or a freshly created campaign's default
+one), not realised. It is fixed anyway: `949f07b` narrows the sweep to TT- names
+and `18-harness-cleanup` now pins that.
+
+**One regression the run did catch**, and it was mine: three skip gates added in
+`391fdba`/`49cb24b` tested
+`typeof game.MonksEnhancedJournal?.registerSheetType === "function"`. That name
+lives on the object `getApi()` **returns** and hands to the
+`setupMonksEnhancedJournal` hook — never on `game.MonksEnhancedJournal` — so it
+reads false on the fork too, and `00-mej-api` (2 tests), `01-session:57` and
+`12-native-mode:215` skipped on the v14 line instead of running. They are real
+api-mode coverage. `949f07b` switches all of them to `getApi`/`externalTypes`;
+`00`+`01`+`12` then run 18/18 on v14 and skip exactly the 4 api-only tests on
+v13. The same wrong predicate was already in `13-stock-smoke.spec.mjs:234`,
+where it asserts `apiPresent === false` — so that assertion had been passing
+vacuously, on either build, and is fixed in the same commit.
+
 ## Verdict
 
 **The companion runs on Foundry 13.351 with a genuinely stock MEJ 13.06, in
@@ -606,7 +705,7 @@ honest, but a GM who clicks a Session in the first second still sees it.
 Follow-up 2, spec first.
 
 **Everything else was environment or test assumption.** 28 of 46 rows are
-`harness`: MEJ's `allow-player` world setting (14 tests), a leftover empty
+`harness`: MEJ's `allow-player` world setting (17 tests), a leftover empty
 timeline journal (3), and specs that assumed the fork's extension API (10, of
 which 3 are genuinely api-only and now skip). None of them is a defect in
 anything, and all of them would have kept failing on every future v13 run.
@@ -614,9 +713,16 @@ anything, and all of them would have kept failing on every future v13 run.
 **Four failures remain in run 3**, none of them blocking and none of them new
 companion defects: `10-secrets-hub:167` (the MEJ 13.06 defect, follow-up 1),
 `09-secrets:970` (the same failure the v14 line already carries as a baseline,
-follow-up 3), `06-player-collab:328` (Foundry 13 has no public
-`HTMLProseMirrorElement#save()`, follow-up 6) and `06-player-collab:366` (which
-passed on its isolated rerun; the file is unstable on this stack, follow-up 7).
+follow-up 4), `06-player-collab:328` (Foundry 13 has no public
+`HTMLProseMirrorElement#save()`, follow-up 7) and `06-player-collab:366` (which
+passed on its isolated rerun; the file is unstable on this stack, follow-up 8).
+
+**The v14 line is unaffected.** The four harness changes that every target
+shares were re-run as the api-mode suite on Foundry 14.368 / MEJ `9569984`:
+135 passed, 1 failed, 23 skipped — the Task 5 baseline, with the known
+`09-secrets:970` as the only failure. One regression of my own was caught there
+and fixed (`949f07b`): a wrong API-presence predicate had made four api-mode
+tests skip on the fork line. See Run 4.
 
 **What this does NOT establish.** The suite runs in native mode on stock MEJ
 13.06, which is what the shim was built for — it says nothing about MEJ 14.01 in
@@ -674,25 +780,34 @@ attributed to the platform.
    user-visible "still starting" state. Not attempted here — it is design work,
    not a contained fix. Owner: **sub-project, spec first.**
 
-3. **`09-secrets:970` — shared with the v14 line.** Same test, same symptom, on
+3. **The three `mej-13.06` rows that are not issue candidates.**
+   `00-mej-api:15`, `00-mej-api:103` and `01-session:57` are classed
+   `mej-13.06` because the thing they test is genuinely absent from a stock
+   build — but the fix for them is **already proposed upstream**: they are
+   exactly what MEJ's extension API (upstream PR #823, `externalTypes` +
+   `registerSheetType`) adds. They need no new issue and no new work; they are
+   the argument for that PR. Nothing to do beyond noting that these three skips
+   would become real assertions the day #823 lands. Owner: none.
+
+4. **`09-secrets:970` — shared with the v14 line.** Same test, same symptom, on
    both stacks; the 14.01 sweep carries it as `baseline`. It needs one
    investigation that serves both lines, not a v13 one. Owner: sub-project.
 
-4. **`assertNoConsoleErrors` still records only message text.** Root cause B was
+5. **`assertNoConsoleErrors` still records only message text.** Root cause B was
    invisible for a whole sweep because the harness stores `msg.text()` and
    nothing else: eight tests failed with a one-line TypeError and no stack, no
    source location, and no clue which document was involved. The 14.01 sweep
    raised the same gap for a 404 URL. Worth recording `msg.location()` and, where
    the console argument is an `Error`, its `stack`. Owner: harness backlog.
 
-5. **`world-b` is a module-rich world.** lib-wrapper, campaign-record,
+6. **`world-b` is a module-rich world.** lib-wrapper, campaign-record,
    omnipresence, monks-active-tiles, levels and others are active, and
    omnipresence runs a macro-sync reconcile on every login. Nothing in this sweep
    was attributed to them, but it is not the clean two-module world the v13 stock
    gate's description implies; worth stating in `tests/e2e/README.md`. Owner:
    harness backlog.
 
-6. **`SessionSheet.onEditGmNotes` has no commit path on Foundry 13.**
+7. **`SessionSheet.onEditGmNotes` has no commit path on Foundry 13.**
    It calls `editor?.save()`, which exists only from Foundry 14
    (`HTMLProseMirrorElement#save()`, public at 14.368; private `#save()` at
    13.351). On v13 the call throws, the editor never closes, and the notes are
@@ -706,10 +821,10 @@ attributed to the platform.
    spec first.** Worth confirming first whether this affects v14 users at all
    (it should not) and therefore whether it is v13-support work or a real bug.
 
-7. **`06-player-collab` is unstable on Foundry 13 / dnd5e 5.3.3.** With cause A
+8. **`06-player-collab` is unstable on Foundry 13 / dnd5e 5.3.3.** With cause A
    fixed, run 3 failed `:328` + `:366` and an isolated rerun minutes later failed
    `:147`, `:205`, `:288` + `:328` — different sets, same file, all of them
-   collaborative-ProseMirror tests. `:328` has a cause (follow-up 6); the rest
+   collaborative-ProseMirror tests. `:328` has a cause (follow-up 7); the rest
    need someone to decide whether the editor's collaborative join is genuinely
    slower on this stack (a timeout question) or whether something is really
    racing. Until then no single run's failure set from this file should be read
