@@ -94,6 +94,8 @@ const FIXTURE = "TT-STOCKSMOKE Session";
 // and removed inside a single test, but it is named here because every phase's
 // teardown has to be able to sweep it if that test died mid-way.
 const CAMPAIGN_FIXTURE = "TT-STOCKSMOKE Campaign";
+// An MEJ person entry for the knowledge-panel contrast check (0.20.1).
+const PERSON_FIXTURE = "TT-STOCKSMOKE Person";
 const ADAPTER = `/modules/${MODULE_ID}/scripts/integrations/mej-adapter.mjs`;
 const CONTRAST = `/modules/${MODULE_ID}/scripts/logic/contrast.mjs`;
 
@@ -852,9 +854,37 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
 
   test("session and Hub text stay readable under both colour schemes", async ({ page }) => {
     await bootAsRealUser(page);
+    // 0.20.1: the knowledge panel is appended below every MEJ-typed sheet and
+    // used to inherit the dark theme's light text over MEJ 13.06's parchment
+    // (white-on-grey, reported 2026-09-22). Measured on a real MEJ person page
+    // opened through MEJ's own entry point, under both schemes, plus the
+    // structural half of that fix: the expanded panel is capped at half its
+    // pane and scrolls itself.
+    const personId = await page.evaluate(async (name) => {
+      const entry = await JournalEntry.implementation.create({
+        name, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+        pages: [{ name, type: "monks-enhanced-journal.person", flags: { "monks-enhanced-journal": { type: "person" } }, text: { content: "<p>Stock-smoke person.</p>" } }]
+      });
+      return entry.id;
+    }, PERSON_FIXTURE);
     try {
       for (const scheme of ["light", "dark"]) {
         await setColorScheme(page, scheme);
+
+        await page.evaluate(async (id) => { await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)); }, personId);
+        await page.waitForSelector("#MonksEnhancedJournal .mej-cc-knowledge", { timeout: 15_000 });
+        const panelShape = await page.evaluate(() => {
+          const panel = document.querySelector("#MonksEnhancedJournal .mej-cc-knowledge");
+          panel.classList.remove("collapsed");
+          const cs = getComputedStyle(panel);
+          return { maxHeight: cs.maxHeight, overflowY: cs.overflowY };
+        });
+        const knowledge = await textContrast(page, "#MonksEnhancedJournal .mej-cc-knowledge-title");
+        expect(panelShape, `expanded knowledge panel is capped and scrolls, ${scheme}`).toEqual({ maxHeight: "50%", overflowY: "auto" });
+        expect(Number.isNaN(knowledge.ratio), `knowledge panel unmeasurable, ${scheme}: ${knowledge.surface}`).toBe(false);
+        expect(knowledge.ratio, `knowledge panel text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+        test.info().annotations.push({ type: `contrast-knowledge-${scheme}`, description: JSON.stringify(knowledge) });
+
         // Opened through the adapter rather than a sidebar click: this test is
         // about what the hosted session LOOKS like, and the sidebar row is not
         // reliably clickable here — MEJ collapses Foundry's directory when its
@@ -891,6 +921,8 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
       }
     } finally {
       await setColorScheme(page, "");
+      await page.evaluate(async (id) => { await game.journal.get(id)?.delete(); }, personId);
+      await removeShellTabs(page);
     }
   });
 

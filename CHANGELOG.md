@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.20.1 (2026-09-22)
+
+Knowledge panel readability on Foundry 13.
+
+- **Fixed:** under a dark colour scheme the knowledge panel (tags, attributes, Mentioned in) at the foot of every MEJ page rendered light text over MEJ 13.06's parchment and was unreadable; it now paints its own dark surface in dark mode.
+- **Fixed:** an expanded knowledge panel with many mentions grew the whole sheet; it is now capped at half the pane and scrolls itself.
+- **Changed:** the stock-MEJ gate also measures the knowledge panel's contrast on a real MEJ person page under both colour schemes and checks the cap.
+
 ## 0.20.0 (2026-09-20)
 
 Shell hosting without the extension API, Foundry 13 fixes, and a Foundry 13 test sweep.

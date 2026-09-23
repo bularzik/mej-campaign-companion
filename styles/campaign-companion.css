@@ -629,6 +629,19 @@
   font-style: italic;
 }
 
+/* Expanded, the panel never takes more than half of the sheet it sits in:
+   a person mentioned in thirty sessions used to grow the sheet by the whole
+   Mentioned-in list (nothing above the panel scrolls in MEJ's shell on
+   Foundry 13). The panel scrolls itself instead. Percentage against the
+   sheet's flex column (definite in MEJ's flexcol chain); min-height: 0 lets a
+   flex child actually shrink below its content. */
+.mej-cc-knowledge:not(.collapsed) {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 50%;
+  overflow-y: auto;
+}
+
 /* Collapsed state: only the bar stays (spec 2026-09-04 §D). */
 .mej-cc-knowledge-bar {
   display: flex;
@@ -1174,6 +1187,21 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 
 .theme-dark .mej-cc-import-wizard-app .mej-cc-import-sections thead th {
   background-color: var(--color-cool-5, #0b0a13);
+}
+
+/* The knowledge panel is appended below MEJ's own sheet content and sets no
+   colours of its own, so under a dark scheme it inherited the theme's light
+   text - while MEJ 13.06's dark-themed shell still paints the parchment
+   image behind it (measured 2026-09-22 on Foundry 13.351: text rgb(239,230,216)
+   over /ui/parchment.jpg). MEJ's own fields set their colours; ours did not.
+   Give the panel its own dark surface in dark mode so it reads whether the
+   ground behind it is parchment (13.06) or truly dark (14.x). */
+.theme-dark .mej-cc-knowledge {
+  background: rgba(11, 10, 19, 0.85);
+  color: var(--color-text-primary, var(--color-light-2, #efe6d8));
+  border-top-color: var(--color-cool-4, #47474f);
+  border-radius: 4px;
+  padding: 0.5em 0.6em;
 }
 
 /* The graph draws on the window's dark surface in dark mode; the legacy
