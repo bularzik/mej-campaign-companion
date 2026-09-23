@@ -886,6 +886,15 @@ suite on v13) is not a gate and is not expected to be green.
    must not take new commits** — this goes to upstream as a new issue.
    Owner: MEJ backlog / upstream issue against 13.06 (and 14.01, where the same
    code stands).
+   **Correction 2026-09-22:** 14.01 does *not* carry the defect. Tag `14.01`
+   (upstream `main`, `9d66fb9`) already registers each page sheet under both
+   keys (`monks-enhanced-journal.js:2225`: the bare key and the
+   `monks-enhanced-journal.`-prefixed key), so `10-secrets-hub:167` on 14.01 fails
+   later and differently (the unguarded `sheet.element`, handed upstream as
+   PR #830). The defect is 13.06-only, upstream has no 13.x branch to target,
+   and no upstream issue was filed (decision 2026-09-22: the guard PR only).
+   This entry stays as the record for anyone running the companion on stock
+   13.06.
 
 2. **Native mode wires itself after `game.ready`, and the gap is user-visible — closed 2026-09-20.**
    Measured: sheet registrations land 1–3s after ready on this stack, and
@@ -1010,3 +1019,19 @@ suite on v13) is not a gate and is not expected to be green.
    2026-09-20 fix wave generalized it from the session type alone to
    `isCompanionPageType`). Owner: **MEJ backlog** (fork side; PR #821 is frozen,
    so not there).
+   **Closed 2026-09-22 as by-design.** The rewrite is the fork's documented
+   contract, not a defect: the fork's `API.md` ("`fixType()` and the
+   foreign-subtype guarantee") states that `fixType` coerces a recognised
+   page's in-memory `type` to the bare key, and that sheets are registered
+   under both forms for exactly that reason; the companion's own
+   `01-session.spec.mjs:120` asserts `memType: "session"` after an api-mode
+   open. The "every consumer would miss that page" claim above does not hold:
+   `mejTypeWith()` (`scripts/logic/mej-type.mjs`) falls through to MEJ's
+   `getMEJType` when `isSessionDoc` misses, and in api mode MEJ's registry
+   knows `session`, so search, auto-link, the Hub index, export and the graph
+   still resolve the page; the only direct `isSessionDoc` caller,
+   `healSessionFlags`, skips a coerced page whose flag is by construction
+   intact. Changing the fork would mean changing `API.md`, PR #823 and the
+   companion test for no observable gain. Native mode is unaffected: there the
+   shim's wrap 2 restores the type because stock MEJ's registry does not know
+   the companion's types at all.
