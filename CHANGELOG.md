@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.2 (2026-09-22)
+
+Sweep-report follow-ups. Docs only, no runtime change.
+
+- **Changed:** the MEJ 14.01 sweep report records what 0.20.0 closed (the stock gate, the manifest's verified pairing) and that the twelve "new, both lines" failures did not reproduce on the two later full runs; the MEJ-side page-render error it found is offered upstream as Monk's Enhanced Journal pull request #830.
+- **Changed:** the Foundry 13 sweep report corrects its claim that MEJ 14.01 shares 13.06's sheet-registration defect (14.01 already registers both type keys) and closes the api-mode `fixType` note as documented MEJ behaviour rather than a defect.
+
 ## 0.20.1 (2026-09-22)
 
 Knowledge panel readability on Foundry 13.
