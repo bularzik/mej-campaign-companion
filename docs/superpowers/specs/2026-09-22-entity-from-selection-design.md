@@ -2,7 +2,8 @@
 
 Date: 2026-09-22. Status: approved in chat (placement A = companion, linking
 option 1 = reuse the retro pass, approach B = separate menu item, design
-sections 1–4), for `writing-plans`. Target release: 0.21.0.
+sections 1–4; campaign contributors = privilege option 3 via GM relay,
+design section 5), for `writing-plans`. Target release: 0.21.0.
 
 ## 1. Problem
 
@@ -24,13 +25,17 @@ too.
 - A **new, separate** context-menu item, "Create Entity from Selection",
   added to MEJ's description context menu. The Extract header button gets no
   new behavior.
+- Available to GMs and to **campaign contributors** (§4.5): non-GM users
+  a GM lists per campaign. Contributors' requests are executed by the active
+  GM's client.
 - Out of scope: edit mode (ProseMirror open), selections spanning blocks,
   selections containing or inside a link, a folder picker, seeding the new
   entity's body, the `session` type.
 
 ## 3. User-facing behavior
 
-1. The GM selects 1–80 characters (after trimming) of text inside a single
+1. A GM, or a contributor of the source page's campaign while a GM is
+   connected, selects 1–80 characters (after trimming) of text inside a single
    block of a page in **display mode**, right-clicks, and sees
    "Create Entity from Selection" beside MEJ's existing items. For any other
    selection the item is hidden.
@@ -53,7 +58,9 @@ too.
      the usual review dialog, off does nothing);
    - the new entity opens as a **background tab** in the MEJ browser; the
      current page keeps focus. If the sheet has no `enhancedjournal` host,
-     nothing is opened;
+     or a contributor cannot see the new entity, nothing is opened;
+   - for a contributor in retro confirm mode, the toast says the other
+     mentions are awaiting GM review (the review dialog is on the GM's screen);
    - a toast confirms, e.g. "Created Person "Elara" and linked the selection."
 4. Cancel/close: nothing is created or written.
 
@@ -63,7 +70,10 @@ too.
 |---|---|---|
 | `scripts/logic/entity-from-selection.mjs` | pure, no Foundry globals | `qualifySelection(text)` → trimmed name or `null`. `occurrenceIndex(textSegments, text, rangeStartOffset)` → zero-based index of the selection among eligible rendered matches. `linkSelectionInSource(sourceHtml, { text, occurrence, uuid })` → new HTML or `null`. |
 | `scripts/apps/entity-from-selection-dialog.mjs` | `DialogV2` form | Renders type/name/checkbox; resolves `{ type, name, linkOthers }` or `null`. |
-| `scripts/hooks/entity-from-selection.mjs` | glue | Installs the wrap, captures the selection, runs dialog → create → link → retro → open → toast. |
+| `scripts/hooks/entity-from-selection.mjs` | glue | Installs the wrap, captures the selection, runs the dialog, then either calls `runEntityFromSelection(request)` (GM) or relays it (contributor); opens the tab and toasts. `runEntityFromSelection` = validate → create → link → retro; it is the ONLY place that writes, used by both paths. |
+| `scripts/logic/campaigns.mjs` | change | Pure `isContributor(user, campaignFlag, playerGroups)` and `validateSelectionRequest(request, ctx)` (§4.5). |
+| `scripts/hooks/socket.mjs` | change | `ENTITY_FROM_SELECTION_ACTION` (in `GM_ACTIONS`) and `ENTITY_FROM_SELECTION_RESULT_ACTION` handlers, mirroring the upload-media request/result pair. |
+| `scripts/apps/CampaignHubPage.mjs` | change | GM-only **Contributors** row in the campaign settings beside Ownership: multi-select of non-GM users and player groups, writing the campaign flag. |
 | constants + settings | config | `ENTITY_FROM_SELECTION_LAST_TYPE_SETTING` (client, string, default `"person"`), `SKIP_RETRO_LINK_OPTION`, i18n keys under `${I18N}.entityFromSelection.*` (en.json). |
 | `scripts/data/mej-entry.mjs` | change | `createMejEntry` gains an optional trailing `createOptions = {}` passed to `JournalEntry.create(data, createOptions)`. Existing callers unchanged. |
 | `scripts/hooks/retro-link.mjs` | change | The `preCreateJournalEntry` stamp handler takes `(entry, data, options)` and returns early when `options?.[MODULE_ID]?.skipRetroLink` is true. |
@@ -101,7 +111,9 @@ region).
 ### 4.2 `canOfferFor(sheet, target)`
 
 True only when all hold:
-- `game.user.isGM` and `sheet.isEditable`;
+- either `game.user.isGM` and `sheet.isEditable`, or: the page is in a
+  campaign, `isContributor(game.user, …)` for that campaign, and
+  `game.users.activeGM` is non-null;
 - the `.editor-parent` under the pointer is **not** in edit mode (no
   `.editing` class, no open `prose-mirror` inside it);
 - `window.getSelection()` has exactly one non-collapsed range whose common
@@ -132,6 +144,9 @@ True only when all hold:
    (section 5), never a guess.
 2. **Dialog** → `{ type, name, linkOthers }` or stop on null. Persist `type`
    to the client setting.
+   Steps 3–5 are `runEntityFromSelection(request)`. A GM calls it directly;
+   a contributor sends the request to the active GM instead (§4.5), and
+   steps 6–7 run on the contributor's client when the result arrives.
 3. **Create**:
    `createMejEntry(type, name, "", {}, null, sourceEntry.folder?.id ?? null,
    { [MODULE_ID]: { skipRetroLink: true } })`. The stamp is always skipped
@@ -161,6 +176,44 @@ source substring preserved around it. A match may not span a tag boundary
 v1 returns `null` for that case rather than restructure markup). Returns
 `null` when the Nth eligible occurrence does not exist.
 
+### 4.5 Campaign contributors
+
+**Data.** The campaign flag (`campaignFlagOf(folder)`, beside
+`ownershipDefault`) gains `contributors: { userIds: string[], groupIds:
+string[] }`. Absent = none; no migration. `isContributor(user, flag, groups)`
+is true for a GM, for a listed user id, or for a member of a listed player
+group (`normalizeGroups(playerGroups setting)`).
+
+**UI.** The Hub campaign settings gain a GM-only **Contributors** row: a
+multi-select of non-GM users and player groups; saving writes the flag.
+
+**Relay.** The contributor's client, after the dialog, emits
+`{ action: ENTITY_FROM_SELECTION_ACTION, requestId, userId, pageUuid,
+fieldKey, text, occurrence, type, name, linkOthers }`. Only the active GM
+handles it (`GM_ACTIONS`). The GM re-validates everything with the pure
+`validateSelectionRequest`, never trusting the sender:
+- the sender is a non-GM contributor of the page's campaign. The sender id
+  is the one Foundry's socket passes to the handler (second argument), not
+  the payload's `userId`; the plan verifies Foundry supplies it on 13.351
+  and 14.x. On a version where it does not, contributor relay is disabled
+  (item GM-only), since a payload-claimed id cannot be trusted;
+- the sender has at least OBSERVER on the page's entry;
+- `fieldKey` is one of `linkableRegions(page)` keys;
+- `qualifySelection(text)` is non-null; `occurrence` is a non-negative integer;
+- `type` is in the dialog's type list; `name` trimmed is 1–120 characters.
+
+Valid → `runEntityFromSelection(request)` on the GM client (so the campaign
+ownership hook, GM-seat only, gives the entity the campaign baseline). The
+GM then emits `{ action: ENTITY_FROM_SELECTION_RESULT_ACTION, requestId,
+recipient: userId, ok, entryUuid, linked, reason }`; only the recipient acts
+on it. Contributors may link text on pages they can only view: the
+privilege is campaign-level, and the change is limited to one link.
+
+**Timeout.** The contributor's client waits 15 s for a matching
+`requestId`; on timeout: "No GM responded; nothing was created." (A late
+result after the timeout is still toasted, so a created entity is never
+silent.)
+
 ## 5. Errors and edge cases
 
 - **Rendered/source mismatch or match spans markup** → `linkSelectionInSource`
@@ -176,6 +229,10 @@ v1 returns `null` for that case rather than restructure markup). Returns
   toasts; this feature adds nothing there.
 - **Wrap target missing** (older/newer MEJ) → `installWraps` warning, feature
   absent, nothing else affected.
+- **Relay rejected** → the contributor gets a warning naming the reason
+  (not a contributor, page not visible, invalid selection/type/name).
+- **No GM connected** → the item is hidden for contributors; a GM
+  disconnecting mid-request is the timeout case.
 - **Same-named entity already exists** → allowed; the retro pass's existing
   ambiguity handling reports it. The selection link itself is unambiguous
   (it carries the uuid).
@@ -193,6 +250,9 @@ Unit (vitest, `test/entity-from-selection.test.js`):
 - Retro preCreate hook: no `retroLinkPending` stamp when
   `options[MODULE_ID].skipRetroLink` is true; stamp unchanged otherwise.
 - `createMejEntry` forwards `createOptions` to `JournalEntry.create`.
+- `isContributor`: direct user, via group, empty/absent list, GM always.
+- `validateSelectionRequest`: each rejection reason plus the valid case.
+- `isAuthorizedForAction`: request action GM-only; result action routed.
 
 E2E (Playwright, companion `tests/e2e`, Foundry 14 + MEJ 14.x, TT- prefix):
 1. Place description, select a short name, choose Person, Create → entity in
@@ -203,12 +263,18 @@ E2E (Playwright, companion `tests/e2e`, Foundry 14 + MEJ 14.x, TT- prefix):
 3. Selection > 80 chars → item absent; MEJ's Extract still present and works.
 4. Page in edit mode → item absent.
 5. Last type is preselected on the next open.
+6. Contributor player (GM connected): item present; Create → entity created
+   by the GM client with the campaign baseline, selection linked, player
+   gets the toast and background tab.
+7. Non-contributor player: item absent. Contributor with no GM connected:
+   item absent.
 
 Foundry 13.351 + stock MEJ 13.06: smoke case 1, or confirm the wrap target is
 missing and the item is cleanly absent (record which).
 
 ## 7. Release
 
-0.21.0: CHANGELOG entry, GM guide note (with screenshot of the dialog),
+0.21.0: CHANGELOG entry, GM guide note (dialog screenshot + Contributors
+row), player guide note,
 en.json strings. Usual companion ceremony: PR, merge, tag, release asset,
 World A restart.
