@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRetroPlanBatch, countEntityLinks } from "../scripts/logic/retro-link.mjs";
+import { buildRetroPlanBatch, countEntityLinks, shouldStampRetro } from "../scripts/logic/retro-link.mjs";
 
 const ENTITY = { uuid: "JournalEntry.new1", name: "Gandalf", viewerIds: [] };
 const page = (uuid, content, extra = {}) => ({
@@ -289,5 +289,16 @@ describe("buildRetroPlanBatch", () => {
     const inB = { uuid: "JournalEntry.eldin", name: "Eldin", viewerIds: [], campaignId: "B" };
     const pageA = page("p1", "<p>Eldin.</p>", { viewerIds: ["u1"], campaignId: "A" });
     expect(planOne(inB, [pageA]).rows).toEqual([]);
+  });
+});
+
+describe("shouldStampRetro", () => {
+  const M = "mej-campaign-companion";
+  it("stamps candidates unless mode is off or the create opted out", () => {
+    expect(shouldStampRetro({ mode: "auto", isCandidate: true, options: {}, moduleId: M })).toBe(true);
+    expect(shouldStampRetro({ mode: "confirm", isCandidate: true, options: undefined, moduleId: M })).toBe(true);
+    expect(shouldStampRetro({ mode: "off", isCandidate: true, options: {}, moduleId: M })).toBe(false);
+    expect(shouldStampRetro({ mode: "auto", isCandidate: false, options: {}, moduleId: M })).toBe(false);
+    expect(shouldStampRetro({ mode: "auto", isCandidate: true, options: { [M]: { skipRetroLink: true } }, moduleId: M })).toBe(false);
   });
 });

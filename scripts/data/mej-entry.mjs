@@ -44,9 +44,11 @@ const MEJ_DEFAULT_OBJECTS = {
  * @param {object|null} [ownership] entry-level ownership record (e.g.
  *   { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }); null → Foundry default
  * @param {string|null} [folder] destination Folder id; null → root (unfiled)
+ * @param {object} [createOptions] passed to JournalEntry.create as its
+ *   options (e.g. the retro opt-out)
  * @returns {Promise<JournalEntryPage>}
  */
-export async function createMejEntry(type, name, htmlContent, extraFlags = {}, ownership = null, folder = null) {
+export async function createMejEntry(type, name, htmlContent, extraFlags = {}, ownership = null, folder = null, createOptions = {}) {
   // JournalEntry.create() returns the created document directly (not an
   // array) when called with a single plain-object `data` argument - an
   // array result only happens when `data` itself is an array. Destructuring
@@ -72,6 +74,6 @@ export async function createMejEntry(type, name, htmlContent, extraFlags = {}, o
         }
       }
     }]
-  });
+  }, createOptions);
   return entry.pages.contents[0];
 }

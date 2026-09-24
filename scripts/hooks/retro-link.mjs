@@ -6,7 +6,7 @@
 // write, so players can enqueue too). The ACTIVE GM's client processes and
 // clears the flag, either immediately (createJournalEntry broadcast) or at
 // login (ready sweep) for entities created while no GM was connected.
-import { buildRetroPlanBatch } from "../logic/retro-link.mjs";
+import { buildRetroPlanBatch, shouldStampRetro } from "../logic/retro-link.mjs";
 import { retroFailureMessage, describeError } from "../logic/retro-report.mjs";
 import { viewerIds } from "../logic/link-audience.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
@@ -457,11 +457,15 @@ async function processBurst(queued, { modeOverride = null } = {}) {
 }
 
 export function registerRetroLink() {
-  Hooks.on("preCreateJournalEntry", (entry) => {
+  Hooks.on("preCreateJournalEntry", (entry, data, options) => {
     try {
-      if (game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING) === "off") return;
-      if (!isMejCandidate(entry)) return;
-      entry.updateSource({ [`flags.${MODULE_ID}.${RETRO_LINK_PENDING_FLAG}`]: true });
+      const stamp = shouldStampRetro({
+        mode: game.settings.get(MODULE_ID, RETRO_LINK_MODE_SETTING),
+        isCandidate: isMejCandidate(entry),
+        options,
+        moduleId: MODULE_ID
+      });
+      if (stamp) entry.updateSource({ [`flags.${MODULE_ID}.${RETRO_LINK_PENDING_FLAG}`]: true });
     } catch (err) {
       console.error(`${MODULE_ID} | retro-link stamp failed`, err);
     }
