@@ -62,7 +62,7 @@ describe("linkSelectionInSource", () => {
   it("matches decoded entities and keeps the encoded source as the label", () => {
     expect(link("Tom & Jerry", 0, 1, "<p>Tom &amp; Jerry</p>")).toBe(`<p>@UUID[${U}]{Tom &amp; Jerry}</p>`);
     expect(link('"Quoted"', 0, 1, "<p>&quot;Quoted&quot;</p>")).toBe(`<p>@UUID[${U}]{&quot;Quoted&quot;}</p>`);
-    expect(link("Old Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
+    expect(link("Old\u00A0Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
   });
   it("returns null when the total differs (rendered/source mismatch)", () => {
     expect(link("Elara", 0, 2, "<p>Elara</p>")).toBeNull();
@@ -87,6 +87,6 @@ describe("linkSelectionInSource", () => {
     // ASCII space selection should NOT match nbsp-encoded text
     expect(link("Old Tom", 0, 0, "<p>Old&nbsp;Tom</p>")).toBeNull();
     // nbsp selection should match nbsp-encoded text (need U+00A0 in selection)
-    expect(link("Old Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
+    expect(link("Old\u00A0Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
   });
 });

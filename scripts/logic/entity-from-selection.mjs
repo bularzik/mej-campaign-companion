@@ -31,7 +31,7 @@ export function countOccurrences(haystack, needle) {
   return n;
 }
 
-const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00A0" };
 const ENTITY_RE = /&(#\d+|#x[0-9a-f]+|[a-z]+);/iy;
 
 /** Decode a raw text segment; map[i] is the raw index of decoded char i (map[len] = raw.length). */
