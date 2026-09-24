@@ -31,7 +31,7 @@ export function countOccurrences(haystack, needle) {
   return n;
 }
 
-const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
 const ENTITY_RE = /&(#\d+|#x[0-9a-f]+|[a-z]+);/iy;
 
 /** Decode a raw text segment; map[i] is the raw index of decoded char i (map[len] = raw.length). */
@@ -53,7 +53,7 @@ function decodeWithMap(raw) {
       }
     }
     if (ch !== null) {
-      for (const c of ch) { map.push(i); decoded += c; }
+      for (let k = 0; k < ch.length; k++) { map.push(i); decoded += ch[k]; }
       i += m[0].length;
     } else {
       map.push(i);

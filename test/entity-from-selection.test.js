@@ -62,7 +62,7 @@ describe("linkSelectionInSource", () => {
   it("matches decoded entities and keeps the encoded source as the label", () => {
     expect(link("Tom & Jerry", 0, 1, "<p>Tom &amp; Jerry</p>")).toBe(`<p>@UUID[${U}]{Tom &amp; Jerry}</p>`);
     expect(link('"Quoted"', 0, 1, "<p>&quot;Quoted&quot;</p>")).toBe(`<p>@UUID[${U}]{&quot;Quoted&quot;}</p>`);
-    expect(link("Old Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
+    expect(link("Old Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
   });
   it("returns null when the total differs (rendered/source mismatch)", () => {
     expect(link("Elara", 0, 2, "<p>Elara</p>")).toBeNull();
@@ -76,5 +76,17 @@ describe("linkSelectionInSource", () => {
   it("tolerates empty/non-string source", () => {
     expect(link("Elara", 0, 1, "")).toBeNull();
     expect(link("Elara", 0, 1, undefined)).toBeNull();
+  });
+  it("handles astral entities correctly (index map alignment)", () => {
+    // &#128512; is grinning face emoji (U+1F600), encoded as surrogate pair in UTF-16
+    expect(link("BC", 0, 1, "<p>A&#128512;BC</p>")).toBe(`<p>A&#128512;@UUID[${U}]{BC}</p>`);
+    // Match after hex astral entity
+    expect(link("Xyz", 0, 1, "<p>A&#x1F600;Xyz</p>")).toBe(`<p>A&#x1F600;@UUID[${U}]{Xyz}</p>`);
+  });
+  it("nbsp decoding distinguishes ASCII space from non-breaking space", () => {
+    // ASCII space selection should NOT match nbsp-encoded text
+    expect(link("Old Tom", 0, 0, "<p>Old&nbsp;Tom</p>")).toBeNull();
+    // nbsp selection should match nbsp-encoded text (need U+00A0 in selection)
+    expect(link("Old Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
   });
 });
