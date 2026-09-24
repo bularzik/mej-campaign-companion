@@ -27,13 +27,86 @@ game.user.id (User 1) = "pB7fn9jrf9IMwDdc"
 ```
 
 On both versions, `args[1]` is the emitting user's id, supplied by Foundry's own
-socket layer — not from the payload the client sent. This is a trustworthy sender
-id (a malicious/compromised client cannot spoof `args[1]` to claim another user's
-id; it's stamped server-side).
+socket layer — not from the payload the client sent.
 
-**Verdict: sender id: arg index 1 (both 13.351 and 14.368)** — PASS. The gate
-condition in the task brief ("STOP if the socket does not supply a trustworthy
-sender id") does not apply; proceeding to Task 7 is safe on this front.
+### Fix round 1: is `args[1]` actually spoof-resistant?
+
+The original draft asserted this without evidence beyond the normal-path probe
+above. Verified two ways.
+
+**Empirical (from the User 1 seat, forging extra arguments):**
+```js
+game.socket.emit("module.mej-campaign-companion", { action: "__probe2" }, "FORGED_ID");
+game.socket.emit("module.mej-campaign-companion", { action: "__probe3" }, "FORGED_ID", "X");
+// also tried the lower-level manager socket (game.socket.io) and an explicit
+// .call() through game.socket itself, with a third distinct forged id
+game.socket.io.emit.call(game.socket.io, "module.mej-campaign-companion", { action: "__probe3-raw" }, "FORGED_ID_RAW");
+game.socket.emit.call(game.socket, "module.mej-campaign-companion", { action: "__probe3-raw" }, "FORGED_ID_RAW");
+```
+GM's handler received, on **both** 14.368 and 13.351, for every one of these
+attempts:
+```
+argCount: 2
+args: [ "<payload JSON>", "<real User 1 id>" ]
+```
+`"FORGED_ID"`, `"FORGED_ID_RAW"`, and `"X"` never appeared anywhere in what the
+GM received, regardless of how many extra arguments the client attached or
+which client-side socket object was used to send them. `game.socket.io.emit`
+(the lower-level manager) produced no event on the GM side at all — it does not
+reach module socket handlers.
+
+**Source (server-side, both 14.368 and 13.351 — identical logic, only variable
+names differ under minification):**
+
+`dist/packages/package.mjs`, `registerCustomSocket`:
+```js
+registerCustomSocket(e) {
+  if (!this.socket) return;
+  const t = `${this.constructor.type}.${this.id}`;   // "module.mej-campaign-companion"
+  e.on(t, handleCustomSocket.bind(e, t))
+}
+```
+
+`dist/server/sockets.mjs`, `handleCustomSocket` (14.368; 13.351 is the same
+modulo minified variable names):
+```js
+export function handleCustomSocket(e, t, { recipients: o } = {}, s) {
+  if (Array.isArray(o))
+    for (let s of o) {
+      const o = game.users.find(e => e.id === s);
+      if (o) for (let s of o.sockets) s.emit(e, t, this.user.id)
+    }
+  else this.broadcast.emit(e, t, this.user.id);
+  "function" == typeof s && s()
+}
+```
+`e` (event name) and the handler itself are bound server-side at registration
+time — the client cannot change what function runs. The handler's own
+parameter list only ever reads the CLIENT's first argument (`t`, the payload)
+and, if shaped like `{recipients: [...]}`, its second argument as delivery
+options; any further client-supplied arguments (our forged strings) are never
+bound to a parameter and are silently discarded — JavaScript doesn't expose
+extra call arguments unless the function opts in with `arguments`/rest params,
+and this one doesn't. The id appended to the broadcast, `this.user.id`, is the
+**server's own socket-connection `.user`**, resolved once during the socket
+handshake from the session cookie (`dist/server/sockets.mjs`, `activate()`:
+`sessions.sessions.get(...)` → `e.user = s`) — never read from the emitted
+message at all. There is no code path by which client-supplied data reaches
+that position.
+
+**Verdict: sender id: arg index 1 (last argument), both 13.351 and 14.368 —
+CONFIRMED SPOOF-RESISTANT, empirically and from source.** A client cannot make
+a forged value occupy that index: the server discards every argument past the
+payload and always appends its own session-derived `user.id` as the final
+argument. **Robust reading rule for Task 7: read the sender id as the LAST
+argument of the handler call (`args[args.length - 1]`), not a hardcoded index
+1** — in this relay, index 1 and "last argument" coincide today (exactly 2 args
+are ever delivered: payload, then id), but reading it as "last" is the rule
+that stays correct if a future Foundry version's `handleCustomSocket` ever
+changes its own arity, since the id is always appended after whatever the
+handler itself forwards. PASS. The gate condition in the task brief ("STOP if
+the socket does not supply a trustworthy sender id") does not apply; proceeding
+to Task 7 is safe on this front.
 
 ## (b) ContextMenu `visible`/`condition` and `onClick` signature
 
@@ -202,8 +275,14 @@ on its own.
 
 ## Summary verdict lines
 
-- **sender id:** arg index 1 (both 13.351 and 14.368) — trustworthy, not
-  payload-derived. Gate PASSES; no need to stop before Task 7.
+- **sender id:** arg index 1, i.e. the LAST argument (both 13.351 and 14.368) —
+  confirmed spoof-resistant empirically (forged extra client args never reach
+  the handler; discarded server-side) AND from source
+  (`handleCustomSocket`/`registerCustomSocket` in `dist/server/sockets.mjs` and
+  `dist/packages/package.mjs`: the id appended is the server's own
+  session-derived `socket.user.id`, never read from the client message). Read
+  it as `args[args.length - 1]`, not a hardcoded index, for forward safety. Gate
+  PASSES; no need to stop before Task 7.
 - **visible:** function (14.368, current) | `condition` (13.351, deprecated-but-
   only-supported-form) — entries for Task 6/7 must set both.
 - **onClick signature:** `onClick(event, target)` (14.368) | `callback(target)`
