@@ -416,6 +416,33 @@
     "media": {
       "missingSrc": "This page has no file attached yet.",
       "openExternal": "Open in a new tab"
+    },
+    "entityFromSelection": {
+      "menu": "Create Entity from Selection",
+      "title": "Create Entity from Selection",
+      "type": "Type",
+      "name": "Name",
+      "linkOthers": "Link other mentions",
+      "create": "Create",
+      "nameRequired": "The entity needs a name.",
+      "created": "Created {type} \"{name}\" and linked the selection.",
+      "createdNotLinked": "Created {type} \"{name}\", but the selected text could not be linked automatically.",
+      "awaitingReview": "Other mentions are waiting for GM review.",
+      "failed": "Could not create the entity ({reason}).",
+      "noGm": "No GM responded; nothing was created.",
+      "rejected": {
+        "bad-payload": "the request was malformed",
+        "bad-sender": "your user could not be verified",
+        "not-contributor": "you are not a contributor to this campaign",
+        "not-visible": "you cannot see this page",
+        "bad-field": "this field cannot be linked",
+        "bad-selection": "the selection is not usable as a name",
+        "bad-type": "unknown entity type",
+        "bad-name": "the name is empty or longer than 120 characters",
+        "page-missing": "the page no longer exists",
+        "create-failed": "creation failed",
+        "relay-unavailable": "no GM is available"
+      }
     }
   }
 }

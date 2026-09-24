@@ -3,7 +3,7 @@ import {
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
-  KNOWLEDGE_COLLAPSED_SETTING
+  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
@@ -19,6 +19,7 @@ import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
+import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
 import { isTimelineJournal, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
 import { campaignTimelines, ensureTimelineJournal } from "./data/timeline-journal.mjs";
 import { planCampaignStructure } from "./logic/campaign-migration.mjs";
@@ -148,6 +149,9 @@ Hooks.once("init", () => {
   });
   game.settings.register(MODULE_ID, HUB_TIMELINE_SELECTION_SETTING, {
     scope: "client", config: false, type: String, default: ""
+  });
+  game.settings.register(MODULE_ID, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, {
+    scope: "client", config: false, type: String, default: "person"
   });
 
   // Task 5 live-e2e finding: Foundry's DocumentDirectory resolves its
@@ -290,6 +294,10 @@ Hooks.once("ready", async () => {
   // wave F2). Campaign is never offered as a page type, and a campaign page
   // created any other way is refused or upgraded.
   if (game.modules.get("monks-enhanced-journal")?.active) registerCampaignGuard();
+
+  // "Create Entity from Selection" (spec 2026-09-22): sheets render after
+  // ready, so the prototype wrap is in place before any menu is built.
+  if (game.modules.get("monks-enhanced-journal")?.active) registerEntityFromSelection();
 
   const mode = await onReady();
 
