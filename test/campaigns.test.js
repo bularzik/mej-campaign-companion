@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_ID } from "../scripts/constants.mjs";
-import { adoptionPlan, campaignChoicePlan, campaignControls } from "../scripts/logic/campaigns.mjs";
+import { adoptionPlan, campaignChoicePlan, campaignControls, contributorsOf, isContributor } from "../scripts/logic/campaigns.mjs";
 import { readFileSync } from "node:fs";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
@@ -408,5 +408,22 @@ describe("hub templates consume campaignControls", () => {
   });
   it("disables the Tools menu's auto-capture target", () => {
     expectGuardedAndNothingElse(buttonFor(read("hub-header.hbs"), 'data-action="setCaptureCampaign"'));
+  });
+});
+
+describe("contributorsOf / isContributor", () => {
+  const groups = [{ id: "g1", name: "Party", members: ["u2"] }];
+  const flag = { ownershipDefault: "observer", contributors: { userIds: ["u1"], groupIds: ["g1"] } };
+  it("normalizes absent/garbage to empty lists", () => {
+    expect(contributorsOf(null)).toEqual({ userIds: [], groupIds: [] });
+    expect(contributorsOf({ contributors: { userIds: "x", groupIds: [1, "g"] } })).toEqual({ userIds: [], groupIds: ["g"] });
+  });
+  it("direct user, group member, GM always, others never", () => {
+    expect(isContributor({ id: "u1", isGM: false }, flag, groups)).toBe(true);
+    expect(isContributor({ id: "u2", isGM: false }, flag, groups)).toBe(true);
+    expect(isContributor({ id: "gm", isGM: true }, null, [])).toBe(true);
+    expect(isContributor({ id: "u3", isGM: false }, flag, groups)).toBe(false);
+    expect(isContributor({ id: "u1", isGM: false }, { ownershipDefault: "observer" }, groups)).toBe(false);
+    expect(isContributor(null, flag, groups)).toBe(false);
   });
 });

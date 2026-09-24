@@ -3,6 +3,7 @@
 // doc-shaped plain objects: folders have .flags/.folder, entries have
 // .documentName/.folder/.flags, pages have .documentName/.parent.
 import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N } from "../constants.mjs";
+import { normalizeGroups } from "./player-groups.mjs";
 
 /** The campaign flag object ({ ownershipDefault, ... }) or null. */
 export function campaignFlagOf(folder) {
@@ -269,4 +270,20 @@ export function campaignChoicePlan(campaigns, { alwaysPrompt = false } = {}) {
 export function campaignControls(campaigns) {
   const disabled = campaigns.length === 0;
   return { disabled, tooltipKey: disabled ? NO_CAMPAIGNS_KEY : null };
+}
+
+/** The campaign flag's contributor lists, normalized; absent = none (spec 2026-09-22 §4.5). */
+export function contributorsOf(flag) {
+  const c = flag?.contributors ?? {};
+  const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.length) : []);
+  return { userIds: strings(c.userIds), groupIds: strings(c.groupIds) };
+}
+
+/** GMs always; otherwise listed directly or via a listed player group. */
+export function isContributor(user, flag, groups) {
+  if (!user) return false;
+  if (user.isGM) return true;
+  const { userIds, groupIds } = contributorsOf(flag);
+  if (userIds.includes(user.id)) return true;
+  return normalizeGroups(groups).some((g) => groupIds.includes(g.id) && g.members.includes(user.id));
 }

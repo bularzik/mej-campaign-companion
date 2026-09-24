@@ -107,3 +107,28 @@ export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uui
     return `${seg.raw.slice(0, hit.rawStart)}@UUID[${uuid}]{${label}}${seg.raw.slice(hit.rawEnd)}`;
   }).join("");
 }
+
+const isIndex = (n) => Number.isInteger(n) && n >= 0;
+
+/**
+ * GM-side check of a contributor's relayed request (spec §4.5). Never
+ * trusts the payload: `ctx` is computed by the GM from the socket-supplied
+ * sender and the live page.
+ */
+export function validateSelectionRequest(request, ctx) {
+  const r = request ?? {};
+  if (typeof r.requestId !== "string" || !r.requestId || typeof r.pageUuid !== "string" ||
+      typeof r.fieldKey !== "string" || !isIndex(r.occurrence) || !isIndex(r.total) ||
+      r.occurrence >= r.total || typeof r.linkOthers !== "boolean") {
+    return { ok: false, reason: "bad-payload" };
+  }
+  if (!ctx?.sender || ctx.sender.isGM) return { ok: false, reason: "bad-sender" };
+  if (!ctx.isContributor) return { ok: false, reason: "not-contributor" };
+  if (!ctx.canObserve) return { ok: false, reason: "not-visible" };
+  if (!ctx.regionKeys?.includes(r.fieldKey)) return { ok: false, reason: "bad-field" };
+  if (qualifySelection(r.text) !== r.text) return { ok: false, reason: "bad-selection" };
+  if (!ENTITY_TYPES.includes(r.type)) return { ok: false, reason: "bad-type" };
+  const name = typeof r.name === "string" ? r.name.trim() : "";
+  if (!name || name.length > MAX_NAME_LENGTH) return { ok: false, reason: "bad-name" };
+  return { ok: true };
+}

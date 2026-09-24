@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource
+  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest
 } from "../scripts/logic/entity-from-selection.mjs";
 
 const U = "JournalEntry.abc";
@@ -88,5 +88,36 @@ describe("linkSelectionInSource", () => {
     expect(link("Old Tom", 0, 0, "<p>Old&nbsp;Tom</p>")).toBeNull();
     // nbsp selection should match nbsp-encoded text (need U+00A0 in selection)
     expect(link("Old\u00A0Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
+  });
+});
+
+describe("validateSelectionRequest", () => {
+  const good = {
+    requestId: "r1", pageUuid: "JournalEntry.a.JournalEntryPage.b", fieldKey: "text.content",
+    text: "Elara", occurrence: 0, total: 1, type: "person", name: "Elara", linkOthers: true
+  };
+  const ctx = { sender: { id: "u1", isGM: false }, isContributor: true, canObserve: true, regionKeys: ["text.content"] };
+  const v = (patch = {}, cpatch = {}) => validateSelectionRequest({ ...good, ...patch }, { ...ctx, ...cpatch });
+
+  it("accepts a valid request", () => expect(v()).toEqual({ ok: true }));
+  it.each([
+    [{ requestId: "" }, {}, "bad-payload"],
+    [{ occurrence: -1 }, {}, "bad-payload"],
+    [{ occurrence: 1, total: 1 }, {}, "bad-payload"],
+    [{ total: 1.5 }, {}, "bad-payload"],
+    [{ linkOthers: "yes" }, {}, "bad-payload"],
+    [{}, { sender: null }, "bad-sender"],
+    [{}, { sender: { id: "gm", isGM: true } }, "bad-sender"],
+    [{}, { isContributor: false }, "not-contributor"],
+    [{}, { canObserve: false }, "not-visible"],
+    [{ fieldKey: "flags.x.notes" }, {}, "bad-field"],
+    [{ text: "a".repeat(81) }, {}, "bad-selection"],
+    [{ text: " Elara " }, {}, "bad-selection"],
+    [{ type: "session" }, {}, "bad-type"],
+    [{ name: "   " }, {}, "bad-name"],
+    [{ name: "x".repeat(121) }, {}, "bad-name"],
+    [{ name: 7 }, {}, "bad-name"]
+  ])("rejects %j %j as %s", (patch, cpatch, reason) => {
+    expect(v(patch, cpatch)).toEqual({ ok: false, reason });
   });
 });
