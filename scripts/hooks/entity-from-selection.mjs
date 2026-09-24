@@ -45,11 +45,22 @@ export function pipelineDeps() {
   };
 }
 
-/** The rendered editor under the pointer, if it is in display mode. */
+/**
+ * The rendered editor under the pointer, if it is in display mode.
+ *
+ * The brief's extra belt-and-braces guard (`.editor-control
+ * prose-mirror.active`) is deliberately dropped: live smoke testing (Task 6
+ * report) found the `<prose-mirror>` element carries the `active` class
+ * UNCONDITIONALLY, in both display and edit mode - confirming spike (e)'s own
+ * verdict ("the <prose-mirror> element ... does not gain/lose a class on
+ * toggle, so it is not a usable edit-mode signal on its own"). Keeping that
+ * check made the guard permanently true, so the menu entry was never
+ * eligible for anyone, GM included. `.editor-parent.editing` alone (spike
+ * (e), confirmed on both versions) is the correct and sufficient signal.
+ */
 function displayFor(target) {
   const parent = target?.closest?.(".editor-parent") ?? null;
   if (!parent || parent.classList.contains("editing")) return null;
-  if (parent.querySelector(".editor-control prose-mirror.active, .editor-control .ProseMirror")) return null;
   return parent.querySelector(".editor-display[data-key]");
 }
 
