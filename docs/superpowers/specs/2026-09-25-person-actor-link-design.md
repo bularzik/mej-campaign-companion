@@ -111,11 +111,13 @@ Three units, one pure and two Foundry-bound.
   sheet's detailed header, only when the page is a Person and
   `sheet.isEditable`.
 - **Unlinked**: a `Link Actor` button (`fa-solid fa-user-plus`) → picker.
-- **Linked**: two icon buttons next to MEJ's `.actor-img-container` —
-  **Change** (`fa-solid fa-user-pen`, opens the picker) and **Unlink**
-  (`fa-solid fa-link-slash`, confirm dialog, then `unsetFlag("monks-enhanced-journal", "actor")`).
-  If the linked actor is not visible to the user (MEJ hides the container),
-  the controls still render so the link can be changed or removed.
+- **Linked**: two icon buttons in the same place (the header name row, so
+  they render even when MEJ hides `.actor-img-container` because the user
+  cannot see the actor) — **Change** (`fa-solid fa-user-pen`, opens the
+  picker) and **Unlink** (`fa-solid fa-link-slash`, confirm dialog, then
+  `unsetFlag("monks-enhanced-journal", "actor")`). Change unsets the old
+  flag before setting the new one, so no stale key (e.g. `pack`) survives
+  `setFlag`'s object merge.
 - **Picker** (`DialogV2`): a filter text box and a scrollable list of world
   actors where `actor.testUserPermission(game.user, "OBSERVER")`, each row
   showing thumbnail and name, sorted by name. Choosing a row writes the flag
