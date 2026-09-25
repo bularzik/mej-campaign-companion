@@ -23,7 +23,6 @@ function foundryEnv() {
     fromUuid: (u) => fromUuid(u),
     campaignFlagFor: (page) => campaignFlagOf(campaignOf(page)),
     groups: game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING),
-    regionKeys: (page) => linkableRegions(page).map((r) => r.key),
     run: async (request) => {
       const { pipelineDeps } = await import("./entity-from-selection.mjs");
       return runEntityFromSelection(request, pipelineDeps());
@@ -37,24 +36,47 @@ function foundryEnv() {
   };
 }
 
+/**
+ * Regions a relayed request may write: never a GM-only one (a session's
+ * system.gmNotes), which the contributor cannot see - otherwise a forged
+ * fieldKey could write into GM notes and the `linked` reply would leak
+ * whether the text occurs there.
+ */
+export function relayRegionKeys(page) {
+  return linkableRegions(page).filter((r) => !r.gmOnly).map((r) => r.key);
+}
+
 /** GM side. `senderId` comes from the socket, never from the payload. */
 export async function handleEntityRequest(payload, senderId, env = foundryEnv()) {
   const reply = (outcome) => env.emit({
     action: ENTITY_FROM_SELECTION_RESULT_ACTION, requestId: payload?.requestId, recipient: senderId, ...outcome
   });
   if (typeof senderId !== "string" || typeof payload?.requestId !== "string") return;
-  const sender = env.users.get(senderId) ?? null;
-  const page = typeof payload.pageUuid === "string" ? await env.fromUuid(payload.pageUuid) : null;
-  if (!page) return reply({ ok: false, reason: "page-missing" });
-  const flag = env.campaignFlagFor(page);
-  const verdict = validateSelectionRequest(payload, {
-    sender: sender ? { id: sender.id, isGM: !!sender.isGM } : null,
-    isContributor: !!sender && !!flag && isContributor({ id: sender.id, isGM: false }, flag, env.groups),
-    canObserve: !!sender && page.parent?.testUserPermission(sender, "OBSERVER") === true,
-    regionKeys: env.regionKeys(page)
-  });
-  if (!verdict.ok) return reply(verdict);
-  return reply(await env.run(pick(payload)));
+  try {
+    // Sender first: an unknown user or a GM is rejected before fromUuid, so
+    // the reply cannot tell an arbitrary client whether a page exists.
+    const sender = env.users.get(senderId) ?? null;
+    if (!sender || sender.isGM) return reply({ ok: false, reason: "bad-sender" });
+    const page = typeof payload.pageUuid === "string" ? await env.fromUuid(payload.pageUuid) : null;
+    if (!page) return reply({ ok: false, reason: "page-missing" });
+    const flag = env.campaignFlagFor(page);
+    const verdict = validateSelectionRequest(payload, {
+      sender: { id: sender.id, isGM: false },
+      isContributor: !!flag && isContributor({ id: sender.id, isGM: false }, flag, env.groups),
+      canObserve: page.parent?.testUserPermission(sender, "OBSERVER") === true,
+      regionKeys: relayRegionKeys(page)
+    });
+    if (!verdict.ok) return reply(verdict);
+    // Foundry renders secret sections only for owners, so a non-owner's
+    // occurrence/total never covered them (linkSelectionInSource).
+    const maskSecrets = page.testUserPermission?.(sender, "OWNER") !== true;
+    return reply(await env.run({ ...pick(payload), maskSecrets }));
+  } catch (err) {
+    // Without a reply the requester would time out into "No GM responded;
+    // nothing was created", which may be false once creation has happened.
+    console.error(`${MODULE_ID} | entity-from-selection: relayed request failed`, err);
+    return reply({ ok: false, reason: "create-failed" });
+  }
 }
 
 const pending = new Map();   // requestId -> { resolve, timer, meta }
