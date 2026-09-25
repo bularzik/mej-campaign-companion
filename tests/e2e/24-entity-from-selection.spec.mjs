@@ -1,31 +1,34 @@
 // "Create Entity from Selection" (spec 2026-09-22 §6, E2E cases 1-7).
 //
-// Names are run-unique single tokens (TTEfs...${RUN}): the brief's "Elara"
-// becomes TTEfsElara${RUN} because the entity is named after the selection,
-// and on World A every created document must carry the TT prefix. The same
-// run-unique name also keeps stale entities from earlier runs out of the
-// retro pass's ambiguity check.
+// Names are run-unique single tokens (TT-Efs...${RUN}; auto-link's WORD_RE
+// keeps an inner hyphen inside one word): the brief's "Elara" becomes
+// TT-EfsElara${RUN} because the entity is named after the selection, and on
+// World A every created document must carry the harness's "TT-" prefix so
+// global setup's crashed-run sweep reclaims it. The run-unique name also
+// keeps stale entities from earlier runs out of the retro pass's ambiguity
+// check.
 import { test, expect } from "@playwright/test";
 import {
   login, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors, settle,
-  KNOWN_MEJ_SESSION_ICON_404
+  deleteJournalsByPrefix, cleanupStrandedTestFolders, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const MOD = "mej-campaign-companion";
 const VIEWPORT = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } };
 const RUN = Date.now();
+// This spec's own slice of the harness "TT-" namespace (cleanup scope).
+const PREFIX = "TT-Efs";
 const N = {
-  camp: `TTEfsCamp${RUN}`,
-  place: `TTEfsPlace${RUN}`,
-  other: `TTEfsOther${RUN}`,
-  elara: `TTEfsElara${RUN}`,
-  boren: `TTEfsBoren${RUN}`,
+  camp: `${PREFIX}Camp${RUN}`,
+  place: `${PREFIX}Place${RUN}`,
+  other: `${PREFIX}Other${RUN}`,
+  elara: `${PREFIX}Elara${RUN}`,
+  boren: `${PREFIX}Boren${RUN}`,
   // 81 characters, no whitespace: one past the 80-character cap.
-  long: `TTEfsLong${RUN}`.padEnd(81, "z")
+  long: `${PREFIX}Long${RUN}`.padEnd(81, "z")
 };
 const MENU_LABEL = "Create Entity from Selection";
-const created = { folders: [] };
 
 async function setSettings(page, { autoLink, retroLinkMode }) {
   await page.evaluate(async ({ autoLink, retroLinkMode, MOD }) => {
@@ -39,7 +42,6 @@ async function createCampaignFolder(page, name) {
     name: n, type: "JournalEntry",
     flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
   })).id, name);
-  created.folders.push(id);
   return id;
 }
 
@@ -119,29 +121,25 @@ async function newSeat(browser, userName) {
 }
 
 /**
- * Deletes this spec's documents by folder and by the TTEfs name prefix (any
- * run, so a crashed earlier run's leftovers go too - global setup only
- * sweeps the hyphenated "TT-" prefix).
+ * Deletes this spec's documents through the harness's prefix helpers (the
+ * same ones global setup's crashed-run sweep uses), scoped to "TT-Efs": the
+ * journals first (the new entity lands in the campaign folder and carries
+ * the prefix too), then the now-empty campaign folders.
  */
 async function cleanup(gmPage) {
-  await gmPage.evaluate(async ({ folders, MOD }) => {
-    // Not awaited to completion: with an editor open (test 4) MEJ's close()
-    // waits on its own "unsaved changes" confirm, which nobody answers.
+  // Capped: with an editor open (test 4) MEJ's close() waits on its own
+  // "unsaved changes" confirm, which nobody answers.
+  await gmPage.evaluate(async () => {
     try {
       await Promise.race([game.MonksEnhancedJournal?.journal?.close?.(), new Promise((r) => setTimeout(r, 1500))]);
     } catch { /* nothing open */ }
-    const ours = (name) => typeof name === "string" && name.startsWith("TTEfs");
-    const tracked = new Set(folders);
-    const ids = game.journal.filter((j) => ours(j.name) || tracked.has(j.folder?.id)).map((j) => j.id);
-    if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-    const fids = game.folders
-      .filter((f) => f.type === "JournalEntry" && (tracked.has(f.id) || ours(f.name)))
-      .map((f) => f.id);
-    if (fids.length) await Folder.implementation.deleteDocuments(fids, { deleteContents: true });
+  });
+  await deleteJournalsByPrefix(gmPage, PREFIX);
+  await cleanupStrandedTestFolders(gmPage, { prefix: PREFIX });
+  await gmPage.evaluate(async (MOD) => {
     await game.settings.set(MOD, "autoLink", true);
     await game.settings.set(MOD, "retroLinkMode", "silent");
-  }, { folders: created.folders, MOD });
-  created.folders.length = 0;
+  }, MOD);
 }
 
 test.describe("24 create entity from selection", () => {
@@ -169,6 +167,7 @@ test.describe("24 create entity from selection", () => {
     expect(entity.folder).toBe(folder);
     expect(entity.type).toBe("person");
     const link = `@UUID[JournalEntry.${entity.id}]{${N.elara}}`;
+    // Only-the-selected-occurrence is proven by test 2 (exact content, no retro).
     // The selected (2nd) occurrence is linked. The retro pass (auto) may
     // link the 1st one as well once it runs, so only the 2nd is pinned here;
     // test 2 pins the exact pre-retro content.
