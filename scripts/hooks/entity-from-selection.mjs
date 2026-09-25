@@ -73,15 +73,21 @@ let lastCapture = null;
  * Capture-phase mousedown listener (ruling 2): stash the live selection NOW,
  * before ContextMenu clears it. macOS Ctrl+click (ruling 2c) fires a
  * `button === 0` mousedown with `ctrlKey` true instead of a real
- * right-button click - treat that the same as button 2. Any other
- * mousedown clears a stale capture rather than leaving it live for a later,
- * unrelated click.
+ * right-button click - treat that the same as button 2.
+ *
+ * Ruling 2c amendment (fix round 1): a plain left mousedown must NOT clear
+ * `lastCapture` here. Foundry's ContextMenu opens on the right-button
+ * mousedown/contextmenu but fires its entries on a later `click` - and
+ * clicking the menu entry itself starts with a plain left mousedown. If
+ * that mousedown cleared `lastCapture`, the menu item's own click would
+ * always find nothing to act on and silently do nothing. The capture is
+ * still bounded: the TTL (CAPTURE_TTL_MS), the `.editor-parent` match in
+ * `eligibilityFromCapture`, and startFromSelection's consume-on-use
+ * (`lastCapture = null` right after reading it) together prevent a stale
+ * capture from being replayed against an unrelated later click.
  */
 function onRightMouseDown(event) {
-  if (!(event.button === 2 || (event.button === 0 && event.ctrlKey))) {
-    lastCapture = null;
-    return;
-  }
+  if (!(event.button === 2 || (event.button === 0 && event.ctrlKey))) return;
   const display = displayFor(event.target);
   if (!display) {
     lastCapture = null;

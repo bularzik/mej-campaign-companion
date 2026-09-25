@@ -75,8 +75,18 @@ export function requestEntityViaGm(request, env = foundryEnv()) {
   return result;
 }
 
-/** Requester side: settle our own pending request; toast a result that arrives after the timeout. */
-export function handleEntityResult(payload, env = foundryEnv()) {
+/**
+ * Requester side: settle our own pending request; toast a result that
+ * arrives after the timeout. Takes `_senderId` (the GM's id, per the
+ * dispatcher's `handler(payload, senderId)` call shape - socket.mjs) as its
+ * second positional argument even though it is unused here, so that shape
+ * lines up with `handleEntityRequest`'s and the default `env` parameter
+ * lands in the third slot instead of silently absorbing the sender id
+ * (fix round 1: a two-parameter signature let `senderId` fall into `env`'s
+ * position, so `env.userId` was undefined and every relay looked like a
+ * timeout - "No GM responded" - even on success).
+ */
+export function handleEntityResult(payload, _senderId, env = foundryEnv()) {
   if (payload?.recipient !== env.userId) return;
   const { action, requestId, recipient, ...outcome } = payload;
   const waiting = pending.get(requestId);

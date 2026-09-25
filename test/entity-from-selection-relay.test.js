@@ -72,8 +72,8 @@ describe("requestEntityViaGm / handleEntityResult (requester)", () => {
     const env = clientEnv();
     const p = requestEntityViaGm({ pageUuid: "P" }, env);
     expect(env.emitted[0]).toMatchObject({ action: "entity-from-selection", requestId: "r1", pageUuid: "P" });
-    handleEntityResult({ requestId: "r1", recipient: "someone-else", ok: true }, env);
-    handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, env);
+    handleEntityResult({ requestId: "r1", recipient: "someone-else", ok: true }, "gm1", env);
+    handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, "gm1", env);
     await expect(p).resolves.toEqual({ ok: true, entryUuid: "E", linked: true, retro: false });
   });
   it("times out after 15 s with no-gm, and a late result goes to onLate", async () => {
@@ -81,7 +81,20 @@ describe("requestEntityViaGm / handleEntityResult (requester)", () => {
     const p = requestEntityViaGm({ pageUuid: "P" }, env);
     vi.advanceTimersByTime(15000);
     await expect(p).resolves.toEqual({ ok: false, reason: "no-gm" });
-    handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, env);
+    handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, "gm1", env);
     expect(env.onLate).toHaveBeenCalledWith(expect.objectContaining({ ok: true, entryUuid: "E" }));
+  });
+  it("regression (fix round 1): tolerates the dispatcher's real call shape - senderId as the 2nd argument, not env", async () => {
+    // socket.mjs's dispatcher always calls `handler(payload, senderId)`. A
+    // two-parameter `handleEntityResult(payload, env = foundryEnv())` would
+    // receive the GM's sender-id STRING as `env` here (since the default
+    // only applies to `undefined`), so `env.userId` would be undefined and
+    // this would never resolve - it would instead time out at 15s. Driving
+    // the call with senderId in the real dispatcher position (2nd) and env
+    // in the 3rd catches that regression.
+    const env = clientEnv();
+    const p = requestEntityViaGm({ pageUuid: "P" }, env);
+    handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, "gm1", env);
+    await expect(p).resolves.toEqual({ ok: true, entryUuid: "E", linked: true, retro: false });
   });
 });
