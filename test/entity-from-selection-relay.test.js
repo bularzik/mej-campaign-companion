@@ -112,7 +112,10 @@ describe("requestEntityViaGm / handleEntityResult (requester)", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  const clientEnv = () => ({ emitted: [], emit(m) { this.emitted.push(m); }, userId: "u1", randomId: () => "r1", onLate: vi.fn() });
+  const clientEnv = () => ({
+    emitted: [], emit(m) { this.emitted.push(m); }, userId: "u1", randomId: () => "r1", onLate: vi.fn(),
+    users: new Map([["gm1", { id: "gm1", isGM: true }], ["p2", { id: "p2", isGM: false }]])
+  });
 
   it("emits the request and resolves on the matching result for this user only", async () => {
     const env = clientEnv();
@@ -142,5 +145,19 @@ describe("requestEntityViaGm / handleEntityResult (requester)", () => {
     const p = requestEntityViaGm({ pageUuid: "P" }, env);
     handleEntityResult({ requestId: "r1", recipient: "u1", ok: true, entryUuid: "E", linked: true, retro: false }, "gm1", env);
     await expect(p).resolves.toEqual({ ok: true, entryUuid: "E", linked: true, retro: false });
+  });  it("ignores a result sent by a non-GM (or unknown) client", async () => {
+    const env = clientEnv();
+    const p = requestEntityViaGm({ pageUuid: "P" }, env);
+    const forged = { requestId: "r1", recipient: "u1", ok: true, entryUuid: "FORGED", linked: true, retro: false };
+    handleEntityResult(forged, "p2", env);
+    handleEntityResult(forged, "nobody", env);
+    handleEntityResult(forged, undefined, env);
+    vi.advanceTimersByTime(15000);
+    await expect(p).resolves.toEqual({ ok: false, reason: "no-gm" });
+    // Nor does a forged late result reach onLate.
+    handleEntityResult(forged, "p2", env);
+    expect(env.onLate).not.toHaveBeenCalled();
+    handleEntityResult({ ...forged, entryUuid: "E" }, "gm1", env);
+    expect(env.onLate).toHaveBeenCalledWith(expect.objectContaining({ entryUuid: "E" }));
   });
 });
