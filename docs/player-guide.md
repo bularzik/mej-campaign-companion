@@ -24,6 +24,12 @@ Your GM will let you know how to find a session page — usually by sharing it d
 
 If there's no pencil at all, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
 
+## If your GM has made you a contributor
+
+Some GMs turn on the **Contributors** setting for a campaign — on their side, from the Hub's campaign settings — and list you there, alone or as part of a player group. If they have, selecting a run of plain text (up to 80 characters, no line breaks) on one of that campaign's pages and right-clicking it shows a **Create Entity from Selection** item in the context menu, the same one your GM sees, alongside MEJ's own Extract to Journal Entry. Pick a type, adjust the name if you want, and click **Create**: the companion makes the new entry, links the text you selected to it, and — if you leave **Link other mentions** checked — offers up every other plain-text mention of that name to your GM's own Retroactive Auto-Link setting.
+
+Your request goes through an active GM's client, so it only works while a GM is connected — with none online the menu item isn't there at all. The entry that comes back has exactly the ownership a GM creating it in that campaign would give it, so you (and the rest of the table) can see it the same way you'd see anything else your GM writes there.
+
 ## Finding things
 
 Once your campaign has more than a few sessions, you won't always remember which entry mentioned what. The **Campaign Hub** is the home base for the whole campaign, and it's open to you as well as to your GM. There are three ways in, and all of them work from a player's seat:
