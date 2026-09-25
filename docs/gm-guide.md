@@ -220,7 +220,7 @@ Select a run of plain text in an entry's description — up to 80 characters, no
 
 ![The Create Entity from Selection dialog, with Type set to Person, Name prefilled with the selected text, and Link other mentions checked](images/entity-from-selection-dialog.png)
 
-Click **Create** and the companion makes a new entry of that type in the same folder as the page you selected from, turns the selected occurrence into a link to it, and opens the new entry as a background tab in the shell without pulling you away from the page you were on. A notification confirms it, e.g. "Created Person 'Elowen' and linked the selection."
+Click **Create** and the companion makes a new entry of that type in the same folder as the page you selected from, turns the selected occurrence into a link to it, and opens the new entry as a background tab in the shell without pulling you away from the page you were on. A notification confirms it, e.g. "Created Person "Elowen" and linked the selection."
 
 **Link other mentions** hands the new entry straight to your Retroactive Auto-Link setting (see [Auto-linking](#auto-linking) above): Silent links every other plain-text mention of the same name right away, Confirm shows you the usual review dialog first, and Off leaves everything but the selection itself untouched. Uncheck the box to only ever link the exact spot you selected, whatever that setting is.
 
