@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.0 (2026-09-25)
+
+Create entities straight from selected text.
+
+- **Added:** "Create Entity from Selection" in the journal description's right-click menu. Select a name (up to 80 characters), pick a type, and the companion creates the entity in the same folder, turns the selected text into a link to it, and (optionally) links the other mentions using your retroactive auto-link setting.
+- **Added:** campaign Contributors (Hub → campaign settings). Listed players and player groups can use the new menu item on that campaign's pages while a GM is connected; the GM's client does the work, so new entities get the campaign's ownership baseline.
+
 ## 0.20.2 (2026-09-22)
 
 Sweep-report follow-ups. Docs only, no runtime change.

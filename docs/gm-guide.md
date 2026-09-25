@@ -214,6 +214,18 @@ Auto-linking turns plain-text mentions of Enhanced Journal entry names into `@UU
 
 One limitation to know about: if the create-time pass rewrites a recap while another player has that recap's editor open, their next save can overwrite the links — the same thing that happens with any outside edit during a collaborative session. Reopening the editor picks the links up.
 
+## Creating an entity from selected text
+
+Select a run of plain text in an entry's description — up to 80 characters, no line breaks — and right-click it. Alongside MEJ's own context-menu entries (Extract to Journal Entry, and so on) you'll find **Create Entity from Selection**; it isn't there while you're editing the field, or when the selection is too long for a name. Choosing it opens a small dialog: **Type** (a dropdown of MEJ's own entity types, defaulting to whichever one you picked last time), **Name** (prefilled with your selection, editable), and a **Link other mentions** checkbox, checked by default:
+
+![The Create Entity from Selection dialog, with Type set to Person, Name prefilled with the selected text, and Link other mentions checked](images/entity-from-selection-dialog.png)
+
+Click **Create** and the companion makes a new entry of that type in the same folder as the page you selected from, turns the selected occurrence into a link to it, and opens the new entry as a background tab in the shell without pulling you away from the page you were on. A notification confirms it, e.g. "Created Person "Elowen" and linked the selection."
+
+**Link other mentions** hands the new entry straight to your Retroactive Auto-Link setting (see [Auto-linking](#auto-linking) above): Silent links every other plain-text mention of the same name right away, Confirm shows you the usual review dialog first, and Off leaves everything but the selection itself untouched. Uncheck the box to only ever link the exact spot you selected, whatever that setting is.
+
+**Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
+
 ## Auto-capture
 
 Two more opt-in settings automate filing things onto the timeline for you, so you don't have to remember to do it by hand mid-session:

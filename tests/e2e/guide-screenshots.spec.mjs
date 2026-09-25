@@ -18,7 +18,7 @@
 // there when it runs.
 import { test, expect } from "@playwright/test";
 import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { login, settle, MODULE_ID } from "./helpers/foundry.mjs";
+import { login, settle, MODULE_ID, deleteJournalsByPrefix, cleanupStrandedTestFolders } from "./helpers/foundry.mjs";
 
 // Gitignored (world state, not source) — see .gitignore. Written in
 // beforeAll BEFORE any mutation, so a crashed run leaves the file behind
@@ -1311,6 +1311,129 @@ guideDescribe("guide screenshots", () => {
       await game.settings.set("mej-campaign-companion", "autoLink", false);
       await game.settings.set("mej-campaign-companion", "retroLinkMode", "off");
     });
+  });
+
+  // Task 10 (release prep, gm-guide "Creating an entity from selected
+  // text"): the entity-from-selection dialog. Deliberately NOT part of the
+  // seed/capture chain above — this file's demo content uses clean
+  // (non-"TT-") fantasy names because World A doubles as the human's real
+  // campaign and afterAll's sweepGuideDemo() only reclaims flagged demo
+  // docs; running just this test with `-g` skips that seed test entirely,
+  // so there would be no demo folder/page to seed from. Instead this test
+  // creates and tears down its own tiny "TT-" prefixed fixture (the
+  // harness's real-world safety convention — 24-entity-from-selection.spec
+  // .mjs's own header comment — so a crash still leaves World A clean via
+  // deleteJournalsByPrefix/cleanupStrandedTestFolders, the same helpers
+  // that spec's cleanup() uses) rather than the file's usual guideDemo flag.
+  // The dialog itself is never submitted (Escape-closed, like
+  // docx-export-dialog.png above), so no entity is ever created — the only
+  // documents this test's cleanup has to reclaim are the source campaign
+  // folder and the page it seeded.
+  test("capture entity-from-selection dialog", async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page, "Gamemaster");
+    await page.evaluate(() => ui.notifications.clear());
+    await unpause(page);
+
+    const RUN = Date.now();
+    const PREFIX = "TT-EfsShot";
+    const campName = `${PREFIX}Camp${RUN}`;
+    const placeName = `${PREFIX}Place${RUN}`;
+    // A plain fantasy name, not "TT-"-prefixed: unlike campName/placeName
+    // (real documents this test must be able to reclaim on a crash), this
+    // is only page CONTENT inside the already-"TT-"-prefixed place entry —
+    // it becomes the dialog's prefilled Name field, which this published
+    // screenshot shows, and the dialog is never submitted (Escape-closed
+    // below), so no document is ever created under this name. Single
+    // token (no whitespace): auto-link's WORD_RE only ever matches one
+    // word at a time (24-entity-from-selection.spec.mjs's own header note).
+    const selection = "Elowen";
+
+    // try/finally, not cleanup-as-trailing-statements: fix round 1 (a dead
+    // test — a failed selector, a timed-out dialog wait, anything between
+    // document creation and the cleanup calls below — used to strand these
+    // "TT-EfsShot"-prefixed docs in World A, the human's real campaign,
+    // until the next global-setup sweep. The finally block below always
+    // runs, success or failure, so a crash here leaves nothing behind.
+    try {
+      const folderId = await page.evaluate(
+        async (n) =>
+          (
+            await Folder.create({
+              name: n,
+              type: "JournalEntry",
+              flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
+            })
+          ).id,
+        campName
+      );
+      const placeId = await page.evaluate(
+        async ({ n, html, folderId }) => {
+          const e = await JournalEntry.create({
+            name: n,
+            folder: folderId,
+            ownership: { default: 2 },
+            pages: [
+              {
+                name: n,
+                type: "text",
+                flags: { "monks-enhanced-journal": { type: "place" } },
+                text: { content: html }
+              }
+            ]
+          });
+          return e.id;
+        },
+        { n: placeName, html: `<p>The merchant mentioned ${selection} in passing.</p>`, folderId }
+      );
+
+      await openEntry(page, placeId);
+      const box = await page.evaluate((text) => {
+        const display = [...document.querySelectorAll(".editor-parent .editor-display[data-key]")].find(
+          (d) => d.offsetParent
+        );
+        const walker = document.createTreeWalker(display, NodeFilter.SHOW_TEXT);
+        let node,
+          at = -1;
+        while ((node = walker.nextNode())) {
+          const i = node.data.indexOf(text);
+          if (i !== -1) {
+            at = i;
+            break;
+          }
+        }
+        const r = document.createRange();
+        r.setStart(node, at);
+        r.setEnd(node, at + text.length);
+        const sel = getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        const rect = r.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      }, selection);
+      await page.mouse.click(box.x, box.y, { button: "right" });
+      const menuItem = page.locator("#context-menu li", { hasText: "Create Entity from Selection" });
+      await expect(menuItem).toHaveCount(1);
+      await menuItem.click();
+      const dialog = page.locator("dialog.application", { hasText: "Create Entity from Selection" });
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+      await shot(dialog, "entity-from-selection-dialog");
+      // Native <dialog> — closes reliably on Escape (docx-export-dialog.png's
+      // own comment above notes the same for this element kind, unlike an
+      // ApplicationV2 window).
+      await page.keyboard.press("Escape");
+      await settle(page, 300);
+    } finally {
+      await page.evaluate(async () => {
+        try {
+          await game.MonksEnhancedJournal?.journal?.close?.();
+        } catch {
+          /* nothing open, or the page/context is already gone */
+        }
+      }).catch(() => {});
+      await deleteJournalsByPrefix(page, PREFIX);
+      await cleanupStrandedTestFolders(page, { prefix: PREFIX });
+    }
   });
 
   // Task 3: player-perspective captures. The two prerequisites the brief's

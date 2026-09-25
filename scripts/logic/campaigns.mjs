@@ -3,6 +3,7 @@
 // doc-shaped plain objects: folders have .flags/.folder, entries have
 // .documentName/.folder/.flags, pages have .documentName/.parent.
 import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N } from "../constants.mjs";
+import { normalizeGroups } from "./player-groups.mjs";
 
 /** The campaign flag object ({ ownershipDefault, ... }) or null. */
 export function campaignFlagOf(folder) {
@@ -269,4 +270,36 @@ export function campaignChoicePlan(campaigns, { alwaysPrompt = false } = {}) {
 export function campaignControls(campaigns) {
   const disabled = campaigns.length === 0;
   return { disabled, tooltipKey: disabled ? NO_CAMPAIGNS_KEY : null };
+}
+
+/** The campaign flag's contributor lists, normalized; absent = none (spec 2026-09-22 §4.5). */
+export function contributorsOf(flag) {
+  const c = flag?.contributors ?? {};
+  const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.length) : []);
+  return { userIds: strings(c.userIds), groupIds: strings(c.groupIds) };
+}
+
+/** GMs always; otherwise listed directly or via a listed player group. */
+export function isContributor(user, flag, groups) {
+  if (!user) return false;
+  if (user.isGM) return true;
+  const { userIds, groupIds } = contributorsOf(flag);
+  if (userIds.includes(user.id)) return true;
+  return normalizeGroups(groups).some((g) => groupIds.includes(g.id) && g.members.includes(user.id));
+}
+
+/** Checkbox rows for the Hub's Contributors fieldset (spec 2026-09-22 §4.5). */
+export function contributorChoices(users, groups, flag) {
+  const { userIds, groupIds } = contributorsOf(flag);
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  return {
+    users: (users ?? []).filter((u) => !u.isGM).map((u) => ({ id: u.id, name: u.name, checked: userIds.includes(u.id) })).sort(byName),
+    groups: normalizeGroups(groups).map((g) => ({ id: g.id, name: g.name, checked: groupIds.includes(g.id) })).sort(byName)
+  };
+}
+
+/** Read the Contributors checkboxes back out of the settings form. */
+export function readContributors(form) {
+  const checked = (name) => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((i) => i.value);
+  return { userIds: checked("contributorUser"), groupIds: checked("contributorGroup") };
 }

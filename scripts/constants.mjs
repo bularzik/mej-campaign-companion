@@ -145,3 +145,9 @@ export const UPLOAD_MEDIA_RESULT_ACTION = "relay-upload-media-result";
 
 /** Native Foundry JournalEntryPage types the companion mounts inside the MEJ shell (spec E §1). */
 export const MEDIA_PAGE_TYPES = ["pdf", "video"];
+
+// Create Entity from Selection (spec 2026-09-22).
+export const ENTITY_FROM_SELECTION_LAST_TYPE_SETTING = "entityFromSelectionLastType";
+export const ENTITY_FROM_SELECTION_ACTION = "entity-from-selection";
+export const ENTITY_FROM_SELECTION_RESULT_ACTION = "entity-from-selection-result";
+export const ENTITY_RELAY_TIMEOUT_MS = 15000;

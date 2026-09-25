@@ -138,3 +138,14 @@ export function buildRetroPlanBatch({ entities, pages, otherSameNamed = {}, minL
   }
   return { rows };
 }
+
+/**
+ * preCreateJournalEntry decision for the retro stamp. A creator that runs
+ * its own pass afterwards (entity-from-selection, which must write the
+ * selection link first so the two writes cannot race) opts out through the
+ * create options: { [moduleId]: { skipRetroLink: true } }.
+ */
+export function shouldStampRetro({ mode, isCandidate, options, moduleId }) {
+  if (mode === "off" || !isCandidate) return false;
+  return options?.[moduleId]?.skipRetroLink !== true;
+}

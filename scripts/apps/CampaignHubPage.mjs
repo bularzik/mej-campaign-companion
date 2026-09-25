@@ -18,7 +18,7 @@ import { renderAwaitable } from "../sheets/awaitable-render.mjs";
 import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
-import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls } from "../logic/campaigns.mjs";
+import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls, contributorChoices, readContributors } from "../logic/campaigns.mjs";
 import { orderTimelines, partitionTimelines } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -1128,11 +1128,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const currentKey = campaignFlagOf(campaign)?.ownershipDefault ?? "observer";
     const options = ["none", "observer", "owner"].map((k) =>
       `<option value="${k}" ${k === currentKey ? "selected" : ""}>${esc(game.i18n.localize(`${I18N}.hub.baseline.${k}`))}</option>`).join("");
+    const choices = contributorChoices(game.users.contents, game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), campaignFlagOf(campaign));
+    const box = (name, c) => `<label class="checkbox"><input type="checkbox" name="${name}" value="${esc(c.id)}" ${c.checked ? "checked" : ""}> ${esc(c.name)}</label>`;
+    const contributors = `
+      <fieldset><legend>${esc(game.i18n.localize(`${I18N}.hub.contributors`))}</legend>
+        <p class="hint">${esc(game.i18n.localize(`${I18N}.hub.contributorsHint`))}</p>
+        <div class="form-group stacked"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsUsers`))}</label>
+          ${choices.users.map((c) => box("contributorUser", c)).join("")}</div>
+        ${choices.groups.length ? `<div class="form-group stacked"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsGroups`))}</label>
+          ${choices.groups.map((c) => box("contributorGroup", c)).join("")}</div>` : ""}
+      </fieldset>`;
     const content = `
       <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
         <select name="baseline">${options}</select></div>
       <div class="form-group"><label><input type="checkbox" name="applyNow" checked>
-        ${esc(game.i18n.localize(`${I18N}.hub.applyBaselineNow`))}</label></div>`;
+        ${esc(game.i18n.localize(`${I18N}.hub.applyBaselineNow`))}</label></div>
+      ${contributors}`;
     // Spec C §2: the campaign settings dialog is also where a GM who deleted
     // (or never had) the campaign's portal entry can get one back. Absent
     // when a portal already exists - nothing to restore.
@@ -1160,12 +1171,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       buttons,
       ok: { callback: (event, button) => ({
         baseline: button.form.elements.baseline.value,
-        applyNow: button.form.elements.applyNow.checked
+        applyNow: button.form.elements.applyNow.checked,
+        contributors: readContributors(button.form)
       }) },
       rejectClose: false
     });
     if (!result) return;
-    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ownershipDefault: result.baseline });
+    const flag = campaignFlagOf(campaign) ?? {};
+    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ...flag, ownershipDefault: result.baseline, contributors: result.contributors });
     if (result.applyNow) {
       const n = await applyBaselineToMembers(campaign);
       ui.notifications.info(game.i18n.format(`${I18N}.hub.baselineApplied`, { count: n }));

@@ -34,3 +34,11 @@ describe("isAuthorizedForAction", () => {
     expect(isAuthorizedForAction("bogus-action", true)).toBe(false);
   });
 });
+
+describe("entity-from-selection actions", () => {
+  it("request is GM-only; result reaches every client", () => {
+    expect(isAuthorizedForAction("entity-from-selection", false)).toBe(false);
+    expect(isAuthorizedForAction("entity-from-selection", true)).toBe(true);
+    expect(isAuthorizedForAction("entity-from-selection-result", false)).toBe(true);
+  });
+});
