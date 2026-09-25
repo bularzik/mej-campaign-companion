@@ -1177,7 +1177,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       rejectClose: false
     });
     if (!result) return;
-    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ownershipDefault: result.baseline, contributors: result.contributors });
+    const flag = campaignFlagOf(campaign) ?? {};
+    await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ...flag, ownershipDefault: result.baseline, contributors: result.contributors });
     if (result.applyNow) {
       const n = await applyBaselineToMembers(campaign);
       ui.notifications.info(game.i18n.format(`${I18N}.hub.baselineApplied`, { count: n }));
