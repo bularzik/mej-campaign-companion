@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_ID } from "../scripts/constants.mjs";
-import { adoptionPlan, campaignChoicePlan, campaignControls, contributorsOf, isContributor } from "../scripts/logic/campaigns.mjs";
+import { adoptionPlan, campaignChoicePlan, campaignControls, contributorsOf, isContributor, contributorChoices } from "../scripts/logic/campaigns.mjs";
 import { readFileSync } from "node:fs";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
@@ -425,5 +425,17 @@ describe("contributorsOf / isContributor", () => {
     expect(isContributor({ id: "u3", isGM: false }, flag, groups)).toBe(false);
     expect(isContributor({ id: "u1", isGM: false }, { ownershipDefault: "observer" }, groups)).toBe(false);
     expect(isContributor(null, flag, groups)).toBe(false);
+  });
+});
+
+describe("contributorChoices", () => {
+  it("lists non-GM users and groups, sorted, with current picks checked", () => {
+    const users = [{ id: "u2", name: "Zed", isGM: false }, { id: "gm", name: "GM", isGM: true }, { id: "u1", name: "Ana", isGM: false }];
+    const groups = [{ id: "g1", name: "Party", members: [] }];
+    const flag = { contributors: { userIds: ["u2"], groupIds: ["g1"] } };
+    expect(contributorChoices(users, groups, flag)).toEqual({
+      users: [{ id: "u1", name: "Ana", checked: false }, { id: "u2", name: "Zed", checked: true }],
+      groups: [{ id: "g1", name: "Party", checked: true }]
+    });
   });
 });
