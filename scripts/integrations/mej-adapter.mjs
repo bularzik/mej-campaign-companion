@@ -147,6 +147,11 @@ export async function registerCore() {
     registerPortalSync();
   });
 
+  await step("actor link sync", async () => {
+    const { registerActorLink } = await import("../hooks/actor-link.mjs");
+    registerActorLink();
+  });
+
   // Folder context menu ("Open Campaign Hub") is registered at "init" now,
   // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
   // registering this late (registerCore only ever runs from "setup"/"ready")
