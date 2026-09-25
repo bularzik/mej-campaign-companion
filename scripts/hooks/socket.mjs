@@ -9,27 +9,34 @@
 // GM_ACTIONS lists every action whose handler is a GM-side write: gated on
 // the elected single writer (`game.user === game.users.activeGM`), matching
 // hooks/auto-capture.mjs's own reasoning for why a plain `game.user.isGM`
-// guard is insufficient with more than one GM online. Names only the upload
-// relay - UPLOAD_MEDIA_RESULT_ACTION is deliberately absent - it settles the
-// REQUESTER's own pending promise, which may be a player's client, not a
-// GM-only action at all.
+// guard is insufficient with more than one GM online. Names the upload
+// relay and the "Create Entity from Selection" contributor relay request
+// (ENTITY_FROM_SELECTION_ACTION) - their *_RESULT_ACTION counterparts are
+// deliberately absent - each settles the REQUESTER's own pending promise,
+// which may be a player's client, not a GM-only action at all.
 //
 // Observer pattern: each handler runs in its own try/catch (including
 // awaited rejections, not just synchronous throws) so one handler's failure
 // can never prevent another action's handler, or a later socket message,
 // from being processed.
-import { SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION } from "../constants.mjs";
+import {
+  SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION,
+  ENTITY_FROM_SELECTION_ACTION, ENTITY_FROM_SELECTION_RESULT_ACTION
+} from "../constants.mjs";
 import { handleUploadRequest, handleUploadResult } from "./media-relay.mjs";
+import { handleEntityRequest, handleEntityResult } from "./entity-from-selection-relay.mjs";
 
 const HANDLERS = {
   [UPLOAD_MEDIA_ACTION]: handleUploadRequest,
-  [UPLOAD_MEDIA_RESULT_ACTION]: handleUploadResult
+  [UPLOAD_MEDIA_RESULT_ACTION]: handleUploadResult,
+  [ENTITY_FROM_SELECTION_ACTION]: handleEntityRequest,
+  [ENTITY_FROM_SELECTION_RESULT_ACTION]: handleEntityResult
 };
 
 // Exported (not just module-local) so the "is this client authorized to run this action"
 // decision is independently unit-testable without registering a real socket listener - see
 // isAuthorizedForAction below and test/socket-dispatcher.test.js.
-export const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION]);
+export const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION, ENTITY_FROM_SELECTION_ACTION]);
 
 /**
  * Pure routing seam: does this client get to run `action`? Every action must be a known
@@ -46,13 +53,18 @@ export function isAuthorizedForAction(action, isActiveGM) {
 
 /** Register the module's one socket listener. Call once, from the ready hook. */
 export function registerSocketDispatcher() {
-  game.socket.on(SOCKET, (payload) => {
+  game.socket.on(SOCKET, (payload, ...rest) => {
+    // Spike note 2026-09-22 (a): Foundry's server appends the emitting
+    // user's own id as the LAST argument, discarding any client-forged
+    // extras - this is the only trustworthy sender identity for a relay
+    // handler (see entity-from-selection-relay.mjs's handleEntityRequest).
+    const senderId = rest.at(-1);
     const action = payload?.action;
     if (!isAuthorizedForAction(action, game.user === game.users.activeGM)) return;
     const handler = HANDLERS[action];
     (async () => {
       try {
-        await handler(payload);
+        await handler(payload, senderId);
       } catch (error) {
         console.error(`mej-campaign-companion | socket handler for "${action}" failed`, error);
       }

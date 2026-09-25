@@ -441,7 +441,8 @@
         "bad-name": "the name is empty or longer than 120 characters",
         "page-missing": "the page no longer exists",
         "create-failed": "creation failed",
-        "relay-unavailable": "no GM is available"
+        "relay-unavailable": "no GM is available",
+        "no-gm": "no GM responded"
       }
     }
   }

@@ -69,9 +69,19 @@ function displayFor(target) {
 // (ruling 2) so a stale capture cannot be replayed for a later click.
 let lastCapture = null;
 
-/** Capture-phase mousedown listener (ruling 2): stash the live selection NOW, before ContextMenu clears it. */
+/**
+ * Capture-phase mousedown listener (ruling 2): stash the live selection NOW,
+ * before ContextMenu clears it. macOS Ctrl+click (ruling 2c) fires a
+ * `button === 0` mousedown with `ctrlKey` true instead of a real
+ * right-button click - treat that the same as button 2. Any other
+ * mousedown clears a stale capture rather than leaving it live for a later,
+ * unrelated click.
+ */
 function onRightMouseDown(event) {
-  if (event.button !== 2) return;
+  if (!(event.button === 2 || (event.button === 0 && event.ctrlKey))) {
+    lastCapture = null;
+    return;
+  }
   const display = displayFor(event.target);
   if (!display) {
     lastCapture = null;
@@ -93,6 +103,10 @@ export function eligibilityFromCapture(sheet, target) {
   const parent = target?.closest?.(".editor-parent") ?? null;
   if (!parent || parent !== lastCapture.parent) return null;
   if (Date.now() - lastCapture.at >= CAPTURE_TTL_MS) return null;
+  // Ruling 2b: re-check edit mode at EVALUATION time, not capture time - the
+  // editor may have flipped into edit mode between the mousedown capture and
+  // this ContextMenu entry actually running.
+  if (lastCapture.parent.classList.contains("editing")) return null;
   const capture = lastCapture.capture;
   if (!capture) return null;
   const fieldKey = lastCapture.display.dataset.key;
@@ -111,6 +125,12 @@ export function setRelay(fn) { requestViaGm = fn; }
 export function showEntityOutcome(outcome, { type, name, sheet }) {
   const f = (k, d) => game.i18n.format(`${I18N}.entityFromSelection.${k}`, d);
   if (!outcome?.ok) {
+    if (outcome?.reason === "no-gm") {
+      // Ruling 3: a relay timeout is a warning, not an error - the request
+      // was never rejected, there was simply no GM online to answer it.
+      ui.notifications.warn(game.i18n.localize(`${I18N}.entityFromSelection.noGm`));
+      return;
+    }
     const reason = game.i18n.localize(`${I18N}.entityFromSelection.rejected.${outcome?.reason ?? "create-failed"}`);
     ui.notifications.error(f("failed", { reason }));
     return;
@@ -136,13 +156,22 @@ async function startFromSelection(sheet, target) {
   const ctx = eligibilityFromCapture(sheet, target);
   lastCapture = null;
   if (!ctx) return;
-  const lastType = game.settings.get(MODULE_ID, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING);
-  const choice = await promptEntityFromSelection({ name: ctx.capture.text, lastType });
-  if (!choice) return;
-  await game.settings.set(MODULE_ID, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, choice.type);
-  const request = { pageUuid: ctx.page.uuid, fieldKey: ctx.fieldKey, ...ctx.capture, ...choice };
-  const outcome = ctx.relay ? await requestViaGm(request) : await runEntityFromSelection(request, pipelineDeps());
-  showEntityOutcome(outcome, { type: choice.type, name: choice.name, sheet });
+  let type, name;
+  try {
+    const lastType = game.settings.get(MODULE_ID, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING);
+    const choice = await promptEntityFromSelection({ name: ctx.capture.text, lastType });
+    if (!choice) return;
+    ({ type, name } = choice);
+    await game.settings.set(MODULE_ID, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, choice.type);
+    const request = { pageUuid: ctx.page.uuid, fieldKey: ctx.fieldKey, ...ctx.capture, ...choice };
+    const outcome = ctx.relay ? await requestViaGm(request) : await runEntityFromSelection(request, pipelineDeps());
+    showEntityOutcome(outcome, { type: choice.type, name: choice.name, sheet });
+  } catch (err) {
+    // Ruling 2a: never leak an unhandled rejection out of the ContextMenu
+    // entry's click handler - report the same way a rejected write does.
+    console.error(`${MODULE_ID} | entity-from-selection: startFromSelection failed`, err);
+    showEntityOutcome({ ok: false, reason: "create-failed" }, { type, name, sheet });
+  }
 }
 
 export async function registerEntityFromSelection() {
@@ -180,4 +209,9 @@ export async function registerEntityFromSelection() {
   // Capture-phase, document-level, installed once the wrap that will consume
   // it is actually in place (ruling 2).
   document.addEventListener("mousedown", onRightMouseDown, true);
+  // Dynamic import (not a static one) to avoid an import cycle:
+  // entity-from-selection-relay.mjs imports pipelineDeps/showEntityOutcome
+  // from this file dynamically inside its own foundryEnv().
+  const { requestEntityViaGm } = await import("./entity-from-selection-relay.mjs");
+  setRelay((request) => requestEntityViaGm(request));
 }
