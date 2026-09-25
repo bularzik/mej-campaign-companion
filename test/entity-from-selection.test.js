@@ -128,3 +128,43 @@ describe("validateSelectionRequest", () => {
     expect(v(patch, cpatch)).toEqual({ ok: false, reason });
   });
 });
+
+describe("linkSelectionInSource with maskSecrets (non-owner relay path)", () => {
+  const link = (text, occurrence, total, html, opts) =>
+    linkSelectionInSource(html, { text, occurrence, total, uuid: U }, opts);
+  const html = `<p>Elara waits.</p><section class="secret" id="secret-1"><p>Elara is a spy.</p></section><p>Then Elara left.</p>`;
+
+  it("without the option, secret text counts (GM path unchanged)", () => {
+    expect(link("Elara", 1, 3, html)).toBe(html.replace("Elara is", `@UUID[${U}]{Elara} is`));
+    expect(link("Elara", 0, 2, html)).toBeNull();
+  });
+  it("masked: secret text is neither counted nor linked", () => {
+    const opts = { maskSecrets: true };
+    expect(link("Elara", 0, 2, html, opts)).toBe(html.replace("<p>Elara waits", `<p>@UUID[${U}]{Elara} waits`));
+    expect(link("Elara", 1, 2, html, opts)).toBe(html.replace("Then Elara", `Then @UUID[${U}]{Elara}`));
+    // An inflated client total that would reach into the secret is refused.
+    expect(link("Elara", 2, 3, html, opts)).toBeNull();
+    expect(link("spy", 0, 1, html, opts)).toBeNull();
+  });
+  it("masks sections nested inside a secret and resumes after the secret closes", () => {
+    const nested = `<section class="secret"><section><p>Elara</p></section><p>Elara</p></section><p>Elara</p>`;
+    expect(link("Elara", 0, 1, nested, { maskSecrets: true })).toBe(
+      `<section class="secret"><section><p>Elara</p></section><p>Elara</p></section><p>@UUID[${U}]{Elara}</p>`);
+    expect(link("Elara", 0, 3, nested, { maskSecrets: true })).toBeNull();
+  });
+  it("masks a secret nested in a plain section, not the plain section's own text", () => {
+    const outer = `<section class="journal"><p>Elara</p><section class='gm secret'><p>Elara</p></section><p>Elara</p></section>`;
+    expect(link("Elara", 1, 2, outer, { maskSecrets: true })).toBe(
+      `<section class="journal"><p>Elara</p><section class='gm secret'><p>Elara</p></section><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+  it("keeps index maps aligned when entities precede the match after a secret", () => {
+    const s = `<section class="secret"><p>Tom &amp; Jerry</p></section><p>&quot;Tom &amp; Jerry&quot;</p>`;
+    expect(link("Tom & Jerry", 0, 1, s, { maskSecrets: true })).toBe(
+      `<section class="secret"><p>Tom &amp; Jerry</p></section><p>&quot;@UUID[${U}]{Tom &amp; Jerry}&quot;</p>`);
+  });
+  it("only the exact 'secret' class counts", () => {
+    const notSecret = `<section class="secretive"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, notSecret, { maskSecrets: true })).toBe(
+      `<section class="secretive"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});

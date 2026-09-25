@@ -67,4 +67,14 @@ describe("runEntityFromSelection", () => {
     expect(await runEntityFromSelection(req(), b.deps)).toEqual({ ok: false, reason: "create-failed" });
     expect(b.page.update).not.toHaveBeenCalled();
   });
+  it("maskSecrets: counts and links only text outside secret sections", async () => {
+    const content = `<section class="secret"><p>Elara</p></section><p>Elara waits.</p>`;
+    const masked = setup({ content });
+    const out = await runEntityFromSelection(req({ maskSecrets: true }), masked.deps);
+    expect(out.linked).toBe(true);
+    expect(masked.page.text.content).toBe(`<section class="secret"><p>Elara</p></section><p>@UUID[JournalEntry.new]{Elara} waits.</p>`);
+    // Without the flag (GM path) the secret occurrence counts, so total 1 no longer matches.
+    const plain = setup({ content });
+    expect((await runEntityFromSelection(req(), plain.deps)).linked).toBe(false);
+  });
 });

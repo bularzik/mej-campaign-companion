@@ -79,19 +79,46 @@ function maskedRanges(decoded) {
   return ranges;
 }
 
+const SECTION_OPEN_RE = /^<section\b([^>]*)>$/i;
+const SECTION_CLOSE_RE = /^<\/section\s*>$/i;
+const CLASS_ATTR_RE = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+
+/** Push/pop the open-section stack for one tag segment. */
+function trackSection(tag, sections) {
+  const open = SECTION_OPEN_RE.exec(tag);
+  if (open) {
+    const attrs = open[1];
+    if (attrs.trimEnd().endsWith("/")) return;   // self-closing: nothing to scope
+    const cls = CLASS_ATTR_RE.exec(attrs);
+    const classes = cls ? (cls[1] ?? cls[2] ?? cls[3]).split(/\s+/) : [];
+    sections.push(classes.includes("secret"));
+  } else if (SECTION_CLOSE_RE.test(tag)) {
+    sections.pop();
+  }
+}
+
 /**
  * Wrap the `occurrence`-th eligible match of `text` in the stored HTML as
  * @UUID[uuid]{<raw source substring>}. Eligible = inside a tokenizeHtml
  * "text" segment and outside enricher syntax. Returns null when the source's
  * eligible count differs from the rendered `total` the capture saw, or the
  * occurrence does not exist - the caller then reports "could not link".
+ *
+ * `maskSecrets`: also treat everything inside a `<section class="secret">`
+ * (and any sections nested in it) as masked, the way enrichers are. The
+ * relay sets it when the requester does not own the page, because Foundry
+ * only renders secrets for owners: their `total` never includes secret
+ * text, and an inflated total must not reach into (or probe) a secret.
  */
-export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid }) {
+export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid }, { maskSecrets = false } = {}) {
   if (typeof sourceHtml !== "string" || !sourceHtml || !text) return null;
   const segs = tokenizeHtml(sourceHtml);
   const hits = [];
+  const sections = [];   // open <section> stack: true = a secret section
   segs.forEach((seg, segIndex) => {
+    if (seg.type === "tag") return trackSection(seg.raw, sections);
     if (seg.type !== "text") return;
+    if (maskSecrets && sections.includes(true)) return;
     const { decoded, map } = decodeWithMap(seg.raw);
     const masked = maskedRanges(decoded);
     for (let i = decoded.indexOf(text); i !== -1; i = decoded.indexOf(text, i + text.length)) {

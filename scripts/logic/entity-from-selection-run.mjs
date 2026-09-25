@@ -5,7 +5,7 @@
 import { linkSelectionInSource } from "./entity-from-selection.mjs";
 
 export async function runEntityFromSelection(request, deps) {
-  const { pageUuid, fieldKey, text, occurrence, total, type, name, linkOthers } = request;
+  const { pageUuid, fieldKey, text, occurrence, total, type, name, linkOthers, maskSecrets } = request;
   const page = await deps.fromUuid(pageUuid);
   if (!page) return { ok: false, reason: "page-missing" };
 
@@ -21,7 +21,10 @@ export async function runEntityFromSelection(request, deps) {
 
   // Re-read now, not the captured HTML: someone may have edited the page
   // while the dialog was open; a shifted occurrence fails the total check.
-  const newHtml = linkSelectionInSource(deps.getProperty(page, fieldKey), { text, occurrence, total, uuid: entry.uuid });
+  // maskSecrets is set only by the relay, for a requester who cannot see
+  // the page's secret sections (see linkSelectionInSource).
+  const newHtml = linkSelectionInSource(deps.getProperty(page, fieldKey), { text, occurrence, total, uuid: entry.uuid },
+    { maskSecrets: maskSecrets === true });
   let linked = false;
   if (newHtml !== null) {
     try {
