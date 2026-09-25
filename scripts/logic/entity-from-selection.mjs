@@ -47,7 +47,9 @@ function decodeWithMap(raw) {
       const body = m[1];
       if (body[0] === "#") {
         const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
-        if (Number.isFinite(code)) ch = String.fromCodePoint(code);
+        // Out-of-range code points would make fromCodePoint throw a
+        // RangeError; leave such an entity as raw text instead.
+        if (Number.isFinite(code) && code > 0 && code <= 0x10FFFF) ch = String.fromCodePoint(code);
       } else if (NAMED[body.toLowerCase()] !== undefined) {
         ch = NAMED[body.toLowerCase()];
       }

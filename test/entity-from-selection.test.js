@@ -89,6 +89,13 @@ describe("linkSelectionInSource", () => {
     // nbsp selection should match nbsp-encoded text (need U+00A0 in selection)
     expect(link("Old\u00A0Tom", 0, 1, "<p>Old&nbsp;Tom</p>")).toBe(`<p>@UUID[${U}]{Old&nbsp;Tom}</p>`);
   });
+  it("out-of-range numeric entities fall through to raw text instead of throwing", () => {
+    expect(() => link("Elara", 0, 1, "<p>&#99999999; Elara</p>")).not.toThrow();
+    expect(link("Elara", 0, 1, "<p>&#99999999; Elara</p>")).toBe(`<p>&#99999999; @UUID[${U}]{Elara}</p>`);
+    expect(link("Elara", 0, 1, "<p>&#x110000;&#0; Elara</p>")).toBe(`<p>&#x110000;&#0; @UUID[${U}]{Elara}</p>`);
+    // The undecoded entity is ordinary text, matchable like any other.
+    expect(link("&#99999999;", 0, 1, "<p>&#99999999;</p>")).toBe(`<p>@UUID[${U}]{&#99999999;}</p>`);
+  });
 });
 
 describe("validateSelectionRequest", () => {
