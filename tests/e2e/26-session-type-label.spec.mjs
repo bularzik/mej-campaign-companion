@@ -61,8 +61,12 @@ test.describe("26 session type label", () => {
     await login(page, "Gamemaster");
     const name = `${PREFIX}Session${RUN}`;
     const { dialog, typeSelect } = await openNewEntryDialog(page);
-    const offered = await typeSelect.locator(`option[value="${SESSION_TYPE}"]`).count();
-    test.skip(offered === 0, "this MEJ build lists Session only under Single Sheet (extension API); 01-session covers that path");
+    // Skip on the extension-API fork only (same detection as 01-session's
+    // mejApiPresent); on stock MEJ the Adventure Book option must exist.
+    const apiMode = await page.evaluate(() => typeof game.MonksEnhancedJournal?.getApi === "function"
+      || !!game.MonksEnhancedJournal?.externalTypes);
+    test.skip(apiMode, "the extension-API fork lists Session only under Single Sheet; 01-session covers that path");
+    await expect(typeSelect.locator(`option[value="${SESSION_TYPE}"]`)).toHaveCount(1);
     await dialog.locator('input[name="name"]').fill(name);
     await typeSelect.selectOption(SESSION_TYPE);
     await dialog.locator('button[data-action="ok"]').click();

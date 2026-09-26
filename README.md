@@ -134,8 +134,9 @@ not announced with a warning. What differs:
 
 - Session appears in MEJ's own "New Entry" dialog in both modes: under
   "Adventure Book" on stock MEJ, under "Single Sheet" with the extension API.
-  A Session created from either opens as a Session sheet (the companion adds
-  MEJ's type flag at creation when the dialog leaves it off). The **New
+  With shell hosting, a Session created from either opens as a Session sheet
+  (the companion adds MEJ's type flag at creation when the dialog leaves it
+  off). The **New
   Session** button in the Campaign Hub works too. Campaigns are created with
   the **New Campaign** button in the journal sidebar in both modes, and never
   appear as a page type in that dialog.
