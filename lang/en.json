@@ -459,5 +459,13 @@
       "filter": "Filter actors…",
       "noActors": "There are no actors you can link."
     }
+  },
+  "TYPES": {
+    "JournalEntryPage": {
+      "mej-campaign-companion": {
+        "session": "Session",
+        "campaign": "Campaign"
+      }
+    }
   }
 }

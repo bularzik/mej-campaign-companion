@@ -1,0 +1,221 @@
+// Hub UX fixes (spec 2026-09-25 hub-ux-fixes): menus dismiss like real
+// menus, the Timeline tab scrolls, the Graph pans.
+import { test, expect } from "@playwright/test";
+import {
+  login, TT_PREFIX,
+  trackConsoleErrors, assertNoConsoleErrors, settle,
+  KNOWN_MEJ_SESSION_ICON_404
+} from "./helpers/foundry.mjs";
+
+const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
+
+/** Open any entry (so the MEJ shell exists) then click the Campaign Hub
+ * toolbar button. Idempotent: a second call on a page that already has the
+ * shell open (this file calls it more than once per page, to re-check state
+ * after a GM-side edit) skips the sidebar-navigation dance - with the shell
+ * already rendered, it can cover/intercept the sidebar's own "journal" tab
+ * button, hanging that click forever (confirmed live). */
+async function openHub(page) {
+  const alreadyOpen = await page.evaluate(() => !!document.querySelector("#MonksEnhancedJournal"));
+  if (!alreadyOpen) {
+    await page.locator('[data-tab="journal"][data-action="tab"]').click();
+    await settle(page, 200);
+    // Not contents[0]: a timeline journal refuses to open in the MEJ shell
+    // (hooks/timeline-open.mjs, spec 2026-09-03 §C), so picking one bootstraps
+    // nothing and every later shell locator times out. See 16-multi-timeline's
+    // openHub() for the full account.
+    const anyEntryId = await page.evaluate(
+      () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
+    );
+    await page.evaluate(async (id) => {
+      await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
+    }, anyEntryId);
+    await settle(page, 400);
+  }
+  const shell = page.locator("#MonksEnhancedJournal");
+  await shell.locator(".nav-button.campaign-hub").click();
+  await settle(page, 500);
+  return shell;
+}
+
+async function openHubTab(page, tab) {
+  const shell = await openHub(page);
+  await shell.locator(`nav.sheet-tabs a[data-tab="${tab}"]`).click();
+  await settle(page, 300);
+  return shell;
+}
+
+async function createPerson(page, name, { tags = [], ownership, text = "" } = {}) {
+  return page.evaluate(async ({ n, t, own, tg }) => {
+    const entry = await JournalEntry.create({
+      name: n,
+      pages: [{
+        name: n,
+        type: "monks-enhanced-journal.person",
+        flags: {
+          "monks-enhanced-journal": { type: "person" },
+          "mej-campaign-companion": { tags: tg }
+        },
+        text: { content: t }
+      }],
+      ...(own ? { ownership: { default: own } } : {})
+    });
+    return entry.id;
+  }, { n: name, t: text, own: ownership, tg: tags });
+}
+
+// HUB_STATE is module-private, so there is no state-reset helper: each test
+// leaves every menu closed when it ends.
+test.describe("27 Hub UX", () => {
+  test("menus: an outside click closes the Type menu", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleTypeMenu"]').click();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    // Inside click keeps it open (multi-select).
+    await shell.locator('.mej-cc-doctype-menu input[name="doctype-check"]').first().check();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    await shell.locator('.mej-cc-doctype-menu input[name="doctype-check"]').first().uncheck();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    // Outside click on inert Hub space closes it.
+    await shell.locator(".mej-cc-index-controls input[name='index-filter']").click();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toHaveCount(0);
+    await expect(shell.locator('button[data-action="toggleTypeMenu"]')).toHaveAttribute("aria-expanded", "false");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("menus: an outside click on a tab closes the Tools menu and switches tab", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await expect(shell.locator(".mej-cc-tools-menu")).toBeVisible();
+    await shell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+    await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(0);
+    await expect(shell.locator('.tab[data-tab="graph"]')).toHaveClass(/active/);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("menus: one toggle switches menus; Escape closes without closing the window", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleTypeMenu"]').click();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    await shell.locator('button[data-action="toggleSortMenu"]').click();
+    await expect(shell.locator(".mej-cc-sort-menu")).toBeVisible();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(shell.locator(".mej-cc-sort-menu")).toHaveCount(0);
+    await expect(page.locator("#MonksEnhancedJournal")).toBeVisible();
+    // A later render must not resurrect it (state was cleared, not just DOM).
+    await shell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
+    await shell.locator('nav.sheet-tabs a[data-tab="index"]').click();
+    await expect(shell.locator('.tab[data-tab="index"]')).toHaveClass(/active/);
+    await expect(shell.locator(".mej-cc-sort-menu")).toHaveCount(0);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("timeline: a long timeline scrolls and keeps its controls visible", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const tlId = await page.evaluate(async (name) => {
+      const { createTimeline } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+      const Timepoints = await import("/modules/mej-campaign-companion/scripts/data/timepoints.mjs");
+      const journal = await createTimeline({ campaign: null, name });
+      for (let i = 1; i <= 40; i++) await Timepoints.addTimepoint(journal, `${name} point ${i}`);
+      return journal.id;
+    }, `${TT_PREFIX}Long timeline`);
+    try {
+      const shell = await openHubTab(page, "timeline");
+      await shell.locator('select[name="timeline-select"]').selectOption(tlId);
+      const last = shell.locator(".mej-cc-timepoint-label", { hasText: `${TT_PREFIX}Long timeline point 40` });
+      await expect(last).toHaveCount(1);
+      const pane = shell.locator(".mej-cc-timeline .mej-cc-timeline-scroll");
+      const m = await pane.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+      expect(m.sh).toBeGreaterThan(m.ch);
+      // Scroll as a user does. Setting scrollTop from script would "work"
+      // even on the old overflow:hidden pane, so it proves nothing.
+      await pane.hover();
+      for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 400);
+      await expect.poll(() => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      await expect(last).toBeInViewport();
+      await expect(shell.locator(".mej-cc-timeline-controls")).toBeInViewport();
+    } finally {
+      await page.evaluate((id) => game.journal.get(id)?.delete(), tlId);
+    }
+    assertNoConsoleErrors(errors);
+  });
+
+  test("graph: dragging the background pans; it opens nothing", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const ids = [await createPerson(page, `${TT_PREFIX}Pan A`), await createPerson(page, `${TT_PREFIX}Pan B`)];
+    try {
+      const shell = await openHubTab(page, "graph");
+      await shell.locator('button[data-action="setGraphMode"][data-mode="all"]').click();
+      const svg = shell.locator(".mej-cc-graph-svg");
+      await expect(svg.locator(".mej-cc-graph-node").first()).toBeVisible();
+      await settle(page, 1500); // let the force layout cool so nodes stop moving under the pointer
+      // An empty background point: the first grid point (top-left half of the
+      // canvas, so the drag stays inside it) that hits the bare SVG. World A's
+      // real campaign can crowd any fixed spot.
+      const start = await svg.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        for (let y = r.top + 6; y < r.top + r.height / 2; y += 12) {
+          for (let x = r.left + 6; x < r.left + r.width / 2; x += 12) {
+            if (document.elementFromPoint(x, y) === el) return { x, y };
+          }
+        }
+        return null;
+      });
+      expect(start).not.toBeNull();
+      const before = (await svg.getAttribute("viewBox")).split(" ").map(Number);
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(start.x + 120, start.y + 80, { steps: 8 });
+      await page.mouse.up();
+      const after = (await svg.getAttribute("viewBox")).split(" ").map(Number);
+      expect(after[0]).toBeLessThan(before[0]);
+      expect(after[1]).toBeLessThan(before[1]);
+      expect(after[2]).toBe(before[2]); // pan, not zoom
+      // Opened nothing: the shell still shows the Hub's Graph tab.
+      await expect(shell.locator('.tab[data-tab="graph"]')).toHaveClass(/active/);
+      await expect(shell.locator(".mej-cc-graph-svg")).toHaveCount(1);
+    } finally {
+      await page.evaluate((list) => JournalEntry.implementation.deleteDocuments(list.filter((id) => game.journal.get(id))), ids);
+    }
+    assertNoConsoleErrors(errors);
+  });
+
+  test("menus: choosing a Tools item closes the menu, so Escape closes the dialog it opened", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await shell.locator('.mej-cc-tools-menu button[data-action="openExportDialog"]').click();
+    const dialog = page.locator("dialog.application:has(input[name='includeGM'])");
+    await expect(dialog).toBeVisible();
+    await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator("#MonksEnhancedJournal")).toBeVisible();
+    assertNoConsoleErrors(errors);
+  });
+
+  test("menus: an outside click on a Hub action button closes the Tools menu", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await expect(shell.locator(".mej-cc-tools-menu")).toBeVisible();
+    // The Hub's own data-action clicks never bubble to document in MEJ's shell.
+    await shell.locator('button[data-action="toggleTypeMenu"]').click();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(shell.locator(".mej-cc-doctype-menu")).toHaveCount(0);
+    assertNoConsoleErrors(errors);
+  });
+});

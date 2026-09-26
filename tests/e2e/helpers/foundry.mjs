@@ -205,7 +205,26 @@ export const COMPANION_WIRED = (moduleId) => {
   try { return !!MEJ?.getDocumentTypes?.()?.session; } catch { return false; }
 };
 
-/** Wait until the companion's sheet registrations are actually in CONFIG. */
+/**
+ * True once the companion's registerCore() has finished. COMPANION_WIRED's
+ * sheet registrations land about a second before the last registerCore()
+ * hook (measured 2026-09-25: none of the session-flag-stamp hooks at 1.4 s
+ * after load, all of them at 2.4 s), so a test acting straight after login
+ * could create documents no companion hook saw. The import resolves to the
+ * instance Foundry loaded (same absolute URL). Self-contained: it runs in
+ * page.evaluate.
+ */
+export const CORE_WIRED = async (moduleId) => {
+  const game = globalThis.game;
+  if (game?.modules?.get(moduleId)?.active !== true) return true;
+  if (game?.modules?.get("monks-enhanced-journal")?.active !== true) return true;
+  const adapter = await import(`/modules/${moduleId}/scripts/integrations/mej-adapter.mjs`);
+  if (typeof adapter.coreWired !== "function") return true; // a build from before the accessor
+  if (adapter.currentMode?.() === "absent") return true;
+  return adapter.coreWired();
+};
+
+/** Wait until the companion's sheet registrations are in CONFIG and every core hook is registered. */
 export async function waitCompanionWired(page, { timeout = 30_000 } = {}) {
   try {
     await page.waitForFunction(COMPANION_WIRED, MODULE_ID, { timeout });
@@ -214,6 +233,16 @@ export async function waitCompanionWired(page, { timeout = 30_000 } = {}) {
       `companion sheet registrations for "${MODULE_ID}.session" never appeared after ${timeout}ms — ` +
       `the module's ready-time wiring did not finish (url=${page.url()})`
     );
+  }
+  // Polled through page.evaluate, not waitForFunction: CORE_WIRED is async
+  // (it imports the adapter), and waitForFunction takes the pending Promise
+  // itself as truthy and returns at once. evaluate awaits it.
+  const deadline = Date.now() + timeout;
+  while (!(await page.evaluate(CORE_WIRED, MODULE_ID))) {
+    if (Date.now() > deadline) {
+      throw new Error(`the companion's registerCore() did not finish within ${timeout}ms (url=${page.url()})`);
+    }
+    await page.waitForTimeout(100);
   }
 }
 
@@ -253,8 +282,18 @@ async function loginFromSavedState(page, userName) {
     const state = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.context().addCookies(state.cookies ?? []);
     await page.goto(`${BASE_URL}/game`);
-    // SESSION_BOUND, not a bare game.ready - see its comment above.
-    await page.waitForFunction(SESSION_BOUND, null, { timeout: 15_000 });
+    // Wait for the page to settle one way or the other: bound (SESSION_BOUND,
+    // not a bare game.ready - see its comment above) or bounced off /game
+    // because the cookie was refused. The old fixed 15 s budget missed while
+    // a slow World A client was still initializing (a player's /game load
+    // measured at 55 s+ on 2026-09-25), and the /join fallback's page.goto
+    // then aborted against that in-flight load (net::ERR_ABORTED).
+    await page.waitForFunction(
+      () => location.pathname !== "/game"
+        || (globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId),
+      null, { timeout: 60_000 }
+    );
+    if (!(await page.evaluate(SESSION_BOUND))) throw new Error(`left /game for ${page.url()}`);
     const actualUser = await page.evaluate(() => game.user?.name);
     if (actualUser !== userName) {
       throw new Error(`landed as "${actualUser}", expected "${userName}"`);

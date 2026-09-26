@@ -9,6 +9,7 @@ import { buildGraph } from "../logic/graph-data.mjs";
 import { graphRowsFor } from "../logic/graph-rows.mjs";
 import { imageFor } from "../logic/default-image.mjs";
 import { graphSignature } from "../logic/graph-signature.mjs";
+import { panViewBox } from "../logic/graph-pan.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
@@ -236,5 +237,32 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
       const nh = nw * (h / w);
       svg.setAttribute("viewBox", `${x + (w - nw) / 2} ${y + (h - nh) / 2} ${nw} ${nh}`);
     }, { passive: false });
+  }
+
+  // Background drag pans (spec 2026-09-25 hub-ux-fixes §3). Node pointerdowns
+  // bubble here too and are skipped, so drag-to-pin is untouched. A pan that
+  // ends over a node cannot open it: the click then fires on the nearest
+  // common ancestor (the SVG), not on the node.
+  if (!svg.dataset.ccPanBound) {
+    svg.dataset.ccPanBound = "1";
+    svg.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0 || down.target.closest?.(".mej-cc-graph-node")) return;
+      down.preventDefault();
+      let last = { x: down.clientX, y: down.clientY };
+      svg.classList.add("panning");
+      const move = (event) => {
+        const viewBox = svg.getAttribute("viewBox").split(" ").map(Number);
+        const next = panViewBox(viewBox, event.clientX - last.x, event.clientY - last.y, svg.clientWidth, svg.clientHeight);
+        svg.setAttribute("viewBox", next.join(" "));
+        last = { x: event.clientX, y: event.clientY };
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        svg.classList.remove("panning");
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
   }
 }

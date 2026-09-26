@@ -21,6 +21,9 @@ import { registerCampaignOwnership } from "../hooks/campaign-ownership.mjs";
 let handshakeFired = false;
 let mode = null;
 let coreRegistered = false;
+// True once registerCore() has run every step (coreRegistered flips at its
+// start, so re-entry is refused while the dozen imports are still pending).
+let coreDone = false;
 let wiringThrew = false;
 
 // Resolves once onReady() has finished wiring, whichever mode it resolved.
@@ -53,6 +56,15 @@ export function currentHosting() {
 /** True when a wiring step threw - the ready hook surfaces this to the GM. */
 export function wiringFailed() {
   return wiringThrew;
+}
+
+/**
+ * True once registerCore() has finished. The sheet registrations land about
+ * a second earlier, so they alone do not mean every hook is listening; the
+ * e2e harness waits on this (tests/e2e/helpers/foundry.mjs CORE_WIRED).
+ */
+export function coreWired() {
+  return coreDone;
 }
 
 /**
@@ -157,10 +169,17 @@ export async function registerCore() {
     registerActorLinkUi();
   });
 
+  await step("session flag stamp", async () => {
+    const { registerSessionFlagStamp } = await import("../hooks/session-flag-stamp.mjs");
+    registerSessionFlagStamp();
+  });
+
   // Folder context menu ("Open Campaign Hub") is registered at "init" now,
   // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
   // registering this late (registerCore only ever runs from "setup"/"ready")
   // reliably missed the sidebar's own one-time ContextMenu construction.
+
+  coreDone = true;
 }
 
 /** Shell-integrated Session sheet + Hub tab, via MEJ's extension API. */

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.1 (2026-09-25)
+
+Session in Monk's Enhanced Journal's New Entry dialog, and Hub fixes.
+
+- **Fixed:** on stock Monk's Enhanced Journal the New Entry dialog listed the Session page type as `TYPES.JournalEntryPage.mej-campaign-companion.session`; it now reads "Session", and the Campaign page type is labelled "Campaign" wherever Foundry lists page types.
+- **Fixed:** a Session created from that dialog opened as a plain journal page, because the dialog leaves off MEJ's type flag; the companion now adds the flag when the page is created, so it opens as a Session sheet.
+- **Changed:** the README and GM guide no longer describe the raw label; Session can be created from the New Entry dialog on stock MEJ as well as with the extension API.
+- **Fixed:** the Hub's Tools, Type and Sort menus now close when you click anywhere outside them or press Escape, not only through their own button; the click still does whatever it landed on.
+- **Fixed:** the Hub's Timeline tab scrolls when the timeline is taller than the pane, with its controls kept in view.
+- **Added:** drag an empty part of the Hub's Graph to pan around it.
+- **Fixed:** a Session page created together with its entry (a script's `JournalEntry.create` with pages, a compendium import, a duplicate) now also gets Monk's Enhanced Journal's type flag.
+
 ## 0.22.0 (2026-09-25)
 
 Link a Person to an actor.

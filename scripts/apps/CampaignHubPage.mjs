@@ -28,6 +28,7 @@ import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
+import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
@@ -99,6 +100,59 @@ const HUB_STATE = {
   // via the picker.
   portalScopedFor: null
 };
+
+// Outside-click / Escape dismissal for the Hub's pop-up menus (spec
+// 2026-09-25 hub-ux-fixes §1). Closing edits the DOM directly instead of
+// re-rendering: a re-render would replace the element the user clicked
+// before its own click handler ran, swallowing that click. Document-level,
+// installed once; a no-op while no menu is open.
+//
+// The click listener is in the CAPTURE phase: MEJ's shell stops the Hub's
+// own data-action clicks from bubbling to document (probed 2026-09-26), so a
+// bubble listener never saw a click on a Tools item or on another Hub
+// button. The close itself is deferred to the next task, so the clicked
+// control's handler runs first against the untouched DOM, and the patch is
+// computed then, from whatever state that handler left.
+let menuDismissInstalled = false;
+function closeMenus(patch) {
+  Object.assign(HUB_STATE, patch);
+  for (const [key, flag] of Object.entries(MENU_FLAGS)) {
+    if (patch[flag] !== false) continue;
+    // Not scoped under .mej-cc-hub: MEJ's shell mounts the Hub's parts
+    // without that outer div. data-cc-menu is the companion's own attribute.
+    for (const wrap of document.querySelectorAll(`[data-cc-menu="${key}"]`)) {
+      wrap.querySelector(".mej-cc-menu")?.remove();
+      wrap.querySelector("[aria-haspopup]")?.setAttribute("aria-expanded", "false");
+    }
+  }
+}
+function installMenuDismissal() {
+  if (menuDismissInstalled) return;
+  menuDismissInstalled = true;
+  document.addEventListener("click", (event) => {
+    // Choosing an action item (a Tools entry) closes its menu like any other
+    // menu. Left open, the flag would make the Escape handler below swallow
+    // the first Escape meant for the dialog that item opened. Type's
+    // checkboxes carry no data-action, so that multi-select stays open.
+    const choseItem = !!event.target?.closest?.(".mej-cc-menu [data-action]");
+    const insideMenuKey = choseItem ? null : (event.target?.closest?.("[data-cc-menu]")?.dataset.ccMenu ?? null);
+    setTimeout(() => {
+      const patch = dismissPatch(HUB_STATE, { insideMenuKey });
+      if (patch) closeMenus(patch);
+    }, 0);
+  }, { capture: true });
+  // Window capture phase so it runs before Foundry's Escape keybinding,
+  // which would otherwise also close the MEJ window. Only swallowed when it
+  // actually closed a menu.
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const patch = dismissPatch(HUB_STATE);
+    if (!patch) return;
+    event.stopPropagation();
+    event.preventDefault();
+    closeMenus(patch);
+  }, { capture: true });
+}
 
 export class CampaignHubPage extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
@@ -1700,6 +1754,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   async activateListeners(html) {
     await super.activateListeners(html);
+    installMenuDismissal();
 
     const typeMenu = html.querySelector(".mej-cc-doctype-menu");
     if (typeMenu && !typeMenu.dataset.ccBound) {

@@ -132,11 +132,14 @@ a build carrying the extension API. It resolves one of three modes at startup:
 Native mode is a supported configuration, not a degraded fallback, and it is
 not announced with a warning. What differs:
 
-- Session appears in MEJ's own "New Entry" dialog only in `api` mode; on
-  stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…`
-  entry instead — use the **New Session** button in the Campaign Hub either
-  way. Campaigns are created with the **New Campaign** button in the journal
-  sidebar in both modes, and never appear as a page type in that dialog.
+- Session appears in MEJ's own "New Entry" dialog in both modes: under
+  "Adventure Book" on stock MEJ, under "Single Sheet" with the extension API.
+  With shell hosting, a Session created from either opens as a Session sheet
+  (the companion adds MEJ's type flag at creation when the dialog leaves it
+  off). The **New
+  Session** button in the Campaign Hub works too. Campaigns are created with
+  the **New Campaign** button in the journal sidebar in both modes, and never
+  appear as a page type in that dialog.
 - Session pages cannot be MEJ *relationship* targets (MEJ's picker only
   enumerates its own registry). Companion relationships are unaffected.
 - In native mode the companion hosts the Campaign Hub and Session sheets

@@ -72,7 +72,7 @@ A **header bar** runs across the top of the Hub, above the pane tabs. Left to ri
 - The **campaign picker** scopes every pane. [Campaigns](#campaigns) below covers it in full.
 - The **gear** is **Campaign settings**, and it appears only while the picker is scoped to one campaign — it isn't there in **All campaigns** or **Unfiled**.
 - **New Session** creates a Session entry, as above.
-- **Tools** opens a small menu with four items: **Import Document**, **Export**, **Auto-capture campaign**, and **Open the user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else).
+- **Tools** opens a small menu with four items: **Import Document**, **Export**, **Auto-capture campaign**, and **Open the user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
 
 Below the header bar are **six panes**: **Index**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. A player sees five — the Secrets tab isn't rendered for a non-GM at all. This section covers Index and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
 
@@ -168,6 +168,8 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
 - **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
 - **Show mention links**, a checkbox, layers `@UUID` backlinks on top of the relationship edges. It's off by default.
+
+Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node opens its entry.
 
 The graph is capped at the **200 most-connected** entries, for performance — additional nodes, and the links to them, are left out of the view. When that happens it says so above the canvas: "Too many entries to draw — filter to reduce (showing the most-connected 200)." Scope the Hub to a single campaign to get back under the cap.
 
@@ -339,7 +341,7 @@ If a portal entry gets deleted, you don't lose the campaign — open **Campaign 
 
 Campaign Companion works against a stock Monk's Enhanced Journal install, not just one carrying MEJ's extension API. Mode detection happens automatically and silently at startup — there's no warning, no setting to flip, and native mode is a fully supported configuration, not a degraded fallback. Everything in this guide still applies; only three things differ:
 
-- **Session** appears in MEJ's own "New Entry" dialog only in API mode; on stock MEJ it may show up there as an unlocalized `TYPES.JournalEntryPage.…` entry instead — use the **New Session** button in the Hub's header bar either way. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
+- **Session** appears in MEJ's own "New Entry" dialog in both modes (under "Adventure Book" on stock MEJ, under "Single Sheet" with the extension API), and the **New Session** button in the Hub's header bar works too. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub and Session sheets normally still open inside MEJ's shell, the same as API mode — the companion adapts MEJ's own functions to make that work. If a future MEJ update ever breaks that adaptation, they fall back to their own standalone window instead; a `shell hosting unavailable` warning in the browser console is the tell.
 
