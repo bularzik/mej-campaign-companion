@@ -448,6 +448,16 @@
         "relay-unavailable": "no GM is available",
         "no-gm": "no GM responded"
       }
+    },
+    "actorLink": {
+      "link": "Link Actor",
+      "change": "Change linked actor",
+      "unlink": "Unlink actor",
+      "unlinkTitle": "Unlink Actor",
+      "unlinkConfirm": "Remove the link to this actor? The image, description and notes stay as they are.",
+      "pickerTitle": "Link Actor",
+      "filter": "Filter actors…",
+      "noActors": "There are no actors you can link."
     }
   }
 }
