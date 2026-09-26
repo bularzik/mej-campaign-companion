@@ -86,4 +86,21 @@ test.describe("26 session type label", () => {
     await expect(page.locator("#MonksEnhancedJournal .session-container").first()).toBeVisible({ timeout: 10_000 });
     assertNoConsoleErrors(errors);
   });
+
+  test("a Session page created together with its entry gets MEJ's type flag", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const result = await page.evaluate(async (name) => {
+      const entry = await JournalEntry.create({ name, pages: [
+        { name: "s", type: "mej-campaign-companion.session" },
+        { name: "t", type: "text" }
+      ] });
+      const out = entry.pages.contents.map((p) => ({ type: p.type, flag: p.getFlag("monks-enhanced-journal", "type") ?? null }));
+      await entry.delete();
+      return out;
+    }, "TT-Embedded Session");
+    expect(result).toContainEqual({ type: "mej-campaign-companion.session", flag: "session" });
+    expect(result).toContainEqual({ type: "text", flag: null });
+    assertNoConsoleErrors(errors);
+  });
 });
