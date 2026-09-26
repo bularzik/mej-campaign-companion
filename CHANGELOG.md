@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.1 (2026-09-25)
+
+Session in Monk's Enhanced Journal's New Entry dialog.
+
+- **Fixed:** on stock Monk's Enhanced Journal the New Entry dialog listed the Session page type as `TYPES.JournalEntryPage.mej-campaign-companion.session`; it now reads "Session", and the Campaign page type is labelled "Campaign" wherever Foundry lists page types.
+- **Fixed:** a Session created from that dialog opened as a plain journal page, because the dialog leaves off MEJ's type flag; the companion now adds the flag when the page is created, so it opens as a Session sheet.
+- **Changed:** the README and GM guide no longer describe the raw label; Session can be created from the New Entry dialog on stock MEJ as well as with the extension API.
+
 ## 0.22.0 (2026-09-25)
 
 Link a Person to an actor.
