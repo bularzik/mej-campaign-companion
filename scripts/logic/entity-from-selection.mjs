@@ -31,6 +31,18 @@ export function countOccurrences(haystack, needle) {
   return n;
 }
 
+/** Trim, collapse whitespace runs, lower-case (spec 2026-09-26 §3). */
+export function normalizeEntityName(s) {
+  return typeof s === "string" ? s.trim().replace(/\s+/g, " ").toLowerCase() : "";
+}
+
+/** Candidates (order kept) whose normalised name equals the normalised selection. */
+export function matchingEntities(text, candidates) {
+  const key = normalizeEntityName(text);
+  if (!key) return [];
+  return (candidates ?? []).filter((c) => normalizeEntityName(c?.name) === key);
+}
+
 const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00A0" };
 const ENTITY_RE = /&(#\d+|#x[0-9a-f]+|[a-z]+);/iy;
 
@@ -142,13 +154,16 @@ const isIndex = (n) => Number.isInteger(n) && n >= 0;
 /**
  * GM-side check of a contributor's relayed request (spec §4.5). Never
  * trusts the payload: `ctx` is computed by the GM from the socket-supplied
- * sender and the live page.
+ * sender and the live page. Two modes: create (type/name/linkOthers) and
+ * link (entityUuid, spec 2026-09-26 §4.2).
  */
 export function validateSelectionRequest(request, ctx) {
   const r = request ?? {};
+  const linkMode = r.entityUuid !== undefined;
   if (typeof r.requestId !== "string" || !r.requestId || typeof r.pageUuid !== "string" ||
       typeof r.fieldKey !== "string" || !isIndex(r.occurrence) || !isIndex(r.total) ||
-      r.occurrence >= r.total || typeof r.linkOthers !== "boolean") {
+      r.occurrence >= r.total ||
+      (linkMode ? (typeof r.entityUuid !== "string" || !r.entityUuid) : typeof r.linkOthers !== "boolean")) {
     return { ok: false, reason: "bad-payload" };
   }
   if (!ctx?.sender || ctx.sender.isGM) return { ok: false, reason: "bad-sender" };
@@ -156,6 +171,7 @@ export function validateSelectionRequest(request, ctx) {
   if (!ctx.canObserve) return { ok: false, reason: "not-visible" };
   if (!ctx.regionKeys?.includes(r.fieldKey)) return { ok: false, reason: "bad-field" };
   if (qualifySelection(r.text) !== r.text) return { ok: false, reason: "bad-selection" };
+  if (linkMode) return { ok: true };
   if (!ENTITY_TYPES.includes(r.type)) return { ok: false, reason: "bad-type" };
   const name = typeof r.name === "string" ? r.name.trim() : "";
   if (!name || name.length > MAX_NAME_LENGTH) return { ok: false, reason: "bad-name" };

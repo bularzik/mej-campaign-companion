@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest
+  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest,
+  normalizeEntityName, matchingEntities
 } from "../scripts/logic/entity-from-selection.mjs";
 
 const U = "JournalEntry.abc";
@@ -166,5 +167,51 @@ describe("linkSelectionInSource with maskSecrets (non-owner relay path)", () => 
     const notSecret = `<section class="secretive"><p>Elara</p></section>`;
     expect(link("Elara", 0, 1, notSecret, { maskSecrets: true })).toBe(
       `<section class="secretive"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});
+
+describe("normalizeEntityName / matchingEntities", () => {
+  const C = [
+    { name: "Vex", uuid: "A" }, { name: "Old  Mill", uuid: "B" },
+    { name: "vex", uuid: "C" }, { name: "Vexa", uuid: "D" }
+  ];
+  it("normalises: trim, collapse whitespace (incl. nbsp), lower-case", () => {
+    expect(normalizeEntityName("  Old   MILL ")).toBe("old mill");
+    expect(normalizeEntityName(7)).toBe("");
+  });
+  it("matches case-insensitively and keeps candidate order", () => {
+    expect(matchingEntities("VEX", C)).toEqual([C[0], C[2]]);
+  });
+  it("collapses inner whitespace on both sides", () => {
+    expect(matchingEntities("old mill", C)).toEqual([C[1]]);
+  });
+  it("no match, empty text, or missing candidates → []", () => {
+    expect(matchingEntities("Vexx", C)).toEqual([]);
+    expect(matchingEntities("   ", C)).toEqual([]);
+    expect(matchingEntities("Vex", null)).toEqual([]);
+  });
+});
+
+describe("validateSelectionRequest link mode", () => {
+  const link = {
+    requestId: "r1", pageUuid: "JournalEntry.a.JournalEntryPage.b", fieldKey: "text.content",
+    text: "Elara", occurrence: 0, total: 1, entityUuid: "JournalEntry.e"
+  };
+  const ctx = { sender: { id: "u1", isGM: false }, isContributor: true, canObserve: true, regionKeys: ["text.content"] };
+  const v = (patch = {}, cpatch = {}) => validateSelectionRequest({ ...link, ...patch }, { ...ctx, ...cpatch });
+
+  it("accepts without type, name or linkOthers", () => expect(v()).toEqual({ ok: true }));
+  it("ignores a bad type/name in link mode", () => expect(v({ type: "session", name: "" })).toEqual({ ok: true }));
+  it.each([
+    [{ entityUuid: "" }, {}, "bad-payload"],
+    [{ entityUuid: 7 }, {}, "bad-payload"],
+    [{ entityUuid: null }, {}, "bad-payload"],
+    [{ occurrence: 1 }, {}, "bad-payload"],
+    [{}, { isContributor: false }, "not-contributor"],
+    [{}, { canObserve: false }, "not-visible"],
+    [{ fieldKey: "system.gmNotes" }, {}, "bad-field"],
+    [{ text: " Elara " }, {}, "bad-selection"]
+  ])("rejects %j %j as %s", (patch, cpatch, reason) => {
+    expect(v(patch, cpatch)).toEqual({ ok: false, reason });
   });
 });
