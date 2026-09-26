@@ -7,10 +7,11 @@ const payload = (p = {}) => ({
   type: "person", name: "Elara", linkOthers: true, ...p
 });
 
-function gmEnv({ contributor = true, observe = true, owner = false, page: pageOverride } = {}) {
+function gmEnv({ contributor = true, observe = true, owner = false, reveals = {}, page: pageOverride } = {}) {
   const page = pageOverride ?? {
     parent: { testUserPermission: vi.fn(() => observe) },
     testUserPermission: vi.fn(() => owner),
+    getFlag: vi.fn(() => reveals),
     text: { content: "<p>Elara</p>" }
   };
   return {
@@ -23,6 +24,7 @@ function gmEnv({ contributor = true, observe = true, owner = false, page: pageOv
     campaignFlagFor: vi.fn(() => ({ contributors: { userIds: contributor ? ["u1"] : [], groupIds: [] } })),
     groups: [],
     run: vi.fn(async () => ({ ok: true, entryUuid: "JournalEntry.new", linked: true, retro: true })),
+    runLink: vi.fn(async () => ({ ok: true, entryUuid: "JournalEntry.e", linked: true })),
     page
   };
 }
@@ -159,5 +161,89 @@ describe("requestEntityViaGm / handleEntityResult (requester)", () => {
     expect(env.onLate).not.toHaveBeenCalled();
     handleEntityResult({ ...forged, entryUuid: "E" }, "gm1", env);
     expect(env.onLate).toHaveBeenCalledWith(expect.objectContaining({ entryUuid: "E" }));
+  });
+});
+
+describe("handleEntityRequest link mode (GM)", () => {
+  const linkPayload = (p = {}) => ({
+    action: "entity-from-selection", requestId: "r1", pageUuid: "P", fieldKey: "text.content",
+    text: "Elara", occurrence: 0, total: 1, entityUuid: "JournalEntry.e", ...p
+  });
+  it("runs the link writer, not the create writer, with maskSecrets and the uuid", async () => {
+    const env = gmEnv();
+    await handleEntityRequest(linkPayload(), "u1", env);
+    expect(env.run).not.toHaveBeenCalled();
+    expect(env.runLink).toHaveBeenCalledWith(expect.objectContaining({ entityUuid: "JournalEntry.e", maskSecrets: true }));
+    expect(env.emitted[0]).toMatchObject({ recipient: "u1", ok: true, entryUuid: "JournalEntry.e", linked: true });
+  });
+  it("an empty entityUuid is bad-payload; nothing runs", async () => {
+    const env = gmEnv();
+    await handleEntityRequest(linkPayload({ entityUuid: "" }), "u1", env);
+    expect(env.runLink).not.toHaveBeenCalled();
+    expect(env.emitted[0]).toMatchObject({ ok: false, reason: "bad-payload" });
+  });
+  it("a throw on the link path replies link-failed", async () => {
+    const env = gmEnv();
+    env.runLink = vi.fn(async () => { throw new Error("boom"); });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await handleEntityRequest(linkPayload(), "u1", env);
+      expect(env.emitted[0]).toMatchObject({ ok: false, reason: "link-failed" });
+    } finally { spy.mockRestore(); }
+  });
+});
+
+describe("requestEntityViaGm link mode (requester)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  it("sends entityUuid and tags a late result as a link", async () => {
+    const env = {
+      emitted: [], emit(m) { this.emitted.push(m); }, userId: "u1", randomId: () => "r9", onLate: vi.fn(),
+      users: new Map([["gm1", { id: "gm1", isGM: true }]])
+    };
+    const p = requestEntityViaGm({ pageUuid: "P", entityUuid: "JournalEntry.e", name: "Elara" }, env);
+    expect(env.emitted[0]).toMatchObject({ requestId: "r9", entityUuid: "JournalEntry.e" });
+    vi.advanceTimersByTime(15000);
+    await expect(p).resolves.toEqual({ ok: false, reason: "no-gm" });
+    handleEntityResult({ requestId: "r9", recipient: "u1", ok: true, entryUuid: "JournalEntry.e", linked: true }, "gm1", env);
+    expect(env.onLate).toHaveBeenCalledWith(expect.objectContaining({ mode: "link", name: "Elara", linked: true }));
+  });
+});
+
+describe("handleEntityRequest visible secrets (GM)", () => {
+  const reveals = {
+    "secret-a": { users: ["u1"], groups: [], all: false, revealedAt: 1 },
+    "secret-b": { users: ["u9"], groups: [], all: false, revealedAt: 1 }
+  };
+  it("a non-owner gets the ids revealed to the SOCKET sender, read from the live page", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.page.getFlag).toHaveBeenCalledWith("mej-campaign-companion", "secretReveals");
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: true, visibleSecretIds: ["secret-a"] }));
+  });
+  it("ignores a payload-supplied visibleSecretIds", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest(payload({ visibleSecretIds: ["secret-b"] }), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ visibleSecretIds: ["secret-a"] }));
+  });
+  it("link mode gets the same set", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest({ action: "entity-from-selection", requestId: "r1", pageUuid: "P", fieldKey: "text.content",
+      text: "Elara", occurrence: 0, total: 1, entityUuid: "JournalEntry.e" }, "u1", env);
+    expect(env.runLink).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: true, visibleSecretIds: ["secret-a"] }));
+  });
+  it("an owner is not masked and gets no set", async () => {
+    const env = gmEnv({ reveals, owner: true });
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: false, visibleSecretIds: [] }));
+  });
+});
+
+describe("handleEntityRequest group normalisation (final review)", () => {
+  it("a malformed group the player's render ignores does not make a secret visible to the GM count", async () => {
+    const env = gmEnv({ reveals: { "secret-g": { users: [], groups: ["gX"], all: false, revealedAt: 1 } } });
+    env.groups = [{ id: "gX", members: ["u1"] }];   // no name: normalizeGroups drops it
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ visibleSecretIds: [] }));
   });
 });

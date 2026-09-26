@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.0 (2026-09-26)
+
+Link to Entity from a selection.
+
+- **Added:** when a right-clicked selection is already the name of an entity auto-link could link there, the description context menu offers **Link to Entity** instead of **Create Entity from Selection**. One match links at once; several open a picker. Campaign contributors get it through the GM, like Create.
+- **Fixed:** a campaign contributor's Create Entity from Selection (and Link to Entity) now links the selection on pages with secrets revealed to them or to everyone; it used to report that the selected text could not be linked.
+
 ## 0.22.1 (2026-09-25)
 
 Session in Monk's Enhanced Journal's New Entry dialog, and Hub fixes.

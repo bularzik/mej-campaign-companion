@@ -25,10 +25,14 @@ import { wrapEnv } from "../integrations/wrap-env.mjs";
 import { captureSelection } from "../logic/selection-capture.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
 import { campaignOf, campaignFlagOf, isContributor } from "../logic/campaigns.mjs";
-import { runEntityFromSelection } from "../logic/entity-from-selection-run.mjs";
+import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
+import { safeMatches, linkedToastArgs } from "../logic/entity-from-selection.mjs";
 import { promptEntityFromSelection } from "../apps/entity-from-selection-dialog.mjs";
+import { promptLinkTarget } from "../apps/link-to-entity-dialog.mjs";
+import { mejType } from "../integrations/mej-adapter.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { runRetroPass } from "./retro-link.mjs";
+import { matchesForField } from "./link-candidates.mjs";
 
 /** How long a captured selection stays usable after a right mousedown (ruling 2). */
 const CAPTURE_TTL_MS = 10000;
@@ -41,6 +45,7 @@ export function pipelineDeps() {
     createMejEntry,
     runRetroPass: (entries) => runRetroPass(entries),
     getProperty: (o, p) => foundry.utils.getProperty(o, p),
+    matchesFor: (page, fieldKey, text) => matchesForField(page, fieldKey, text),
     logError: (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err)
   };
 }
@@ -117,11 +122,18 @@ export function eligibilityFromCapture(sheet, target) {
   if (!capture) return null;
   const fieldKey = lastCapture.display.dataset.key;
   if (!linkableRegions(page).some((r) => r.key === fieldKey)) return null;
-  if (game.user.isGM) return sheet.isEditable ? { page, fieldKey, capture, relay: false } : null;
+  // Link to Entity (spec 2026-09-26 §4.4): existing entities the selection names.
+  // Computed once per stashed capture and shared by both menu callbacks and
+  // the click; a new right-click replaces lastCapture, so it never goes stale.
+  const record = lastCapture;
+  const matches = () => (record.matches ??= safeMatches(() => matchesForField(page, fieldKey, capture.text),
+    (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err)));
+  if (game.user.isGM) return sheet.isEditable ? { page, fieldKey, capture, relay: false, matches: matches() } : null;
   const campaign = campaignOf(page);
   if (!campaign || !game.users.activeGM) return null;
   const groups = game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING);
-  return isContributor(game.user, campaignFlagOf(campaign), groups) ? { page, fieldKey, capture, relay: true } : null;
+  return isContributor(game.user, campaignFlagOf(campaign), groups)
+    ? { page, fieldKey, capture, relay: true, matches: matches() } : null;
 }
 
 /** Replaced by Task 7 (entity-from-selection-relay.mjs). */
@@ -155,6 +167,38 @@ export function showEntityOutcome(outcome, { type, name, sheet }) {
   }
 }
 
+const typeLabelOf = (entry) => {
+  const t = entry ? mejType(entry) : null;
+  return t ? game.i18n.localize(game.MonksEnhancedJournal?.getTypeLabels?.()?.[t] ?? t) : "";
+};
+
+/** Link to Entity outcome (spec 2026-09-26 §2.5). */
+export function showLinkOutcome(outcome, { name, sheet }) {
+  const f = (k, d) => game.i18n.format(`${I18N}.entityFromSelection.${k}`, d);
+  if (!outcome?.ok) {
+    if (outcome?.reason === "no-gm") {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.entityFromSelection.noGmLink`));
+      return;
+    }
+    const reason = game.i18n.localize(`${I18N}.entityFromSelection.rejected.${outcome?.reason ?? "link-failed"}`);
+    ui.notifications.error(f("linkFailed", { reason }));
+    return;
+  }
+  const entry = fromUuidSync(outcome.entryUuid);
+  const shown = entry?.name ?? name;
+  if (!outcome.linked) {
+    ui.notifications.warn(f("linkedNot", { name: shown }));
+    return;
+  }
+  const [key, data] = linkedToastArgs(typeLabelOf(entry), shown);
+  ui.notifications.info(f(key, data));
+  const host = sheet?.enhancedjournal;
+  if (entry && host && entry.testUserPermission(game.user, "OBSERVER")) {
+    host.addTab(entry, { activate: false });
+    host.render();
+  }
+}
+
 async function startFromSelection(sheet, target) {
   // Re-check against the STASHED capture (ruling 2), not a live selection
   // read: the dialog awaited below steals focus and the live selection is
@@ -180,6 +224,31 @@ async function startFromSelection(sheet, target) {
   }
 }
 
+async function startLinkFromSelection(sheet, target) {
+  // Same stashed-capture contract as startFromSelection (ruling 2).
+  const ctx = eligibilityFromCapture(sheet, target);
+  lastCapture = null;
+  if (!ctx?.matches.length) return;
+  let match = ctx.matches.length === 1 ? ctx.matches[0] : null;
+  try {
+    if (!match) {
+      const options = ctx.matches.map((m) => {
+        const entry = fromUuidSync(m.uuid);
+        return { uuid: m.uuid, name: m.name, type: typeLabelOf(entry), folder: entry?.folder?.name ?? "" };
+      });
+      const uuid = await promptLinkTarget(options);
+      match = ctx.matches.find((m) => m.uuid === uuid) ?? null;
+      if (!match) return;
+    }
+    const request = { pageUuid: ctx.page.uuid, fieldKey: ctx.fieldKey, ...ctx.capture, entityUuid: match.uuid, name: match.name };
+    const outcome = ctx.relay ? await requestViaGm(request) : await runLinkSelection(request, pipelineDeps());
+    showLinkOutcome(outcome, { name: match.name, sheet });
+  } catch (err) {
+    console.error(`${MODULE_ID} | link-to-entity: startLinkFromSelection failed`, err);
+    showLinkOutcome({ ok: false, reason: "link-failed" }, { name: match?.name, sheet });
+  }
+}
+
 export async function registerEntityFromSelection() {
   let EnhancedJournalSheet;
   try {
@@ -198,12 +267,21 @@ export async function registerEntityFromSelection() {
       // Both API shapes (ruling 1): 14.368 reads label/visible/onClick(event,
       // target); 13.351 reads name/condition/callback(target) with no event.
       const label = game.i18n.localize(`${I18N}.entityFromSelection.menu`);
-      const isVisible = (t) => !!eligibilityFromCapture(sheet, t);
-      const run = (t) => startFromSelection(sheet, t);
+      const linkLabel = game.i18n.localize(`${I18N}.entityFromSelection.menuLink`);
+      // Labels are fixed per menu build, so Create and Link are two entries
+      // whose visibility is complementary (spec 2026-09-26 §4.4).
+      const canCreate = (t) => { const c = eligibilityFromCapture(sheet, t); return !!c && !c.matches.length; };
+      const canLink = (t) => !!eligibilityFromCapture(sheet, t)?.matches.length;
+      const create = (t) => startFromSelection(sheet, t);
+      const link = (t) => startLinkFromSelection(sheet, t);
       menu.push({
         label, name: label, icon: '<i class="fas fa-user-plus"></i>',
-        visible: isVisible, condition: isVisible,
-        onClick: (event, t) => run(t), callback: (t) => run(t)
+        visible: canCreate, condition: canCreate,
+        onClick: (event, t) => create(t), callback: (t) => create(t)
+      }, {
+        label: linkLabel, name: linkLabel, icon: '<i class="fas fa-link"></i>',
+        visible: canLink, condition: canLink,
+        onClick: (event, t) => link(t), callback: (t) => link(t)
       });
       return menu;
     }

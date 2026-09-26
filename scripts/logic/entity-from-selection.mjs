@@ -31,6 +31,37 @@ export function countOccurrences(haystack, needle) {
   return n;
 }
 
+/** Trim, collapse whitespace runs, lower-case (spec 2026-09-26 §3). */
+export function normalizeEntityName(s) {
+  return typeof s === "string" ? s.trim().replace(/\s+/g, " ").toLowerCase() : "";
+}
+
+/** Candidates (order kept) whose normalised name equals the normalised selection. */
+export function matchingEntities(text, candidates) {
+  const key = normalizeEntityName(text);
+  if (!key) return [];
+  return (candidates ?? []).filter((c) => normalizeEntityName(c?.name) === key);
+}
+
+/** i18n key + data for the Link to Entity success toast; no type → no "{type} " gap. */
+export function linkedToastArgs(typeLabel, name) {
+  return typeLabel ? ["linked", { type: typeLabel, name }] : ["linkedNoType", { name }];
+}
+
+/**
+ * Matches for the context-menu callbacks: a throw in candidate building (an
+ * odd entry, a permission lookup) yields [] so Create stays offered and the
+ * menu itself still renders; the error is logged, not swallowed silently.
+ */
+export function safeMatches(compute, logError) {
+  try {
+    return compute() ?? [];
+  } catch (err) {
+    logError("link-to-entity: matching failed", err);
+    return [];
+  }
+}
+
 const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00A0" };
 const ENTITY_RE = /&(#\d+|#x[0-9a-f]+|[a-z]+);/iy;
 
@@ -81,17 +112,37 @@ function maskedRanges(decoded) {
 
 const SECTION_OPEN_RE = /^<section\b([^>]*)>$/i;
 const SECTION_CLOSE_RE = /^<\/section\s*>$/i;
-const CLASS_ATTR_RE = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+// One attribute at a time, left to right, so text inside another attribute's
+// value (title="see id=x", data-class="…") is never read as class or id.
+const ATTR_RE = /([^\s"'>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
-/** Push/pop the open-section stack for one tag segment. */
-function trackSection(tag, sections) {
+/** Lower-cased attribute name → value (first occurrence wins, as in HTML). */
+function parseAttrs(attrs) {
+  const out = new Map();
+  ATTR_RE.lastIndex = 0;
+  let m;
+  while ((m = ATTR_RE.exec(attrs))) {
+    const name = m[1].toLowerCase();
+    if (!out.has(name)) out.set(name, m[2] ?? m[3] ?? m[4] ?? "");
+  }
+  return out;
+}
+
+/**
+ * Push/pop the open-section stack for one tag segment. Each entry is true
+ * when that section HIDES its content from the requester: a secret that is
+ * neither revealed to everyone (class `revealed`, which Foundry keeps for
+ * non-owners) nor in `visible` (ids revealed to this requester).
+ */
+function trackSection(tag, sections, visible) {
   const open = SECTION_OPEN_RE.exec(tag);
   if (open) {
     const attrs = open[1];
     if (attrs.trimEnd().endsWith("/")) return;   // self-closing: nothing to scope
-    const cls = CLASS_ATTR_RE.exec(attrs);
-    const classes = cls ? (cls[1] ?? cls[2] ?? cls[3]).split(/\s+/) : [];
-    sections.push(classes.includes("secret"));
+    const parsed = parseAttrs(attrs);
+    const classes = (parsed.get("class") ?? "").split(/\s+/);
+    const id = parsed.has("id") ? parsed.get("id") : null;
+    sections.push(classes.includes("secret") && !classes.includes("revealed") && !(id !== null && visible.has(id)));
   } else if (SECTION_CLOSE_RE.test(tag)) {
     sections.pop();
   }
@@ -104,19 +155,23 @@ function trackSection(tag, sections) {
  * eligible count differs from the rendered `total` the capture saw, or the
  * occurrence does not exist - the caller then reports "could not link".
  *
- * `maskSecrets`: also treat everything inside a `<section class="secret">`
- * (and any sections nested in it) as masked, the way enrichers are. The
- * relay sets it when the requester does not own the page, because Foundry
- * only renders secrets for owners: their `total` never includes secret
- * text, and an inflated total must not reach into (or probe) a secret.
+ * `maskSecrets`: also treat everything inside a secret section the requester
+ * cannot see (and any sections nested in it) as masked, the way enrichers
+ * are. The relay sets it when the requester does not own the page: Foundry
+ * renders only `revealed` secrets for non-owners and the companion injects
+ * the ones revealed to that user (`visibleSecretIds`, section ids; any
+ * iterable). Their `total` covers exactly those, and an inflated total must
+ * not reach into (or probe) a secret they cannot see.
  */
-export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid }, { maskSecrets = false } = {}) {
+export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid },
+  { maskSecrets = false, visibleSecretIds = null } = {}) {
   if (typeof sourceHtml !== "string" || !sourceHtml || !text) return null;
   const segs = tokenizeHtml(sourceHtml);
   const hits = [];
-  const sections = [];   // open <section> stack: true = a secret section
+  const sections = [];   // open <section> stack: true = hides its content
+  const visible = new Set(visibleSecretIds ?? []);
   segs.forEach((seg, segIndex) => {
-    if (seg.type === "tag") return trackSection(seg.raw, sections);
+    if (seg.type === "tag") return trackSection(seg.raw, sections, visible);
     if (seg.type !== "text") return;
     if (maskSecrets && sections.includes(true)) return;
     const { decoded, map } = decodeWithMap(seg.raw);
@@ -142,13 +197,16 @@ const isIndex = (n) => Number.isInteger(n) && n >= 0;
 /**
  * GM-side check of a contributor's relayed request (spec §4.5). Never
  * trusts the payload: `ctx` is computed by the GM from the socket-supplied
- * sender and the live page.
+ * sender and the live page. Two modes: create (type/name/linkOthers) and
+ * link (entityUuid, spec 2026-09-26 §4.2).
  */
 export function validateSelectionRequest(request, ctx) {
   const r = request ?? {};
+  const linkMode = r.entityUuid !== undefined;
   if (typeof r.requestId !== "string" || !r.requestId || typeof r.pageUuid !== "string" ||
       typeof r.fieldKey !== "string" || !isIndex(r.occurrence) || !isIndex(r.total) ||
-      r.occurrence >= r.total || typeof r.linkOthers !== "boolean") {
+      r.occurrence >= r.total ||
+      (linkMode ? (typeof r.entityUuid !== "string" || !r.entityUuid) : typeof r.linkOthers !== "boolean")) {
     return { ok: false, reason: "bad-payload" };
   }
   if (!ctx?.sender || ctx.sender.isGM) return { ok: false, reason: "bad-sender" };
@@ -156,6 +214,7 @@ export function validateSelectionRequest(request, ctx) {
   if (!ctx.canObserve) return { ok: false, reason: "not-visible" };
   if (!ctx.regionKeys?.includes(r.fieldKey)) return { ok: false, reason: "bad-field" };
   if (qualifySelection(r.text) !== r.text) return { ok: false, reason: "bad-selection" };
+  if (linkMode) return { ok: true };
   if (!ENTITY_TYPES.includes(r.type)) return { ok: false, reason: "bad-type" };
   const name = typeof r.name === "string" ? r.name.trim() : "";
   if (!name || name.length > MAX_NAME_LENGTH) return { ok: false, reason: "bad-name" };

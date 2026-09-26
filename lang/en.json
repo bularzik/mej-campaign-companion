@@ -423,6 +423,15 @@
     },
     "entityFromSelection": {
       "menu": "Create Entity from Selection",
+      "menuLink": "Link to Entity",
+      "pickTitle": "Link to Entity",
+      "pickLabel": "Entity",
+      "link": "Link",
+      "linked": "Linked the selection to {type} \"{name}\".",
+      "linkedNoType": "Linked the selection to \"{name}\".",
+      "linkedNot": "Could not link the selection to \"{name}\"; the page text changed.",
+      "linkFailed": "Could not link the selection ({reason}).",
+      "noGmLink": "No GM responded; nothing was linked.",
       "title": "Create Entity from Selection",
       "type": "Type",
       "name": "Name",
@@ -446,7 +455,9 @@
         "page-missing": "the page no longer exists",
         "create-failed": "creation failed",
         "relay-unavailable": "no GM is available",
-        "no-gm": "no GM responded"
+        "no-gm": "no GM responded",
+        "bad-entity": "that entity is not a match for the selection",
+        "link-failed": "linking failed"
       }
     },
     "actorLink": {

@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
-  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest
+  ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest,
+  normalizeEntityName, matchingEntities, safeMatches, linkedToastArgs
 } from "../scripts/logic/entity-from-selection.mjs";
 
 const U = "JournalEntry.abc";
@@ -166,5 +167,137 @@ describe("linkSelectionInSource with maskSecrets (non-owner relay path)", () => 
     const notSecret = `<section class="secretive"><p>Elara</p></section>`;
     expect(link("Elara", 0, 1, notSecret, { maskSecrets: true })).toBe(
       `<section class="secretive"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});
+
+describe("normalizeEntityName / matchingEntities", () => {
+  const C = [
+    { name: "Vex", uuid: "A" }, { name: "Old  Mill", uuid: "B" },
+    { name: "vex", uuid: "C" }, { name: "Vexa", uuid: "D" }
+  ];
+  it("normalises: trim, collapse whitespace (incl. nbsp), lower-case", () => {
+    expect(normalizeEntityName("  Old   MILL ")).toBe("old mill");
+    expect(normalizeEntityName(7)).toBe("");
+  });
+  it("matches case-insensitively and keeps candidate order", () => {
+    expect(matchingEntities("VEX", C)).toEqual([C[0], C[2]]);
+  });
+  it("collapses inner whitespace on both sides", () => {
+    expect(matchingEntities("old mill", C)).toEqual([C[1]]);
+  });
+  it("no match, empty text, or missing candidates → []", () => {
+    expect(matchingEntities("Vexx", C)).toEqual([]);
+    expect(matchingEntities("   ", C)).toEqual([]);
+    expect(matchingEntities("Vex", null)).toEqual([]);
+  });
+});
+
+describe("validateSelectionRequest link mode", () => {
+  const link = {
+    requestId: "r1", pageUuid: "JournalEntry.a.JournalEntryPage.b", fieldKey: "text.content",
+    text: "Elara", occurrence: 0, total: 1, entityUuid: "JournalEntry.e"
+  };
+  const ctx = { sender: { id: "u1", isGM: false }, isContributor: true, canObserve: true, regionKeys: ["text.content"] };
+  const v = (patch = {}, cpatch = {}) => validateSelectionRequest({ ...link, ...patch }, { ...ctx, ...cpatch });
+
+  it("accepts without type, name or linkOthers", () => expect(v()).toEqual({ ok: true }));
+  it("ignores a bad type/name in link mode", () => expect(v({ type: "session", name: "" })).toEqual({ ok: true }));
+  it.each([
+    [{ entityUuid: "" }, {}, "bad-payload"],
+    [{ entityUuid: 7 }, {}, "bad-payload"],
+    [{ entityUuid: null }, {}, "bad-payload"],
+    [{ occurrence: 1 }, {}, "bad-payload"],
+    [{}, { isContributor: false }, "not-contributor"],
+    [{}, { canObserve: false }, "not-visible"],
+    [{ fieldKey: "system.gmNotes" }, {}, "bad-field"],
+    [{ text: " Elara " }, {}, "bad-selection"]
+  ])("rejects %j %j as %s", (patch, cpatch, reason) => {
+    expect(v(patch, cpatch)).toEqual({ ok: false, reason });
+  });
+});
+
+describe("safeMatches", () => {
+  it("returns the computed matches", () => {
+    expect(safeMatches(() => [{ name: "Vex", uuid: "A" }], () => {})).toEqual([{ name: "Vex", uuid: "A" }]);
+  });
+  it("a throw in candidate building yields [] (Create stays offered) and is logged", () => {
+    const log = vi.fn();
+    const err = new Error("bad entry");
+    expect(safeMatches(() => { throw err; }, log)).toEqual([]);
+    expect(log).toHaveBeenCalledWith(expect.any(String), err);
+  });
+});
+
+describe("linkSelectionInSource viewer-aware masking", () => {
+  const link = (text, occurrence, total, html, opts) =>
+    linkSelectionInSource(html, { text, occurrence, total, uuid: U }, opts);
+
+  it("a secret revealed to everyone (class 'revealed') counts and can be linked", () => {
+    const html = `<p>Elara</p><section class="secret revealed" id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 1, 2, html, { maskSecrets: true })).toBe(
+      `<p>Elara</p><section class="secret revealed" id="secret-a"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+  it("a secret whose id is in visibleSecretIds counts; others stay masked", () => {
+    const html = `<p>Elara</p><section class="secret" id="secret-a"><p>Elara</p></section><section class="secret" id="secret-b"><p>Elara</p></section>`;
+    const opts = { maskSecrets: true, visibleSecretIds: new Set(["secret-a"]) };
+    expect(link("Elara", 0, 2, html, opts)).toBe(html.replace("<p>Elara</p><section", `<p>@UUID[${U}]{Elara}</p><section`));
+    expect(link("Elara", 1, 2, html, opts)).toBe(
+      html.replace(`id="secret-a"><p>Elara</p>`, `id="secret-a"><p>@UUID[${U}]{Elara}</p>`));
+    expect(link("Elara", 2, 3, html, opts)).toBeNull();
+  });
+  it("accepts an array of ids", () => {
+    const html = `<section class="secret" id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      `<section class="secret" id="secret-a"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+  it("a hidden secret nested in a visible one is masked", () => {
+    const html = `<section class="secret revealed" id="secret-a"><p>Elara</p><section class="secret" id="secret-b"><p>Elara</p></section></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBe(
+      html.replace(`id="secret-a"><p>Elara</p>`, `id="secret-a"><p>@UUID[${U}]{Elara}</p>`));
+  });
+  it("a visible secret nested in a hidden one is masked", () => {
+    const html = `<section class="secret" id="secret-b"><section class="secret revealed" id="secret-a"><p>Elara</p></section></section><p>Elara</p>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      html.replace("</section><p>Elara</p>", `</section><p>@UUID[${U}]{Elara}</p>`));
+  });
+  it("data-id is not id", () => {
+    const html = `<section class="secret" data-id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBeNull();
+  });
+  it("without maskSecrets the visible set is irrelevant (everything counts)", () => {
+    const html = `<section class="secret" id="secret-b"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { visibleSecretIds: [] })).toBe(
+      `<section class="secret" id="secret-b"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});
+
+describe("linkedToastArgs", () => {
+  it("names the type when there is one", () => {
+    expect(linkedToastArgs("Person", "Vex")).toEqual(["linked", { type: "Person", name: "Vex" }]);
+  });
+  it("omits the type instead of leaving a double space", () => {
+    expect(linkedToastArgs("", "Vex")).toEqual(["linkedNoType", { name: "Vex" }]);
+  });
+});
+
+describe("linkSelectionInSource attribute parsing (final review)", () => {
+  const link = (text, occurrence, total, html, opts) =>
+    linkSelectionInSource(html, { text, occurrence, total, uuid: U }, opts);
+  it("an id= inside another attribute's value is not the section id", () => {
+    const html = `<section class="secret" title="see id=secret-a" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBeNull();
+  });
+  it("data-class does not hide the real class=secret", () => {
+    const html = `<section data-class="x" class="secret" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBeNull();
+  });
+  it("a class= inside another attribute's value is not the section class", () => {
+    const html = `<section title='class="secret revealed"' class="secret" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBeNull();
+  });
+  it("unquoted and single-quoted attributes still parse", () => {
+    const html = `<section class=secret id='secret-a'><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      `<section class=secret id='secret-a'><p>@UUID[${U}]{Elara}</p></section>`);
   });
 });
