@@ -196,11 +196,18 @@ test.describe("23 campaign creation", () => {
     await expect(page.locator("#context-menu")).toBeVisible();
     await expect(item).toHaveCount(0);
     await page.keyboard.press("Escape");
+    // Wait for the closed menu to leave the DOM before opening the next one.
+    // Foundry 14.368's ContextMenu.close() awaits a 200 ms animation and then
+    // removes this.#element - by which time a right-click on the next folder
+    // (same ContextMenu instance) has pointed #element at the NEW menu, which
+    // then vanishes under the click ("element was detached"; 4/10 runs).
+    await expect(page.locator("#context-menu")).toHaveCount(0);
 
     // Root folder: option present; rename in the dialog; converted in place.
     await rootRow.locator(":scope > .folder-header").click({ button: "right" });
     await expect(item).toHaveCount(1);
     await item.click();
+    const itemClickedAt = await page.evaluate(() => performance.now());
     const renamed = `${n} renamed`;
     await confirmNewCampaign(page, renamed, "none");
     await expect(page.locator("#notifications .notification", { hasText: `Folder "${renamed}" is now a campaign.` })).toBeVisible();
@@ -210,7 +217,14 @@ test.describe("23 campaign creation", () => {
     expect(s.timelineNames).toEqual([`${renamed} — Timeline`]);
     expect(await page.evaluate((id) => game.journal.get(id).folder?.id, ids.member)).toBe(ids.root);
 
-    // Campaign folder now: option gone.
+    // Campaign folder now: option gone. Same Foundry race as above, but not
+    // observable through the DOM this time: the item click starts an animated
+    // close() (200 ms), the conversion's directory re-render removes the menu
+    // element at once, and the still-pending close() later removes whatever
+    // this.#element is by then - the menu opened below (probe: its _close ran
+    // ~40 ms after this right-click, 8/20 runs). Wait out Foundry's fixed
+    // 200 ms close animation from the item click, with margin.
+    await page.waitForFunction((t) => performance.now() - t > 500, itemClickedAt);
     await rootRow.locator(":scope > .folder-header").click({ button: "right" });
     await expect(page.locator("#context-menu")).toBeVisible();
     await expect(item).toHaveCount(0);

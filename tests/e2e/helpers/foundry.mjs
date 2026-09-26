@@ -282,8 +282,18 @@ async function loginFromSavedState(page, userName) {
     const state = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.context().addCookies(state.cookies ?? []);
     await page.goto(`${BASE_URL}/game`);
-    // SESSION_BOUND, not a bare game.ready - see its comment above.
-    await page.waitForFunction(SESSION_BOUND, null, { timeout: 15_000 });
+    // Wait for the page to settle one way or the other: bound (SESSION_BOUND,
+    // not a bare game.ready - see its comment above) or bounced off /game
+    // because the cookie was refused. The old fixed 15 s budget missed while
+    // a slow World A client was still initializing (a player's /game load
+    // measured at 55 s+ on 2026-09-25), and the /join fallback's page.goto
+    // then aborted against that in-flight load (net::ERR_ABORTED).
+    await page.waitForFunction(
+      () => location.pathname !== "/game"
+        || (globalThis.game?.ready === true && !!globalThis.game?.socket?.session?.userId),
+      null, { timeout: 60_000 }
+    );
+    if (!(await page.evaluate(SESSION_BOUND))) throw new Error(`left /game for ${page.url()}`);
     const actualUser = await page.evaluate(() => game.user?.name);
     if (actualUser !== userName) {
       throw new Error(`landed as "${actualUser}", expected "${userName}"`);
