@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runEntityFromSelection } from "../scripts/logic/entity-from-selection-run.mjs";
+import { runEntityFromSelection, runLinkSelection } from "../scripts/logic/entity-from-selection-run.mjs";
 
 const M = "mej-campaign-companion";
 const get = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
@@ -76,5 +76,49 @@ describe("runEntityFromSelection", () => {
     // Without the flag (GM path) the secret occurrence counts, so total 1 no longer matches.
     const plain = setup({ content });
     expect((await runEntityFromSelection(req(), plain.deps)).linked).toBe(false);
+  });
+});
+
+describe("runLinkSelection", () => {
+  const E = "JournalEntry.e";
+  function linkSetup(opts = {}) {
+    const s = setup(opts);
+    s.deps.matchesFor = vi.fn(() => opts.matches ?? [{ name: "Elara", uuid: E }]);
+    return s;
+  }
+  const lreq = (p = {}) => ({ pageUuid: "P", fieldKey: "text.content", text: "Elara", occurrence: 0, total: 1, entityUuid: E, ...p });
+
+  it("links the occurrence to the chosen entity; never creates or runs the retro pass", async () => {
+    const { page, deps } = linkSetup();
+    const out = await runLinkSelection(lreq(), deps);
+    expect(deps.matchesFor).toHaveBeenCalledWith(page, "text.content", "Elara");
+    expect(page.text.content).toBe(`<p>@UUID[${E}]{Elara} waits.</p>`);
+    expect(out).toEqual({ ok: true, entryUuid: E, linked: true });
+    expect(deps.createMejEntry).not.toHaveBeenCalled();
+    expect(deps.runRetroPass).not.toHaveBeenCalled();
+  });
+  it("an entityUuid that is not among the recomputed matches → bad-entity, nothing written", async () => {
+    const { page, deps } = linkSetup({ matches: [{ name: "Elara", uuid: "JournalEntry.other" }] });
+    expect(await runLinkSelection(lreq(), deps)).toEqual({ ok: false, reason: "bad-entity" });
+    expect(page.update).not.toHaveBeenCalled();
+  });
+  it("occurrence no longer found → linked:false, nothing written", async () => {
+    const { page, deps } = linkSetup({ content: "<p>Elara and Elara.</p>" });
+    expect(await runLinkSelection(lreq(), deps)).toEqual({ ok: true, entryUuid: E, linked: false });
+    expect(page.update).not.toHaveBeenCalled();
+  });
+  it("page missing → page-missing", async () => {
+    const { deps } = linkSetup();
+    expect(await runLinkSelection(lreq({ pageUuid: "gone" }), deps)).toEqual({ ok: false, reason: "page-missing" });
+  });
+  it("update throws → linked:false, logged", async () => {
+    const { deps } = linkSetup({ updateThrows: true });
+    expect(await runLinkSelection(lreq(), deps)).toEqual({ ok: true, entryUuid: E, linked: false });
+    expect(deps.logError).toHaveBeenCalled();
+  });
+  it("maskSecrets: a secret occurrence is neither counted nor linked", async () => {
+    const { page, deps } = linkSetup({ content: '<section class="secret"><p>Elara</p></section><p>Elara</p>' });
+    await runLinkSelection(lreq({ maskSecrets: true }), deps);
+    expect(page.text.content).toBe(`<section class="secret"><p>Elara</p></section><p>@UUID[${E}]{Elara}</p>`);
   });
 });
