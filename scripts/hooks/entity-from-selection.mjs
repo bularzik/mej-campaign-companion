@@ -26,7 +26,7 @@ import { captureSelection } from "../logic/selection-capture.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
 import { campaignOf, campaignFlagOf, isContributor } from "../logic/campaigns.mjs";
 import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
-import { safeMatches } from "../logic/entity-from-selection.mjs";
+import { safeMatches, linkedToastArgs } from "../logic/entity-from-selection.mjs";
 import { promptEntityFromSelection } from "../apps/entity-from-selection-dialog.mjs";
 import { promptLinkTarget } from "../apps/link-to-entity-dialog.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -123,8 +123,11 @@ export function eligibilityFromCapture(sheet, target) {
   const fieldKey = lastCapture.display.dataset.key;
   if (!linkableRegions(page).some((r) => r.key === fieldKey)) return null;
   // Link to Entity (spec 2026-09-26 §4.4): existing entities the selection names.
-  const matches = () => safeMatches(() => matchesForField(page, fieldKey, capture.text),
-    (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err));
+  // Computed once per stashed capture and shared by both menu callbacks and
+  // the click; a new right-click replaces lastCapture, so it never goes stale.
+  const record = lastCapture;
+  const matches = () => (record.matches ??= safeMatches(() => matchesForField(page, fieldKey, capture.text),
+    (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err)));
   if (game.user.isGM) return sheet.isEditable ? { page, fieldKey, capture, relay: false, matches: matches() } : null;
   const campaign = campaignOf(page);
   if (!campaign || !game.users.activeGM) return null;
@@ -187,7 +190,8 @@ export function showLinkOutcome(outcome, { name, sheet }) {
     ui.notifications.warn(f("linkedNot", { name: shown }));
     return;
   }
-  ui.notifications.info(f("linked", { type: typeLabelOf(entry), name: shown }));
+  const [key, data] = linkedToastArgs(typeLabelOf(entry), shown);
+  ui.notifications.info(f(key, data));
   const host = sheet?.enhancedjournal;
   if (entry && host && entry.testUserPermission(game.user, "OBSERVER")) {
     host.addTab(entry, { activate: false });

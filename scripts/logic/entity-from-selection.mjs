@@ -43,6 +43,11 @@ export function matchingEntities(text, candidates) {
   return (candidates ?? []).filter((c) => normalizeEntityName(c?.name) === key);
 }
 
+/** i18n key + data for the Link to Entity success toast; no type → no "{type} " gap. */
+export function linkedToastArgs(typeLabel, name) {
+  return typeLabel ? ["linked", { type: typeLabel, name }] : ["linkedNoType", { name }];
+}
+
 /**
  * Matches for the context-menu callbacks: a throw in candidate building (an
  * odd entry, a permission lookup) yields [] so Create stays offered and the

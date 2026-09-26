@@ -10,21 +10,23 @@ import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
 import { linkableRegions, sameLinkScope } from "../logic/link-targets.mjs";
 import { campaignIdOf, isLinkableEntity } from "../logic/campaigns.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
-import { matchingEntities } from "../logic/entity-from-selection.mjs";
+import { matchingEntities, normalizeEntityName } from "../logic/entity-from-selection.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 
 /**
  * Every other MEJ-typed JournalEntry in the page's campaign scope whose
  * viewer set contains the region's viewers. A gmOnly region (session GM
  * notes) has no non-GM viewers, so containment passes for every entity in
- * scope.
+ * scope. `nameKey` (a normalizeEntityName result) drops other names before
+ * any permission work; auto-link omits it.
  */
-export function linkCandidates(page, region) {
+export function linkCandidates(page, region, { nameKey = null } = {}) {
   const users = game.users.contents;
   const pageViewers = region.gmOnly ? [] : viewerIds(page.parent, users, isVisibleToUser);
   const pageCampaignId = campaignIdOf(page);
   const pages = game.journal
-    .filter((entry) => isLinkableEntity(entry, mejType)
+    .filter((entry) => (nameKey === null || normalizeEntityName(entry.name) === nameKey)
+      && isLinkableEntity(entry, mejType)
       && sameLinkScope(pageCampaignId, campaignIdOf(entry)))
     .map((entry) => ({
       id: entry.id,
@@ -39,5 +41,6 @@ export function linkCandidates(page, region) {
 /** Link to Entity's matches for a selection in the field `fieldKey` ([] for an unknown field). */
 export function matchesForField(page, fieldKey, text) {
   const region = linkableRegions(page).find((r) => r.key === fieldKey);
-  return region ? matchingEntities(text, linkCandidates(page, region)) : [];
+  const nameKey = normalizeEntityName(text);
+  return region && nameKey ? matchingEntities(text, linkCandidates(page, region, { nameKey })) : [];
 }

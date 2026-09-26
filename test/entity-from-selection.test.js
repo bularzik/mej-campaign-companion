@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest,
-  normalizeEntityName, matchingEntities, safeMatches
+  normalizeEntityName, matchingEntities, safeMatches, linkedToastArgs
 } from "../scripts/logic/entity-from-selection.mjs";
 
 const U = "JournalEntry.abc";
@@ -268,5 +268,14 @@ describe("linkSelectionInSource viewer-aware masking", () => {
     const html = `<section class="secret" id="secret-b"><p>Elara</p></section>`;
     expect(link("Elara", 0, 1, html, { visibleSecretIds: [] })).toBe(
       `<section class="secret" id="secret-b"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});
+
+describe("linkedToastArgs", () => {
+  it("names the type when there is one", () => {
+    expect(linkedToastArgs("Person", "Vex")).toEqual(["linked", { type: "Person", name: "Vex" }]);
+  });
+  it("omits the type instead of leaving a double space", () => {
+    expect(linkedToastArgs("", "Vex")).toEqual(["linkedNoType", { name: "Vex" }]);
   });
 });

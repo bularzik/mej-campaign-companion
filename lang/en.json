@@ -428,6 +428,7 @@
       "pickLabel": "Entity",
       "link": "Link",
       "linked": "Linked the selection to {type} \"{name}\".",
+      "linkedNoType": "Linked the selection to \"{name}\".",
       "linkedNot": "Could not link the selection to \"{name}\"; the page text changed.",
       "linkFailed": "Could not link the selection ({reason}).",
       "noGmLink": "No GM responded; nothing was linked.",
