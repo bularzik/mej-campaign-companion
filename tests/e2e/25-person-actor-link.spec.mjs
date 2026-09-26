@@ -149,26 +149,25 @@ test.describe("25 person to actor link", () => {
     test.setTimeout(120_000);
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
-    // registerCore() (mej-adapter.mjs) wires actor-link's hook near the END of
-    // its sequential await chain (after several other dynamic-import steps),
-    // while login()'s waitCompanionWired() only confirms the Session sheet
-    // CLASS is registered - a different, earlier-finishing part of the same
-    // ready-time wiring. Every other test in this file naturally clears that
-    // window via several UI round trips (openEntry, dialog wait/close) before
-    // it ever touches the actor flag; this test is the one path that goes
-    // straight from login() to a raw setFlag with none of that padding, so it
-    // is the one exposed to the race - confirmed live: chained right after
-    // another test, the flag write always lands (setFlag's own await
-    // resolves) but zero "updateJournalEntryPage" hook firings follow it
-    // within 10s, meaning registerActorLink()'s Hooks.on(...) simply was not
-    // registered yet at the moment the update happened - and no amount of
-    // waiting afterwards will call a hook that was not there to catch the
-    // event. A short settle first (registerCore's remaining steps normally
-    // finish in single-digit ms) closes that window without adding a real
-    // dependency on internal wiring order.
-    await settle(page, 2000);
     const actor = await createActor(page, N.actor);
     const person = await createPerson(page, N.person);
+
+    // registerCore() (mej-adapter.mjs) wires actor-link's sync hook
+    // (registerActorLink) before actor-link's UI hook (registerActorLinkUi),
+    // both later in its sequential await chain than login()'s
+    // waitCompanionWired() waits for (that only confirms the Session sheet
+    // CLASS is registered - a different, earlier-finishing part of the same
+    // ready-time wiring). This test is the one path in the file that would
+    // otherwise go straight from login() to a raw setFlag with no
+    // intervening UI round trip, and can race ahead of that later wiring -
+    // confirmed live: the flag write always lands, but occasionally zero
+    // "updateJournalEntryPage" sync firings followed within 10s, because the
+    // sync hook simply had not registered yet. Opening the entry and
+    // waiting for the "link" control to render proves the UI hook (which
+    // registers AFTER the sync hook) is wired, and so the sync hook is too -
+    // a real readiness signal instead of a blind wait.
+    const shell = await openEntry(page, person.id);
+    await expect(control(shell, "link")).toBeVisible({ timeout: 10_000 });
 
     await page.evaluate(async ({ entryId, actorId, F }) => {
       const a = game.actors.get(actorId);
