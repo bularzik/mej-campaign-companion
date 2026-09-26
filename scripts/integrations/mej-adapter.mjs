@@ -157,6 +157,11 @@ export async function registerCore() {
     registerActorLinkUi();
   });
 
+  await step("session flag stamp", async () => {
+    const { registerSessionFlagStamp } = await import("../hooks/session-flag-stamp.mjs");
+    registerSessionFlagStamp();
+  });
+
   // Folder context menu ("Open Campaign Hub") is registered at "init" now,
   // not here - see campaign-companion.mjs's Hooks.once("init", ...) for why
   // registering this late (registerCore only ever runs from "setup"/"ready")
