@@ -228,7 +228,7 @@ Click **Create** and the companion makes a new entry of that type in the same fo
 
 ## Linking a Person to an actor
 
-A Person entry can be linked to one of the world's actors. Open the Person and press the **Link Actor** button (the person-with-a-plus icon next to its name), then pick the actor. Only actors you can see are listed; type in the filter box to narrow the list.
+A Person entry can be linked to one of the world's actors. Open the Person and press the **Link Actor** button (the person-with-a-plus icon next to its name), then pick the actor. Only actors whose sheet you can open are listed; type in the filter box to narrow the list.
 
 ![The Link Actor picker](images/actor-link-picker.png)
 
@@ -240,7 +240,7 @@ When you link:
 
 The copy happens once, when you link. Editing the actor's biography later doesn't change the Person. Systems that don't separate a public biography (anything other than dnd5e's and pf2e's public fields) copy the full biography to your Notes only and leave the description for you to write.
 
-A linked Person shows two buttons instead: **Change linked actor** and **Unlink actor**. Unlinking keeps the picture, description and notes as they are. Dragging an actor onto a Person (Monk's Enhanced Journal's own way of linking) works the same as the picker. Persons you linked before this version start following their actor's picture the next time that picture changes, or when you re-link them.
+A linked Person shows two buttons instead: **Change linked actor** and **Unlink actor**. Unlinking keeps the picture, description and notes as they are. Dragging an actor onto a Person (Monk's Enhanced Journal's own way of linking) stores the same link, but only copies anything when the player who dragged it can open that actor's sheet — Monk's Enhanced Journal's own drag does no such check, so a player dragging an actor they can't see onto their own Person stores the link and copies nothing. Persons you linked before this version start following their actor's picture the next time that picture changes, or when you re-link them.
 
 ## Auto-capture
 

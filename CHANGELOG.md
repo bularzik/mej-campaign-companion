@@ -4,8 +4,8 @@
 
 Link a Person to an actor.
 
-- **Added:** a **Link Actor** button on Person entries, with a picker of the actors you can see, plus **Change linked actor** and **Unlink actor** once linked. Monk's Enhanced Journal's own drag-an-actor link goes through the same path.
-- **Added:** a linked Person's picture follows the actor's picture, including later changes (applied by a connected GM).
+- **Added:** a **Link Actor** button on Person entries, with a picker of the actors whose sheet you can open, plus **Change linked actor** and **Unlink actor** once linked. Monk's Enhanced Journal's own drag-an-actor link stores the same flag, but only copies the picture and biography when you can open that actor's sheet — dragging one you can't see onto a Person you own stores the link and changes nothing else.
+- **Added:** a linked Person's picture follows the actor's picture, including later changes (applied by a connected GM); a synthetic token actor or a compendium copy sharing that actor's id is ignored, so retexturing a token or editing a compendium duplicate no longer repaints every linked Person.
 - **Added:** when you link, the actor's public biography fills an empty Person description, and its full biography fills your own empty Notes on that Person, so GM-only text stays private.
 - **Changed:** the README is reorganized by feature and brought up to date (settings table, features since 0.5.0, test counts).
 
