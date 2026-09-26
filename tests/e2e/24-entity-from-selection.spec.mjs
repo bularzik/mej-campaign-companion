@@ -19,15 +19,19 @@ const VIEWPORT = { viewport: { width: 1440, height: 900 }, screen: { width: 1440
 const RUN = Date.now();
 // This spec's own slice of the harness "TT-" namespace (cleanup scope).
 const PREFIX = "TT-Efs";
-const N = {
-  camp: `${PREFIX}Camp${RUN}`,
-  place: `${PREFIX}Place${RUN}`,
-  other: `${PREFIX}Other${RUN}`,
-  elara: `${PREFIX}Elara${RUN}`,
-  boren: `${PREFIX}Boren${RUN}`,
+// Per-test names (run id + test counter): a leftover from one test can never
+// be an existing entity that turns another test's Create into Link to Entity.
+const names = (tag) => ({
+  camp: `${PREFIX}Camp${tag}`,
+  place: `${PREFIX}Place${tag}`,
+  other: `${PREFIX}Other${tag}`,
+  elara: `${PREFIX}Elara${tag}`,
+  boren: `${PREFIX}Boren${tag}`,
   // 81 characters, no whitespace: one past the 80-character cap.
-  long: `${PREFIX}Long${RUN}`.padEnd(81, "z")
-};
+  long: `${PREFIX}Long${tag}`.padEnd(81, "z")
+});
+let N = names(`${RUN}t0`);
+let testSeq = 0;
 const MENU_LABEL = "Create Entity from Selection";
 
 async function setSettings(page, { autoLink, retroLinkMode }) {
@@ -143,6 +147,7 @@ async function cleanup(gmPage) {
 }
 
 test.describe("24 create entity from selection", () => {
+  test.beforeEach(() => { N = names(`${RUN}t${++testSeq}`); });
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, (gm) => cleanup(gm));
   });

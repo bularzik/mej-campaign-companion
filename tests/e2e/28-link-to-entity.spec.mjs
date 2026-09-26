@@ -17,13 +17,29 @@ const RUN = Date.now();
 const PREFIX = "TT-Lte";
 const N = {
   camp: `${PREFIX}Camp${RUN}`, place: `${PREFIX}Place${RUN}`,
-  vex: `${PREFIX}Vex${RUN}`, twin: `${PREFIX}Twin${RUN}`, none: `${PREFIX}None${RUN}`
+  vex: `${PREFIX}Vex${RUN}`, twin: `${PREFIX}Twin${RUN}`, none: `${PREFIX}None${RUN}`,
+  new: `${PREFIX}New${RUN}`
 };
 const CREATE = "Create Entity from Selection";
 const LINK = "Link to Entity";
 const item = (page, label) => page.locator("#context-menu li", { hasText: label });
 const picker = (page) => page.locator("dialog.application", { hasText: LINK });
 const journalCount = (page) => page.evaluate(() => game.journal.size);
+const entityDialog = (page) => page.locator("dialog.application", { hasText: CREATE });
+async function makeContributor(page, folder, userName = "User 1") {
+  await page.evaluate(async ({ folder, MOD, userName }) => {
+    const u = game.users.getName(userName);
+    await game.folders.get(folder).setFlag(MOD, "campaign.contributors", { userIds: [u.id], groupIds: [] });
+  }, { folder, MOD, userName });
+}
+async function revealTo(page, entryId, sectionId, userName) {
+  await page.evaluate(async ({ entryId, sectionId, userName, MOD }) => {
+    const u = game.users.getName(userName);
+    await game.journal.get(entryId).pages.contents[0].update({
+      [`flags.${MOD}.secretReveals.${sectionId}`]: { users: [u.id], groups: [], all: false, revealedAt: Date.now() }
+    });
+  }, { entryId, sectionId, userName, MOD });
+}
 
 async function setSettings(page, { autoLink, retroLinkMode }) {
   await page.evaluate(async ({ autoLink, retroLinkMode, MOD }) => {
@@ -234,6 +250,139 @@ test.describe("28 link to entity", () => {
         .toBe(`<p>Ask @UUID[${vex.uuid}]{${N.vex}} now.</p>`);
       await expect(u1.page.locator("#notifications li.notification.info", { hasText: "Linked the selection" }))
         .toHaveCount(1, { timeout: 15_000 });
+      assertNoConsoleErrors(u1.errors);
+      assertNoConsoleErrors(gmErrors);
+    } finally {
+      await u1.context.close();
+    }
+  });
+
+  test("Escape on the picker writes nothing", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await setSettings(page, { retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.camp);
+    await createMejPage(page, N.twin, "<p>First.</p>", folder, "person");
+    await createMejPage(page, N.twin, "<p>Second.</p>", folder, "place");
+    const html = `<p>Meet ${N.twin} here.</p>`;
+    const place = await createMejPage(page, N.place, html, folder);
+
+    await openEntry(page, place.id);
+    await selectAndOpenMenu(page, N.twin);
+    await item(page, LINK).click();
+    await expect(picker(page)).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press("Escape");
+    await expect(picker(page)).toHaveCount(0, { timeout: 10_000 });
+    await settle(page, 800);
+    expect(await textOf(page, place.id)).toBe(html);
+    assertNoConsoleErrors(errors);
+  });
+
+  test("a contributor chooses in the picker; the GM links the chosen entity", async ({ page, browser }) => {
+    test.setTimeout(150_000);
+    const gmErrors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await setSettings(page, { retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.camp);
+    await createMejPage(page, N.twin, "<p>First.</p>", folder, "person");
+    const second = await createMejPage(page, N.twin, "<p>Second.</p>", folder, "place");
+    const place = await createMejPage(page, N.place, `<p>Meet ${N.twin} here.</p>`, folder);
+    await makeContributor(page, folder);
+
+    const u1 = await newSeat(browser, "User 1");
+    try {
+      await openEntry(u1.page, place.id);
+      await selectAndOpenMenu(u1.page, N.twin);
+      await item(u1.page, LINK).click();
+      await expect(picker(u1.page)).toBeVisible({ timeout: 10_000 });
+      await picker(u1.page).locator("select[name='entity']").selectOption(second.uuid);
+      await picker(u1.page).locator("button[data-action='ok']").click();
+      await expect.poll(() => textOf(page, place.id), { timeout: 15_000 })
+        .toBe(`<p>Meet @UUID[${second.uuid}]{${N.twin}} here.</p>`);
+      assertNoConsoleErrors(u1.errors);
+      assertNoConsoleErrors(gmErrors);
+    } finally {
+      await u1.context.close();
+    }
+  });
+
+  test("contributor Create links on a page with a secret revealed to them", async ({ page, browser }) => {
+    test.setTimeout(150_000);
+    const gmErrors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await setSettings(page, { retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.camp);
+    const html = `<p>Ask ${N.new} now.</p><section class="secret" id="secret-lte1"><p>${N.new} is a spy.</p></section>`;
+    const place = await createMejPage(page, N.place, html, folder);
+    await revealTo(page, place.id, "secret-lte1", "User 1");
+    await makeContributor(page, folder);
+
+    const u1 = await newSeat(browser, "User 1");
+    try {
+      const shell = await openEntry(u1.page, place.id);
+      await expect(shell.locator("section.secret.mej-cc-revealed-to-you")).toBeVisible({ timeout: 15_000 });
+      await selectAndOpenMenu(u1.page, N.new, 0);
+      await item(u1.page, CREATE).click();
+      const dialog = entityDialog(u1.page);
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+      await dialog.locator("input[name='linkOthers']").setChecked(false);
+      await dialog.locator("button[data-action='ok']").click();
+      await expect.poll(() => page.evaluate((n) => game.journal.getName(n)?.uuid ?? null, N.new), { timeout: 15_000 }).not.toBeNull();
+      const uuid = await page.evaluate((n) => game.journal.getName(n).uuid, N.new);
+      await expect.poll(() => textOf(page, place.id), { timeout: 15_000 })
+        .toBe(html.replace(`Ask ${N.new} now`, `Ask @UUID[${uuid}]{${N.new}} now`));
+      await expect(u1.page.locator("#notifications li.notification.info", { hasText: "Created" })).toHaveCount(1, { timeout: 15_000 });
+      assertNoConsoleErrors(u1.errors);
+      assertNoConsoleErrors(gmErrors);
+    } finally {
+      await u1.context.close();
+    }
+  });
+
+  test("contributor Link inside a secret revealed to everyone", async ({ page, browser }) => {
+    test.setTimeout(150_000);
+    const gmErrors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await setSettings(page, { retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.camp);
+    const vex = await createMejPage(page, N.vex, "<p>A person.</p>", folder, "person");
+    const html = `<p>Intro.</p><section class="secret revealed" id="secret-lte2"><p>Ask ${N.vex} now.</p></section>`;
+    const place = await createMejPage(page, N.place, html, folder);
+    await makeContributor(page, folder);
+
+    const u1 = await newSeat(browser, "User 1");
+    try {
+      await openEntry(u1.page, place.id);
+      await selectAndOpenMenu(u1.page, N.vex);
+      await item(u1.page, LINK).click();
+      await expect.poll(() => textOf(page, place.id), { timeout: 15_000 })
+        .toBe(html.replace(`Ask ${N.vex} now`, `Ask @UUID[${vex.uuid}]{${N.vex}} now`));
+      assertNoConsoleErrors(u1.errors);
+      assertNoConsoleErrors(gmErrors);
+    } finally {
+      await u1.context.close();
+    }
+  });
+
+  test("contributor Link leaves a secret they cannot see untouched", async ({ page, browser }) => {
+    test.setTimeout(150_000);
+    const gmErrors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    await setSettings(page, { retroLinkMode: "off" });
+    const folder = await createCampaignFolder(page, N.camp);
+    const vex = await createMejPage(page, N.vex, "<p>A person.</p>", folder, "person");
+    const html = `<p>Ask ${N.vex} now.</p><section class="secret" id="secret-lte3"><p>${N.vex} is hidden.</p></section>`;
+    const place = await createMejPage(page, N.place, html, folder);
+    await makeContributor(page, folder);
+
+    const u1 = await newSeat(browser, "User 1");
+    try {
+      await openEntry(u1.page, place.id);
+      await selectAndOpenMenu(u1.page, N.vex);
+      await item(u1.page, LINK).click();
+      await expect.poll(() => textOf(page, place.id), { timeout: 15_000 })
+        .toBe(html.replace(`Ask ${N.vex} now`, `Ask @UUID[${vex.uuid}]{${N.vex}} now`));
       assertNoConsoleErrors(u1.errors);
       assertNoConsoleErrors(gmErrors);
     } finally {
