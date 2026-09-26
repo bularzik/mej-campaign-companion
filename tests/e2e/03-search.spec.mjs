@@ -22,7 +22,15 @@ async function openHubSearch(page) {
   }, anyEntryId);
   await settle(page, 400);
   const shell = page.locator("#MonksEnhancedJournal");
-  await shell.locator(".nav-button.campaign-hub").click();
+  // A busy client can take well past the 15 s action timeout to report the
+  // Hub button "stable" (animation frames starve under load; flake seen
+  // 2026-09-26 with the same signature on player seats). Wait for the shell's
+  // rendered entry and the button, then give the click a longer budget.
+  await expect(shell.locator(".editor-parent .editor-display[data-key], .journal-entry-page").first())
+    .toBeVisible({ timeout: 30_000 });
+  const hubButton = shell.locator(".nav-button.campaign-hub");
+  await expect(hubButton).toBeVisible({ timeout: 30_000 });
+  await hubButton.click({ timeout: 30_000 });
   await settle(page, 500);
   await shell.locator('nav.sheet-tabs a[data-tab="search"]').click();
   await settle(page, 200);
