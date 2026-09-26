@@ -226,6 +226,22 @@ Click **Create** and the companion makes a new entry of that type in the same fo
 
 **Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
 
+## Linking a Person to an actor
+
+A Person entry can be linked to one of the world's actors. Open the Person and press the **Link Actor** button (the person-with-a-plus icon next to its name), then pick the actor. Only actors you can see are listed; type in the filter box to narrow the list.
+
+![The Link Actor picker](images/actor-link-picker.png)
+
+When you link:
+
+- The Person's picture becomes the actor's picture, and it stays in step: change the actor's picture later and the Person follows (while a GM is connected).
+- If the Person's description is empty, the actor's **public** biography is copied into it. Players who can open the Person see this text.
+- If your own **Notes** on the Person are empty, the actor's **full** biography is copied there. Notes are private to you — MEJ shows each user only their own — so GM-only details stay out of what players see. Another GM sees their own Notes, not yours.
+
+The copy happens once, when you link. Editing the actor's biography later doesn't change the Person. Systems that don't separate a public biography (anything other than dnd5e's and pf2e's public fields) copy the full biography to your Notes only and leave the description for you to write.
+
+A linked Person shows two buttons instead: **Change linked actor** and **Unlink actor**. Unlinking keeps the picture, description and notes as they are. Dragging an actor onto a Person (Monk's Enhanced Journal's own way of linking) works the same as the picker. Persons you linked before this version start following their actor's picture the next time that picture changes, or when you re-link them.
+
 ## Auto-capture
 
 Two more opt-in settings automate filing things onto the timeline for you, so you don't have to remember to do it by hand mid-session:

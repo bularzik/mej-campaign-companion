@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.0 (2026-09-25)
+
+Link a Person to an actor.
+
+- **Added:** a **Link Actor** button on Person entries, with a picker of the actors you can see, plus **Change linked actor** and **Unlink actor** once linked. Monk's Enhanced Journal's own drag-an-actor link goes through the same path.
+- **Added:** a linked Person's picture follows the actor's picture, including later changes (applied by a connected GM).
+- **Added:** when you link, the actor's public biography fills an empty Person description, and its full biography fills your own empty Notes on that Person, so GM-only text stays private.
+- **Changed:** the README is reorganized by feature and brought up to date (settings table, features since 0.5.0, test counts).
+
 ## 0.21.0 (2026-09-25)
 
 Create entities straight from selected text.

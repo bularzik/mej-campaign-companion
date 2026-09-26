@@ -18,7 +18,7 @@
 // there when it runs.
 import { test, expect } from "@playwright/test";
 import { mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { login, settle, MODULE_ID, deleteJournalsByPrefix, cleanupStrandedTestFolders } from "./helpers/foundry.mjs";
+import { login, settle, MODULE_ID, deleteJournalsByPrefix, deleteActorsByPrefix, cleanupStrandedTestFolders } from "./helpers/foundry.mjs";
 
 // Gitignored (world state, not source) — see .gitignore. Written in
 // beforeAll BEFORE any mutation, so a crashed run leaves the file behind
@@ -1433,6 +1433,37 @@ guideDescribe("guide screenshots", () => {
       }).catch(() => {});
       await deleteJournalsByPrefix(page, PREFIX);
       await cleanupStrandedTestFolders(page, { prefix: PREFIX });
+    }
+
+    // Person <-> Actor link picker (GM guide, "Linking a Person to an actor").
+    {
+      const PREFIX = "TT-PalShot";
+      const personName = `${PREFIX}Mirela`;
+      try {
+        await page.evaluate(async ({ PREFIX }) => {
+          for (const [name, img] of [["Mirela Vance", "icons/svg/mystery-man.svg"], ["Old Tom", "icons/svg/cowled.svg"], ["Captain Hesk", "icons/svg/skull.svg"]]) {
+            await Actor.create({ name: `${PREFIX}${name}`, type: "npc", img });
+          }
+        }, { PREFIX });
+        const personId = await page.evaluate(async (n) => (await JournalEntry.create({
+          name: n, pages: [{ name: n, type: "text", flags: { "monks-enhanced-journal": { type: "person", relationships: [], attributes: {} } }, text: { content: "" } }]
+        })).id, personName);
+        await openEntry(page, personId);
+        await page.locator("#MonksEnhancedJournal .mej-cc-actor-link button[data-mej-cc-actor='link']").first().click();
+        const dialog = page.locator("dialog.application", { hasText: "Link Actor" });
+        await expect(dialog).toBeVisible({ timeout: 10_000 });
+        await dialog.locator("input[name='filter']").fill(PREFIX);
+        await settle(page, 300);
+        await shot(dialog, "actor-link-picker");
+        await page.keyboard.press("Escape");
+        await settle(page, 300);
+      } finally {
+        await page.evaluate(async () => {
+          try { await game.MonksEnhancedJournal?.journal?.close?.(); } catch { /* nothing open */ }
+        }).catch(() => {});
+        await deleteJournalsByPrefix(page, PREFIX);
+        await deleteActorsByPrefix(page, PREFIX);
+      }
     }
   });
 
