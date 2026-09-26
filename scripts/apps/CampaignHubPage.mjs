@@ -105,8 +105,14 @@ const HUB_STATE = {
 // 2026-09-25 hub-ux-fixes §1). Closing edits the DOM directly instead of
 // re-rendering: a re-render would replace the element the user clicked
 // before its own click handler ran, swallowing that click. Document-level,
-// installed once; a no-op while no menu is open. The click listener is in
-// the bubble phase, so a toggle button's own action has already run.
+// installed once; a no-op while no menu is open.
+//
+// The click listener is in the CAPTURE phase: MEJ's shell stops the Hub's
+// own data-action clicks from bubbling to document (probed 2026-09-26), so a
+// bubble listener never saw a click on a Tools item or on another Hub
+// button. The close itself is deferred to the next task, so the clicked
+// control's handler runs first against the untouched DOM, and the patch is
+// computed then, from whatever state that handler left.
 let menuDismissInstalled = false;
 function closeMenus(patch) {
   Object.assign(HUB_STATE, patch);
@@ -124,10 +130,17 @@ function installMenuDismissal() {
   if (menuDismissInstalled) return;
   menuDismissInstalled = true;
   document.addEventListener("click", (event) => {
-    const insideMenuKey = event.target?.closest?.("[data-cc-menu]")?.dataset.ccMenu ?? null;
-    const patch = dismissPatch(HUB_STATE, { insideMenuKey });
-    if (patch) closeMenus(patch);
-  });
+    // Choosing an action item (a Tools entry) closes its menu like any other
+    // menu. Left open, the flag would make the Escape handler below swallow
+    // the first Escape meant for the dialog that item opened. Type's
+    // checkboxes carry no data-action, so that multi-select stays open.
+    const choseItem = !!event.target?.closest?.(".mej-cc-menu [data-action]");
+    const insideMenuKey = choseItem ? null : (event.target?.closest?.("[data-cc-menu]")?.dataset.ccMenu ?? null);
+    setTimeout(() => {
+      const patch = dismissPatch(HUB_STATE, { insideMenuKey });
+      if (patch) closeMenus(patch);
+    }, 0);
+  }, { capture: true });
   // Window capture phase so it runs before Foundry's Escape keybinding,
   // which would otherwise also close the MEJ window. Only swallowed when it
   // actually closed a menu.

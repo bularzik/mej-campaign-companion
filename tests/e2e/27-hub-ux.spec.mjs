@@ -188,4 +188,34 @@ test.describe("27 Hub UX", () => {
     }
     assertNoConsoleErrors(errors);
   });
+
+  test("menus: choosing a Tools item closes the menu, so Escape closes the dialog it opened", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await shell.locator('.mej-cc-tools-menu button[data-action="openExportDialog"]').click();
+    const dialog = page.locator("dialog.application:has(input[name='includeGM'])");
+    await expect(dialog).toBeVisible();
+    await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator("#MonksEnhancedJournal")).toBeVisible();
+    assertNoConsoleErrors(errors);
+  });
+
+  test("menus: an outside click on a Hub action button closes the Tools menu", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const shell = await openHubTab(page, "index");
+    await shell.locator('button[data-action="toggleToolsMenu"]').click();
+    await expect(shell.locator(".mej-cc-tools-menu")).toBeVisible();
+    // The Hub's own data-action clicks never bubble to document in MEJ's shell.
+    await shell.locator('button[data-action="toggleTypeMenu"]').click();
+    await expect(shell.locator(".mej-cc-doctype-menu")).toBeVisible();
+    await expect(shell.locator(".mej-cc-tools-menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(shell.locator(".mej-cc-doctype-menu")).toHaveCount(0);
+    assertNoConsoleErrors(errors);
+  });
 });
