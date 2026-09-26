@@ -45,6 +45,25 @@ async function openHubTab(page, tab) {
   return shell;
 }
 
+async function createPerson(page, name, { tags = [], ownership, text = "" } = {}) {
+  return page.evaluate(async ({ n, t, own, tg }) => {
+    const entry = await JournalEntry.create({
+      name: n,
+      pages: [{
+        name: n,
+        type: "monks-enhanced-journal.person",
+        flags: {
+          "monks-enhanced-journal": { type: "person" },
+          "mej-campaign-companion": { tags: tg }
+        },
+        text: { content: t }
+      }],
+      ...(own ? { ownership: { default: own } } : {})
+    });
+    return entry.id;
+  }, { n: name, t: text, own: ownership, tg: tags });
+}
+
 // HUB_STATE is module-private, so there is no state-reset helper: each test
 // leaves every menu closed when it ends.
 test.describe("27 Hub UX", () => {
@@ -125,6 +144,47 @@ test.describe("27 Hub UX", () => {
       await expect(shell.locator(".mej-cc-timeline-controls")).toBeInViewport();
     } finally {
       await page.evaluate((id) => game.journal.get(id)?.delete(), tlId);
+    }
+    assertNoConsoleErrors(errors);
+  });
+
+  test("graph: dragging the background pans; it opens nothing", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const ids = [await createPerson(page, `${TT_PREFIX}Pan A`), await createPerson(page, `${TT_PREFIX}Pan B`)];
+    try {
+      const shell = await openHubTab(page, "graph");
+      await shell.locator('button[data-action="setGraphMode"][data-mode="all"]').click();
+      const svg = shell.locator(".mej-cc-graph-svg");
+      await expect(svg.locator(".mej-cc-graph-node").first()).toBeVisible();
+      await settle(page, 1500); // let the force layout cool so nodes stop moving under the pointer
+      // An empty background point: the first grid point (top-left half of the
+      // canvas, so the drag stays inside it) that hits the bare SVG. World A's
+      // real campaign can crowd any fixed spot.
+      const start = await svg.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        for (let y = r.top + 6; y < r.top + r.height / 2; y += 12) {
+          for (let x = r.left + 6; x < r.left + r.width / 2; x += 12) {
+            if (document.elementFromPoint(x, y) === el) return { x, y };
+          }
+        }
+        return null;
+      });
+      expect(start).not.toBeNull();
+      const before = (await svg.getAttribute("viewBox")).split(" ").map(Number);
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(start.x + 120, start.y + 80, { steps: 8 });
+      await page.mouse.up();
+      const after = (await svg.getAttribute("viewBox")).split(" ").map(Number);
+      expect(after[0]).toBeLessThan(before[0]);
+      expect(after[1]).toBeLessThan(before[1]);
+      expect(after[2]).toBe(before[2]); // pan, not zoom
+      // Opened nothing: the shell still shows the Hub's Graph tab.
+      await expect(shell.locator('.tab[data-tab="graph"]')).toHaveClass(/active/);
+      await expect(shell.locator(".mej-cc-graph-svg")).toHaveCount(1);
+    } finally {
+      await page.evaluate((list) => JournalEntry.implementation.deleteDocuments(list.filter((id) => game.journal.get(id))), ids);
     }
     assertNoConsoleErrors(errors);
   });

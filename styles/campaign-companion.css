@@ -964,6 +964,10 @@
   width: 100%;
 }
 
+/* Background drag pans the graph (spec 2026-09-25 hub-ux-fixes §3). */
+.mej-cc-graph-svg { cursor: grab; }
+.mej-cc-graph-svg.panning { cursor: grabbing; }
+
 .mej-cc-graph-edge {
   stroke: var(--color-border-dark-secondary, #888);
   stroke-width: 1.25;
