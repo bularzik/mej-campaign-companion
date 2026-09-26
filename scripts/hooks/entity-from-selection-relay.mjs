@@ -11,6 +11,7 @@ import {
 import { validateSelectionRequest } from "../logic/entity-from-selection.mjs";
 import { isContributor, campaignOf, campaignFlagOf } from "../logic/campaigns.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
+import { visibleSecretIds } from "../logic/reveal-state.mjs";
 import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
 
 const FIELDS = ["pageUuid", "fieldKey", "text", "occurrence", "total", "type", "name", "linkOthers", "entityUuid"];
@@ -74,10 +75,15 @@ export async function handleEntityRequest(payload, senderId, env = foundryEnv())
       regionKeys: relayRegionKeys(page)
     });
     if (!verdict.ok) return reply(verdict);
-    // Foundry renders secret sections only for owners, so a non-owner's
-    // occurrence/total never covered them (linkSelectionInSource).
+    // Foundry renders only `revealed` secrets for non-owners and the
+    // companion injects the ones revealed to this user, so a non-owner's
+    // occurrence/total covered exactly those (linkSelectionInSource). The
+    // set comes from the live page and the socket sender, never the payload.
     const maskSecrets = page.testUserPermission?.(sender, "OWNER") !== true;
-    return reply(await (linkMode ? env.runLink : env.run)({ ...pick(payload), maskSecrets }));
+    const visible = maskSecrets
+      ? [...visibleSecretIds(page.getFlag?.(MODULE_ID, "secretReveals"), sender.id, env.groups)]
+      : [];
+    return reply(await (linkMode ? env.runLink : env.run)({ ...pick(payload), maskSecrets, visibleSecretIds: visible }));
   } catch (err) {
     // Without a reply the requester would time out into "No GM responded;
     // nothing was created", which may be false once creation has happened.

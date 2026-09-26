@@ -122,3 +122,21 @@ describe("runLinkSelection", () => {
     expect(page.text.content).toBe(`<section class="secret"><p>Elara</p></section><p>@UUID[${E}]{Elara}</p>`);
   });
 });
+
+describe("writers forward visibleSecretIds", () => {
+  const html = '<section class="secret" id="secret-a"><p>Elara</p></section>';
+  it("create: a secret visible to the requester is linkable when masked", async () => {
+    const { page, deps } = setup({ content: html });
+    const out = await runEntityFromSelection(req({ maskSecrets: true, visibleSecretIds: ["secret-a"], linkOthers: false }), deps);
+    expect(out.linked).toBe(true);
+    expect(page.text.content).toBe('<section class="secret" id="secret-a"><p>@UUID[JournalEntry.new]{Elara}</p></section>');
+  });
+  it("link: same", async () => {
+    const { page, deps } = setup({ content: html });
+    deps.matchesFor = () => [{ name: "Elara", uuid: "JournalEntry.e" }];
+    const out = await runLinkSelection({ pageUuid: "P", fieldKey: "text.content", text: "Elara", occurrence: 0, total: 1,
+      entityUuid: "JournalEntry.e", maskSecrets: true, visibleSecretIds: ["secret-a"] }, deps);
+    expect(out.linked).toBe(true);
+    expect(page.text.content).toContain("@UUID[JournalEntry.e]{Elara}");
+  });
+});

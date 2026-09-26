@@ -7,10 +7,11 @@ const payload = (p = {}) => ({
   type: "person", name: "Elara", linkOthers: true, ...p
 });
 
-function gmEnv({ contributor = true, observe = true, owner = false, page: pageOverride } = {}) {
+function gmEnv({ contributor = true, observe = true, owner = false, reveals = {}, page: pageOverride } = {}) {
   const page = pageOverride ?? {
     parent: { testUserPermission: vi.fn(() => observe) },
     testUserPermission: vi.fn(() => owner),
+    getFlag: vi.fn(() => reveals),
     text: { content: "<p>Elara</p>" }
   };
   return {
@@ -206,5 +207,34 @@ describe("requestEntityViaGm link mode (requester)", () => {
     await expect(p).resolves.toEqual({ ok: false, reason: "no-gm" });
     handleEntityResult({ requestId: "r9", recipient: "u1", ok: true, entryUuid: "JournalEntry.e", linked: true }, "gm1", env);
     expect(env.onLate).toHaveBeenCalledWith(expect.objectContaining({ mode: "link", name: "Elara", linked: true }));
+  });
+});
+
+describe("handleEntityRequest visible secrets (GM)", () => {
+  const reveals = {
+    "secret-a": { users: ["u1"], groups: [], all: false, revealedAt: 1 },
+    "secret-b": { users: ["u9"], groups: [], all: false, revealedAt: 1 }
+  };
+  it("a non-owner gets the ids revealed to the SOCKET sender, read from the live page", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.page.getFlag).toHaveBeenCalledWith("mej-campaign-companion", "secretReveals");
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: true, visibleSecretIds: ["secret-a"] }));
+  });
+  it("ignores a payload-supplied visibleSecretIds", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest(payload({ visibleSecretIds: ["secret-b"] }), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ visibleSecretIds: ["secret-a"] }));
+  });
+  it("link mode gets the same set", async () => {
+    const env = gmEnv({ reveals });
+    await handleEntityRequest({ action: "entity-from-selection", requestId: "r1", pageUuid: "P", fieldKey: "text.content",
+      text: "Elara", occurrence: 0, total: 1, entityUuid: "JournalEntry.e" }, "u1", env);
+    expect(env.runLink).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: true, visibleSecretIds: ["secret-a"] }));
+  });
+  it("an owner is not masked and gets no set", async () => {
+    const env = gmEnv({ reveals, owner: true });
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: false, visibleSecretIds: [] }));
   });
 });
