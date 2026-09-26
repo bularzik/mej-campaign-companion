@@ -226,6 +226,22 @@ Click **Create** and the companion makes a new entry of that type in the same fo
 
 **Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
 
+## Linking a Person to an actor
+
+A Person entry can be linked to one of the world's actors. Open the Person and press the **Link Actor** button (the person-with-a-plus icon next to its name), then pick the actor. Only actors whose sheet you can open are listed; type in the filter box to narrow the list.
+
+![The Link Actor picker](images/actor-link-picker.png)
+
+When you link:
+
+- The Person's picture becomes the actor's picture, and it stays in step: change the actor's picture later and the Person follows (while a GM is connected).
+- If the Person's description is empty, the actor's **public** biography is copied into it. Players who can open the Person see this text.
+- If your own **Notes** on the Person are empty, the actor's **full** biography is copied there. Notes are private to you — MEJ shows each user only their own — so GM-only details stay out of what players see. Another GM sees their own Notes, not yours.
+
+The copy happens once, when you link. Editing the actor's biography later doesn't change the Person. Systems that don't separate a public biography (anything other than dnd5e's and pf2e's public fields) copy the full biography to your Notes only and leave the description for you to write.
+
+A linked Person shows two buttons instead: **Change linked actor** and **Unlink actor**. Unlinking keeps the picture, description and notes as they are. Dragging an actor onto a Person (Monk's Enhanced Journal's own way of linking) stores the same link, but only copies anything when the player who dragged it can open that actor's sheet — Monk's Enhanced Journal's own drag does no such check, so a player dragging an actor they can't see onto their own Person stores the link and copies nothing. Persons you linked before this version start following their actor's picture the next time that picture changes, or when you re-link them.
+
 ## Auto-capture
 
 Two more opt-in settings automate filing things onto the timeline for you, so you don't have to remember to do it by hand mid-session:
@@ -271,7 +287,7 @@ Either way, every player you reveal to gets a private whisper naming the entry t
 
 ![The session prep board, showing attendees, the numbered secrets and clues list, linked entries, and a scratch-notes box](images/prep-board.png)
 
-**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets-layer-030) for the full statement.
+**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets) for the full statement.
 
 ## Word import & export
 
@@ -343,7 +359,7 @@ Five settings are visible in **Configure Settings → Module Settings**, all wor
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.
 
-A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `forceNativeMode`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and the two per-client ones, `hubCampaignScope` and `hubTimelineSelection`. The Hub writes them for you as you use it: your current campaign scope and timeline selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch. The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
+A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create Entity from Selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 
 ## Troubleshooting
 
