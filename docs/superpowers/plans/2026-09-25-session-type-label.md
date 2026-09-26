@@ -99,6 +99,98 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ---
 
+### Task 1b: Stamp MEJ's type flag on Session pages created without it (spec amendment)
+
+**Files:**
+- Create: `scripts/logic/session-flag-stamp.mjs`, `scripts/hooks/session-flag-stamp.mjs`
+- Modify: `scripts/integrations/mej-adapter.mjs` (`registerCore()`, a new step after `"actor link controls"`)
+- Test: `test/session-flag-stamp.test.js`
+
+**Interfaces:**
+- Produces: `sessionFlagPatch(data) -> { "flags.monks-enhanced-journal.type": "session" } | null`; `registerSessionFlagStamp()`.
+
+- [ ] **Step 1: failing test** — `test/session-flag-stamp.test.js`:
+
+```js
+import { describe, it, expect } from "vitest";
+import { sessionFlagPatch } from "../scripts/logic/session-flag-stamp.mjs";
+
+const PATCH = { "flags.monks-enhanced-journal.type": "session" };
+describe("sessionFlagPatch", () => {
+  it("stamps a session page that has no MEJ type flag", () => {
+    expect(sessionFlagPatch({ type: "mej-campaign-companion.session" })).toEqual(PATCH);
+    expect(sessionFlagPatch({ type: "mej-campaign-companion.session", flags: {} })).toEqual(PATCH);
+    expect(sessionFlagPatch({ type: "session" })).toEqual(PATCH);
+  });
+  it("never overwrites an existing MEJ type flag", () => {
+    expect(sessionFlagPatch({ type: "mej-campaign-companion.session", flags: { "monks-enhanced-journal": { type: "session" } } })).toBeNull();
+    expect(sessionFlagPatch({ type: "mej-campaign-companion.session", flags: { "monks-enhanced-journal": { type: "other" } } })).toBeNull();
+  });
+  it("ignores other page types and bad input", () => {
+    for (const d of [{ type: "text" }, { type: "mej-campaign-companion.campaign" }, {}, null, undefined]) expect(sessionFlagPatch(d)).toBeNull();
+  });
+});
+```
+
+Run `npx vitest run test/session-flag-stamp.test.js` → FAIL (module missing).
+
+- [ ] **Step 2: implement** — `scripts/logic/session-flag-stamp.mjs`:
+
+```js
+// Stock MEJ's New Entry dialog creates a Session page (type
+// mej-campaign-companion.session) with no MEJ type flag, so MEJ opens it as a
+// plain JournalEntrySheet. The companion's own creation paths set the flag
+// (session-page-data.mjs); this is the patch for pages created any other way
+// (spec 2026-09-25 session-type-label, amendment).
+import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+
+const MEJ = "monks-enhanced-journal";
+
+export function sessionFlagPatch(data) {
+  if (!data || (data.type !== SESSION_DOCUMENT_TYPE && data.type !== SESSION_TYPE)) return null;
+  if (data.flags?.[MEJ]?.type !== undefined) return null;
+  return { [`flags.${MEJ}.type`]: SESSION_TYPE };
+}
+```
+
+`scripts/hooks/session-flag-stamp.mjs`:
+
+```js
+// Applies sessionFlagPatch to a page before it is written (see
+// logic/session-flag-stamp.mjs). updateSource on the pending document is the
+// preCreate-hook way to amend the create data.
+import { MODULE_ID } from "../constants.mjs";
+import { sessionFlagPatch } from "../logic/session-flag-stamp.mjs";
+
+export function registerSessionFlagStamp() {
+  Hooks.on("preCreateJournalEntryPage", (page, data) => {
+    try {
+      const patch = sessionFlagPatch(data);
+      if (patch) page.updateSource(patch);
+    } catch (err) {
+      console.error(`${MODULE_ID} | session flag stamp failed`, err);
+    }
+  });
+}
+```
+
+In `registerCore()` after the `"actor link controls"` step:
+
+```js
+  await step("session flag stamp", async () => {
+    const { registerSessionFlagStamp } = await import("../hooks/session-flag-stamp.mjs");
+    registerSessionFlagStamp();
+  });
+```
+
+(`SESSION_TYPE` is `"session"` and `SESSION_DOCUMENT_TYPE` is `"mej-campaign-companion.session"` in `scripts/constants.mjs`; check before relying on it.)
+
+- [ ] **Step 3:** `npx vitest run test/session-flag-stamp.test.js` → PASS; `npm test` → all pass.
+
+- [ ] **Step 4: commit** — `fix(session): stamp MEJ's type flag on Session pages created without it` (Opus trailer).
+
+---
+
 ### Task 2: End-to-end check on both worlds (includes the guard)
 
 **Files:**
@@ -192,6 +284,8 @@ test.describe("26 session type label", () => {
   });
 });
 ```
+
+**Amendment:** the spec file as committed in Task 2 accepts either Session option value in test 1, skips test 2 where the Adventure Book option is absent (World A), and test 2 also asserts `flags["monks-enhanced-journal"].type === "session"` on the created page.
 
 - [ ] **Step 2: Run it on World A (Foundry 14, api mode)**
 
