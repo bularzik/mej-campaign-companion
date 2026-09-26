@@ -287,7 +287,7 @@ Either way, every player you reveal to gets a private whisper naming the entry t
 
 ![The session prep board, showing attendees, the numbered secrets and clues list, linked entries, and a scratch-notes box](images/prep-board.png)
 
-**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets-layer-030) for the full statement.
+**Before you rely on any of this to protect something sensitive at the table:** secrets here are hidden by client-side filtering, the same trust model as Foundry's own secret blocks and MEJ's GM notes — the data still reaches every client that can see the page. Read the README's [secrets trust model](../README.md#secrets) for the full statement.
 
 ## Word import & export
 
@@ -359,7 +359,7 @@ Five settings are visible in **Configure Settings → Module Settings**, all wor
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.
 
-A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `forceNativeMode`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and the two per-client ones, `hubCampaignScope` and `hubTimelineSelection`. The Hub writes them for you as you use it: your current campaign scope and timeline selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch. The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
+A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create Entity from Selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 
 ## Troubleshooting
 
