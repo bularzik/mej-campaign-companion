@@ -29,6 +29,7 @@ import { runEntityFromSelection } from "../logic/entity-from-selection-run.mjs";
 import { promptEntityFromSelection } from "../apps/entity-from-selection-dialog.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { runRetroPass } from "./retro-link.mjs";
+import { matchesForField } from "./link-candidates.mjs";
 
 /** How long a captured selection stays usable after a right mousedown (ruling 2). */
 const CAPTURE_TTL_MS = 10000;
@@ -41,6 +42,7 @@ export function pipelineDeps() {
     createMejEntry,
     runRetroPass: (entries) => runRetroPass(entries),
     getProperty: (o, p) => foundry.utils.getProperty(o, p),
+    matchesFor: (page, fieldKey, text) => matchesForField(page, fieldKey, text),
     logError: (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err)
   };
 }
@@ -154,6 +156,9 @@ export function showEntityOutcome(outcome, { type, name, sheet }) {
     host.render();
   }
 }
+
+/** Link to Entity outcome toast (filled in by Task 5). */
+export function showLinkOutcome(outcome, { name, sheet }) {}
 
 async function startFromSelection(sheet, target) {
   // Re-check against the STASHED capture (ruling 2), not a live selection

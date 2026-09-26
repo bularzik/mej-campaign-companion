@@ -11,9 +11,9 @@ import {
 import { validateSelectionRequest } from "../logic/entity-from-selection.mjs";
 import { isContributor, campaignOf, campaignFlagOf } from "../logic/campaigns.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
-import { runEntityFromSelection } from "../logic/entity-from-selection-run.mjs";
+import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
 
-const FIELDS = ["pageUuid", "fieldKey", "text", "occurrence", "total", "type", "name", "linkOthers"];
+const FIELDS = ["pageUuid", "fieldKey", "text", "occurrence", "total", "type", "name", "linkOthers", "entityUuid"];
 const pick = (p) => Object.fromEntries(FIELDS.map((k) => [k, p?.[k]]));
 
 function foundryEnv() {
@@ -27,11 +27,16 @@ function foundryEnv() {
       const { pipelineDeps } = await import("./entity-from-selection.mjs");
       return runEntityFromSelection(request, pipelineDeps());
     },
+    runLink: async (request) => {
+      const { pipelineDeps } = await import("./entity-from-selection.mjs");
+      return runLinkSelection(request, pipelineDeps());
+    },
     userId: game.user.id,
     randomId: () => foundry.utils.randomID(),
     onLate: async (outcome) => {
-      const { showEntityOutcome } = await import("./entity-from-selection.mjs");
-      showEntityOutcome(outcome, { type: outcome.type, name: outcome.name, sheet: null });
+      const { showEntityOutcome, showLinkOutcome } = await import("./entity-from-selection.mjs");
+      if (outcome.mode === "link") showLinkOutcome(outcome, { name: outcome.name, sheet: null });
+      else showEntityOutcome(outcome, { type: outcome.type, name: outcome.name, sheet: null });
     }
   };
 }
@@ -52,6 +57,8 @@ export async function handleEntityRequest(payload, senderId, env = foundryEnv())
     action: ENTITY_FROM_SELECTION_RESULT_ACTION, requestId: payload?.requestId, recipient: senderId, ...outcome
   });
   if (typeof senderId !== "string" || typeof payload?.requestId !== "string") return;
+  // Link to Entity (spec 2026-09-26 §4.5): an entityUuid selects the link writer.
+  const linkMode = payload.entityUuid !== undefined;
   try {
     // Sender first: an unknown user or a GM is rejected before fromUuid, so
     // the reply cannot tell an arbitrary client whether a page exists.
@@ -70,12 +77,12 @@ export async function handleEntityRequest(payload, senderId, env = foundryEnv())
     // Foundry renders secret sections only for owners, so a non-owner's
     // occurrence/total never covered them (linkSelectionInSource).
     const maskSecrets = page.testUserPermission?.(sender, "OWNER") !== true;
-    return reply(await env.run({ ...pick(payload), maskSecrets }));
+    return reply(await (linkMode ? env.runLink : env.run)({ ...pick(payload), maskSecrets }));
   } catch (err) {
     // Without a reply the requester would time out into "No GM responded;
     // nothing was created", which may be false once creation has happened.
     console.error(`${MODULE_ID} | entity-from-selection: relayed request failed`, err);
-    return reply({ ok: false, reason: "create-failed" });
+    return reply({ ok: false, reason: linkMode ? "link-failed" : "create-failed" });
   }
 }
 
@@ -84,7 +91,7 @@ const late = new Map();      // requestId -> meta, after a timeout
 
 export function requestEntityViaGm(request, env = foundryEnv()) {
   const requestId = env.randomId();
-  const meta = { type: request.type, name: request.name };
+  const meta = { type: request.type, name: request.name, mode: request.entityUuid !== undefined ? "link" : "create" };
   const result = new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(requestId);
