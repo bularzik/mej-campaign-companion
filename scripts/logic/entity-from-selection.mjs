@@ -112,9 +112,21 @@ function maskedRanges(decoded) {
 
 const SECTION_OPEN_RE = /^<section\b([^>]*)>$/i;
 const SECTION_CLOSE_RE = /^<\/section\s*>$/i;
-const CLASS_ATTR_RE = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
-// (?:^|\s) so data-id="…" is not read as the section's id.
-const ID_ATTR_RE = /(?:^|\s)id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+// One attribute at a time, left to right, so text inside another attribute's
+// value (title="see id=x", data-class="…") is never read as class or id.
+const ATTR_RE = /([^\s"'>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+
+/** Lower-cased attribute name → value (first occurrence wins, as in HTML). */
+function parseAttrs(attrs) {
+  const out = new Map();
+  ATTR_RE.lastIndex = 0;
+  let m;
+  while ((m = ATTR_RE.exec(attrs))) {
+    const name = m[1].toLowerCase();
+    if (!out.has(name)) out.set(name, m[2] ?? m[3] ?? m[4] ?? "");
+  }
+  return out;
+}
 
 /**
  * Push/pop the open-section stack for one tag segment. Each entry is true
@@ -127,10 +139,9 @@ function trackSection(tag, sections, visible) {
   if (open) {
     const attrs = open[1];
     if (attrs.trimEnd().endsWith("/")) return;   // self-closing: nothing to scope
-    const cls = CLASS_ATTR_RE.exec(attrs);
-    const classes = cls ? (cls[1] ?? cls[2] ?? cls[3]).split(/\s+/) : [];
-    const idm = ID_ATTR_RE.exec(attrs);
-    const id = idm ? (idm[1] ?? idm[2] ?? idm[3]) : null;
+    const parsed = parseAttrs(attrs);
+    const classes = (parsed.get("class") ?? "").split(/\s+/);
+    const id = parsed.has("id") ? parsed.get("id") : null;
     sections.push(classes.includes("secret") && !classes.includes("revealed") && !(id !== null && visible.has(id)));
   } else if (SECTION_CLOSE_RE.test(tag)) {
     sections.pop();

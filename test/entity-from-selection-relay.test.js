@@ -238,3 +238,12 @@ describe("handleEntityRequest visible secrets (GM)", () => {
     expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ maskSecrets: false, visibleSecretIds: [] }));
   });
 });
+
+describe("handleEntityRequest group normalisation (final review)", () => {
+  it("a malformed group the player's render ignores does not make a secret visible to the GM count", async () => {
+    const env = gmEnv({ reveals: { "secret-g": { users: [], groups: ["gX"], all: false, revealedAt: 1 } } });
+    env.groups = [{ id: "gX", members: ["u1"] }];   // no name: normalizeGroups drops it
+    await handleEntityRequest(payload(), "u1", env);
+    expect(env.run).toHaveBeenCalledWith(expect.objectContaining({ visibleSecretIds: [] }));
+  });
+});

@@ -12,6 +12,7 @@ import { validateSelectionRequest } from "../logic/entity-from-selection.mjs";
 import { isContributor, campaignOf, campaignFlagOf } from "../logic/campaigns.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
 import { visibleSecretIds } from "../logic/reveal-state.mjs";
+import { normalizeGroups } from "../logic/player-groups.mjs";
 import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
 
 const FIELDS = ["pageUuid", "fieldKey", "text", "occurrence", "total", "type", "name", "linkOthers", "entityUuid"];
@@ -81,7 +82,10 @@ export async function handleEntityRequest(payload, senderId, env = foundryEnv())
     // set comes from the live page and the socket sender, never the payload.
     const maskSecrets = page.testUserPermission?.(sender, "OWNER") !== true;
     const visible = maskSecrets
-      ? [...visibleSecretIds(page.getFlag?.(MODULE_ID, "secretReveals"), sender.id, env.groups)]
+      ? [...visibleSecretIds(page.getFlag?.(MODULE_ID, "secretReveals"), sender.id,
+        // Normalised exactly as the player's render does (secrets-ui.mjs), so a
+        // malformed group can't count as visible here yet be hidden there.
+        normalizeGroups(env.groups))]
       : [];
     return reply(await (linkMode ? env.runLink : env.run)({ ...pick(payload), maskSecrets, visibleSecretIds: visible }));
   } catch (err) {

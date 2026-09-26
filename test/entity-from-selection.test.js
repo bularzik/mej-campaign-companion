@@ -279,3 +279,25 @@ describe("linkedToastArgs", () => {
     expect(linkedToastArgs("", "Vex")).toEqual(["linkedNoType", { name: "Vex" }]);
   });
 });
+
+describe("linkSelectionInSource attribute parsing (final review)", () => {
+  const link = (text, occurrence, total, html, opts) =>
+    linkSelectionInSource(html, { text, occurrence, total, uuid: U }, opts);
+  it("an id= inside another attribute's value is not the section id", () => {
+    const html = `<section class="secret" title="see id=secret-a" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBeNull();
+  });
+  it("data-class does not hide the real class=secret", () => {
+    const html = `<section data-class="x" class="secret" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBeNull();
+  });
+  it("a class= inside another attribute's value is not the section class", () => {
+    const html = `<section title='class="secret revealed"' class="secret" id="secret-z"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBeNull();
+  });
+  it("unquoted and single-quoted attributes still parse", () => {
+    const html = `<section class=secret id='secret-a'><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      `<section class=secret id='secret-a'><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});
