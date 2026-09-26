@@ -9,37 +9,12 @@
 // report channel, so the drop is silent here. Regions come from
 // logic/link-targets.mjs so session recaps and GM notes are covered;
 // candidates are limited to the page's campaign scope.
+// Candidate building lives in hooks/link-candidates.mjs (shared with Link to Entity).
 import { autoLinkAdded } from "../logic/auto-link.mjs";
-import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
-import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
-import { linkableRegions, sameLinkScope } from "../logic/link-targets.mjs";
-import { campaignIdOf, isLinkableEntity } from "../logic/campaigns.mjs";
-import { isVisibleToUser } from "../logic/hub-index.mjs";
+import { dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
+import { linkableRegions } from "../logic/link-targets.mjs";
 import { MODULE_ID, AUTO_LINK_SETTING, NO_AUTO_LINK_FLAG } from "../constants.mjs";
-import { mejType } from "../integrations/mej-adapter.mjs";
-
-/**
- * Linkable candidates for one region of a page: every other MEJ-typed
- * JournalEntry in the page's campaign scope whose viewer set contains the
- * region's viewers. A gmOnly region (session GM notes) has no non-GM
- * viewers, so containment passes for every entity in scope.
- */
-function buildCandidates(page, region) {
-  const users = game.users.contents;
-  const pageViewers = region.gmOnly ? [] : viewerIds(page.parent, users, isVisibleToUser);
-  const pageCampaignId = campaignIdOf(page);
-  const pages = game.journal
-    .filter((entry) => isLinkableEntity(entry, mejType)
-      && sameLinkScope(pageCampaignId, campaignIdOf(entry)))
-    .map((entry) => ({
-      id: entry.id,
-      uuid: entry.uuid,
-      name: entry.name,
-      indexable: true,
-      visible: audienceContains(pageViewers, viewerIds(entry, users, isVisibleToUser))
-    }));
-  return dropAmbiguousNames(selectCandidates({ pages, selfId: page.parent?.id })).kept;
-}
+import { linkCandidates } from "./link-candidates.mjs";
 
 /**
  * On a committed page save, wrap newly-added MEJ entry-name mentions in
@@ -68,7 +43,7 @@ export function registerAutoLink() {
       for (const region of linkableRegions(page)) {
         const next = foundry.utils.getProperty(changes, region.key);
         if (typeof next !== "string" || !next) continue;
-        const candidates = buildCandidates(page, region);
+        const candidates = dropAmbiguousNames(linkCandidates(page, region)).kept;
         if (!candidates.length) continue;
         // Baseline = the field as of the last save that ran this hook (see
         // the baseline note above): only words added since then are linked.
