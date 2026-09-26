@@ -227,3 +227,46 @@ describe("safeMatches", () => {
     expect(log).toHaveBeenCalledWith(expect.any(String), err);
   });
 });
+
+describe("linkSelectionInSource viewer-aware masking", () => {
+  const link = (text, occurrence, total, html, opts) =>
+    linkSelectionInSource(html, { text, occurrence, total, uuid: U }, opts);
+
+  it("a secret revealed to everyone (class 'revealed') counts and can be linked", () => {
+    const html = `<p>Elara</p><section class="secret revealed" id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 1, 2, html, { maskSecrets: true })).toBe(
+      `<p>Elara</p><section class="secret revealed" id="secret-a"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+  it("a secret whose id is in visibleSecretIds counts; others stay masked", () => {
+    const html = `<p>Elara</p><section class="secret" id="secret-a"><p>Elara</p></section><section class="secret" id="secret-b"><p>Elara</p></section>`;
+    const opts = { maskSecrets: true, visibleSecretIds: new Set(["secret-a"]) };
+    expect(link("Elara", 0, 2, html, opts)).toBe(html.replace("<p>Elara</p><section", `<p>@UUID[${U}]{Elara}</p><section`));
+    expect(link("Elara", 1, 2, html, opts)).toBe(
+      html.replace(`id="secret-a"><p>Elara</p>`, `id="secret-a"><p>@UUID[${U}]{Elara}</p>`));
+    expect(link("Elara", 2, 3, html, opts)).toBeNull();
+  });
+  it("accepts an array of ids", () => {
+    const html = `<section class="secret" id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      `<section class="secret" id="secret-a"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+  it("a hidden secret nested in a visible one is masked", () => {
+    const html = `<section class="secret revealed" id="secret-a"><p>Elara</p><section class="secret" id="secret-b"><p>Elara</p></section></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true })).toBe(
+      html.replace(`id="secret-a"><p>Elara</p>`, `id="secret-a"><p>@UUID[${U}]{Elara}</p>`));
+  });
+  it("a visible secret nested in a hidden one is masked", () => {
+    const html = `<section class="secret" id="secret-b"><section class="secret revealed" id="secret-a"><p>Elara</p></section></section><p>Elara</p>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBe(
+      html.replace("</section><p>Elara</p>", `</section><p>@UUID[${U}]{Elara}</p>`));
+  });
+  it("data-id is not id", () => {
+    const html = `<section class="secret" data-id="secret-a"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { maskSecrets: true, visibleSecretIds: ["secret-a"] })).toBeNull();
+  });
+  it("without maskSecrets the visible set is irrelevant (everything counts)", () => {
+    const html = `<section class="secret" id="secret-b"><p>Elara</p></section>`;
+    expect(link("Elara", 0, 1, html, { visibleSecretIds: [] })).toBe(
+      `<section class="secret" id="secret-b"><p>@UUID[${U}]{Elara}</p></section>`);
+  });
+});

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeAudience, canSee, isRevealed, toggleUser, toggleGroup, setAll,
-  resolveRecipients, pruneReveals
+  resolveRecipients, pruneReveals, visibleSecretIds
 } from "../scripts/logic/reveal-state.mjs";
 
 const GROUPS = [
@@ -87,5 +87,26 @@ describe("pruneReveals", () => {
     expect(changed).toBe(true);
     const same = pruneReveals(map, ["secret-a", "secret-b"]);
     expect(same.changed).toBe(false);
+  });
+});
+
+describe("visibleSecretIds", () => {
+  const groups = [{ id: "gA", name: "A", members: ["u1"] }];
+  const reveals = {
+    "secret-u": { users: ["u1"], groups: [], all: false, revealedAt: 1 },
+    "secret-g": { users: [], groups: ["gA"], all: false, revealedAt: 1 },
+    "secret-all": { users: [], groups: [], all: true, revealedAt: 1 },
+    "secret-none": { users: [], groups: [], all: false, revealedAt: null },
+    "secret-other": { users: ["u2"], groups: [], all: false, revealedAt: 1 }
+  };
+  it("returns the ids whose audience includes the user directly, by group, or via legacy all", () => {
+    expect([...visibleSecretIds(reveals, "u1", groups)].sort()).toEqual(["secret-all", "secret-g", "secret-u"]);
+  });
+  it("group membership resolves against the live list", () => {
+    expect(visibleSecretIds(reveals, "u1", []).has("secret-g")).toBe(false);
+  });
+  it("non-object reveals → empty set", () => {
+    expect(visibleSecretIds(null, "u1", groups).size).toBe(0);
+    expect(visibleSecretIds("x", "u1", groups).size).toBe(0);
   });
 });

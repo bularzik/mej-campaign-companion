@@ -108,16 +108,25 @@ function maskedRanges(decoded) {
 const SECTION_OPEN_RE = /^<section\b([^>]*)>$/i;
 const SECTION_CLOSE_RE = /^<\/section\s*>$/i;
 const CLASS_ATTR_RE = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+// (?:^|\s) so data-id="…" is not read as the section's id.
+const ID_ATTR_RE = /(?:^|\s)id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
 
-/** Push/pop the open-section stack for one tag segment. */
-function trackSection(tag, sections) {
+/**
+ * Push/pop the open-section stack for one tag segment. Each entry is true
+ * when that section HIDES its content from the requester: a secret that is
+ * neither revealed to everyone (class `revealed`, which Foundry keeps for
+ * non-owners) nor in `visible` (ids revealed to this requester).
+ */
+function trackSection(tag, sections, visible) {
   const open = SECTION_OPEN_RE.exec(tag);
   if (open) {
     const attrs = open[1];
     if (attrs.trimEnd().endsWith("/")) return;   // self-closing: nothing to scope
     const cls = CLASS_ATTR_RE.exec(attrs);
     const classes = cls ? (cls[1] ?? cls[2] ?? cls[3]).split(/\s+/) : [];
-    sections.push(classes.includes("secret"));
+    const idm = ID_ATTR_RE.exec(attrs);
+    const id = idm ? (idm[1] ?? idm[2] ?? idm[3]) : null;
+    sections.push(classes.includes("secret") && !classes.includes("revealed") && !(id !== null && visible.has(id)));
   } else if (SECTION_CLOSE_RE.test(tag)) {
     sections.pop();
   }
@@ -130,19 +139,23 @@ function trackSection(tag, sections) {
  * eligible count differs from the rendered `total` the capture saw, or the
  * occurrence does not exist - the caller then reports "could not link".
  *
- * `maskSecrets`: also treat everything inside a `<section class="secret">`
- * (and any sections nested in it) as masked, the way enrichers are. The
- * relay sets it when the requester does not own the page, because Foundry
- * only renders secrets for owners: their `total` never includes secret
- * text, and an inflated total must not reach into (or probe) a secret.
+ * `maskSecrets`: also treat everything inside a secret section the requester
+ * cannot see (and any sections nested in it) as masked, the way enrichers
+ * are. The relay sets it when the requester does not own the page: Foundry
+ * renders only `revealed` secrets for non-owners and the companion injects
+ * the ones revealed to that user (`visibleSecretIds`, section ids; any
+ * iterable). Their `total` covers exactly those, and an inflated total must
+ * not reach into (or probe) a secret they cannot see.
  */
-export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid }, { maskSecrets = false } = {}) {
+export function linkSelectionInSource(sourceHtml, { text, occurrence, total, uuid },
+  { maskSecrets = false, visibleSecretIds = null } = {}) {
   if (typeof sourceHtml !== "string" || !sourceHtml || !text) return null;
   const segs = tokenizeHtml(sourceHtml);
   const hits = [];
-  const sections = [];   // open <section> stack: true = a secret section
+  const sections = [];   // open <section> stack: true = hides its content
+  const visible = new Set(visibleSecretIds ?? []);
   segs.forEach((seg, segIndex) => {
-    if (seg.type === "tag") return trackSection(seg.raw, sections);
+    if (seg.type === "tag") return trackSection(seg.raw, sections, visible);
     if (seg.type !== "text") return;
     if (maskSecrets && sections.includes(true)) return;
     const { decoded, map } = decodeWithMap(seg.raw);

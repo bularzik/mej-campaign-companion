@@ -77,3 +77,18 @@ export function pruneReveals(revealMap, liveIds) {
   }
   return { map, changed };
 }
+
+/**
+ * Secret section ids whose audience includes `userId` (spec 2026-09-26
+ * selection-secret-visibility §2.1): the GM-side mirror of what
+ * injectPlayerSecrets shows that player. `reveals` = the page's
+ * secretReveals flag map (section id → audience).
+ */
+export function visibleSecretIds(reveals, userId, groups) {
+  const ids = new Set();
+  if (!reveals || typeof reveals !== "object") return ids;
+  for (const [id, audience] of Object.entries(reveals)) {
+    if (canSee(audience, userId, groups)) ids.add(id);
+  }
+  return ids;
+}
