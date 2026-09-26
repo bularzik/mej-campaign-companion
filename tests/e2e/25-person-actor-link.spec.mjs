@@ -245,4 +245,42 @@ test.describe("25 person to actor link", () => {
       await ctx.close();
     }
   });
+
+  test("MEJ's own drop path stores the link but copies nothing when the linking player can't observe the actor", async ({ page, browser }) => {
+    test.setTimeout(120_000);
+    await login(page, "Gamemaster");
+    // LIMITED: below the OBSERVER floor the picker itself enforces, so this
+    // link can only happen through MEJ's own drop path, which does no
+    // permission check of its own (C1).
+    const actor = await createActor(page, N.actor, { ownershipDefault: 1 });
+    const person = await createPerson(page, N.person, { ownershipDefault: 3 });
+
+    const ctx = await browser.newContext(VIEWPORT);
+    const player = await ctx.newPage();
+    const errors = trackConsoleErrors(player, { ignore: IGNORE });
+    try {
+      await login(player, "User 1");
+      const before = await pageState(player, person.id);
+      // Proves the sync hook is wired (same readiness signal as the
+      // "MEJ's own link path" test above) before the direct setFlag below.
+      const shell = await openEntry(player, person.id);
+      await expect(control(shell, "link")).toBeVisible({ timeout: 10_000 });
+
+      await player.evaluate(async ({ entryId, actorId, F }) => {
+        const a = game.actors.get(actorId);
+        const p = game.journal.get(entryId).pages.contents[0];
+        await p.setFlag(F, "actor", { id: a.id, uuid: a.uuid, img: a.img, name: a.name, quantity: "1", type: a.flags[F]?.type });
+      }, { entryId: person.id, actorId: actor.id, F });
+      await settle(player, 1500);
+
+      const after = await pageState(player, person.id);
+      expect(after.link).toMatchObject({ id: actor.id, uuid: actor.uuid, quantity: "1" });
+      expect(after.src).toBe(before.src);
+      expect(after.content).toBe(before.content);
+      expect(after.myNotes).toBeNull();
+      assertNoConsoleErrors(errors);
+    } finally {
+      await ctx.close();
+    }
+  });
 });

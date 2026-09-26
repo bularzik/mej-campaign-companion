@@ -65,6 +65,9 @@ export function linkedActorId(page) {
   const link = page?.flags?.[MEJ_FLAG]?.actor;
   if (typeof link === "string") return WORLD_ACTOR_UUID.exec(link)?.[1] ?? null; // legacy uuid string
   if (!link || typeof link !== "object" || link.pack) return null;
+  // A compendium uuid outranks a present id: MEJ's v13/v14 compendium drop
+  // does not always set `pack`, so a non-world uuid is the only tell.
+  if (typeof link.uuid === "string" && link.uuid && !WORLD_ACTOR_UUID.test(link.uuid)) return null;
   if (typeof link.id === "string" && link.id) return link.id;
   return typeof link.uuid === "string" ? (WORLD_ACTOR_UUID.exec(link.uuid)?.[1] ?? null) : null;
 }

@@ -13,7 +13,8 @@ function foundryEnv() {
     userId: game.user.id,
     isActiveGM: game.user === game.users.activeGM,
     actors: game.actors,
-    journal: game.journal
+    journal: game.journal,
+    canObserve: (actor) => actor.testUserPermission(game.user, "OBSERVER")
   };
 }
 
@@ -24,12 +25,21 @@ export async function onPageUpdate(page, changes, options, userId, env = foundry
   if (!actorId) return; // unlinked, or a compendium link
   const actor = env.actors.get(actorId);
   if (!actor) return;
+  // A player can drag (or @UUID-link) an actor they only have LIMITED
+  // permission on; MEJ's own drop path does no permission check. Store the
+  // link (already done by the caller) but copy nothing from an actor this
+  // user cannot even open the sheet of.
+  if (!env.canObserve(actor)) return;
   const update = linkSyncUpdate(page, actor, env.userId);
   if (update) await page.update(update);
 }
 
 export async function onActorUpdate(actor, changes, options, userId, env = foundryEnv()) {
   if (!env.isActiveGM || !changes || !("img" in changes)) return;
+  // Foundry fires updateActor for a synthetic unlinked-token actor (same id
+  // as its world actor) and for a compendium actor (pack set) alike; only
+  // the world actor itself should repaint every Person linked to it.
+  if (actor.isToken || actor.pack || env.actors.get(actor.id) !== actor) return;
   for (const { entryId, updates } of imageFollowPlan(actor, env.journal)) {
     await env.journal.get(entryId)?.updateEmbeddedDocuments("JournalEntryPage", updates);
   }

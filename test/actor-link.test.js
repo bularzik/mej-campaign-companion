@@ -80,6 +80,9 @@ describe("linkedActorId", () => {
     expect(linkedActorId(personPage({ actor: { uuid: "Scene.s.Token.t.Actor.a" } }))).toBeNull();
     expect(linkedActorId(personPage())).toBeNull();
   });
+  it("ignores a compendium uuid even when id is set and pack is absent (MEJ's v13/v14 compendium drop shape)", () => {
+    expect(linkedActorId(personPage({ actor: { id: "a1", uuid: "Compendium.x.y.Actor.a1" } }))).toBeNull();
+  });
 });
 
 describe("linkChanged", () => {

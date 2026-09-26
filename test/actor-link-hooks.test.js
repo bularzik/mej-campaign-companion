@@ -7,7 +7,10 @@ const actor = { id: "a1", uuid: "Actor.a1", img: "new.webp", system: { details: 
 function page({ link = { id: "a1" }, src = "old.webp", content = "", type = "person" } = {}) {
   return { id: "p1", src, text: { content }, flags: { [F]: { type, actor: link } }, update: vi.fn(async () => {}) };
 }
-const env = (over = {}) => ({ userId: "u1", isActiveGM: false, actors: new Map([["a1", actor]]), journal: [], ...over });
+const env = (over = {}) => ({
+  userId: "u1", isActiveGM: false, actors: new Map([["a1", actor]]), journal: [],
+  canObserve: () => true, ...over
+});
 const linkDiff = { flags: { [F]: { actor: { id: "a1" } } } };
 
 describe("onPageUpdate", () => {
@@ -41,6 +44,11 @@ describe("onPageUpdate", () => {
     await onPageUpdate(p, linkDiff, {}, "u1", env());
     expect(p.update).not.toHaveBeenCalled();
   });
+  it("writes nothing - not even the image - when the linking user cannot observe the actor (C1)", async () => {
+    const p = page();
+    await onPageUpdate(p, linkDiff, {}, "u1", env({ canObserve: () => false }));
+    expect(p.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("onActorUpdate", () => {
@@ -59,6 +67,24 @@ describe("onActorUpdate", () => {
     const { list, entry } = journalOf([page()]);
     await onActorUpdate(actor, { img: "new.webp" }, {}, "u9", env({ isActiveGM: false, journal: list }));
     await onActorUpdate(actor, { name: "Renamed" }, {}, "u9", env({ isActiveGM: true, journal: list }));
+    expect(entry.updateEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+  it("ignores a synthetic unlinked-token actor sharing the world actor's id (I2)", async () => {
+    const { list, entry } = journalOf([page()]);
+    const tokenActor = { ...actor, isToken: true };
+    await onActorUpdate(tokenActor, { img: "new.webp" }, {}, "u9", env({ isActiveGM: true, journal: list }));
+    expect(entry.updateEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+  it("ignores a compendium copy sharing the world actor's id (I2)", async () => {
+    const { list, entry } = journalOf([page()]);
+    const compendiumActor = { ...actor, pack: "world.actors" };
+    await onActorUpdate(compendiumActor, { img: "new.webp" }, {}, "u9", env({ isActiveGM: true, journal: list }));
+    expect(entry.updateEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+  it("ignores a different object with the same id as the world actor (I2)", async () => {
+    const { list, entry } = journalOf([page()]);
+    const impostor = { ...actor };
+    await onActorUpdate(impostor, { img: "new.webp" }, {}, "u9", env({ isActiveGM: true, journal: list }));
     expect(entry.updateEmbeddedDocuments).not.toHaveBeenCalled();
   });
 });
