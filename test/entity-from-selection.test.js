@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   ENTITY_TYPES, qualifySelection, countOccurrences, linkSelectionInSource, validateSelectionRequest,
-  normalizeEntityName, matchingEntities
+  normalizeEntityName, matchingEntities, safeMatches
 } from "../scripts/logic/entity-from-selection.mjs";
 
 const U = "JournalEntry.abc";
@@ -213,5 +213,17 @@ describe("validateSelectionRequest link mode", () => {
     [{ text: " Elara " }, {}, "bad-selection"]
   ])("rejects %j %j as %s", (patch, cpatch, reason) => {
     expect(v(patch, cpatch)).toEqual({ ok: false, reason });
+  });
+});
+
+describe("safeMatches", () => {
+  it("returns the computed matches", () => {
+    expect(safeMatches(() => [{ name: "Vex", uuid: "A" }], () => {})).toEqual([{ name: "Vex", uuid: "A" }]);
+  });
+  it("a throw in candidate building yields [] (Create stays offered) and is logged", () => {
+    const log = vi.fn();
+    const err = new Error("bad entry");
+    expect(safeMatches(() => { throw err; }, log)).toEqual([]);
+    expect(log).toHaveBeenCalledWith(expect.any(String), err);
   });
 });

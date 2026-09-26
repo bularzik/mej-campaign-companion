@@ -43,6 +43,20 @@ export function matchingEntities(text, candidates) {
   return (candidates ?? []).filter((c) => normalizeEntityName(c?.name) === key);
 }
 
+/**
+ * Matches for the context-menu callbacks: a throw in candidate building (an
+ * odd entry, a permission lookup) yields [] so Create stays offered and the
+ * menu itself still renders; the error is logged, not swallowed silently.
+ */
+export function safeMatches(compute, logError) {
+  try {
+    return compute() ?? [];
+  } catch (err) {
+    logError("link-to-entity: matching failed", err);
+    return [];
+  }
+}
+
 const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00A0" };
 const ENTITY_RE = /&(#\d+|#x[0-9a-f]+|[a-z]+);/iy;
 

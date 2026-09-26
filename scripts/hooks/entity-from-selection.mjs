@@ -26,6 +26,7 @@ import { captureSelection } from "../logic/selection-capture.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
 import { campaignOf, campaignFlagOf, isContributor } from "../logic/campaigns.mjs";
 import { runEntityFromSelection, runLinkSelection } from "../logic/entity-from-selection-run.mjs";
+import { safeMatches } from "../logic/entity-from-selection.mjs";
 import { promptEntityFromSelection } from "../apps/entity-from-selection-dialog.mjs";
 import { promptLinkTarget } from "../apps/link-to-entity-dialog.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -122,7 +123,8 @@ export function eligibilityFromCapture(sheet, target) {
   const fieldKey = lastCapture.display.dataset.key;
   if (!linkableRegions(page).some((r) => r.key === fieldKey)) return null;
   // Link to Entity (spec 2026-09-26 §4.4): existing entities the selection names.
-  const matches = () => matchesForField(page, fieldKey, capture.text);
+  const matches = () => safeMatches(() => matchesForField(page, fieldKey, capture.text),
+    (msg, err) => console.error(`${MODULE_ID} | ${msg}`, err));
   if (game.user.isGM) return sheet.isEditable ? { page, fieldKey, capture, relay: false, matches: matches() } : null;
   const campaign = campaignOf(page);
   if (!campaign || !game.users.activeGM) return null;
