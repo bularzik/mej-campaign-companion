@@ -47,7 +47,8 @@ when what they wanted was the selection linked to the existing entity.
      ({reason})` error is **not** reused; link failures use
      `Could not link the selection ({reason}).` with the existing reason
      strings plus `bad-entity` ("that entity is not a match for the
-     selection").
+     selection") and `link-failed` ("linking failed", used where Create
+     would report `create-failed`: an unexpected throw on either path).
    - No GM answers a contributor's relayed request: warning `No GM
      responded; nothing was linked.`
 
@@ -152,7 +153,7 @@ No `createMejEntry`, no `runRetroPass`.
 
 `menuLink` "Link to Entity"; `pickTitle` "Link to Entity"; `pickLabel`
 "Entity"; `link` "Link"; `linked`; `linkedNot`; `linkFailed`; `noGmLink`;
-`rejected.bad-entity` — texts as in §2.
+`rejected.bad-entity`; `rejected.link-failed` — texts as in §2.
 
 ## 5. Out of scope
 
