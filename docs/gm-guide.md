@@ -72,7 +72,7 @@ A **header bar** runs across the top of the Hub, above the pane tabs. Left to ri
 - The **campaign picker** scopes every pane. [Campaigns](#campaigns) below covers it in full.
 - The **gear** is **Campaign settings**, and it appears only while the picker is scoped to one campaign — it isn't there in **All campaigns** or **Unfiled**.
 - **New Session** creates a Session entry, as above.
-- **Tools** opens a small menu with four items: **Import Document**, **Export**, **Auto-capture campaign**, and **Open the user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else).
+- **Tools** opens a small menu with four items: **Import Document**, **Export**, **Auto-capture campaign**, and **Open the user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
 
 Below the header bar are **six panes**: **Index**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. A player sees five — the Secrets tab isn't rendered for a non-GM at all. This section covers Index and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
 
@@ -168,6 +168,8 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
 - **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
 - **Show mention links**, a checkbox, layers `@UUID` backlinks on top of the relationship edges. It's off by default.
+
+Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node opens its entry.
 
 The graph is capped at the **200 most-connected** entries, for performance — additional nodes, and the links to them, are left out of the view. When that happens it says so above the canvas: "Too many entries to draw — filter to reduce (showing the most-connected 200)." Scope the Hub to a single campaign to get back under the cap.
 
