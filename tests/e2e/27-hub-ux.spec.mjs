@@ -97,4 +97,35 @@ test.describe("27 Hub UX", () => {
     await expect(shell.locator(".mej-cc-sort-menu")).toHaveCount(0);
     assertNoConsoleErrors(errors);
   });
+
+  test("timeline: a long timeline scrolls and keeps its controls visible", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+    const tlId = await page.evaluate(async (name) => {
+      const { createTimeline } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+      const Timepoints = await import("/modules/mej-campaign-companion/scripts/data/timepoints.mjs");
+      const journal = await createTimeline({ campaign: null, name });
+      for (let i = 1; i <= 40; i++) await Timepoints.addTimepoint(journal, `${name} point ${i}`);
+      return journal.id;
+    }, `${TT_PREFIX}Long timeline`);
+    try {
+      const shell = await openHubTab(page, "timeline");
+      await shell.locator('select[name="timeline-select"]').selectOption(tlId);
+      const last = shell.locator(".mej-cc-timepoint-label", { hasText: `${TT_PREFIX}Long timeline point 40` });
+      await expect(last).toHaveCount(1);
+      const pane = shell.locator(".mej-cc-timeline .mej-cc-timeline-scroll");
+      const m = await pane.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+      expect(m.sh).toBeGreaterThan(m.ch);
+      // Scroll as a user does. Setting scrollTop from script would "work"
+      // even on the old overflow:hidden pane, so it proves nothing.
+      await pane.hover();
+      for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 400);
+      await expect.poll(() => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      await expect(last).toBeInViewport();
+      await expect(shell.locator(".mej-cc-timeline-controls")).toBeInViewport();
+    } finally {
+      await page.evaluate((id) => game.journal.get(id)?.delete(), tlId);
+    }
+    assertNoConsoleErrors(errors);
+  });
 });

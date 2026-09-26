@@ -279,6 +279,20 @@
   padding: 0.5em;
 }
 
+/* The Hub's .tab-inner clips (overflow:hidden) and the timeline stacks had no
+   height bound, so a long timeline - or several stacks in All campaigns
+   scope - was cut off. The stacks now sit in their own scroll area under the
+   controls row, which therefore stays in view without needing a background
+   of its own (spec 2026-09-25 hub-ux-fixes §2). */
+.mej-cc-timeline-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
 /* Modelled on .mej-cc-index-controls above - every other control row in this
    file is a flex row, and this one (the newest, from the multi-timeline work)
    was simply never given a rule, so it stayed display:block and stacked. */

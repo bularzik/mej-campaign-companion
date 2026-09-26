@@ -116,6 +116,7 @@
                                     data-tooltip="{{localize 'MEJCampaignCompanion.hub.timeline.deleteTitle'}}"><i class="fa-solid fa-trash"></i></button>
                             {{/if}}
                         </div>
+                        <div class="mej-cc-timeline-scroll">
                         {{#each timeline.stacks}}
                         <div class="mej-cc-timeline-stack" data-journal-id="{{this.journalId}}">
                             {{#if this.name}}<h3 class="mej-cc-timeline-campaign">{{this.name}}</h3>{{/if}}
@@ -175,6 +176,7 @@
                         {{#unless timeline.stacks.length}}
                         <p class="mej-cc-timeline-empty">{{localize "MEJCampaignCompanion.hub.timelineEmptyScope"}}</p>
                         {{/unless}}
+                        </div>
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.graph.active}} active{{/if}}" data-group="primary" data-tab="graph">
