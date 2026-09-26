@@ -14,7 +14,7 @@
                         </div>
                         {{/if}}
                         <div class="mej-cc-index-controls">
-                            <div class="mej-cc-doctype-filter">
+                            <div class="mej-cc-doctype-filter" data-cc-menu="type">
                                 <button type="button" class="mej-cc-doctype-summary" data-action="toggleTypeMenu"
                                         aria-haspopup="true" aria-expanded="{{#if index.typeMenuOpen}}true{{else}}false{{/if}}"
                                         data-tooltip="{{localize 'MEJCampaignCompanion.hub.typeFilter'}}">
@@ -32,7 +32,7 @@
                                 </div>
                                 {{/if}}
                             </div>
-                            <div class="mej-cc-sort-filter">
+                            <div class="mej-cc-sort-filter" data-cc-menu="sort">
                                 <button type="button" class="mej-cc-sort-summary" data-action="toggleSortMenu"
                                         aria-haspopup="true" aria-expanded="{{#if index.sortMenuOpen}}true{{else}}false{{/if}}"
                                         data-tooltip="{{localize 'MEJCampaignCompanion.hub.sortBy'}}">
