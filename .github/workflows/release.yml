@@ -1,0 +1,73 @@
+# Release on a version tag. To cut a release:
+#   1. bump "version" in module.json and add a "## x.y.z (YYYY-MM-DD)" section
+#      to CHANGELOG.md, and merge that to main;
+#   2. tag the merge commit with the bare version and push the tag:
+#        git tag -a 0.24.0 <commit> -m "0.24.0" && git push origin 0.24.0
+# The committed module.json version is the source of truth: a tag that does
+# not match it fails the run instead of publishing. The release notes are the
+# tag's CHANGELOG section; the assets are module.zip and module.json (the
+# manifest URL in module.json points at releases/latest/download/module.json).
+name: release
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Same gates as test.yml (e2e needs a live Foundry and is not run here).
+      - run: npm test
+      - run: npm run check:links
+      - run: npm run check:vendor
+
+      - name: Tag matches module.json version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(jq -r .version module.json)
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match module.json version $VERSION"
+            exit 1
+          fi
+
+      - name: Release notes from CHANGELOG
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          awk -v tag="$TAG" '
+            index($0, "## " tag " ") == 1 { on=1; next }
+            on && /^## /                    { exit }
+            on                              { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no \"## $TAG (...)\" section"
+            exit 1
+          fi
+
+      - name: Build module.zip
+        run: |
+          zip -r module.zip \
+            module.json README.md CHANGELOG.md LICENSE \
+            assets lang scripts styles templates vendor \
+            docs/gm-guide.md docs/player-guide.md docs/manual-test-checklist.md \
+            docs/images
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: notes.md
+          make_latest: true
+          files: |
+            module.zip
+            module.json
