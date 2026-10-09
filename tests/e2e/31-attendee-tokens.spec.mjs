@@ -51,8 +51,11 @@ test.describe("31 attendee tokens", () => {
     const shell = page.locator("#MonksEnhancedJournal");
     await expect(shell).toContainText(pcName);
 
+    // The attendees live on the Session tab, which is not the default one.
+    await shell.locator('nav.tabs a[data-tab="session"]').first().click();
     const tiles = shell.locator(".attendees-list .mej-cc-attendee");
     await expect(tiles).toHaveCount(2);
+    await expect(tiles.first()).toBeVisible();
     for (const box of await tiles.locator(".mej-cc-attendee-token").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
       expect(box.width).toBeGreaterThan(24);
       expect(box.width).toBeLessThanOrEqual(80);
