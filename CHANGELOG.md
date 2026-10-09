@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed:** the Session sheet's attendee images were far too large. Attendees are now a row of small round tokens with the character name below and, when a player owns the character, the player's name under that. The remove button appears on hover.
+- **Tests:** end-to-end spec `31-attendee-tokens` checks token size and the names.
+
 ## 0.24.0 (2026-10-09)
 
 Readable text on every Monk's Enhanced Journal background, and a check that players can use Campaign Companion.
