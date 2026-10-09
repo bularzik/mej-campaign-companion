@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.24.0 (2026-10-09)
 
-Readable text on every Monk's Enhanced Journal background.
+Readable text on every Monk's Enhanced Journal background, and a check that players can use Campaign Companion.
 
+- **Added:** when a GM logs in and Monk's Enhanced Journal's "Allow players to use Enhanced Journal" setting is off, Campaign Companion explains that it won't work properly for players and offers to turn the setting on. Connected players are asked to reload once it is on. "Don't show this again" silences it; the new **Warn when Campaign Companion can't work for players** setting brings it back.
 - **Fixed:** the Session sheet's field labels (Session Number, Campaign Date and its Year/Month/Day/Hour/Minute) were near-white on a light background under Foundry's dark colour scheme when Monk's Enhanced Journal's "Background Image" setting was parchment, marble, paper or wood (measured 1.03:1). The headings, tab strip, recap text and placeholder lines had the same problem.
 - **Fixed:** the reverse case. Under the light scheme with the Marble Black, Solid Black or Solid Grey background, companion text and fields in the journal window were near-black on black. This covered the Session sheet, the Hub, the knowledge panel, tag chips and attribute fields.
 - **Fixed:** companion text inside the journal window now follows the chosen background image, and follows the colour scheme only when no image is set. This covers the Hub's index, timeline, search and graph, the knowledge panel, secret audience buttons and query embeds. Secondary text (types, counts, the query header) and links reach WCAG AA contrast on every background; a few light-scheme spots were just under it before, such as the orange links at 2.09:1 and the grey "No secrets yet." lines at 2.78:1.

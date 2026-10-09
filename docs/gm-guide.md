@@ -26,9 +26,11 @@ The screenshot below is the Campaign Hub — the module's home base. You'll spen
 
 2. Open your world's **Manage Modules** dialog and enable **both** "Monk's Enhanced Journal" and "Campaign Companion for Monk's Enhanced Journal". Load order doesn't matter — Campaign Companion listens for MEJ's own setup hook regardless of which module's script loads first.
 
-3. Open **Configure Settings → Module Settings** and find the Campaign Companion section, shown below. You don't need to turn anything on to start using the module — campaigns, the Session sheet, the Hub, tags, the graph, secrets, and docx import/export all work with every setting left at its default. The five settings here (auto-link, retroactive auto-link, the two auto-capture toggles, and player-writable sessions) are opt-in conveniences you can turn on once you know you want them; [Settings reference](#settings-reference) below covers each one and when to flip it.
+3. Open **Configure Settings → Module Settings** and find the Campaign Companion section, shown below. You don't need to turn anything on to start using the module — campaigns, the Session sheet, the Hub, tags, the graph, secrets, and docx import/export all work with every setting left at its default. The six settings here (auto-link, retroactive auto-link, the two auto-capture toggles, player-writable sessions, and the player-access warning) are opt-in conveniences you can turn on once you know you want them; [Settings reference](#settings-reference) below covers each one and when to flip it.
 
-   ![Campaign Companion's module settings panel, showing all five visible settings with their descriptions](images/settings.png)
+   ![Campaign Companion's module settings panel, showing the visible settings with their descriptions](images/settings.png)
+
+**Player access.** Campaign Companion only works properly for players when Monk's Enhanced Journal's **"Allow players to use Enhanced Journal"** setting is on — with it off, players open every journal (including campaign entries and Sessions) in Foundry's default editor. MEJ ships with it off. When a GM logs in while it is off, Campaign Companion offers to turn it on; connected players are then asked to reload. Tick **Don't show this again** to stop the reminder; **Warn when Campaign Companion can't work for players** in the module settings brings it back.
 
 ## Running your first session
 
@@ -353,7 +355,7 @@ If your world moves between a build with the extension API and a stock build (in
 
 ## Settings reference
 
-Five settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
+Six settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
 
 ![Campaign Companion's module settings panel](images/settings.png)
 
@@ -362,6 +364,7 @@ Five settings are visible in **Configure Settings → Module Settings**, all wor
 - **Auto-Capture Encounters** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you'd rather have an Encounter entry appear automatically after every fight than create one yourself.
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.
+- **Warn when Campaign Companion can't work for players** (on by default) — see the **Player access** note under [Installation & first-time setup](#installation--first-time-setup). When a GM logs in while Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off, a dialog offers to turn it on; ticking **Don't show this again** turns this setting off, and you can switch it back on here.
 
 A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create Entity from Selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 

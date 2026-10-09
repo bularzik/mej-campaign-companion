@@ -151,3 +151,9 @@ export const ENTITY_FROM_SELECTION_LAST_TYPE_SETTING = "entityFromSelectionLastT
 export const ENTITY_FROM_SELECTION_ACTION = "entity-from-selection";
 export const ENTITY_FROM_SELECTION_RESULT_ACTION = "entity-from-selection-result";
 export const ENTITY_RELAY_TIMEOUT_MS = 15000;
+
+// GM player-access check (spec 2026-10-08). MEJ's world setting that lets
+// non-GMs use its window at all; the companion's own "warn" toggle.
+export const MEJ_MODULE_ID = "monks-enhanced-journal";
+export const MEJ_ALLOW_PLAYER_SETTING = "allow-player";
+export const WARN_PLAYER_ACCESS_SETTING = "warnPlayerAccess";
