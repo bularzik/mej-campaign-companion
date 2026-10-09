@@ -34,6 +34,10 @@
         "off": "Off",
         "confirm": "Confirm (review dialog)",
         "silent": "Silent (notification)"
+      },
+      "warnPlayerAccess": {
+        "name": "Warn when Campaign Companion can't work for players",
+        "hint": "When a GM logs in and Monk's Enhanced Journal's \"Allow players to use Enhanced Journal\" setting is off, explain that Campaign Companion won't work properly for players and offer to turn it on."
       }
     },
     "sheettype": {
@@ -469,6 +473,21 @@
       "pickerTitle": "Link Actor",
       "filter": "Filter actors…",
       "noActors": "There are no actors you can link."
+    },
+    "playerAccess": {
+      "title": "Campaign Companion: players need Enhanced Journal access",
+      "body1": "Campaign Companion won't work properly for your players while Monk's Enhanced Journal's <strong>\"Allow players to use Enhanced Journal\"</strong> setting is off.",
+      "body2": "With it off, players can't use the Campaign Hub, Session sheets, the knowledge panel or campaign entries the way the companion expects. Anything they open or create opens in Foundry's default journal editor instead.",
+      "body3": "Turn it on now to make Campaign Companion work for players?",
+      "dontShowAgain": "Don't show this again",
+      "enable": "Enable for players",
+      "notNow": "Not now",
+      "enabled": "Players can now use Campaign Companion. Connected players have been asked to reload.",
+      "failed": "Campaign Companion could not change the player-access settings. See the console for details.",
+      "reloadTitle": "Campaign Companion",
+      "reloadBody": "Your GM has enabled Campaign Companion for players. Reload now to use it?",
+      "reload": "Reload",
+      "later": "Later"
     }
   },
   "TYPES": {

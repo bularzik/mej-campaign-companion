@@ -3,9 +3,10 @@ import {
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
-  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING
+  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
+import { checkPlayerAccessOnLogin } from "./hooks/player-access.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly, readyWiring } from "./integrations/mej-adapter.mjs";
@@ -43,6 +44,17 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, AUTO_LINK_SETTING, {
     name: `${I18N}.settings.autoLink.name`,
     hint: `${I18N}.settings.autoLink.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  // GM player-access check (spec 2026-10-08): "Don't show this again" turns
+  // this off; ticking it in settings brings the check back.
+  game.settings.register(MODULE_ID, WARN_PLAYER_ACCESS_SETTING, {
+    name: `${I18N}.settings.warnPlayerAccess.name`,
+    hint: `${I18N}.settings.warnPlayerAccess.hint`,
     scope: "world",
     config: true,
     type: Boolean,
@@ -313,6 +325,9 @@ Hooks.once("ready", async () => {
   // Single shared socket listener for the whole module (media relay +
   // player recap relay) - see hooks/socket.mjs's header comment.
   registerSocketDispatcher();
+  // GM player-access check (spec 2026-10-08): fire-and-forget so the dialog
+  // never delays the migrations below.
+  checkPlayerAccessOnLogin();
 
   // A world that spent time on a stock MEJ install comes back with the MEJ
   // type flag scrubbed off its Session pages; put it back so MEJ's shell
