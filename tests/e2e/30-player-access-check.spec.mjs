@@ -26,9 +26,17 @@ const readAccess = (page) => page.evaluate(() => ({
 
 const accessDialog = (page) => page.locator("dialog.application.mej-campaign-companion-player-access");
 
+// World A (v14) players lack JOURNAL_CREATE; the test grants it and restores
+// the saved permissions in afterEach (idempotent: only when a copy was saved).
+let savedPermissions = null;
+
 test.describe("30 player access check", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gm) => {
+      if (savedPermissions) {
+        await gm.evaluate((perms) => game.settings.set("core", "permissions", perms), savedPermissions);
+        savedPermissions = null;
+      }
       await gm.evaluate(() => game.settings.set("mej-campaign-companion", "warnPlayerAccess", true));
       await ensureMejPlayerAccess(gm);
       await deleteJournalsByPrefix(gm, PREFIX);
@@ -39,6 +47,12 @@ test.describe("30 player access check", () => {
   test("GM enables player access; a connected player reloads and a new entity opens in MEJ", async ({ page, browser }) => {
     await login(page, "Gamemaster");
     await setAccess(page, { allow: false, warn: true });
+    savedPermissions = await page.evaluate(() => foundry.utils.deepClone(game.settings.get("core", "permissions")));
+    await page.evaluate(async () => {
+      const perms = foundry.utils.deepClone(game.settings.get("core", "permissions"));
+      perms.JOURNAL_CREATE = [...new Set([...(perms.JOURNAL_CREATE ?? []), CONST.USER_ROLES.PLAYER])];
+      await game.settings.set("core", "permissions", perms);
+    });
     const folderId = await page.evaluate(async (name) => {
       const { createCampaign } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
       return (await createCampaign(name)).id;
@@ -62,21 +76,10 @@ test.describe("30 player access check", () => {
       await player.waitForEvent("load", { timeout: 60_000 });
       await login(player, "User 1");
 
-      // Players cannot create journals by default, so the GM creates the entry
-      // (observer for everyone) and the player opens it from their own client.
+      // The original report: the player creates a new entity in a campaign folder.
       const entryName = `${PREFIX} Person`;
-      const entryId = await page.evaluate(async ({ name, folder }) => (await JournalEntry.create({
-        name, folder, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
-        flags: { "monks-enhanced-journal": { pagetype: "person" } }
-      })).id, { name: entryName, folder: folderId });
-      await player.waitForFunction((id) => !!game.journal?.get(id), entryId, { timeout: 15_000 });
-
-      const opened = await player.evaluate(async ({ name, id }) => {
-        // The player opens it the way they would: a click on its sidebar row.
-        await ui.sidebar.changeTab?.("journal", "primary");
-        const row = document.querySelector(`#journal [data-entry-id="${id}"], .journal-sidebar [data-entry-id="${id}"], [data-entry-id="${id}"]`);
-        if (!row) return { error: "sidebar row not found" };
-        (row.querySelector(".entry-name") ?? row).click();
+      const opened = await player.evaluate(async ({ name, folder }) => {
+        await JournalEntry.create({ name, folder, flags: { "monks-enhanced-journal": { pagetype: "person" } } }, { renderSheet: true });
         await new Promise((r) => setTimeout(r, 2500));
         const rendered = [...foundry.applications.instances.values()].filter((a) => a.rendered && a.document);
         return {
@@ -85,7 +88,7 @@ test.describe("30 player access check", () => {
           standalone: rendered.filter((a) => a.constructor.name !== "EnhancedJournal"
             && (a.document.name === name || a.document.parent?.name === name)).map((a) => a.constructor.name)
         };
-      }, { name: entryName, id: entryId });
+      }, { name: entryName, folder: folderId });
       expect(opened).toEqual({ inShell: true, standalone: [] });
     } finally {
       await playerContext.close();
