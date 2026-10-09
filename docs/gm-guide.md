@@ -30,6 +30,8 @@ The screenshot below is the Campaign Hub — the module's home base. You'll spen
 
    ![Campaign Companion's module settings panel, showing all five visible settings with their descriptions](images/settings.png)
 
+**Player access.** Campaign Companion only works properly for players when Monk's Enhanced Journal's **"Allow players to use Enhanced Journal"** setting is on — with it off, players open every journal (including campaign entries and Sessions) in Foundry's default editor. MEJ ships with it off. When a GM logs in while it is off, Campaign Companion offers to turn it on; connected players are then asked to reload. Tick **Don't show this again** to stop the reminder; **Warn when Campaign Companion can't work for players** in the module settings brings it back.
+
 ## Running your first session
 
 Create a Session entry the same way you'd create any other MEJ entry:

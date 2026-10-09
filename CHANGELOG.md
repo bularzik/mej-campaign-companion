@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Added:** when a GM logs in and Monk's Enhanced Journal's "Allow players to use Enhanced Journal" setting is off, Campaign Companion explains that it won't work properly for players and offers to turn the setting on. Connected players are asked to reload once it is on. "Don't show this again" silences it; the new **Warn when Campaign Companion can't work for players** setting brings it back.
+
 ## 0.23.0 (2026-09-26)
 
 Link to Entity from a selection.
