@@ -6,7 +6,7 @@ import {
   KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
-import { checkPlayerAccessOnLogin } from "./hooks/player-access.mjs";
+import { checkPlayerAccessOnLogin, registerPlayerAccessReloadPrompt } from "./hooks/player-access.mjs";
 import { shouldOwnSessionEntry } from "./logic/session-ownership.mjs";
 import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.mjs";
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly, readyWiring } from "./integrations/mej-adapter.mjs";
@@ -327,6 +327,7 @@ Hooks.once("ready", async () => {
   registerSocketDispatcher();
   // GM player-access check (spec 2026-10-08): fire-and-forget so the dialog
   // never delays the migrations below.
+  registerPlayerAccessReloadPrompt();
   checkPlayerAccessOnLogin();
 
   // A world that spent time on a stock MEJ install comes back with the MEJ

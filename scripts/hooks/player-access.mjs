@@ -4,7 +4,7 @@
 // it on. Decisions are pure (logic/player-access.mjs); this file only reads
 // and writes Foundry state. Never throws out of the ready hook.
 import { MODULE_ID, I18N, MEJ_MODULE_ID, MEJ_ALLOW_PLAYER_SETTING, WARN_PLAYER_ACCESS_SETTING } from "../constants.mjs";
-import { shouldOfferPlayerAccess, playerAccessWrites } from "../logic/player-access.mjs";
+import { shouldOfferPlayerAccess, playerAccessWrites, shouldPromptReload, MEJ_ALLOW_PLAYER_FULL_KEY } from "../logic/player-access.mjs";
 
 /** MEJ's allow-player value, or undefined when MEJ has not registered it. */
 export function readAllowPlayer() {
@@ -39,4 +39,36 @@ export async function checkPlayerAccessOnLogin() {
   } catch (err) {
     console.error(`${MODULE_ID} | player-access check failed`, err);
   }
+}
+
+/**
+ * Players: when a GM turns MEJ's allow-player on, ask to reload (MEJ wires
+ * its sidebar and context menus for players at load). World-setting changes
+ * broadcast to every client; a setting saved for the first time arrives as
+ * createSetting, later changes as updateSetting - listen to both. Neither
+ * hook carries the previous value, so it is cached here.
+ */
+export function registerPlayerAccessReloadPrompt() {
+  let last = readAllowPlayer();
+  const onSetting = (setting) => {
+    if (setting?.key !== MEJ_ALLOW_PLAYER_FULL_KEY) return;
+    const oldValue = last;
+    const newValue = readAllowPlayer();
+    last = newValue;
+    if (!shouldPromptReload({ isGM: game.user.isGM, key: setting.key, oldValue, newValue })) return;
+    const t = (k) => game.i18n.localize(`${I18N}.playerAccess.${k}`);
+    foundry.applications.api.DialogV2.confirm({
+      window: { title: t("reloadTitle") },
+      content: `<p>${foundry.utils.escapeHTML(t("reloadBody"))}</p>`,
+      yes: { label: t("reload"), icon: "fa-solid fa-rotate-right" },
+      no: { label: t("later") },
+      rejectClose: false
+    }).then((yes) => {
+      if (!yes) return;
+      if (typeof foundry.utils.debouncedReload === "function") foundry.utils.debouncedReload();
+      else window.location.reload();
+    }).catch((err) => console.error(`${MODULE_ID} | player-access reload prompt failed`, err));
+  };
+  Hooks.on("createSetting", onSetting);
+  Hooks.on("updateSetting", onSetting);
 }
