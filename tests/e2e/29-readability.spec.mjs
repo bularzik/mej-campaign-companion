@@ -393,7 +393,13 @@ test.describe("29 readability", () => {
           // button is ours to check here.
         }, "#journal .mej-cc-create-campaign");
         await check("folder context menu", async () => {
-          await page.locator(`#journal li.folder[data-folder-id="${seed.campaignId}"] > .folder-header`).click({ button: "right" });
+          // A module-rich world (v13's world-b) pushes the folder below the
+          // fold of the sidebar; scroll it in, and if a pointer click is
+          // still intercepted, fire the contextmenu event Foundry listens for.
+          const header = page.locator(`#journal li.folder[data-folder-id="${seed.campaignId}"] > .folder-header`);
+          await header.scrollIntoViewIfNeeded();
+          try { await header.click({ button: "right", timeout: 5_000 }); }
+          catch { await header.dispatchEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }); }
           await page.waitForSelector("#context-menu", { timeout: 5_000 });
         }, "#context-menu");
         await page.keyboard.press("Escape");
