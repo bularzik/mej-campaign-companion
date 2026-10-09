@@ -1259,3 +1259,242 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-actor-pick img { width: 32px; height: 32px; object-fit: cover; border: none; flex: 0 0 32px; }
 .mej-cc-actor-pick:hover, .mej-cc-actor-pick:focus { background: rgba(127, 127, 127, 0.2); outline: none; }
 .mej-cc-actor-pick.current { font-weight: bold; }
+
+/* Readable ink inside MEJ's shell (readability sweep, 2026-10-08).
+
+   Companion content inside MEJ's shell (the Session sheet, the Hub, the
+   knowledge panel, secret audience buttons, query embeds) sits on whatever
+   MEJ paints there, and that is not the colour scheme's surface: MEJ's
+   client setting "background-image" lays one of fifteen images under the
+   sheet (apsjournal.css) in either scheme. Text that followed the scheme -
+   Foundry's label/legend colours, inherited text - therefore went near-white
+   on parchment or marble under the dark scheme (Session Number measured
+   1.03:1) and near-black on Marble/Solid Black under the light one (~1.2:1).
+   MEJ's own text variables have the same blind spot, so they are not reused.
+
+   Companion text in the shell reads these tokens instead. They follow the
+   scheme only when no image is chosen and otherwise follow the image,
+   grouped by its measured average colour. 29-readability checks every
+   image in both schemes. Popped-out MEJ sheets carry the same class and
+   attribute, so they are covered too. */
+.monks-enhanced-journal {
+  --mej-cc-ink: #191813;
+  --mej-cc-ink-muted: #4b4a44;
+  --mej-cc-link: #8a2c00;
+  --mej-cc-field-ink: #191813;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.55);
+  --mej-cc-field-border: rgba(25, 24, 19, 0.45);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.45);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+.theme-dark .monks-enhanced-journal,
+.monks-enhanced-journal.theme-dark {
+  --mej-cc-ink: #efe6d8;
+  --mej-cc-ink-muted: #c9bfae;
+  --mej-cc-link: #ffa463;
+  --mej-cc-field-ink: #efe6d8;
+  --mej-cc-field-bg: rgba(11, 10, 19, 0.6);
+  --mej-cc-field-border: rgba(239, 230, 216, 0.35);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.1);
+  /* No image chosen: MEJ 13.06's dark shell still paints parchment under
+     some parts (see the knowledge-panel note above), so blocks that carry
+     their own surface keep one here. */
+  --mej-cc-surface: rgba(11, 10, 19, 0.85);
+  --mej-cc-halo: #0b0a13;
+}
+
+.monks-enhanced-journal.theme-light {
+  --mej-cc-ink: #191813;
+  --mej-cc-ink-muted: #4b4a44;
+  --mej-cc-link: #8a2c00;
+  --mej-cc-field-ink: #191813;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.55);
+  --mej-cc-field-border: rgba(25, 24, 19, 0.45);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.45);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+/* Light images (average luminance high): dark ink in both schemes. */
+.monks-enhanced-journal[background-image='parchment'],
+.monks-enhanced-journal[background-image='marbleWhite'],
+.monks-enhanced-journal[background-image='paperCrumpled'],
+.monks-enhanced-journal[background-image='paperRice'],
+.monks-enhanced-journal[background-image='solidWhite'],
+/* Mid-tone images: dark ink, and no lighter "muted" shade - on these a
+   muted grey-brown falls under 4.5:1, so muted text keeps the full ink. */
+.monks-enhanced-journal[background-image='darkParchment'],
+.monks-enhanced-journal[background-image='metalBrushed'],
+.monks-enhanced-journal[background-image='paperCotton'],
+.monks-enhanced-journal[background-image='paperCrumpledYellowed'],
+.monks-enhanced-journal[background-image='paperRecycled'],
+.monks-enhanced-journal[background-image='woodAlpine'],
+.monks-enhanced-journal[background-image='woodPine'] {
+  --mej-cc-ink: #191813;
+  --mej-cc-ink-muted: #3a372f;
+  --mej-cc-link: #7a2500;
+  --mej-cc-field-ink: #191813;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.6);
+  --mej-cc-field-border: rgba(25, 24, 19, 0.5);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.5);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+.monks-enhanced-journal[background-image='darkParchment'],
+.monks-enhanced-journal[background-image='metalBrushed'],
+.monks-enhanced-journal[background-image='paperCotton'],
+.monks-enhanced-journal[background-image='paperCrumpledYellowed'],
+.monks-enhanced-journal[background-image='paperRecycled'],
+.monks-enhanced-journal[background-image='woodAlpine'],
+.monks-enhanced-journal[background-image='woodPine'] {
+  --mej-cc-ink: #000;
+  --mej-cc-ink-muted: #000;
+  --mej-cc-link: #3d1200;
+}
+
+/* Solid grey (#808080): only near-black clears 4.5:1 (#222 measured 4.04). */
+.monks-enhanced-journal[background-image='solidGrey'] {
+  --mej-cc-ink: #000;
+  --mej-cc-ink-muted: #000;
+  --mej-cc-link: #2a0b00;
+  --mej-cc-field-ink: #000;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.65);
+  --mej-cc-field-border: rgba(0, 0, 0, 0.55);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.45);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+/* Dark images: light ink in both schemes. */
+.monks-enhanced-journal[background-image='marbleBlack'],
+.monks-enhanced-journal[background-image='solidBlack'] {
+  --mej-cc-ink: #efe6d8;
+  --mej-cc-ink-muted: #c9bfae;
+  --mej-cc-link: #ffa463;
+  --mej-cc-field-ink: #efe6d8;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.08);
+  --mej-cc-field-border: rgba(239, 230, 216, 0.4);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.12);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: #0b0a13;
+}
+
+/* Where the tokens apply: companion-owned roots inside the shell only. */
+.monks-enhanced-journal .session-container,
+.monks-enhanced-journal .mej-cc-hub-container,
+.monks-enhanced-journal .mej-cc-knowledge,
+.monks-enhanced-journal .mej-cc-query-embed,
+.monks-enhanced-journal .mej-cc-media-page {
+  color: var(--mej-cc-ink);
+}
+
+/* Foundry colours label/legend/headings directly from the scheme, and MEJ
+   its tab strip and instruction lines from its own variables, so plain
+   inheritance from the roots above is not enough. */
+.monks-enhanced-journal .session-container :is(label, legend, h1, h2, h3, h4, .editor-display, section.secret),
+.monks-enhanced-journal .session-container nav.sheet-tabs a,
+.monks-enhanced-journal .session-container nav.sheet-tabs a > span,
+.monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-index-name, .mej-cc-timepoint-label, .mej-cc-search-name, .mej-cc-dashboard-name,
+  .mej-cc-row-campaign, .mej-cc-secret-source, .mej-cc-timeline-campaign),
+.monks-enhanced-journal .mej-cc-hub-container :is(label, legend, h3, h4, summary, .mej-cc-groups header),
+.monks-enhanced-journal .mej-cc-knowledge :is(summary, label, .mej-cc-knowledge-bar, .mej-cc-backlink-name, .mej-cc-attr-key-ro) {
+  color: var(--mej-cc-ink);
+}
+
+.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge) .instruction {
+  color: var(--mej-cc-ink-muted);
+}
+
+.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) a.content-link {
+  color: var(--mej-cc-link);
+}
+
+.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border-color: var(--mej-cc-field-border);
+}
+
+.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge) :is(input, textarea)::placeholder {
+  color: var(--mej-cc-ink-muted);
+}
+
+/* Companion buttons in the shell: Foundry's translucent button surface
+   takes the image's colour underneath, so give them the field surface. */
+.monks-enhanced-journal .mej-cc-hub-container button,
+.monks-enhanced-journal .session-container .mej-cc-session-header-compact button,
+.monks-enhanced-journal .session-container section.secret > button.reveal,
+.monks-enhanced-journal .mej-cc-secret-audience {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border-color: var(--mej-cc-field-border);
+}
+
+.monks-enhanced-journal .mej-cc-hub-container .mej-cc-menu button {
+  background: transparent;
+  color: inherit;
+}
+
+/* Per-row icon buttons stay bare, as before; they only take the ink. */
+.monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-row-hide, .mej-cc-row-file, .mej-cc-timepoint-head button) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.monks-enhanced-journal .mej-cc-graph-controls button.active {
+  border-color: var(--color-border-highlight, #ff6400);
+  box-shadow: inset 0 0 0 1px var(--color-border-highlight, #ff6400);
+}
+
+.monks-enhanced-journal :is(.mej-cc-link-chip, .mej-cc-tag-chip, .mej-cc-mention-badge) {
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+}
+
+/* Companion roots carry a surface of their own only where the tokens call
+   for one: the dark scheme with no image chosen. MEJ 13.06 still paints
+   Foundry's light parchment there (measured #dbd9cd on Foundry 13.351),
+   while 14.x paints a dark ground, and CSS cannot tell the two apart - so
+   the companion supplies the dark ground its light ink needs. Transparent
+   everywhere else. */
+.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) {
+  background: var(--mej-cc-surface);
+}
+
+.monks-enhanced-journal .mej-cc-graph-edge-label {
+  fill: var(--mej-cc-ink-muted);
+}
+
+.monks-enhanced-journal .mej-cc-graph-node text {
+  fill: var(--mej-cc-ink);
+  stroke: var(--mej-cc-halo);
+}
+
+/* Secondary text above is faded with opacity, which on a textured image
+   drops it under 4.5:1 (index type 4.17, query header 4.3 on parchment).
+   In the shell it takes the muted ink at full opacity instead. */
+.monks-enhanced-journal :is(
+  .mej-cc-index-type, .mej-cc-filtered-count, .mej-cc-mention-badge, .mej-cc-timepoint-date,
+  .mej-cc-search-type, .mej-cc-search-match, .mej-cc-knowledge-summary, .mej-cc-knowledge-empty,
+  .mej-cc-backlink-count, .mej-cc-backlink-gm, .mej-cc-audience-count, .mej-cc-dashboard-query,
+  .mej-cc-query-embed-header, .mej-cc-graph-truncated, .mej-cc-secret-preview,
+  .mej-cc-secret-audience-label
+) {
+  opacity: 1;
+  color: var(--mej-cc-ink-muted);
+}
+
+/* A revealed relationship secret is inlined into MEJ's own row, which has
+   no companion surface behind it and whose own text can be low-contrast
+   (MEJ 13.06 measured #7a7971 on parchment, 3.07:1). Carry a small field
+   surface so the ink and its ground always come as a pair. */
+.monks-enhanced-journal .mej-cc-rel-secret {
+  opacity: 1;
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  padding: 0 0.3em;
+  border-radius: 3px;
+}
