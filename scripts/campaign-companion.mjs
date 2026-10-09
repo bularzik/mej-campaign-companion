@@ -325,9 +325,10 @@ Hooks.once("ready", async () => {
   // Single shared socket listener for the whole module (media relay +
   // player recap relay) - see hooks/socket.mjs's header comment.
   registerSocketDispatcher();
+  // Players: reload prompt when a GM turns MEJ's allow-player on.
+  registerPlayerAccessReloadPrompt();
   // GM player-access check (spec 2026-10-08): fire-and-forget so the dialog
   // never delays the migrations below.
-  registerPlayerAccessReloadPrompt();
   checkPlayerAccessOnLogin();
 
   // A world that spent time on a stock MEJ install comes back with the MEJ

@@ -49,8 +49,10 @@ export async function checkPlayerAccessOnLogin() {
  * hook carries the previous value, so it is cached here.
  */
 export function registerPlayerAccessReloadPrompt() {
+  try {
   let last = readAllowPlayer();
   const onSetting = (setting) => {
+    try {
     if (setting?.key !== MEJ_ALLOW_PLAYER_FULL_KEY) return;
     const oldValue = last;
     const newValue = readAllowPlayer();
@@ -68,7 +70,13 @@ export function registerPlayerAccessReloadPrompt() {
       if (typeof foundry.utils.debouncedReload === "function") foundry.utils.debouncedReload();
       else window.location.reload();
     }).catch((err) => console.error(`${MODULE_ID} | player-access reload prompt failed`, err));
+    } catch (err) {
+      console.error(`${MODULE_ID} | player-access reload prompt failed`, err);
+    }
   };
   Hooks.on("createSetting", onSetting);
   Hooks.on("updateSetting", onSetting);
+  } catch (err) {
+    console.error(`${MODULE_ID} | player-access reload prompt registration failed`, err);
+  }
 }

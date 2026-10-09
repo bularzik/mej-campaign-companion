@@ -194,7 +194,7 @@ Or install manually:
 
 ## Settings
 
-Seventeen settings are registered: five visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
+Eighteen settings are registered: six visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
@@ -203,6 +203,7 @@ Seventeen settings are registered: five visible in the module settings menu, all
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
+| `warnPlayerAccess` | Yes | On | Warn a GM at login when Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off (Campaign Companion doesn't work properly for players without it), and offer to turn it on. Ticking "Don't show this again" in the dialog turns this setting off. |
 | `timelineJournalId` | No (internal) | `""` | Legacy: the id of the world-singleton "Campaign Timeline" JournalEntry used by a world with no campaigns. Adopting the world into a campaign moves that journal into the campaign and clears the setting. Don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |

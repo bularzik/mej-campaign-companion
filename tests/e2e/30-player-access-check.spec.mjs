@@ -72,8 +72,10 @@ test.describe("30 player access check", () => {
 
       const prompt = player.locator("dialog.application", { hasText: "Your GM has enabled Campaign Companion for players" });
       await expect(prompt).toBeVisible({ timeout: 15_000 });
-      await prompt.locator('button[data-action="yes"]').click();
-      await player.waitForEvent("load", { timeout: 60_000 });
+      await Promise.all([
+        player.waitForEvent("load", { timeout: 60_000 }),
+        prompt.locator('button[data-action="yes"]').click()
+      ]);
       await login(player, "User 1");
 
       // The original report: the player creates a new entity in a campaign folder.
