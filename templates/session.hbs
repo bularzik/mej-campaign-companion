@@ -84,11 +84,12 @@
                             <h3>{{localize 'MEJCampaignCompanion.session.attendees'}}</h3>
                             <ol class="attendees-list item-list scrollable">
                                 {{#each attendeeDetails as |attendee|}}
-                                <li class="item flexrow" data-uuid="{{attendee.uuid}}">
-                                    <img class="item-image" src="{{attendee.img}}" />
-                                    <div class="item-name">{{attendee.name}}</div>
+                                <li class="item mej-cc-attendee" data-uuid="{{attendee.uuid}}">
+                                    <img class="mej-cc-attendee-token" src="{{attendee.img}}" alt="{{attendee.name}}" />
+                                    <div class="mej-cc-attendee-name">{{attendee.name}}</div>
+                                    {{#if attendee.player}}<div class="mej-cc-attendee-player">{{attendee.player}}</div>{{/if}}
                                     {{#if @root.editable}}
-                                    <a class="item-delete" data-action="removeAttendee" data-uuid="{{attendee.uuid}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.removeAttendee'}}"><i class="fas fa-trash"></i></a>
+                                    <a class="item-delete mej-cc-attendee-remove" data-action="removeAttendee" data-uuid="{{attendee.uuid}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.removeAttendee'}}"><i class="fas fa-trash"></i></a>
                                     {{/if}}
                                 </li>
                                 {{else}}

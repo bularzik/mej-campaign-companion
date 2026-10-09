@@ -1498,3 +1498,62 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   padding: 0 0.3em;
   border-radius: 3px;
 }
+
+/* Session sheet attendees: a wrapping row of small round tokens, character
+   name under each with the player's name beneath it. The unscoped .item-image
+   rule that used to size these is MEJ's and renders far too large. */
+.monks-enhanced-journal .attendees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.monks-enhanced-journal .attendees-list > .mej-cc-attendee {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 84px;
+  padding: 0;
+  text-align: center;
+}
+.monks-enhanced-journal .attendees-list > .instruction { flex: 1 1 100%; }
+.monks-enhanced-journal .mej-cc-attendee-token {
+  width: 64px;
+  height: 64px;
+  max-width: 64px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid var(--mej-cc-field-border);
+  background: var(--mej-cc-chip-bg);
+}
+.monks-enhanced-journal .mej-cc-attendee-name {
+  margin-top: 4px;
+  max-width: 100%;
+  font-weight: bold;
+  line-height: 1.15;
+  color: var(--mej-cc-ink);
+  overflow-wrap: anywhere;
+}
+.monks-enhanced-journal .mej-cc-attendee-player {
+  max-width: 100%;
+  font-size: var(--font-size-11, 11px);
+  line-height: 1.15;
+  color: var(--mej-cc-ink-muted);
+  overflow-wrap: anywhere;
+}
+.monks-enhanced-journal .mej-cc-attendee-remove {
+  position: absolute;
+  top: -2px;
+  right: 6px;
+  display: none;
+  padding: 2px 4px;
+  border-radius: 50%;
+  font-size: 10px;
+  background: var(--mej-cc-field-bg);
+  color: var(--mej-cc-ink);
+}
+.monks-enhanced-journal .mej-cc-attendee:hover .mej-cc-attendee-remove,
+.monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: block; }

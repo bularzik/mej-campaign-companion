@@ -14,6 +14,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { renderAwaitable } from "./awaitable-render.mjs";
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
+import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
@@ -178,7 +179,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       await Promise.all(
         session.attendees.map(async (uuid) => {
           const actor = await fromUuid(uuid).catch(() => null);
-          return actor ? { uuid, name: actor.name, img: actor.img } : { uuid, name: uuid, img: "icons/svg/mystery-man.svg" };
+          return actor ? { uuid, name: actor.name, img: actor.img, player: attendeePlayerName(actor, game.users) } : { uuid, name: uuid, img: "icons/svg/mystery-man.svg" };
         })
       )
     );
