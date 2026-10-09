@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.24.0 (2026-10-09)
 
 Readable text on every Monk's Enhanced Journal background, and a check that players can use Campaign Companion.
 
