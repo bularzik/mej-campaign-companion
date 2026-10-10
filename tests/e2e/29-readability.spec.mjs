@@ -120,6 +120,22 @@ async function closeDialogs(page) {
   await expect(page.locator("dialog.application[open]")).toHaveCount(0, { timeout: 5_000 });
 }
 
+/**
+ * Put one of the session sheet's editors into edit mode via its pencil, wait for ProseMirror to
+ * mount and type some text. Returns the selector of the editing region. The editor is left open
+ * (the next surface closes the shell).
+ */
+async function enterEditMode(page, editorId) {
+  const parent = `#MonksEnhancedJournal .session-container .editor-parent[data-editor-id='${editorId}']`;
+  // A reopened sheet can still be in edit mode from the last pass, and then the pencil is hidden.
+  if (!await page.locator(`${parent}.editing`).count()) await page.locator(`${parent} button.editor-edit`).first().click();
+  await page.waitForSelector(`${parent}.editing .editor-control .ProseMirror`, { timeout: 15_000 });
+  await page.locator(`${parent} .editor-control .ProseMirror`).first().click();
+  await page.keyboard.type("Edit mode readability text");
+  await settle(page, 400);
+  return `${parent} .editor-control`;
+}
+
 /** Collects results across surfaces; each surface runs isolated. */
 function sweeper(page, testInfo, label) {
   const results = [];
@@ -132,17 +148,18 @@ function sweeper(page, testInfo, label) {
       await page.screenshot({ path: testInfo.outputPath(shotName) });
       let checked = 0;
       let found = 0;
-      for (const root of [].concat(roots)) {
+      const rootList = [].concat(typeof roots === "function" ? roots() : roots);
+      for (const root of rootList) {
         const r = await scanContrast(page, root);
         checked += r.checked;
         found += r.roots;
         for (const f of r.failures) results.push({ surface, root, ...f });
       }
-      if (!found) openFailures.push(`${surface}: no element matched ${[].concat(roots).join(", ")}`);
-      else if (!checked) openFailures.push(`${surface}: matched but no visible text in ${[].concat(roots).join(", ")}`);
+      if (!found) openFailures.push(`${surface}: no element matched ${rootList.join(", ")}`);
+      else if (!checked) openFailures.push(`${surface}: matched but no visible text in ${rootList.join(", ")}`);
     } catch (err) {
       if (process.env.RD_DEBUG) console.log("RDDEBUG", surface, err.message);
-      openFailures.push(`${surface}: ${String(err.message ?? err).split("\n")[0]}`);
+      openFailures.push(`${surface}: ${String(err.message ?? err).split("\n").slice(0, process.env.RD_DEBUG ? 30 : 1).join(" / ")}`);
       await closeDialogs(page).catch(() => {});
     }
   };
@@ -422,6 +439,41 @@ test.describe("29 readability", () => {
         await page.keyboard.press("Escape");
       } finally {
         await closeDialogs(page).catch(() => {});
+        await closeShell(page).catch(() => {});
+        await setColorScheme(page, "").catch(() => {});
+      }
+      await finish();
+    });
+
+    // Edit mode is its own pass: the editors paint their own surface and text, and a dark MEJ
+    // background under a dark-inked editor (black on black) only shows here. RD_BGS=a,b narrows it.
+    test(`session editors are readable while editing on every MEJ background - ${scheme}`, async ({ page }, testInfo) => {
+      test.setTimeout(600_000);
+      await login(page, "Gamemaster");
+      await setColorScheme(page, scheme);
+      const prior = await page.evaluate(() => game.settings.get("monks-enhanced-journal", "background-image"));
+      const { check, finish } = sweeper(page, testInfo, `edit/${scheme}`);
+      const S = "#MonksEnhancedJournal";
+      const only = process.env.RD_BGS?.split(",");
+      try {
+        for (const bg of MEJ_BACKGROUNDS.filter((b) => !only || only.includes(b))) {
+          await page.evaluate((bg) => game.settings.set("monks-enhanced-journal", "background-image", bg), bg);
+          await closeShell(page);
+          let recapEdit = "";
+          let gmEdit = "";
+          await check(`${bg}: session recap editing`, async () => {
+            await openEntry(page, seed.sessionId);
+            await page.waitForSelector(`${S} .session-container`, { timeout: 15_000 });
+            await sheetTab(page, "description");
+            recapEdit = await enterEditMode(page, "recap");
+          }, () => recapEdit);
+          await check(`${bg}: session gm notes editing`, async () => {
+            await sheetTab(page, "session");
+            gmEdit = await enterEditMode(page, "gmNotes");
+          }, () => gmEdit);
+        }
+      } finally {
+        await page.evaluate((bg) => game.settings.set("monks-enhanced-journal", "background-image", bg), prior).catch(() => {});
         await closeShell(page).catch(() => {});
         await setColorScheme(page, "").catch(() => {});
       }

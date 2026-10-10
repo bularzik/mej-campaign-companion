@@ -1451,6 +1451,25 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   color: inherit;
 }
 
+/* Session editors in edit mode (recap and GM notes). Foundry paints the
+   ProseMirror text and toolbar from the colour scheme, so under MEJ's
+   background image it went light-on-light (dark scheme, parchment) or
+   dark-on-black (light scheme, Marble/Solid Black). Text and toolbar take the
+   same ink and field tokens as the inputs above; 29-readability checks both
+   editors while open on every image in both schemes. */
+.monks-enhanced-journal .session-container .editor-control prose-mirror :is(.editor-content, .editor-content p, .editor-content li, .editor-content h1, .editor-content h2, .editor-content h3, .editor-content h4) {
+  color: var(--mej-cc-ink);
+}
+
+.monks-enhanced-journal .session-container .editor-control prose-mirror .editor-menu {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+}
+
+.monks-enhanced-journal .session-container .editor-control prose-mirror .editor-menu :is(button, button span, button i, summary) {
+  color: var(--mej-cc-field-ink);
+}
+
 /* Per-row icon buttons stay bare, as before; they only take the ink. */
 .monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-row-hide, .mej-cc-row-file, .mej-cc-timepoint-head button) {
   background: transparent;

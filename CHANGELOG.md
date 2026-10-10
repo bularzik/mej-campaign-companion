@@ -14,6 +14,8 @@ Every session gets a timepoint, encounters are captured when combat starts, and 
 - **Added:** the **Players can create connections** setting (on by default).
 - **Changed:** players now get the Relationships tab, Session pages included, when they can add a connection or have something to see there, and no longer get an empty tab when every relationship is hidden from them.
 - **Tests:** end-to-end spec `33-player-connections` on Foundry 13 and 14; `29-readability` covers the block and the dialog.
+- **Fixed:** editing a Session's recap or GM notes could show black text on a black background, or light text on a light one, depending on the colour scheme and MEJ's background image. The editor text and toolbar now follow the same readable ink and field colours as the rest of the sheet.
+- **Tests:** `29-readability` also opens the recap and GM notes editors and checks them on every MEJ background in both schemes.
 
 ## 0.24.1 (2026-10-09)
 
