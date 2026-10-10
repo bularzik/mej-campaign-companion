@@ -300,7 +300,9 @@ test.describe("04 auto-capture", () => {
 
     expect(await timepointLinks(page, target.timelineId, target.timepointId)).toEqual([]);
     const count = await page.evaluate((campaignId) =>
-      game.journal.filter((j) => j.folder?.id === campaignId && !j.getFlag("mej-campaign-companion", "timeline")).length,
+      game.journal.filter((j) => j.folder?.id === campaignId)
+        .flatMap((j) => j.pages.contents)
+        .filter((p) => p.getFlag("monks-enhanced-journal", "type") === "encounter").length,
     target.campaignId);
     expect(count).toBe(0);
 

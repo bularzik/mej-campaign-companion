@@ -62,7 +62,10 @@ export function registerSessionTimepoint() {
     }
   });
   Hooks.on("updateJournalEntryPage", (page) => {
-    if (page.type !== SESSION_DOCUMENT_TYPE || game.user !== game.users.activeGM) return;
+    // No type check: MEJ rewrites an in-memory page.type to its short key
+    // ("session") after updates. syncSessionTimepoint keys off the stored
+    // session.timepointId, which only session pages carry.
+    if (game.user !== game.users.activeGM || !page.getFlag(MODULE_ID, "session")?.timepointId) return;
     guard(syncSessionTimepoint(page), "sync");
   });
 }
