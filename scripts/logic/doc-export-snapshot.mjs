@@ -116,13 +116,13 @@ export function relationshipsHtml(resolved, includeGM, heading) {
 }
 
 /**
- * HTML for an entry's player connections (spec 2026-10-09 §6.2): lines from
+ * HTML for an entry's party relationships (spec 2026-10-10): lines from
  * exportLines(), each with its notes as a nested list. Empty string when
  * nothing renders. Every value is escaped - labels are player-written.
  * @param {{text:string, children:string[]}[]} lines
- * @param {string} heading localized "Player connections" label
+ * @param {string} heading localized "Party relationships" label
  */
-export function playerConnectionsHtml(lines, heading) {
+export function partyRelationshipsHtml(lines, heading) {
   if (!lines?.length) return "";
   const items = lines.map((line) => {
     const nested = line.children.length
@@ -176,14 +176,14 @@ export function sessionBodyHtml(page, { sessionNumberLabel, campaignDateLabel, f
  * @param {{
  *   includeGM: boolean,
  *   relationships?: {name:string, hidden?:boolean}[],
- *   playerConnections?: {text:string, children:string[]}[],
- *   labels: {relationships:string, playerConnections?:string, sessionNumber:string, campaignDate:string},
+ *   partyRelationships?: {text:string, children:string[]}[],
+ *   labels: {relationships:string, partyRelationships?:string, sessionNumber:string, campaignDate:string},
  *   formatCampaignDate?: (cd:object) => string
  * }} opts
  */
 export function recordSnapshot(row, opts) {
-  const { includeGM, relationships, playerConnections, labels, formatCampaignDate } = opts;
-  const pcHtml = playerConnectionsHtml(playerConnections, labels.playerConnections ?? "");
+  const { includeGM, relationships, partyRelationships, labels, formatCampaignDate } = opts;
+  const prHtml = partyRelationshipsHtml(partyRelationships, labels.partyRelationships ?? "");
   if (row.kind === SESSION_KIND) {
     const session = sessionData(row.page);
     return {
@@ -196,10 +196,10 @@ export function recordSnapshot(row, opts) {
         campaignDateLabel: labels.campaignDate,
         formatCampaignDate,
         includeGM
-      }) + pcHtml
+      }) + prHtml
     };
   }
-  const html = stripSecretSections(bodyText(row.page), { includeAll: includeGM }) + relationshipsHtml(relationships, includeGM, labels.relationships) + pcHtml;
+  const html = stripSecretSections(bodyText(row.page), { includeAll: includeGM }) + relationshipsHtml(relationships, includeGM, labels.relationships) + prHtml;
   return { name: row.name, kind: row.kind, hidden: false, system: {}, html };
 }
 

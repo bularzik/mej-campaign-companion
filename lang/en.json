@@ -395,7 +395,7 @@
       "nothingToExport": "There are no journal entries to export yet.",
       "defaultTitle": "Campaign Export",
       "relationships": "Relationships",
-      "playerConnections": "Player connections",
+      "partyRelationships": "Party relationships",
       "secret": "Secret",
       "private": "private",
       "sessionNumber": "Session Number",
