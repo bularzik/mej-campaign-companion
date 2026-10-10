@@ -3,7 +3,7 @@ import {
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
-  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING
+  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING, PLAYER_CONNECTIONS_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { checkPlayerAccessOnLogin, registerPlayerAccessReloadPrompt } from "./hooks/player-access.mjs";
@@ -21,6 +21,7 @@ import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
+import { registerRelationshipsTabWrap } from "./hooks/rel-tab-wrap.mjs";
 import { isTimelineJournal, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
 import { campaignTimelines, ensureTimelineJournal } from "./data/timeline-journal.mjs";
 import { planCampaignStructure } from "./logic/campaign-migration.mjs";
@@ -59,6 +60,23 @@ Hooks.once("init", () => {
     config: true,
     type: Boolean,
     default: true
+  });
+
+  // Player connections (spec 2026-10-09 §4.8): off hides Add connection, Add
+  // a note and the drop target and makes notes read-only; existing
+  // connections still display. Open sheets re-render on change.
+  game.settings.register(MODULE_ID, PLAYER_CONNECTIONS_SETTING, {
+    name: `${I18N}.settings.playerConnectionsEnabled.name`,
+    hint: `${I18N}.settings.playerConnectionsEnabled.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      import("./hooks/player-connections-index.mjs")
+        .then((m) => m.refreshConnectionViews(null))
+        .catch((err) => console.error(`${MODULE_ID} | player connections refresh failed`, err));
+    }
   });
 
   game.settings.register(MODULE_ID, RETRO_LINK_MODE_SETTING, {
@@ -310,6 +328,12 @@ Hooks.once("ready", async () => {
   // "Create Entity from Selection" (spec 2026-09-22): sheets render after
   // ready, so the prototype wrap is in place before any menu is built.
   if (game.modules.get("monks-enhanced-journal")?.active) registerEntityFromSelection();
+
+  // Player connections (spec 2026-10-09 §4.7): sheets render after ready, so
+  // the _prepareTabs wrap is in place before any Relationships tab is built.
+  if (game.modules.get("monks-enhanced-journal")?.active) {
+    registerRelationshipsTabWrap().catch((err) => console.error(`${MODULE_ID} | relationships tab wrap failed`, err));
+  }
 
   const mode = await onReady();
 

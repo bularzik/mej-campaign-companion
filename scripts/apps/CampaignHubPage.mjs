@@ -81,6 +81,7 @@ const HUB_STATE = {
   graphMode: "all",
   graphCenterUuid: null,
   graphBacklinks: false,
+  graphPlayerConnections: true,
   pendingTab: null,
   // Timeline id handed over by openTimelineInHub (sidebar/link open of a
   // timeline journal). Consumed by #timelineSelection on the next render,
@@ -1897,6 +1898,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       backlinksToggle.dataset.ccBound = "1";
       backlinksToggle.addEventListener("change", () => {
         this.state.graphBacklinks = backlinksToggle.checked;
+        this.render({ parts: ["main"] });
+      });
+    }
+    const playerToggle = html.querySelector('[data-action-change="toggleGraphPlayerConnections"]');
+    if (playerToggle && !playerToggle.dataset.ccBound) {
+      playerToggle.dataset.ccBound = "1";
+      playerToggle.addEventListener("change", () => {
+        this.state.graphPlayerConnections = playerToggle.checked;
         this.render({ parts: ["main"] });
       });
     }

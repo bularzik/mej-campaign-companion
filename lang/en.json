@@ -38,6 +38,10 @@
       "warnPlayerAccess": {
         "name": "Warn when Campaign Companion can't work for players",
         "hint": "When a GM logs in and Monk's Enhanced Journal's \"Allow players to use Enhanced Journal\" setting is off, explain that Campaign Companion won't work properly for players and offer to turn it on."
+      },
+      "playerConnectionsEnabled": {
+        "name": "Players can create connections",
+        "hint": "Let players record connections between journal entries on the Relationships tab. Off hides Add connection and Add a note and makes notes read-only; existing connections still show, and their writers can still delete them."
       }
     },
     "sheettype": {
@@ -367,10 +371,13 @@
       "button": "Export",
       "download": "Download",
       "includeGM": "Include GM Content",
-      "includeGMHint": "When checked, session GM notes and relationships hidden from players are included in the export.",
+      "includeGMHint": "When checked, session GM notes, relationships hidden from players, and private player connections and their unrevealed secrets are included in the export.",
       "nothingToExport": "There are no journal entries to export yet.",
       "defaultTitle": "Campaign Export",
       "relationships": "Relationships",
+      "playerConnections": "Player connections",
+      "secret": "Secret",
+      "private": "private",
       "sessionNumber": "Session Number",
       "campaignDate": "Campaign Date",
       "timelineHeading": "Timeline",
@@ -387,6 +394,7 @@
       "ego": "Focus",
       "all": "Whole campaign",
       "backlinks": "Show mention links",
+      "playerConnections": "Show player connections",
       "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
     },
     "prep": {
@@ -488,6 +496,67 @@
       "reloadBody": "Your GM has enabled Campaign Companion for players. Reload now to use it?",
       "reload": "Reload",
       "later": "Later"
+    },
+    "playerConnections": {
+      "heading": "Player connections",
+      "add": "Add connection",
+      "addNote": "Add a note",
+      "empty": "No player connections yet.",
+      "by": "by {name}",
+      "shared": "Shared with the party",
+      "private": "Private: only its author and the GM see it",
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "revealTooltip": "Show or hide this secret to everyone who sees the connection",
+      "deleteConnection": "Delete connection",
+      "deleteNote": "Delete note",
+      "unresolved": "Unknown entry",
+      "unknownWriter": "Unknown player",
+      "labelPlaceholder": "Connection",
+      "secretPlaceholder": "Secret (only you and the GM)",
+      "noTargets": "There are no entries you can connect this one to.",
+      "deleteTitle": "Delete connection",
+      "deleteBody": "Delete this connection?",
+      "deleteBodyNotes": "Delete this connection? {count} note(s) by other players will be deleted with it.",
+      "privateTitle": "Make connection private",
+      "privateBody": "Make this connection private? {count} note(s) by other players will be hidden from them until you share it again.",
+      "dialog": {
+        "title": "Add connection",
+        "from": "From {name}",
+        "filter": "Filter entries…",
+        "fromLabel": "Connection (this entry)",
+        "fromSecret": "Secret (this entry)",
+        "toLabel": "Connection (other entry)",
+        "toSecret": "Secret (other entry)",
+        "shared": "Share with party",
+        "save": "Add connection",
+        "pickTarget": "Pick an entry to connect to.",
+        "labelRequired": "Describe the connection first."
+      },
+      "drop": {
+        "not-journal": "Only journal entries can be connected.",
+        "self": "An entry can't be connected to itself.",
+        "no-access": "You can't see that entry.",
+        "type-not-allowed": "That kind of entry can't be connected from here.",
+        "duplicate": "You've already connected these two entries."
+      },
+      "reasons": {
+        "no-entry": "That entry can't hold connections.",
+        "disabled": "Your GM has turned player connections off.",
+        "no-access": "You don't have access to do that.",
+        "type-not-allowed": "That kind of entry can't be connected from here.",
+        "self": "An entry can't be connected to itself.",
+        "duplicate": "You've already connected these two entries.",
+        "bad-label": "A connection needs a label of at most 200 characters; secrets are limited to 500.",
+        "not-author": "Only its author can change that.",
+        "gone": "That connection or note no longer exists.",
+        "locked": "That entry is in a locked compendium.",
+        "bad-request": "That request wasn't understood.",
+        "bad-sender": "That request wasn't understood.",
+        "no-gm": "A GM must be connected to save connections.",
+        "timeout": "Couldn't save the connection — try again.",
+        "failed": "Couldn't save the connection. See the console for details."
+      }
     }
   },
   "TYPES": {

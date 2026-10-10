@@ -32,8 +32,8 @@ describe("graphRowsFor", () => {
       entry("J.b", "B", [page("quest")])
     ], ctx());
     expect(rows).toEqual([
-      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [] },
-      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [] }
+      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [], playerConnections: [] },
+      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [], playerConnections: [] }
     ]);
   });
 
@@ -87,5 +87,27 @@ describe("graphRowsFor", () => {
     const g = buildGraph(rows, [], { mode: "all", isGM: true, maxNodes: 200 });
     expect(g.nodes.map((n) => n.uuid).sort()).toEqual(["J.a", "J.b"]);
     expect(g.edges).toHaveLength(0);
+  });
+});
+
+describe("graphRowsFor player connections (spec 2026-10-09 §6.1)", () => {
+  const pcPage = (type, flag) => ({ __type: type, __rels: [], __pc: flag });
+  const flag = {
+    c1: { id: "c1", to: "J.b", authorId: "u2", authorName: "Jo", shared: true,
+      sides: { from: { notes: { u2: { label: "Sister of", secret: "never in the graph" } } }, to: { notes: { u2: { label: "Brother of" } } } } },
+    c2: { id: "c2", to: "J.b", authorId: "u2", authorName: "Jo", shared: false, sides: {} }
+  };
+  const pcCtx = (over = {}) => ctx({ playerConnectionsOf: (p) => p.__pc, canSeeEntry: () => true, ...over });
+  it("lists the connections this viewer may see, with the author's main labels and no secrets", () => {
+    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx());
+    expect(rows[0].playerConnections).toEqual([{ id: "c1", to: "J.b", authorName: "Jo", fromLabel: "Sister of", toLabel: "Brother of" }]);
+  });
+  it("the GM sees private ones too", () => {
+    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx({ isGM: true }));
+    expect(rows[0].playerConnections.map((p) => p.id)).toEqual(["c1", "c2"]);
+  });
+  it("a target the viewer can't see drops the connection", () => {
+    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx({ canSeeEntry: (u) => u !== "J.b" }));
+    expect(rows[0].playerConnections).toEqual([]);
   });
 });

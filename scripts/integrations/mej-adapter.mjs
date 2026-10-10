@@ -154,6 +154,16 @@ export async function registerCore() {
     registerRelationshipsUi();
   });
 
+  await step("player connections index", async () => {
+    const { registerPlayerConnectionsIndex } = await import("../hooks/player-connections-index.mjs");
+    registerPlayerConnectionsIndex();
+  });
+
+  await step("player connections ui", async () => {
+    const { registerPlayerConnectionsUi } = await import("../hooks/player-connections-ui.mjs");
+    registerPlayerConnectionsUi();
+  });
+
   await step("portal rename sync", async () => {
     const { registerPortalSync } = await import("../hooks/portal-sync.mjs");
     registerPortalSync();

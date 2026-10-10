@@ -195,6 +195,21 @@ test.describe("29 readability", () => {
       await person.pages.contents[0].update({
         [`flags.${MOD}.secretReveals.secret-rd1`]: { users: [user1.id], groups: [], all: false, revealedAt: Date.now() }
       });
+      // A player connection with a revealed secret and another player's note (spec 2026-10-09).
+      const user2 = game.users.getName("User 2");
+      const now = Date.now();
+      await person.pages.contents[0].update({
+        [`flags.${MOD}.playerConnections.rdpc1`]: {
+          id: "rdpc1", to: ally.uuid, authorId: user1.id, authorName: user1.name, shared: true, created: now,
+          sides: {
+            from: { notes: {
+              [user1.id]: { authorName: user1.name, label: "sworn friend", secret: "saved her life", revealed: true, updated: now },
+              [user2.id]: { authorName: user2.name, label: "rivals, really", secret: "", revealed: false, updated: now }
+            } },
+            to: { notes: { [user1.id]: { authorName: user1.name, label: "owes a life", secret: "", revealed: false, updated: now } } }
+          }
+        }
+      });
       const sessionName = `${P}Session`;
       const sessionPage = buildSessionPageData(sessionName,
         `<p>We met @UUID[${person.uuid}]{the person}.</p><section class="secret" id="secret-rd2"><p>GM aside.</p></section>`,
@@ -339,6 +354,8 @@ test.describe("29 readability", () => {
           });
           await settle(page, 400);
         }, [`${S} .mej-cc-knowledge`, `${S} .mej-cc-secret-audience`, `${S} .mej-cc-query-embed`, `${S} .mej-cc-actor-link`]);
+        await check("person relationships player connections", () => sheetTab(page, "relationships"),
+          `${S} .mej-cc-player-connections`);
         // The GM relationships tab carries no companion text: its audience
         // controls are icon-only and the row text is MEJ's own markup.
 
@@ -412,7 +429,7 @@ test.describe("29 readability", () => {
     });
 
     test(`in-shell surfaces are readable on every MEJ background - ${scheme}`, async ({ page }, testInfo) => {
-      test.setTimeout(420_000);
+      test.setTimeout(600_000);
       await login(page, "Gamemaster");
       await setColorScheme(page, scheme);
       const prior = await page.evaluate(() => game.settings.get("monks-enhanced-journal", "background-image"));
@@ -437,6 +454,8 @@ test.describe("29 readability", () => {
             });
             await settle(page, 300);
           }, [`${S} .mej-cc-knowledge`, `${S} .mej-cc-secret-audience`, `${S} .mej-cc-query-embed`]);
+          await check(`${bg}: person player connections`, () => sheetTab(page, "relationships"),
+            `${S} .mej-cc-player-connections`);
           await check(`${bg}: hub index`, async () => {
             await openHub(page);
             await hubTab(page, "index");
@@ -484,7 +503,11 @@ test.describe("29 readability", () => {
           await settle(page, 400);
         }, [`${S} .mej-cc-knowledge`, `${S} section.secret.mej-cc-revealed-to-you`]);
         await check("player relationships", () => sheetTab(page, "relationships"),
-          [`${S} .mej-cc-rel-secret, ${S} .mej-cc-rel-revealed, ${S} .mej-cc-known-connections`]);
+          [`${S} .mej-cc-rel-secret, ${S} .mej-cc-rel-revealed, ${S} .mej-cc-known-connections`, `${S} .mej-cc-player-connections`]);
+        await check("player connection dialog", () => openDialog(page, "player-connection-dialog.mjs", "promptPlayerConnection",
+          { sourceName: `${PREFIX}Person`, rows: [{ uuid: seed.allyUuid, name: `${PREFIX}Ally`, img: "icons/svg/book.svg", typeLabel: "Person" }] }),
+          "[data-rd-scan]");
+        await closeDialogs(page);
       } finally {
         await closeShell(page).catch(() => {});
         await setColorScheme(page, "").catch(() => {});

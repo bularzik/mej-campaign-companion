@@ -44,11 +44,19 @@ export function prepareGraphContext(entries, state) {
     // EnhancedJournalSheet relationship rendering); the per-type default
     // placeholder otherwise (MEJ's own art for its built-in types, the
     // companion's for session/campaign), null for types with no art.
-    imageOf: (page, type) => imageFor(page.src, type)
+    imageOf: (page, type) => imageFor(page.src, type),
+    // Player connections (spec 2026-10-09 §6.1): the from-page's flag, and
+    // LIMITED+ on both endpoints for a player (canSeeConnection).
+    playerConnectionsOf: (page) => page.flags?.[MODULE_ID]?.playerConnections,
+    canSeeEntry: (uuid) => {
+      const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
+      return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
+    }
   });
+  const includePlayer = state.graphPlayerConnections !== false;
   const graph = buildGraph(rows, state.graphBacklinks ? backlinkPairs() : [], {
     mode: state.graphMode, centerUuid: state.graphCenterUuid,
-    includeBacklinks: state.graphBacklinks, isGM: game.user.isGM, maxNodes: MAX_NODES
+    includeBacklinks: state.graphBacklinks, includePlayer, isGM: game.user.isGM, maxNodes: MAX_NODES
   });
   return {
     graph,
@@ -56,6 +64,7 @@ export function prepareGraphContext(entries, state) {
       isEgo: state.graphMode === "ego",
       centerUuid: state.graphCenterUuid,
       includeBacklinks: state.graphBacklinks,
+      includePlayer,
       truncated: graph.truncated === true
     }
   };
@@ -146,6 +155,12 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
     const line = document.createElementNS(NS, "line");
     line.classList.add("mej-cc-graph-edge", link.kind);
     if (link.hidden) line.classList.add("hidden-rel");
+    if (link.tooltip) {
+      // Author names and labels are client-writable: textContent only.
+      const title = document.createElementNS(NS, "title");
+      title.textContent = link.tooltip;
+      line.append(title);
+    }
     svg.append(line);
     return line;
   });

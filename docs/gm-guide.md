@@ -323,11 +323,13 @@ For the details of what does and doesn't survive a round trip — type markers, 
 
 ## Player collaboration
 
-Turning on the **Players Write Sessions** setting makes new Session entries — from the docx import wizard or MEJ's own New Entry dialog — owned by all players by default, so an owning player can open the Recap tab and edit the shared recap the same way you do. When you turn it on, the companion also offers to grant ownership of every session entry that already exists; answer **No** to leave them as they are and open individual entries up through Foundry's ownership dialog instead. Turning the setting off never removes ownership. A player's Session sheet shows three tabs rather than four — Recap, Session and Notes, with no Relationships tab.
+Turning on the **Players Write Sessions** setting makes new Session entries — from the docx import wizard or MEJ's own New Entry dialog — owned by all players by default, so an owning player can open the Recap tab and edit the shared recap the same way you do. When you turn it on, the companion also offers to grant ownership of every session entry that already exists; answer **No** to leave them as they are and open individual entries up through Foundry's ownership dialog instead. Turning the setting off never removes ownership. A player's Session sheet shows Recap, Session and Notes, plus Relationships when they can add a player connection there or have one to see.
 
 Dropping or pasting an image onto the recap is refused with a notice ("Close the recap editor first, then drop the image.") whenever the editor is open — that's a general rule for anyone with edit access, GM included, not just players going through the relay below. An image dropped while another owner still has the recap open on their screen can be overwritten when they save — ask them to close it first. Players who don't have Foundry's file-upload permission still get inline images into the recap: the upload is relayed through an active GM's client, then written to the recap by the player's own owner update. A player who doesn't own the entry sees the recap read-only — there is no relay for recap text.
 
 Ownership is Foundry's: an owning player's client receives the whole page, including **GM Notes**, even though the sheet never shows them that tab. Keep anything that must stay hidden in a GM-only entry rather than a player-writable session.
+
+**Player connections.** Players can record their own connections between entries in the **Player connections** block on the Relationships tab (see the Player Guide's "Recording connections"). They never touch your MEJ relationships. A connection is stored on the entry it starts from and shows on both ends, each side with its own label and secret; other players can add one note per side. It is shared with the party by default unless its author makes it private, and you always see every connection with its author. Saves go through your client, so a GM must be connected for players to save. You can delete any player's note or connection from the block but can't edit their text, and you add relationships with MEJ's own tools. Players get a Relationships tab whenever they can add a connection or have something to see there, including on Session pages. Connections draw as dotted lines in the Hub graph (**Show player connections**), and appear in Word export only when you export with **Include GM Content** if they are private or hold unrevealed secrets. Turn **Players can create connections** off in the module settings to freeze editing; existing connections stay visible.
 
 ## The player portal
 
@@ -355,7 +357,7 @@ If your world moves between a build with the extension API and a stock build (in
 
 ## Settings reference
 
-Six settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
+Seven settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
 
 ![Campaign Companion's module settings panel](images/settings.png)
 
@@ -365,6 +367,7 @@ Six settings are visible in **Configure Settings → Module Settings**, all worl
 - **Auto-Capture Shared Media** (default: off) — see [Auto-capture](#auto-capture). Turn this on if you regularly show players images or video during a session and want them filed onto the timeline without extra effort.
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.
 - **Warn when Campaign Companion can't work for players** (on by default) — see the **Player access** note under [Installation & first-time setup](#installation--first-time-setup). When a GM logs in while Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off, a dialog offers to turn it on; ticking **Don't show this again** turns this setting off, and you can switch it back on here.
+- **Players can create connections** (on by default) — see [Player collaboration](#player-collaboration). Off hides **Add connection**, **Add a note** and the drop target and makes player notes read-only; existing connections still show and their writers can still delete them.
 
 A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create Entity from Selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 

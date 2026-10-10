@@ -198,6 +198,8 @@
                                 <i class="fa-solid fa-circle-nodes"></i> {{localize "MEJCampaignCompanion.graph.all"}}</button>
                             <label class="mej-cc-graph-backlinks"><input type="checkbox" data-action-change="toggleGraphBacklinks" {{#if graph.includeBacklinks}}checked{{/if}}>
                                 {{localize "MEJCampaignCompanion.graph.backlinks"}}</label>
+                            <label class="mej-cc-graph-backlinks mej-cc-graph-player"><input type="checkbox" data-action-change="toggleGraphPlayerConnections" {{#if graph.includePlayer}}checked{{/if}}>
+                                {{localize "MEJCampaignCompanion.graph.playerConnections"}}</label>
                             {{#if graph.truncated}}<span class="mej-cc-graph-truncated">{{localize "MEJCampaignCompanion.graph.truncated"}}</span>{{/if}}
                         </div>
                         <svg class="mej-cc-graph-svg"></svg>

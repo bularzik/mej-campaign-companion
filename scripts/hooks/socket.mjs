@@ -21,22 +21,26 @@
 // from being processed.
 import {
   SOCKET, UPLOAD_MEDIA_ACTION, UPLOAD_MEDIA_RESULT_ACTION,
-  ENTITY_FROM_SELECTION_ACTION, ENTITY_FROM_SELECTION_RESULT_ACTION
+  ENTITY_FROM_SELECTION_ACTION, ENTITY_FROM_SELECTION_RESULT_ACTION,
+  PLAYER_CONNECTION_ACTION, PLAYER_CONNECTION_RESULT_ACTION
 } from "../constants.mjs";
 import { handleUploadRequest, handleUploadResult } from "./media-relay.mjs";
 import { handleEntityRequest, handleEntityResult } from "./entity-from-selection-relay.mjs";
+import { handleConnectionRequest, handleConnectionResult } from "./player-connections-relay.mjs";
 
 const HANDLERS = {
   [UPLOAD_MEDIA_ACTION]: handleUploadRequest,
   [UPLOAD_MEDIA_RESULT_ACTION]: handleUploadResult,
   [ENTITY_FROM_SELECTION_ACTION]: handleEntityRequest,
-  [ENTITY_FROM_SELECTION_RESULT_ACTION]: handleEntityResult
+  [ENTITY_FROM_SELECTION_RESULT_ACTION]: handleEntityResult,
+  [PLAYER_CONNECTION_ACTION]: handleConnectionRequest,
+  [PLAYER_CONNECTION_RESULT_ACTION]: handleConnectionResult
 };
 
 // Exported (not just module-local) so the "is this client authorized to run this action"
 // decision is independently unit-testable without registering a real socket listener - see
 // isAuthorizedForAction below and test/socket-dispatcher.test.js.
-export const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION, ENTITY_FROM_SELECTION_ACTION]);
+export const GM_ACTIONS = new Set([UPLOAD_MEDIA_ACTION, ENTITY_FROM_SELECTION_ACTION, PLAYER_CONNECTION_ACTION]);
 
 /**
  * Pure routing seam: does this client get to run `action`? Every action must be a known

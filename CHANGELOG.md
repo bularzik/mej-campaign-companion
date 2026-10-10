@@ -2,13 +2,18 @@
 
 ## Unreleased
 
-Every session gets a timepoint, and encounters are captured when combat starts.
+Every session gets a timepoint, encounters are captured when combat starts, and players can record their own connections between entries.
 
 - **Added:** creating a Session now adds a timepoint to the campaign's timeline. It takes the session's name and in-world campaign date and time, and the session is attached to it. A session with no date yet is stamped with the current world date, and that date is written into the session so the two match. Renaming the session or changing its date updates the timepoint; deleting the timepoint is respected. Docx-imported sessions are unchanged (the import wizard still makes its own dated timepoints).
 - **Fixed:** a GM could be left with no way to add a timepoint. **Add Timepoint** now also shows when a scope has no timeline yet, and creates the timeline on demand.
 - **Changed:** **Auto-Capture Encounters** creates the Encounter entry when combat starts, from the opening roster. Ending combat merges the final roster and outcome into it, keeping anything you wrote. A combat that started before capture was on still gets its Encounter at the end.
 - **Changed:** **Auto-Capture Encounters** is now on by default. Worlds that never changed the setting will start capturing; turn it off in Module Settings.
 - **Fixed:** captures (encounters and shared media) were silently dropped when the timeline had no timepoints. They now create a timepoint dated to the current world date and file onto it.
+- **Added:** players can record connections between journal entries in a new **Player connections** block on the Relationships tab: a label and secret for each side, one note per player per side, shared with the party by default or private to the author and the GM. Add them with **Add connection** or by dropping a journal entry onto the block. Saves go through the active GM, so a GM must be connected; the GM sees every connection and can delete any connection or note.
+- **Added:** player connections draw as dotted lines in the relationship graph (**Show player connections**) and appear under each entry in Word export; private connections and unrevealed secrets are exported only with **Include GM Content**.
+- **Added:** the **Players can create connections** setting (on by default).
+- **Changed:** players now get the Relationships tab, Session pages included, when they can add a connection or have something to see there, and no longer get an empty tab when every relationship is hidden from them.
+- **Tests:** end-to-end spec `33-player-connections` on Foundry 13 and 14; `29-readability` covers the block and the dialog.
 
 ## 0.24.1 (2026-10-09)
 

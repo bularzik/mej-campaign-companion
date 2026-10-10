@@ -13,7 +13,7 @@
 // (same node kinds in, same docx.iife.js vendor bundle) - only the vendor
 // path (loadVendorGlobal, this module's own Task 11 asset) and localization
 // keys differ.
-import { MODULE_ID, I18N } from "../constants.mjs";
+import { MODULE_ID, I18N, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
 import { snapshotToDocModel, replaceUuidTags } from "../logic/doc-export.mjs";
 import {
   eligibleEntries, orderEligibleEntries, recordSnapshot, pageRelationships,
@@ -25,6 +25,8 @@ import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { normalizeConnections, exportLines } from "../logic/player-connections.mjs";
+import { incomingConnections } from "../hooks/player-connections-index.mjs";
 
 /**
  * doc-export.mjs is ported byte-for-byte from campaign-record, including
@@ -134,16 +136,34 @@ function isDefaultPlayerVisible(uuid) {
   return (doc.ownership?.default ?? levels.NONE) >= levels.LIMITED;
 }
 
+/** Export lines for one row's player connections, both ends (spec §6.2). Unresolved ends are dropped. */
+function playerConnectionLines(row, includeGM, labels) {
+  const nameOf = (uuid) => fromUuidSync(uuid)?.name ?? null;
+  const items = [
+    ...normalizeConnections(row.page?.flags?.[MODULE_ID]?.[PLAYER_CONNECTIONS_FLAG], row.uuid)
+      .map((r) => ({ row: r, side: "from", otherName: nameOf(r.to) })),
+    ...incomingConnections(row.uuid).map(({ row: r }) => ({ row: r, side: "to", otherName: nameOf(r.from) }))
+  ].filter((item) => item.otherName);
+  return exportLines(items, { includeGM, viewerId: game.user.id, labels });
+}
+
 async function runExport(selectedRows, includeGM, timepoints) {
   try {
     const labels = {
       relationships: game.i18n.localize(`${I18N}.export.relationships`),
+      playerConnections: game.i18n.localize(`${I18N}.export.playerConnections`),
       sessionNumber: game.i18n.localize(`${I18N}.export.sessionNumber`),
       campaignDate: game.i18n.localize(`${I18N}.export.campaignDate`)
+    };
+    const pcLabels = {
+      by: (name) => game.i18n.format(`${I18N}.playerConnections.by`, { name }),
+      private: game.i18n.localize(`${I18N}.export.private`),
+      secret: game.i18n.localize(`${I18N}.export.secret`)
     };
     const buildRecord = (row) => recordSnapshot(row, {
       includeGM,
       relationships: row.kind === SESSION_KIND ? undefined : resolvedRelationships(row.page),
+      playerConnections: playerConnectionLines(row, includeGM, pcLabels),
       labels,
       formatCampaignDate
     });

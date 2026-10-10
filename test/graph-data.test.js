@@ -97,3 +97,37 @@ describe("edge labels (Phase C)", () => {
     expect(g.edges).toEqual([]);
   });
 });
+
+describe("buildGraph player edges (spec 2026-10-09 §6.1)", () => {
+  const pc = (to, authorName, fromLabel = "", toLabel = "") => ({ id: `${authorName}-${to}`, to, authorName, fromLabel, toLabel });
+  const rowsWith = (aRels = [], aPcs = [], bPcs = []) => [
+    { uuid: "J.a", name: "A", type: "person", relationships: aRels, playerConnections: aPcs },
+    { uuid: "J.b", name: "B", type: "person", relationships: [], playerConnections: bPcs }
+  ];
+  it("one player edge per pair, a tooltip line per connection", () => {
+    const g = buildGraph(rowsWith([], [pc("J.b", "Dana", "Sister of", "Brother of"), pc("J.b", "Jo", "Rival")]), [], { isGM: false });
+    expect(g.edges).toEqual([{ source: "J.a", target: "J.b", kind: "player", label: "", tooltip: "Dana: Sister of / Brother of\nJo: Rival" }]);
+  });
+  it("connections stored on either end of the same pair collapse into one edge", () => {
+    const g = buildGraph(rowsWith([], [pc("J.b", "Dana", "Sister of")], [pc("J.a", "Jo", "Cousin of")]), [], {});
+    expect(g.edges).toHaveLength(1);
+    expect(g.edges[0].tooltip).toBe("Dana: Sister of\nJo: Cousin of");
+  });
+  it("a GM relationship on the pair wins", () => {
+    const g = buildGraph(rowsWith([{ id: "r1", uuid: "J.b", hidden: false, label: "ally" }], [pc("J.b", "Dana", "x")]), [], {});
+    expect(g.edges.map((e) => e.kind)).toEqual(["relationship"]);
+  });
+  it("a GM edge hidden from this player leaves their player edge", () => {
+    const g = buildGraph(rowsWith([{ id: "r1", uuid: "J.b", hidden: true, label: "secret" }], [pc("J.b", "Dana", "x")]), [], { isGM: false });
+    expect(g.edges.map((e) => e.kind)).toEqual(["player"]);
+  });
+  it("player edges beat mention links; includePlayer:false drops them and lets the link through", () => {
+    const links = [{ source: "J.a", target: "J.b" }];
+    expect(buildGraph(rowsWith([], [pc("J.b", "Dana", "x")]), links, { includeBacklinks: true }).edges.map((e) => e.kind)).toEqual(["player"]);
+    expect(buildGraph(rowsWith([], [pc("J.b", "Dana", "x")]), links, { includeBacklinks: true, includePlayer: false }).edges.map((e) => e.kind)).toEqual(["backlink"]);
+  });
+  it("only the author when both labels are empty; a missing endpoint draws nothing", () => {
+    expect(buildGraph(rowsWith([], [pc("J.b", "Dana")]), [], {}).edges[0].tooltip).toBe("Dana");
+    expect(buildGraph(rowsWith([], [pc("J.zzz", "Dana", "x")]), [], {}).edges).toEqual([]);
+  });
+});
