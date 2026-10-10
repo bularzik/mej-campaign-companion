@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Party relationships replace Player connections. Players' relationships
+  now live in MEJ's own Relationships list, one per pair of entries,
+  editable by any campaign Contributor, beside (never overwriting) the
+  GM's. Add by dropping an entry or with Add relationship (pick the entry,
+  then label it inline). No GM needs to be online. Secrets, private
+  connections and per-player notes are gone; 0.25.0 connection data is not
+  carried over.
+
 ## 0.25.0 (2026-10-10)
 
 Every session gets a timepoint, encounters are captured when combat starts, and players can record their own connections between entries.
