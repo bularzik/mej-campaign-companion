@@ -983,6 +983,15 @@
   stroke-dasharray: 4 3;
 }
 
+/* Player connections (spec 2026-10-09 §6.1): dotted, their own colour. */
+.mej-cc-graph-edge.player {
+  stroke: #2f7d6d;
+  stroke-width: 2;
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
 .mej-cc-graph-edge-label {
   font-size: 10px;
   fill: var(--color-text-dark-secondary, #666);
@@ -1229,6 +1238,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    dark surface color instead of white. */
 .theme-dark .mej-cc-graph-edge {
   stroke: var(--color-light-5, #9f8475);
+}
+
+.theme-dark .mej-cc-graph-edge.player {
+  stroke: #6fd0b9;
 }
 
 .theme-dark .mej-cc-graph-edge-label {

@@ -4,6 +4,7 @@
 // Foundry touch is injected - same convention as campaigns.mjs. Row shape is
 // exactly what logic/graph-data.mjs's buildGraph consumes.
 import { visibleRelRows } from "./rel-reveals.mjs";
+import { normalizeConnections, canSeeConnection } from "./player-connections.mjs";
 
 /**
  * Edge label text: the free-text relationship label plus the secret label
@@ -20,9 +21,14 @@ export function combineLabel(label, secretText) {
  * first typed page wins). Scope IS the entries argument - callers decide
  * membership (the Hub passes its #scopedEntries()).
  * ctx: { isGM, userId, groups, getType(page), canObserve(entry),
- *        relRevealsOf(entry), relationshipsOf(page), imageOf?(page, type) }
+ *        relRevealsOf(entry), relationshipsOf(page), imageOf?(page, type),
+ *        playerConnectionsOf?(page), canSeeEntry?(uuid) }
+ * Player connections are the row's OUTGOING ones (spec 2026-10-09 §6.1):
+ * an edge needs both endpoints as nodes, and the from-entry's row is always
+ * present when they are, so incoming ones would only duplicate the pair.
+ * Only the author's main labels travel; notes and secrets never do.
  */
-export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserve, relRevealsOf, relationshipsOf, imageOf }) {
+export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserve, relRevealsOf, relationshipsOf, imageOf, playerConnectionsOf, canSeeEntry }) {
   const rows = [];
   for (const entry of entries ?? []) {
     if (!isGM && !canObserve(entry)) continue;
@@ -34,8 +40,17 @@ export function graphRowsFor(entries, { isGM, userId, groups, getType, canObserv
         relRevealsOf(entry) ?? {},
         { userId, groups, isGM }
       ).map((r) => ({ id: r.id, uuid: r.uuid, hidden: r.hidden, revealedToViewer: r.rowRevealedToUser, label: combineLabel(r.label, r.secretText) }));
+      const playerConnections = typeof playerConnectionsOf === "function"
+        ? normalizeConnections(playerConnectionsOf(page), entry.uuid)
+          .filter((row) => canSeeConnection(row, { userId, isGM, canSeeEntry: canSeeEntry ?? (() => false) }))
+          .map((row) => ({
+            id: row.id, to: row.to, authorName: row.authorName,
+            fromLabel: row.sides.from.notes[row.authorId]?.label ?? "",
+            toLabel: row.sides.to.notes[row.authorId]?.label ?? ""
+          }))
+        : [];
       const img = typeof imageOf === "function" ? imageOf(page, type) : null;
-      rows.push({ uuid: entry.uuid, name: entry.name, type, img: typeof img === "string" && img.length ? img : null, relationships });
+      rows.push({ uuid: entry.uuid, name: entry.name, type, img: typeof img === "string" && img.length ? img : null, relationships, playerConnections });
       break;
     }
   }
