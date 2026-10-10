@@ -1,4 +1,4 @@
-// Relationships tab for non-GMs (spec 2026-10-09 §3, §4.7). MEJ removes the
+// Relationships tab for non-GMs (spec 2026-10-09 §3, §4.7; rule 2 per 2026-10-10 §3.1). MEJ removes the
 // tab when the raw relationships flag is empty (EnhancedJournalSheet.js:228-232)
 // and PlaceSheet removes it again when no non-person/shop rows exist
 // (PlaceSheet.js:74-76) - both on RAW rows, so a player whose rows are all
@@ -10,9 +10,9 @@ const KEY = "relationships";
 // PlaceSheet shows person and shop rows on its own Townsfolk / Shops tabs.
 const PLACE_OWN_TABS = new Set(["person", "shop"]);
 
-export function relationshipsTabVisible({ isGM, visibleGmRows, visiblePlayerRows, canAdd }) {
+export function relationshipsTabVisible({ isGM, visibleGmRows, visiblePartyRows, canAdd }) {
   if (isGM) return true;
-  return visibleGmRows > 0 || visiblePlayerRows > 0 || canAdd === true;
+  return visibleGmRows > 0 || visiblePartyRows > 0 || canAdd === true;
 }
 
 function relTypeById(relationships) {

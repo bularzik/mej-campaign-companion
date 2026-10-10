@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { relationshipsTabVisible, countVisibleGmRows, applyRelationshipsTab } from "../scripts/logic/rel-tab-visibility.mjs";
 
 describe("relationshipsTabVisible (spec §3 tab rules)", () => {
-  const none = { isGM: false, visibleGmRows: 0, visiblePlayerRows: 0, canAdd: false };
+  const none = { isGM: false, visibleGmRows: 0, visiblePartyRows: 0, canAdd: false };
   it("GM always", () => expect(relationshipsTabVisible({ ...none, isGM: true })).toBe(true));
   it("rule 1: a visible GM row", () => expect(relationshipsTabVisible({ ...none, visibleGmRows: 1 })).toBe(true));
-  it("rule 2: a visible player connection", () => expect(relationshipsTabVisible({ ...none, visiblePlayerRows: 1 })).toBe(true));
+  it("rule 2: a readable party row", () => expect(relationshipsTabVisible({ ...none, visiblePartyRows: 1 })).toBe(true));
   it("rule 3: can add", () => expect(relationshipsTabVisible({ ...none, canAdd: true })).toBe(true));
   it("nothing visible and can't add (LIMITED viewer, or setting off): hidden", () => expect(relationshipsTabVisible(none)).toBe(false));
 });
