@@ -42,3 +42,12 @@ describe("entity-from-selection actions", () => {
     expect(isAuthorizedForAction("entity-from-selection-result", false)).toBe(true);
   });
 });
+
+describe("player connection actions (spec 2026-10-09 §4.4)", () => {
+  it("request is GM-only; result reaches every client", () => {
+    expect(isAuthorizedForAction("player-connection", false)).toBe(false);
+    expect(isAuthorizedForAction("player-connection", true)).toBe(true);
+    expect(isAuthorizedForAction("player-connection-result", false)).toBe(true);
+    expect(GM_ACTIONS.has("player-connection-result")).toBe(false);
+  });
+});
