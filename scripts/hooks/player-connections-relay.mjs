@@ -21,6 +21,33 @@ const REASONS = new Set([
 
 const getMEJType = (doc) => game.MonksEnhancedJournal?.getMEJType?.(doc);
 
+/**
+ * The relationship types MEJ allows on `page`, read from the sheet class MEJ
+ * registers for its `type` (getDocumentTypes) - the class MEJ's shell renders.
+ * Not page.sheet first: a "text" page carrying MEJ's type flag only becomes
+ * that type in memory when MEJ's fixType runs on it (openJournalEntry), so on
+ * a GM who never opened the entry page.sheet is core's text sheet, with no
+ * allowedRelationships, and every player add would be "type-not-allowed".
+ * The getter is called with the class prototype as receiver; MEJ's reads
+ * nothing but this.constructor. page.sheet is the fallback (e.g. a Session on
+ * stock MEJ, whose class MEJ does not list).
+ * @returns {string[]}
+ */
+export function allowedRelationshipsOf(page, type, sheetClasses) {
+  try {
+    const cls = type ? sheetClasses?.[type] : null;
+    const fromClass = cls?.prototype ? Reflect.get(cls.prototype, "allowedRelationships") : null;
+    if (Array.isArray(fromClass)) return [...fromClass];
+  } catch {
+    // fall back to the page's own sheet
+  }
+  try {
+    return [...(page?.sheet?.allowedRelationships ?? [])];
+  } catch {
+    return [];
+  }
+}
+
 function foundryEnv() {
   return {
     emit: (msg) => game.socket.emit(SOCKET, msg),
@@ -37,13 +64,13 @@ function foundryEnv() {
       if (!(entry instanceof JournalEntry)) return null;
       const page = entry.pages.contents.find((p) => mejTypeWith(p, getMEJType)) ?? null;
       if (!page) return null;
-      let allowed = [];
+      let sheetClasses = null;
       try {
-        // MEJ's own addRelationship reads the target page's sheet the same way.
-        allowed = [...(page.sheet?.allowedRelationships ?? [])];
+        sheetClasses = game.MonksEnhancedJournal?.getDocumentTypes?.() ?? null;
       } catch {
-        allowed = [];
+        sheetClasses = null;
       }
+      const allowed = allowedRelationshipsOf(page, mejTypeWith(page, getMEJType), sheetClasses);
       return { uuid: entry.uuid, page, typed: true, locked: entry.compendium?.locked === true, allowed };
     },
     typeOf: (uuid) => {

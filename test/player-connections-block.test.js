@@ -129,6 +129,22 @@ describe("buildConnectionsBlock - editing (spec §4.5)", () => {
     label.dispatchEvent(enter);
     expect(enter.defaultPrevented).toBe(true);
   });
+  it("controls belong to no form, so a read-only sheet's _toggleDisabled(true) leaves them working", () => {
+    // MEJ's shell disables every element of a non-editable subsheet's form
+    // (enhanced-journal.js: subsheet._toggleDisabled) - i.e. for every player.
+    document.body.innerHTML = "";
+    const form = document.createElement("form");
+    document.body.append(form);
+    const root = build([{ view: editable(), target: mara }], { canAdd: true },
+      { saveNote: vi.fn(), toggleReveal: vi.fn(), add: vi.fn(), deleteConnection: vi.fn() });
+    form.append(root);
+    const controls = [...root.querySelectorAll("button, input")];
+    expect(controls.length).toBeGreaterThanOrEqual(4);
+    for (const el of controls) expect(el.form, el.className).toBeNull();
+    for (const el of form.elements) el.disabled = true;
+    expect(controls.every((el) => el.disabled === false)).toBe(true);
+    document.body.innerHTML = "";
+  });
   it("no inputs without a saveNote handler or for someone else's note", () => {
     expect(build([{ view: editable(), target: mara }]).querySelector("input")).toBeNull();
     expect(build([{ view: view({ others: [note()] }), target: mara }], {}, { saveNote: vi.fn() }).querySelector("input")).toBeNull();

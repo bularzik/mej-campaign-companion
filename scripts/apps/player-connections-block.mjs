@@ -14,6 +14,17 @@ import { LABEL_MAX, SECRET_MAX } from "../logic/player-connections.mjs";
 
 export const DEBOUNCE_MS = 400;
 
+// The block sits inside MEJ's sheet <form>. For a non-editable sheet - every
+// player's - MEJ's shell runs the subsheet's _toggleDisabled(true) after
+// rendering (enhanced-journal.js), which disables every element of that form,
+// and it can run again after the block is injected. A form attribute naming
+// no element gives a control no form owner, so it is not in form.elements.
+export const DETACHED_FORM = "mej-cc-pc-no-form";
+const detach = (control) => {
+  control.setAttribute("form", DETACHED_FORM);
+  return control;
+};
+
 export function debounce(fn, ms = DEBOUNCE_MS) {
   let timer = null;
   return (...args) => {
@@ -50,7 +61,7 @@ function icon(doc, className, tooltip) {
 }
 
 function button(doc, className, iconClass, text, tooltip, onClick) {
-  const a = el(doc, "button", className);
+  const a = detach(el(doc, "button", className));
   a.type = "button"; // real button: Enter/Space activate it; never submits MEJ's form
   const glyph = icon(doc, iconClass);
   glyph.setAttribute("aria-hidden", "true");
@@ -68,7 +79,7 @@ function button(doc, className, iconClass, text, tooltip, onClick) {
 }
 
 function field(doc, className, value, placeholder, maxLength) {
-  const input = el(doc, "input", `item-field ${className}`);
+  const input = detach(el(doc, "input", `item-field ${className}`));
   input.type = "text";
   input.value = value ?? "";
   input.placeholder = placeholder ?? "";

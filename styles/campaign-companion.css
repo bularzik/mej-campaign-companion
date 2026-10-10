@@ -1659,7 +1659,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   color: var(--mej-cc-ink-muted);
   opacity: 1;
 }
-.monks-enhanced-journal .mej-cc-player-connections input.item-field {
+/* .items-list: outranks MEJ's equal-specificity, later-loaded
+   `.monks-journal-sheet .items-list .item input`, whose dark-ink variables
+   ignore the shell's dark scheme (1.2:1 on the dark surface). */
+.monks-enhanced-journal .mej-cc-player-connections .items-list input.item-field {
   color: var(--mej-cc-field-ink);
   background: var(--mej-cc-field-bg);
   border: 1px solid var(--mej-cc-field-border);

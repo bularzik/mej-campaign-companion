@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  applyConnectionOp, handleConnectionRequest, handleConnectionResult, requestConnectionOp, connectionReasonKey
+  applyConnectionOp, handleConnectionRequest, handleConnectionResult, requestConnectionOp, connectionReasonKey,
+  allowedRelationshipsOf
 } from "../scripts/hooks/player-connections-relay.mjs";
 import { ENTITY_RELAY_TIMEOUT_MS } from "../scripts/constants.mjs";
 
@@ -127,5 +128,31 @@ describe("connectionReasonKey", () => {
   it("maps known reasons and falls back to failed", () => {
     expect(connectionReasonKey("duplicate")).toBe("MEJCampaignCompanion.playerConnections.reasons.duplicate");
     expect(connectionReasonKey("weird")).toBe("MEJCampaignCompanion.playerConnections.reasons.failed");
+  });
+});
+
+describe("allowedRelationshipsOf", () => {
+  // MEJ's own sheet getter: a constant list, plus (v14 fork) types keyed by this.constructor.type.
+  class PersonSheet {
+    static type = "person";
+    get allowedRelationships() { return ["person", "place", ...(this.constructor.type === "person" ? ["shop"] : [])]; }
+  }
+
+  it("reads the MEJ sheet class for the type, not page.sheet (a text page MEJ never fixType'd on the GM)", () => {
+    const page = { get sheet() { return { constructor: { name: "JournalEntryPageProseMirrorSheet" } }; } };
+    expect(allowedRelationshipsOf(page, "person", { person: PersonSheet })).toEqual(["person", "place", "shop"]);
+  });
+
+  it("falls back to page.sheet when MEJ has no class for the type", () => {
+    const page = { sheet: { allowedRelationships: ["person"] } };
+    expect(allowedRelationshipsOf(page, "session", { person: PersonSheet })).toEqual(["person"]);
+    expect(allowedRelationshipsOf(page, "person", null)).toEqual(["person"]);
+  });
+
+  it("is empty when neither resolves, and never throws", () => {
+    const throwing = { get sheet() { throw new Error("no sheet"); } };
+    expect(allowedRelationshipsOf(throwing, "unknown", {})).toEqual([]);
+    class Broken { get allowedRelationships() { throw new Error("boom"); } }
+    expect(allowedRelationshipsOf({ sheet: null }, "x", { x: Broken })).toEqual([]);
   });
 });
