@@ -1716,3 +1716,26 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-pc-target .mej-cc-pc-target-type { font-size: var(--font-size-11, 11px); }
 .mej-cc-pc-target:hover, .mej-cc-pc-target:focus { background: rgba(127, 127, 127, 0.2); outline: none; }
 .mej-cc-pc-target.selected { font-weight: bold; background: rgba(127, 127, 127, 0.3); }
+
+/* Party relationships inside MEJ's Relationships list (spec 2026-10-10 §3.2). */
+.monks-journal-sheet .relationships .mej-cc-party-line {
+  display: flex; align-items: center; gap: 0.4em; margin-top: 2px;
+  color: var(--mej-cc-ink); font-size: var(--font-size-13, 13px);
+}
+.monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-icon { color: var(--mej-cc-ink-muted); flex: 0 0 auto; }
+.monks-journal-sheet .relationships .mej-cc-party-line input.mej-cc-party-input { flex: 1 1 auto; color: var(--mej-cc-ink); }
+.monks-journal-sheet .relationships .mej-cc-party-line input.mej-cc-party-input::placeholder { color: var(--mej-cc-ink-muted); }
+.monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-label { flex: 1 1 auto; }
+.monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-edited,
+.monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-campaign {
+  color: var(--mej-cc-ink-muted); font-size: 0.85em; white-space: nowrap;
+}
+.monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-campaign {
+  background: var(--mej-cc-chip-bg); border-radius: 3px; padding: 0 4px;
+}
+.monks-journal-sheet .relationships .mej-cc-party-add { padding: 6px 0; }
+.mej-cc-party-picker .mej-cc-party-picks { list-style: none; margin: 6px 0 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.mej-cc-party-picker .mej-cc-party-pick { display: flex; align-items: center; gap: 8px; padding: 4px; cursor: pointer; }
+.mej-cc-party-picker .mej-cc-party-pick:hover { background: var(--mej-cc-chip-bg); }
+.mej-cc-party-picker .mej-cc-party-pick img { width: 32px; height: 32px; object-fit: cover; border: none; }
+.mej-cc-party-picker .mej-cc-party-pick .type { margin-left: auto; color: var(--mej-cc-ink-muted); }

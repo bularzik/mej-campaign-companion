@@ -1,7 +1,24 @@
 {
   "MEJCampaignCompanion": {
     "party": {
-      "notebookName": "Party relationships — {campaign}"
+      "notebookName": "Party relationships — {campaign}",
+      "party": "Party relationship",
+      "addLabel": "Party: add a label",
+      "edited": "edited by {name}",
+      "remove": "Remove party relationship",
+      "add": "Add relationship",
+      "pickTitle": "Add a relationship to {name}",
+      "search": "Search entries",
+      "noTargets": "There are no entries you can relate to this one.",
+      "noNotebook": "A GM must open the world once before party relationships can be added in this campaign.",
+      "writeFailed": "Couldn't save the party relationship.",
+      "unresolved": "Unknown entry",
+      "drop": {
+        "not-journal": "Only journal entries in this world can be related.",
+        "self": "An entry can't be related to itself.",
+        "no-access": "You can't see that entry.",
+        "type-not-allowed": "This kind of entry can't be related here."
+      }
     },
     "errors": {
       "mej-missing": "Campaign Companion requires Monk's Enhanced Journal. The module is disabled.",
