@@ -62,9 +62,9 @@ Hooks.once("init", () => {
     default: true
   });
 
-  // Player connections (spec 2026-10-09 §4.8): off hides Add connection, Add
-  // a note and the drop target and makes notes read-only; existing
-  // connections still display. Open sheets re-render on change.
+  // Party relationships (spec 2026-10-10 §4.7): off hides Add, the drop
+  // target and empty party lines, and makes labels read-only for players;
+  // existing rows still display. Open sheets re-render on change.
   game.settings.register(MODULE_ID, PLAYER_CONNECTIONS_SETTING, {
     name: `${I18N}.settings.playerConnectionsEnabled.name`,
     hint: `${I18N}.settings.playerConnectionsEnabled.hint`,
@@ -73,9 +73,9 @@ Hooks.once("init", () => {
     type: Boolean,
     default: true,
     onChange: () => {
-      import("./hooks/player-connections-index.mjs")
-        .then((m) => m.refreshConnectionViews(null))
-        .catch((err) => console.error(`${MODULE_ID} | player connections refresh failed`, err));
+      import("./hooks/view-refresh.mjs")
+        .then((m) => m.refreshViewsMatching(null))
+        .catch((err) => console.error(`${MODULE_ID} | party relationships refresh failed`, err));
     }
   });
 
