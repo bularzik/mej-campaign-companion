@@ -38,6 +38,10 @@
       "warnPlayerAccess": {
         "name": "Warn when Campaign Companion can't work for players",
         "hint": "When a GM logs in and Monk's Enhanced Journal's \"Allow players to use Enhanced Journal\" setting is off, explain that Campaign Companion won't work properly for players and offer to turn it on."
+      },
+      "playerConnectionsEnabled": {
+        "name": "Players can create connections",
+        "hint": "Let players record connections between journal entries on the Relationships tab. Off hides Add connection and Add a note and makes notes read-only; existing connections still show, and their writers can still delete them."
       }
     },
     "sheettype": {
