@@ -8,7 +8,7 @@
 import { MODULE_ID, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
 import { buildReverseIndex, reindexSource, removeSource, incomingFor } from "../logic/player-connections.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
-import { poppedOutPageSheets } from "./secrets-ui.mjs";
+import { refreshViewsMatching } from "./view-refresh.mjs";
 
 let index = null;
 let registered = false;
@@ -37,15 +37,7 @@ export function incomingConnections(toUuid) {
  * `null` = every one (a setting change implicates no single entry).
  */
 export function refreshConnectionViews(uuids) {
-  const hit = (uuid) => !uuids || uuids.has(uuid);
-  const shell = game.MonksEnhancedJournal?.journal;
-  if (shell?.rendered) {
-    const shown = shell.document?.parent ?? shell.document;
-    if (shown && hit(shown.uuid)) shell.render({ tempOwnership: shell.tempOwnership, reload: true });
-  }
-  for (const app of poppedOutPageSheets()) {
-    if (hit(app.document?.parent?.uuid)) app.render?.();
-  }
+  refreshViewsMatching(uuids ? (uuid) => uuids.has(uuid) : null);
 }
 
 export function registerPlayerConnectionsIndex() {

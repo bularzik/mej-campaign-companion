@@ -11,6 +11,7 @@ import { extractSecretBlocks, setSectionRevealed, sectionRevealedAll } from "../
 import { bodyRegion } from "../logic/field-extractors.mjs";
 import { suppressRevealToggles } from "../logic/secret-reveal-toggles.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { refreshViewsMatching } from "./view-refresh.mjs";
 
 const REVEALS_FLAG = "secretReveals";
 
@@ -274,20 +275,6 @@ async function injectPlayerSecrets(sheet, element) {
 }
 
 /**
- * Sheets showing a JournalEntryPage that are NOT the shell's mounted
- * subsheet - i.e. popped-out windows. Feature-detected against Foundry's
- * ApplicationV2 instance registry; an empty list is a safe degradation (the
- * shell still refreshes), never an error.
- */
-export function poppedOutPageSheets() {
-  const registry = foundry.applications?.instances;
-  if (!registry?.values) return [];
-  const shellSubsheet = game.MonksEnhancedJournal?.journal?.subsheet ?? null;
-  return [...registry.values()].filter((app) =>
-    app && app !== shellSubsheet && app.rendered && app.document instanceof JournalEntryPage);
-}
-
-/**
  * Re-render everything that could be displaying a reveal for `entry`.
  *
  * The shell reload alone was not enough: a popped-out sheet is its own
@@ -298,17 +285,7 @@ export function poppedOutPageSheets() {
  * is refreshed rather than trying to guess which ones carry reveals.
  */
 function refreshRevealViews(entry) {
-  const shell = game.MonksEnhancedJournal?.journal;
-  if (shell?.rendered) {
-    const shown = shell.document?.parent ?? shell.document;
-    if (!entry || shown?.uuid === entry.uuid || shell.document?.uuid === entry.uuid) {
-      shell.render({ tempOwnership: shell.tempOwnership, reload: true });
-    }
-  }
-  for (const app of poppedOutPageSheets()) {
-    if (entry && app.document?.parent?.uuid !== entry.uuid) continue;
-    app.render?.();
-  }
+  refreshViewsMatching(entry ? (uuid) => uuid === entry.uuid : null);
 }
 
 export function registerSecretsUi() {
