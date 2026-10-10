@@ -140,6 +140,19 @@ describe("trackEditing - a re-render never wipes text being typed", () => {
     expect(tracker.editing()).toBe(false);
     expect(onSettled).toHaveBeenCalled();
   });
+  it("a draft typed into and cleared back to empty is not an edit once focus leaves (no change event fires)", async () => {
+    const { block, outside, onSettled, tracker } = setup();
+    const draft = block.querySelector("input.draft");
+    draft.focus();
+    draft.value = "O";
+    draft.dispatchEvent(new Event("input", { bubbles: true }));
+    draft.value = "";
+    draft.dispatchEvent(new Event("input", { bubbles: true }));
+    outside.focus();
+    await tick();
+    expect(tracker.editing()).toBe(false);
+    expect(onSettled).toHaveBeenCalled();
+  });
 });
 
 describe("shouldKeepBlock", () => {

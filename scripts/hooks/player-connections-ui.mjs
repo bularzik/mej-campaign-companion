@@ -125,8 +125,12 @@ export function trackEditing(block, onSettled) {
   });
   block.addEventListener("focusout", settle);
   block.addEventListener("input", (event) => {
+    // Track the draft's contents, not just "was typed in": text typed and
+    // deleted again fires no change event, so a sticky flag would latch.
     const draft = draftOf(event.target);
-    if (draft) draft.dataset.unsent = "";
+    if (!draft) return;
+    if ([...draft.querySelectorAll("input")].some((i) => i.value.trim() !== "")) draft.dataset.unsent = "";
+    else delete draft.dataset.unsent;
   });
   block.addEventListener("change", (event) => {
     delete draftOf(event.target)?.dataset.unsent;
