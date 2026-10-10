@@ -31,9 +31,16 @@ export function notebookOwnership(current, { defaultLevel, writerIds, ownerLevel
  * Convert a current -> next ownership pair into an explicit document update
  * (removed keys via "ownership.-=<id>", set keys via "ownership.<key>"), so
  * removal never depends on Foundry's merge semantics. Null when nothing changes.
+ * `replace` (Foundry 14's global _replace) is used instead when a key is removed.
  */
-export function ownershipUpdate(current, next) {
+export function ownershipUpdate(current, next, { replace = null } = {}) {
   if (!next) return null;
+  // Foundry 14 ignores "-=" keys (and _del) inside a document's ownership:
+  // a removal there needs the whole record replaced (_replace, v14 only).
+  // Foundry 13 has no _replace and honours "-=". Both verified live.
+  if (typeof replace === "function" && Object.keys(current ?? {}).some((key) => !(key in next))) {
+    return { ownership: replace({ ...next }) };
+  }
   const update = {};
   for (const key of Object.keys(current ?? {})) {
     if (!(key in next)) update[`ownership.-=${key}`] = null;

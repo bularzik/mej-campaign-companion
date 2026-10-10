@@ -50,7 +50,9 @@ export async function syncNotebookOwnership(campaign) {
   if (!game.user.isGM) return;
   const nb = partyNotebookOf(campaign);
   if (!nb) return;
-  const update = ownershipUpdate(nb.ownership, desiredOwnership(campaign, nb.ownership));
+  const update = ownershipUpdate(nb.ownership, desiredOwnership(campaign, nb.ownership), {
+    replace: typeof globalThis._replace === "function" ? globalThis._replace : null
+  });
   if (update) await nb.update(update);
 }
 

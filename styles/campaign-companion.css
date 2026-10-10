@@ -1591,9 +1591,13 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: block; }
 
 /* Party relationships inside MEJ's Relationships list (spec 2026-10-10 §3.2). */
+/* MEJ 13.06's dark shell with no image still paints parchment under the
+   list (29-readability, v13 dark: light ink at 1.3:1), so the line carries
+   the companion surface - transparent everywhere else - with its ink. */
 .monks-journal-sheet .relationships .mej-cc-party-line {
   display: flex; align-items: center; gap: 0.4em; margin-top: 2px;
   color: var(--mej-cc-ink); font-size: var(--font-size-13, 13px);
+  background: var(--mej-cc-surface); border-radius: 3px; padding: 0 0.3em;
 }
 .monks-journal-sheet .relationships .mej-cc-party-line .mej-cc-party-icon { color: var(--mej-cc-ink-muted); flex: 0 0 auto; }
 .monks-journal-sheet .relationships .mej-cc-party-line input.mej-cc-party-input { flex: 1 1 auto; color: var(--mej-cc-ink); }

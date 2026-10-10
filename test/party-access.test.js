@@ -48,4 +48,14 @@ describe("ownershipUpdate", () => {
     expect(ownershipUpdate({ default: 2, u1: 3 }, { default: 2, u1: 3 })).toBeNull();
     expect(ownershipUpdate({ default: 2 }, null)).toBeNull();
   });
+  it("replaces the whole record through `replace` when a key is removed (Foundry 14)", () => {
+    const replace = (value) => ({ replaced: value });
+    expect(ownershipUpdate({ default: 2, u1: 3, u2: 3 }, { default: 2, u2: 3 }, { replace }))
+      .toEqual({ ownership: { replaced: { default: 2, u2: 3 } } });
+  });
+  it("keeps keyed updates when nothing is removed, even with `replace`", () => {
+    const replace = () => { throw new Error("not used"); };
+    expect(ownershipUpdate({ default: 2, u1: 3 }, { default: 2, u1: 3, u2: 3 }, { replace })).toEqual({ "ownership.u2": 3 });
+    expect(ownershipUpdate({ default: 2 }, { default: 2 }, { replace })).toBeNull();
+  });
 });
