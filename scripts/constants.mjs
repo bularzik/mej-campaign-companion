@@ -71,6 +71,9 @@ export const PLAYER_GROUPS_SETTING = "playerGroups";
 /** Combat flag: combatants that left mid-fight, for the end-of-combat summary. */
 export const DEPARTED_FLAG = "departed";
 
+/** Combat flag: uuid of the Encounter page created when that combat started. */
+export const ENCOUNTER_PAGE_FLAG = "encounterPage";
+
 /** MEJ JournalEntryPage short type key for an Encounter (flags["monks-enhanced-journal"].type). */
 export const MEJ_ENCOUNTER_TYPE = "encounter";
 

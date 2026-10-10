@@ -389,7 +389,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         // #timelineContext itself does NOT filter by visibility (only a
         // null check) - the guard has to happen here, at the render seam,
         // via #visibleTimeline, same as the world bucket below already does.
-        stacks = campaigns.map((c) => ({ name: c.name, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM) }));
+        stacks = campaigns.map((c) => ({ name: c.name, campaignId: c.id, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM) }));
         // World bucket only: visibility-filtered for display (no per-campaign
         // "default" concept applies to it), via partitionTimelines.
         const visibleTimelines = game.journal.contents
@@ -417,7 +417,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.campaignControls = scopeContext.campaignControls;
     context.index = this.#indexContext();
-    context.timeline = { stacks, ...this.#timelineSelectionContext(campaign) };
+    context.timeline = { stacks, canAdd: isGM && !stacks.length && !unfiled, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
     this.#graphData = graphPrep.graph;
     context.graph = graphPrep.context;
@@ -676,7 +676,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       // exists yet (or the resolved journal isn't visible to them - see
       // #visibleTimeline). Render an explicit empty state rather than
       // erroring or leaking timepoint labels.
-      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: false, journalId: null };
+      return { hasJournal: false, rows: [], order: this.state.timelineOrder, orderOptions: [], canEdit: isGM, journalId: null };
     }
     const canEdit = isGM;
     const order = this.state.timelineOrder;
@@ -1582,7 +1582,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onAddTimepoint(event, target) {
     if (!game.user.isGM) return;
     const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
-    const journal = journalId ? game.journal.get(journalId) : null;
+    // No timeline in this scope yet: create it on demand so a GM is never
+    // left without a way to add the first timepoint.
+    // In All scope the stack names the campaign it belongs to.
+    const stackCampaignId = target.closest("[data-campaign-id]")?.dataset.campaignId;
+    const stackCampaign = stackCampaignId ? game.folders.get(stackCampaignId) : null;
+    const journal = journalId
+      ? game.journal.get(journalId)
+      : await ensureTimelineJournal(stackCampaign ?? this.#scope().campaign ?? null);
     if (!journal) return;
     // C14: guard on a NON-EMPTY attribute. Number("") is 0 and "" != null, so
     // an empty data-position used to mean "insert at the head" when it means

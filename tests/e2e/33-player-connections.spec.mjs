@@ -151,7 +151,7 @@ async function closeSeats(...seats) {
   for (const seat of seats) await seat?.context.close().catch(() => {});
 }
 
-test.describe("32 player connections", () => {
+test.describe("33 player connections", () => {
   test.beforeEach(() => { seq += 1; });
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, (gm) => cleanup(gm));

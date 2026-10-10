@@ -139,7 +139,7 @@ Selecting a real timeline (rather than "All timelines in scope") brings up the G
 
 Three buttons below the picker switch how the stack orders itself: **Manual** (the default — drag entries into whatever order you want, a fractional-key drag-insert under the hood, so you can drop a new point between any two existing ones), **Date Added** (creation order), and **Campaign Date** (chronological by the in-world date you gave each timepoint, for the ones that have one).
 
-Click **Add Timepoint** at the bottom — GM only — to create one. The dialog asks for a **Label** and, in a **Campaign Date** fieldset, a **Year**, a **Month** dropdown, a **Day**, and a **Time** that is a single free-text field. **Create** saves it:
+Every new Session also gets a timepoint automatically, named after the session and carrying its campaign date and time (a session with no date yet takes the current world date); renaming or re-dating the session updates it. Click **Add Timepoint** at the bottom — GM only — to create one by hand; it works even before the scope has a timeline, and creates the timeline for you. The dialog asks for a **Label** and, in a **Campaign Date** fieldset, a **Year**, a **Month** dropdown, a **Day**, and a **Time** that is a single free-text field. **Create** saves it:
 
 ![The Add Timepoint dialog with Label, Year, Month, Day, and a free-text Time filled in for "Session 12 Convenes"](images/campaign-date-picker.png)
 
@@ -252,10 +252,10 @@ A linked Person shows two buttons instead: **Change linked actor** and **Unlink 
 
 Two more opt-in settings automate filing things onto the timeline for you, so you don't have to remember to do it by hand mid-session:
 
-- **Auto-Capture Encounters**: when combat ends, this creates (or updates) an Encounter journal entry summarizing the participants and outcome, and files it onto the campaign timeline's newest timepoint.
+- **Auto-Capture Encounters** (on by default): when combat starts, this creates an Encounter journal entry from the participants, and when combat ends it adds the outcome. The entry is filed onto the campaign timeline's newest timepoint; if the timeline has none yet, one is created for the current world date.
 - **Auto-Capture Shared Media**: whenever you use Foundry's "Show Players" on an image or video, this files it onto that same newest timepoint automatically.
 
-Both are independent of each other and off by default. Which campaign they file into is set from **Tools → Auto-capture campaign** in the Hub's header bar — see [Campaigns](#campaigns). Neither ever blocks the operation it's hooked into — see [Troubleshooting](#troubleshooting) below.
+Both are independent of each other. Encounters are on by default; shared media is off by default. Which campaign they file into is set from **Tools → Auto-capture campaign** in the Hub's header bar — see [Campaigns](#campaigns). Neither ever blocks the operation it's hooked into — see [Troubleshooting](#troubleshooting) below.
 
 ## Secrets
 
