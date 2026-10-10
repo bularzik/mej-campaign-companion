@@ -52,9 +52,13 @@ function icon(doc, className, tooltip) {
 function button(doc, className, iconClass, text, tooltip, onClick) {
   const a = el(doc, "button", className);
   a.type = "button"; // real button: Enter/Space activate it; never submits MEJ's form
-  a.append(icon(doc, iconClass));
+  const glyph = icon(doc, iconClass);
+  glyph.setAttribute("aria-hidden", "true");
+  a.append(glyph);
   if (text) a.append(doc.createTextNode(` ${text}`));
   if (tooltip) a.dataset.tooltip = tooltip;
+  // An icon-only button is named by its tooltip (localized UI text only).
+  if (!text && tooltip) a.setAttribute("aria-label", tooltip);
   a.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -127,7 +131,10 @@ function rowControls(doc, view, handlers, labels) {
   if (view.canToggleShare && handlers.toggleShare) {
     controls.append(button(doc, "mej-cc-pc-share", shareIcon, null, shareTip, () => handlers.toggleShare(view)));
   } else {
-    controls.append(icon(doc, `${shareIcon} mej-cc-pc-share-state`, shareTip));
+    const state = icon(doc, `${shareIcon} mej-cc-pc-share-state`, shareTip);
+    state.setAttribute("role", "img");
+    state.setAttribute("aria-label", shareTip);
+    controls.append(state);
   }
   if (view.canDelete && handlers.deleteConnection) {
     controls.append(button(doc, "item-delete mej-cc-pc-delete", "fas fa-trash", null, labels.deleteConnection,

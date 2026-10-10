@@ -1557,3 +1557,110 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 }
 .monks-enhanced-journal .mej-cc-attendee:hover .mej-cc-attendee-remove,
 .monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: block; }
+
+/* Player connections block (spec 2026-10-09 §4.5). MEJ sizes its own list
+   to the whole tab (`.tab .relationships { height: 100% }` inside an
+   overflow-hidden tab-inner), which would clip anything after it; when the
+   block is present the two share the tab instead. Row markup and grid are
+   MEJ's; the block is not inside `.relationships`, so its grid columns and
+   defunct styling are restated here. */
+.monks-journal-sheet .tab[data-tab="relationships"] .tab-inner.mej-cc-has-player-connections > .relationships {
+  height: auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 55%;
+}
+.monks-journal-sheet .tab[data-tab="relationships"] .mej-cc-player-connections {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.mej-cc-player-connections .mej-cc-pc-heading {
+  align-items: center;
+  gap: 0.5em;
+  flex: 0 0 auto;
+  border: none;
+}
+.mej-cc-player-connections .mej-cc-pc-heading h3 {
+  flex: 1;
+  margin: 0;
+  border-bottom: none;
+}
+.mej-cc-player-connections .mej-cc-pc-add { flex: 0 0 auto; cursor: pointer; }
+.monks-journal-sheet .mej-cc-player-connections .items-list header,
+.monks-journal-sheet .mej-cc-player-connections .items-list ol.item-list {
+  grid-template-columns: 175px auto 60px;
+}
+.mej-cc-player-connections .mej-cc-pc-author { font-size: var(--font-size-11, 11px); }
+.mej-cc-player-connections .mej-cc-pc-notes-row { display: block; padding: 0 0 4px 175px; }
+.mej-cc-player-connections .mej-cc-pc-notes { list-style: none; margin: 0; padding: 0; }
+.mej-cc-player-connections .mej-cc-pc-note { align-items: center; gap: 0.5em; }
+.mej-cc-player-connections .mej-cc-pc-writer { flex: 0 0 110px; font-weight: bold; overflow-wrap: anywhere; }
+.mej-cc-player-connections .mej-cc-pc-add-note { cursor: pointer; font-size: var(--font-size-12, 12px); }
+.mej-cc-player-connections .item.defunct :is(input, img, a:not(.item-delete)) {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.mej-cc-player-connections.mej-cc-pc-dropping { outline: 2px dashed var(--color-border-highlight, #ff6400); }
+
+/* The controls are real <button>s (keyboard operable, never submit MEJ's
+   form); Foundry styles every button as a full-width bordered box, so reset
+   them to read like MEJ's icon links, keeping a visible keyboard focus ring. */
+.mej-cc-player-connections button {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0.25em;
+  flex: 0 0 auto;
+  line-height: inherit;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  box-shadow: none;
+  cursor: pointer;
+}
+.mej-cc-player-connections button:hover { background: none; box-shadow: none; text-shadow: 0 0 6px var(--color-shadow-primary, #ff6400); }
+.mej-cc-player-connections button:focus { box-shadow: none; }
+.mej-cc-player-connections button:focus-visible {
+  outline: 2px solid var(--mej-cc-ink);
+  outline-offset: 1px;
+}
+
+/* Readable ink (readability sweep tokens; 29-readability checks the block). */
+.monks-enhanced-journal .mej-cc-player-connections {
+  color: var(--mej-cc-ink);
+  background: var(--mej-cc-surface);
+}
+.monks-enhanced-journal .mej-cc-player-connections :is(h3, header, .name, .relationship, .mej-cc-pc-label, .mej-cc-pc-writer, .mej-cc-pc-open, .mej-cc-pc-add, .mej-cc-pc-add-note, .item-controls a, .item-controls i, .item-controls button) {
+  color: var(--mej-cc-ink);
+  opacity: 1;
+}
+.monks-enhanced-journal .mej-cc-player-connections .items-list header {
+  background: var(--mej-cc-chip-bg);
+}
+.monks-enhanced-journal .mej-cc-player-connections :is(.mej-cc-pc-author, .mej-cc-pc-empty) {
+  color: var(--mej-cc-ink-muted);
+  opacity: 1;
+}
+.monks-enhanced-journal .mej-cc-player-connections input.item-field {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+}
+.monks-enhanced-journal .mej-cc-player-connections .mej-cc-pc-secret {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  padding: 0 0.3em;
+  border-radius: 3px;
+}
+.monks-enhanced-journal .mej-cc-player-connections .item-reveal {
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+  flex: 0 0 auto;
+  padding: 0 0.4em;
+}

@@ -236,3 +236,25 @@ describe("buildConnectionsBlock - keyboard operability", () => {
     expect(open).toHaveBeenCalledWith("JournalEntry.mara");
   });
 });
+
+describe("buildConnectionsBlock - accessible names", () => {
+  it("icon-only buttons are named by their tooltip; the share-state icon is a named image", () => {
+    const root = build([{ view: view({ canToggleShare: true, canDelete: true, others: [note({ canDelete: true })] }), target: mara }],
+      {}, { toggleShare: vi.fn(), deleteConnection: vi.fn(), deleteNote: vi.fn() });
+    expect(root.querySelector(".mej-cc-pc-share").getAttribute("aria-label")).toBe("Shared");
+    expect(root.querySelector(".mej-cc-pc-delete").getAttribute("aria-label")).toBe("Delete connection");
+    expect(root.querySelector(".mej-cc-pc-note-delete").getAttribute("aria-label")).toBe("Delete note");
+    const privateRow = build([{ view: view({ shared: false }), target: mara }]);
+    const state = privateRow.querySelector(".mej-cc-pc-share-state");
+    expect(state.getAttribute("role")).toBe("img");
+    expect(state.getAttribute("aria-label")).toBe("Private");
+  });
+  it("buttons with visible text carry no aria-label; their icons are hidden from assistive tech", () => {
+    const root = build([{ view: view({ canAddNote: true }), target: mara }], { canAdd: true }, { add: vi.fn(), saveNote: vi.fn() });
+    for (const sel of [".mej-cc-pc-add", ".mej-cc-pc-add-note"]) {
+      const b = root.querySelector(sel);
+      expect(b.hasAttribute("aria-label"), sel).toBe(false);
+      expect(b.querySelector("i").getAttribute("aria-hidden"), sel).toBe("true");
+    }
+  });
+});
