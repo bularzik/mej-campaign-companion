@@ -54,7 +54,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - **Tags and attributes** — custom tags and key/value attributes on MEJ entries, edited in a knowledge panel at the foot of each sheet. An attribute row marked `playerHidden` is kept off player sheets and out of player searches immediately.
 - **Backlinks** — the panel's "Mentioned in" section lists the entries that link to this one through `@UUID` links, updates live, and feeds the mention-count badges on the Hub Index. Plain-text names count only once auto-link has turned them into links.
 - **Knowledge bar** — the panel collapses to a one-line bar summarizing what it holds. The collapsed state is per client (`knowledgePanelCollapsed`) and applies to every sheet. The expanded panel is capped at half the pane and scrolls, and paints its own surface under a dark colour scheme.
-- **Relationship graph** — the Hub's Graph pane draws entries connected through MEJ's `relationships` flags, with vendored d3-force layout. It follows the campaign picker; **Whole campaign** and **Focus** (one entry and its direct connections) modes; an optional dashed overlay of `@UUID` mention edges; nodes draw the entry's own picture or a per-type placeholder. It is capped at the 200 most-connected entries and says so when the cap applies. A player's graph shows only relationships revealed to them.
+- **Relationship graph** — the Hub's Graph pane draws entries connected through MEJ's `relationships` flags, with vendored d3-force layout. It follows the campaign picker; **Whole campaign** and **Focus** (one entry and its direct connections) modes; an optional dashed overlay of `@UUID` mention edges; nodes draw the entry's own picture or a per-type placeholder. It is capped at the 200 most-connected entries and says so when the cap applies. A player's graph shows only relationships revealed to them. Player connections draw as dotted lines, toggled by **Show player connections**.
 - Mentions and relationships are separate layers: mentions are derived from links, relationships are curated on MEJ's Relationships tab. The module never turns one into the other.
 
 ### Secrets
@@ -117,6 +117,13 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 
 - `playersWriteSessions` (off by default) gives players ownership of new Session entries so they can edit the shared recap directly; turning it on also offers to grant ownership of existing sessions. Players without file-upload permission get inline images through a GM relay. See [Player collaboration notes](#player-collaboration-notes).
 - Players can reach the Hub (five panes), search without GM-only content, see the relationships revealed to them, and — as campaign Contributors — create entities from a selection. Walkthrough: [Player Guide](docs/player-guide.md).
+
+### Player connections
+
+- Players record what their characters believe connects people, places and factions, in a **Player connections** block on an entry's Relationships tab. **Add connection** (or dropping a journal entry onto the block) opens a picker of entries they can see whose type the sheet allows, with a label for each side, an optional secret for each, and **Share with party** (on by default; off = only the author and the GM see it).
+- A connection shows on both entries, each with its own label, like MEJ's reciprocal rows. Each other player can add one note per side; the author's note is the row's label and other players' notes list beneath it, attributed. A note's secret is visible to its writer and the GM until the writer reveals it.
+- Every write goes through the active GM's client, which re-checks access, type and authorship; with no GM connected the player is told so ("A GM must be connected to save connections.") and nothing is saved. The GM sees every connection with its author and can delete any note or connection, but adds relationships with MEJ's own tools. Players get the Relationships tab (Session pages included) whenever they have something to see there or could add a connection, and not otherwise.
+- Player connections draw as dotted lines in the relationship graph (toggle **Show player connections**). Word export is GM-only: private connections and unrevealed secrets are written only when **Include GM Content** is on. The **Players can create connections** setting (on by default) turns adding and editing off; existing connections stay visible.
 
 ## Running without the MEJ extension API (0.5.0)
 
@@ -194,7 +201,7 @@ Or install manually:
 
 ## Settings
 
-Eighteen settings are registered: six visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
+Nineteen settings are registered: seven visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
@@ -204,6 +211,7 @@ Eighteen settings are registered: six visible in the module settings menu, all w
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
 | `warnPlayerAccess` | Yes | On | Warn a GM at login when Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off (Campaign Companion doesn't work properly for players without it), and offer to turn it on. Ticking "Don't show this again" in the dialog turns this setting off. |
+| `playerConnectionsEnabled` | Yes | On | Players can create connections: shows **Add connection**, **Add a note** and the drop target on the Relationships tab and lets players edit their notes. Off makes notes read-only; existing connections still show and their writers can still delete them. |
 | `timelineJournalId` | No (internal) | `""` | Legacy: the id of the world-singleton "Campaign Timeline" JournalEntry used by a world with no campaigns. Adopting the world into a campaign moves that journal into the campaign and clears the setting. Don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |

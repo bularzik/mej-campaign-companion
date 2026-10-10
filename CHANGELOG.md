@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.25.0 (2026-10-09)
+
+Player connections.
+
+- **Added:** players can record connections between journal entries in a new **Player connections** block on the Relationships tab: a label and secret for each side, one note per player per side, shared with the party by default or private to the author and the GM. Add them with **Add connection** or by dropping a journal entry onto the block. Saves go through the active GM, so a GM must be connected; the GM sees every connection and can delete any connection or note.
+- **Added:** player connections draw as dotted lines in the relationship graph (**Show player connections**) and appear under each entry in Word export; private connections and unrevealed secrets are exported only with **Include GM Content**.
+- **Added:** the **Players can create connections** setting (on by default).
+- **Changed:** players now get the Relationships tab, Session pages included, when they can add a connection or have something to see there, and no longer get an empty tab when every relationship is hidden from them.
+- **Tests:** end-to-end spec `32-player-connections` on Foundry 13 and 14; `29-readability` covers the block and the dialog.
+
 ## 0.24.1 (2026-10-09)
 
 A readable Session tab attendee list.

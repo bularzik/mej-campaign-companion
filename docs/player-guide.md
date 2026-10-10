@@ -8,7 +8,7 @@ If you're running the game rather than playing in it, read the [GM guide](gm-gui
 
 Your GM's world is organised into **campaigns** — a folder of entries plus a **portal entry** that opens straight into the module's home base, the **Campaign Hub**. Everything you can reach from your seat comes through one of three things: session pages, the Hub, and the entries your GM has shared with you.
 
-The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**.
+The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**, plus **Relationships** whenever you can add a player connection there or have one to see (see [Recording connections](#recording-connections)).
 
 ![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the three tabs Recap, Session and Notes, and the session's shared recap on the Recap tab with an edit pencil beside it](images/session-sheet-player.png)
 
@@ -83,6 +83,21 @@ Don't be surprised if your graph looks sparser than what your GM sees on their o
 When your GM does reveal a relationship to you, it turns up in two places: as a new line on the graph, and on the entry's own **Relationships** list, where a connection that had been hidden from you appears as a fresh row (or, if it can't be slotted into the existing list, under a heading of its own reading "Known connections"). A relationship that was already visible but carried a hidden note gets that note added inline instead, marked with an eye icon.
 
 One thing to expect on a big campaign: the graph draws at most 200 entries at a time. Past that it shows the notice "Too many entries to draw — filter to reduce (showing the most-connected 200)." and keeps the most-connected ones — narrow the campaign picker's scope if you hit it.
+
+## Recording connections
+
+You can note what your character thinks ties two entries together — "Sister of", "Owes money to", "Saw them at the docks" — without waiting for your GM to draw it.
+
+Open an entry and go to its **Relationships** tab. Below your GM's relationships is a **Player connections** block. Click **Add connection** (or drag a journal entry from the sidebar onto the block), pick the other entry, and fill in:
+
+- **Connection (this entry)**: how this entry relates to the other one (required).
+- **Connection (other entry)**: the same tie seen from the other side (optional). It's what shows on the other entry.
+- A **Secret** for either side (optional). Only you and your GM can read it until you click **Reveal** next to it; **Hide** puts it back.
+- **Share with party**: on by default, so the rest of the party sees the connection. Untick it to keep it between you and your GM; the icon on the row switches it later.
+
+Other players can add one note of their own under your connection on either side ("half-sister, actually"). Their notes show beneath your row with their name, and only they can edit them. You edit your own labels and secrets right in the row; changes save when you leave the field. Clear both fields of a note to remove it, or use the bin to delete the whole connection (it asks first, and says how many other players' notes go with it).
+
+Saving needs your GM to be connected. If they aren't, you'll see "A GM must be connected to save connections." and nothing is saved. Your connections also show as dotted lines on the Hub's **Graph** (untick **Show player connections** to hide them). If your GM turns off **Players can create connections**, existing connections stay visible but can't be edited.
 
 ## When secrets are revealed to you
 
