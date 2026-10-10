@@ -115,6 +115,24 @@ export function rowsFromEncounterActors(actorsFlag) {
 }
 
 /**
+ * Re-key counted rows by their dot-free base-actor id, summing counts that
+ * collide. Needed before merging a fresh roster into a stored Encounter:
+ * stored rows are one-per-base-actor (see buildEncounterActorRows), while a
+ * fresh roster has one row per unlinked token (distinct synthetic uuids), so
+ * merging them as-is double-counts ("2" + two 1s -> "3").
+ */
+export function rekeyByBaseActor(rows) {
+  const byId = new Map();
+  for (const row of rows) {
+    const id = row.actor ? idFromUuid(row.actor) : row.id;
+    const prev = byId.get(id);
+    if (prev) prev.count += row.count;
+    else byId.set(id, { ...row, id });
+  }
+  return [...byId.values()];
+}
+
+/**
  * Names+counts of participant rows with no linked actor ("Name ×N",
  * comma-joined; empty string when every row has an actor), for appending to
  * the Encounter's description text since MEJ's `actors` flag has no safe

@@ -48,10 +48,18 @@ function guard(task, what) {
 }
 
 export function registerSessionTimepoint() {
-  // Both hooks fire on every client; only the active GM writes.
+  // All hooks fire on every client; only the active GM writes.
   Hooks.on("createJournalEntryPage", (page) => {
     if (page.type !== SESSION_DOCUMENT_TYPE || game.user !== game.users.activeGM) return;
     guard(createSessionTimepoint(page), "create");
+  });
+  // Pages created together with their entry (JournalEntry.create({pages})) fire
+  // only the entry's createJournalEntry, never createJournalEntryPage.
+  Hooks.on("createJournalEntry", (entry) => {
+    if (game.user !== game.users.activeGM) return;
+    for (const page of entry.pages) {
+      if (page.type === SESSION_DOCUMENT_TYPE) guard(createSessionTimepoint(page), "create");
+    }
   });
   Hooks.on("updateJournalEntryPage", (page) => {
     if (page.type !== SESSION_DOCUMENT_TYPE || game.user !== game.users.activeGM) return;

@@ -53,7 +53,7 @@ import {
   resolveSharedMediaShare, installShareImageWrap
 } from "../logic/auto-capture.mjs";
 import {
-  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName,
+  buildEncounterActorRows, rowsFromEncounterActors, rekeyByBaseActor, describeUnlinkedParticipants, buildEncounterName,
   wrapOutcomeHtml, mergeOutcomeHtml
 } from "../logic/encounter-capture.mjs";
 
@@ -188,7 +188,7 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
  */
 async function mergeEncounter(page, participants, outcome, unlinkedNames) {
   const existing = rowsFromEncounterActors(page.getFlag("monks-enhanced-journal", "actors"));
-  const merged = mergeParticipants(existing, participants);
+  const merged = mergeParticipants(rekeyByBaseActor(existing), rekeyByBaseActor(participants));
   await page.update({
     "flags.monks-enhanced-journal.actors": buildEncounterActorRows(merged),
     "text.content": mergeOutcomeHtml(page.text?.content ?? "", buildDescriptionHtml(outcome, unlinkedNames))
