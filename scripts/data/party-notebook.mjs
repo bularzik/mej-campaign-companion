@@ -3,7 +3,7 @@
 import { MODULE_ID, I18N, PARTY_NOTEBOOK_FLAG, PARTY_ROWS_FLAG, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { campaignOf, isPartyNotebook } from "../logic/campaigns.mjs";
 import { normalizeRows } from "../logic/party-rows.mjs";
-import { partyWriters, partyReaders, notebookOwnership } from "../logic/party-access.mjs";
+import { partyWriters, partyReaders, notebookOwnership, ownershipUpdate } from "../logic/party-access.mjs";
 import { getCampaigns } from "./campaign-store.mjs";
 
 /** Direct child of the campaign folder carrying the notebook flag. */
@@ -26,6 +26,17 @@ export async function ensurePartyNotebook(campaign) {
   if (!game.user.isGM || !campaign) return null;
   const existing = partyNotebookOf(campaign);
   if (existing) return existing;
+  // Overlapping triggers share one creation (else both see no notebook and both create).
+  const pending = creating.get(campaign.id);
+  if (pending) return pending;
+  const p = createNotebook(campaign).finally(() => creating.delete(campaign.id));
+  creating.set(campaign.id, p);
+  return p;
+}
+
+const creating = new Map();
+
+function createNotebook(campaign) {
   return JournalEntry.create({
     name: game.i18n.format(`${I18N}.party.notebookName`, { campaign: campaign.name }),
     folder: campaign.id,
@@ -39,8 +50,8 @@ export async function syncNotebookOwnership(campaign) {
   if (!game.user.isGM) return;
   const nb = partyNotebookOf(campaign);
   if (!nb) return;
-  const next = desiredOwnership(campaign, nb.ownership);
-  if (next) await nb.update({ ownership: next }, { diff: false, recursive: false });
+  const update = ownershipUpdate(nb.ownership, desiredOwnership(campaign, nb.ownership));
+  if (update) await nb.update(update);
 }
 
 /** Every notebook this user can read, with parsed rows. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { partyWriters, partyReaders, notebookOwnership } from "../scripts/logic/party-access.mjs";
+import { partyWriters, partyReaders, notebookOwnership, ownershipUpdate } from "../scripts/logic/party-access.mjs";
 
 const P = "mej-campaign-companion";
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
@@ -35,5 +35,17 @@ describe("notebookOwnership", () => {
   });
   it("null when already right", () => {
     expect(notebookOwnership({ default: 2, u1: 3 }, opts)).toBeNull();
+  });
+});
+
+describe("ownershipUpdate", () => {
+  it("removes dropped writers with a -= key and sets changed keys", () => {
+    expect(ownershipUpdate({ default: 2, u1: 3, u2: 3 }, { default: 2, u2: 3, u3: 3 })).toEqual({
+      "ownership.-=u1": null, "ownership.u3": 3
+    });
+  });
+  it("is null when unchanged or next is null", () => {
+    expect(ownershipUpdate({ default: 2, u1: 3 }, { default: 2, u1: 3 })).toBeNull();
+    expect(ownershipUpdate({ default: 2 }, null)).toBeNull();
   });
 });

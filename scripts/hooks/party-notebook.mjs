@@ -29,6 +29,15 @@ async function reconcile(campaigns, { create = true } = {}) {
   }
 }
 
+/** Lower ownership where writers vanished, then create/raise where they exist. GM writer seat only. */
+function reconcileAll() {
+  if (!isWriterSeat()) return Promise.resolve();
+  return Promise.resolve()
+    .then(() => reconcile(getCampaigns(), { create: false }))
+    .then(() => reconcile(campaignsNeedingNotebooks()))
+    .catch((err) => console.error(`${MODULE_ID} | party notebook reconcile failed`, err));
+}
+
 /** Pre-1.0: no migration. Drop stray 0.25.0 playerConnections page flags. */
 async function dropOldConnectionFlags() {
   for (const entry of game.journal.contents) {
@@ -44,22 +53,35 @@ export function registerPartyNotebook() {
   Hooks.on("renderJournalDirectory", (app, html) => hidePartyNotebookRows(rootOf(html)));
   Hooks.on("renderEnhancedJournal", (app) => hidePartyNotebookRows(app?.element ?? null));
 
-  Hooks.once("ready", () => {
+  // registerCore() may run inside or after the "ready" dispatch; Hooks.once("ready") would never fire then.
+  const readyPass = () => {
     if (!isWriterSeat()) return;
     reconcile(campaignsNeedingNotebooks())
       .then(() => dropOldConnectionFlags())
       .catch((err) => console.error(`${MODULE_ID} | party notebook ready pass failed`, err));
-  });
+  };
+  if (game.ready) readyPass();
+  else Hooks.once("ready", readyPass);
   Hooks.on("updateFolder", (folder, changes) => {
     if (!isWriterSeat() || !isCampaignFolder(folder)) return;
     if (changes?.flags?.[MODULE_ID]?.[CAMPAIGN_FLAG] === undefined) return;
     // A campaign that lost all writers keeps its notebook but gets its ownership lowered.
-    const needs = campaignsNeedingNotebooks().some((c) => c.id === folder.id);
-    reconcile([folder], { create: needs });
+    try {
+      const needs = campaignsNeedingNotebooks().some((c) => c.id === folder.id);
+      reconcile([folder], { create: needs });
+    } catch (err) {
+      console.error(`${MODULE_ID} | party notebook folder update failed`, err);
+    }
   });
   Hooks.on("updateSetting", (setting) => {
     if (setting.key !== `${MODULE_ID}.${PLAYER_GROUPS_SETTING}` || !isWriterSeat()) return;
-    reconcile(getCampaigns(), { create: false }).then(() => reconcile(campaignsNeedingNotebooks()));
+    reconcileAll();
+  });
+  Hooks.on("createUser", () => reconcileAll());
+  Hooks.on("deleteUser", () => reconcileAll());
+  Hooks.on("updateUser", (user, changes) => {
+    if (changes?.role === undefined) return;
+    reconcileAll();
   });
   Hooks.on("updateJournalEntry", (entry, changes) => {
     if (!isPartyNotebook(entry) || changes?.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG] === undefined) return;

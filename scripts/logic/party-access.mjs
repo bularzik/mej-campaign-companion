@@ -26,3 +26,20 @@ export function notebookOwnership(current, { defaultLevel, writerIds, ownerLevel
   const same = [...keys].every((k) => current?.[k] === next[k]);
   return same ? null : next;
 }
+
+/**
+ * Convert a current -> next ownership pair into an explicit document update
+ * (removed keys via "ownership.-=<id>", set keys via "ownership.<key>"), so
+ * removal never depends on Foundry's merge semantics. Null when nothing changes.
+ */
+export function ownershipUpdate(current, next) {
+  if (!next) return null;
+  const update = {};
+  for (const key of Object.keys(current ?? {})) {
+    if (!(key in next)) update[`ownership.-=${key}`] = null;
+  }
+  for (const [key, value] of Object.entries(next)) {
+    if (current?.[key] !== value) update[`ownership.${key}`] = value;
+  }
+  return Object.keys(update).length ? update : null;
+}
