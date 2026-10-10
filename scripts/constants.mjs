@@ -167,3 +167,7 @@ export const PLAYER_CONNECTIONS_FLAG = "playerConnections";
 export const PLAYER_CONNECTIONS_SETTING = "playerConnectionsEnabled";
 export const PLAYER_CONNECTION_ACTION = "player-connection";
 export const PLAYER_CONNECTION_RESULT_ACTION = "player-connection-result";
+
+/** Party relationships (spec 2026-10-10): notebook marker and row map on the notebook JournalEntry. */
+export const PARTY_NOTEBOOK_FLAG = "partyNotebook";
+export const PARTY_ROWS_FLAG = "partyRows";
