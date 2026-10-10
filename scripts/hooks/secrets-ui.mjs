@@ -279,7 +279,7 @@ async function injectPlayerSecrets(sheet, element) {
  * ApplicationV2 instance registry; an empty list is a safe degradation (the
  * shell still refreshes), never an error.
  */
-function poppedOutPageSheets() {
+export function poppedOutPageSheets() {
   const registry = foundry.applications?.instances;
   if (!registry?.values) return [];
   const shellSubsheet = game.MonksEnhancedJournal?.journal?.subsheet ?? null;

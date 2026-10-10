@@ -276,3 +276,50 @@ export function connectionUpdate(op, request, { senderId, senderName, now, newId
   }
   return {};
 }
+
+// ---- Reverse index (spec §4.3) ---------------------------------------------
+// Only the "from" end stores a connection; the "to" end finds it here.
+// `outbound` remembers each source's targets so a source can be re-indexed
+// or dropped without scanning every target.
+
+export function createReverseIndex() {
+  return { inbound: new Map(), outbound: new Map() };
+}
+
+export function removeSource(index, fromUuid) {
+  const affected = new Set([fromUuid]);
+  const targets = index.outbound.get(fromUuid);
+  if (!targets) return affected;
+  for (const to of targets) {
+    const kept = (index.inbound.get(to) ?? []).filter((e) => e.fromUuid !== fromUuid);
+    if (kept.length) index.inbound.set(to, kept);
+    else index.inbound.delete(to);
+    affected.add(to);
+  }
+  index.outbound.delete(fromUuid);
+  return affected;
+}
+
+export function reindexSource(index, { fromUuid, flag }) {
+  const affected = removeSource(index, fromUuid);
+  const targets = new Set();
+  for (const row of normalizeConnections(flag, fromUuid)) {
+    const list = index.inbound.get(row.to) ?? [];
+    list.push({ fromUuid, row });
+    index.inbound.set(row.to, list);
+    targets.add(row.to);
+    affected.add(row.to);
+  }
+  if (targets.size) index.outbound.set(fromUuid, targets);
+  return affected;
+}
+
+export function buildReverseIndex(sources) {
+  const index = createReverseIndex();
+  for (const source of sources ?? []) reindexSource(index, source);
+  return index;
+}
+
+export function incomingFor(index, toUuid) {
+  return index?.inbound.get(toUuid) ?? [];
+}
