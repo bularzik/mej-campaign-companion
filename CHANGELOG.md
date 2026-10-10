@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.25.0 (2026-10-10)
 
 Every session gets a timepoint, encounters are captured when combat starts, and players can record their own connections between entries.
 
