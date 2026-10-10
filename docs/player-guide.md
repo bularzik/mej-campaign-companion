@@ -92,8 +92,9 @@ Open an entry and go to its **Relationships** tab. Below your GM's relationships
 
 - **Connection (this entry)**: how this entry relates to the other one (required).
 - **Connection (other entry)**: the same tie seen from the other side (optional). It's what shows on the other entry.
-- A **Secret** for either side (optional). Only you and your GM can read it until you click **Reveal** next to it; **Hide** puts it back.
-- **Share with party**: on by default, so the rest of the party sees the connection. Untick it to keep it between you and your GM; the icon on the row switches it later.
+- A **Secret** for either side (optional). It is hidden from other players (not shown on the sheet, graph or export) until you click **Reveal** next to it; **Hide** puts it back.
+- **Share with party**: on by default, so the rest of the party sees the connection. Untick it to hide the connection from other players; the icon on the row switches it later. Making a shared connection private asks for confirmation first when other players have added notes, and those notes are then hidden from their writers until it is shared again.
+- **A note on privacy**: this is display-level privacy, the same as Monk's Enhanced Journal's own hidden relationships. Private connections and unrevealed secrets are stored on the journal page, which every client that can see the entry receives. The companion hides them in the interface, but a player using the browser's developer tools could read them, so don't put anything truly secret there.
 
 Other players can add one note of their own under your connection on either side ("half-sister, actually"). Their notes show beneath your row with their name, and only they can edit them. You edit your own labels and secrets right in the row; changes save when you leave the field. Clear both fields of a note to remove it, or use the bin to delete the whole connection (it asks first, and says how many other players' notes go with it).
 
