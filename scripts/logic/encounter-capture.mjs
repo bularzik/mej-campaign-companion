@@ -138,7 +138,7 @@ export function buildEncounterName(sceneName, dateLabel) {
  * that block instead of the whole body.
  *
  * Why it needs to: hooks/auto-capture.mjs's mergeEncounter() runs when the
- * same combat's end fires twice (the encounterPagesByCombatId re-fire path).
+ * same combat's end fires twice (the combat-flag merge path).
  * It merges the actor roster additively, but it used to overwrite
  * `text.content` outright with a freshly generated summary - so a GM who had
  * written the encounter up in the meantime lost every word of it.

@@ -38,11 +38,12 @@
 //    there is nothing to match against. Documented per the task's
 //    "decide from evidence and document" instruction.
 import {
-  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, DEPARTED_FLAG, MEJ_ENCOUNTER_TYPE, I18N,
+  MODULE_ID, AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, DEPARTED_FLAG, ENCOUNTER_PAGE_FLAG, MEJ_ENCOUNTER_TYPE, I18N,
   AUTO_CAPTURE_CAMPAIGN_SETTING
 } from "../constants.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
-import { getTimepoints, addLink } from "../data/timepoints.mjs";
+import { getTimepoints, addTimepoint, addLink } from "../data/timepoints.mjs";
+import { currentWorldComponents, formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { isCampaignFolder } from "../logic/campaigns.mjs";
@@ -105,10 +106,13 @@ async function fileOntoNewestTimepoint(link) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);
     return;
   }
-  const tp = pickNewestTimepoint(getTimepoints(journal));
+  // A timeline with no timepoints used to drop the capture; give it one
+  // dated "now" so the capture always lands somewhere.
+  let tp = pickNewestTimepoint(getTimepoints(journal));
   if (!tp) {
-    console.debug(`${MODULE_ID} | auto-capture: no timepoints yet, skipping filing`);
-    return;
+    const now = currentWorldComponents();
+    const label = (now && formatCampaignDate(now)) || new Date().toLocaleDateString();
+    tp = await addTimepoint(journal, label, null, now);
   }
   await addLink(journal, tp.id, link);
 }
@@ -138,29 +142,17 @@ function buildDescriptionHtml(outcome, unlinkedNames) {
   return parts.join("");
 }
 
-// combat.id -> created Encounter page uuid, for this session only. Replaces
-// a combat-flag-based merge guard: deleteCombat fires after the Combat
-// document is already deleted server-side (confirmed against Foundry's
-// ClientDatabaseBackend#_deleteDocuments - the "deleteX" hook fires from
-// the delete *response* handler, after the request already completed), so
-// combat.setFlag() there always fails/no-ops; CR's flag-at-combatStart
-// approach isn't reachable either, since the brief's creation timing is
-// deleteCombat-only. This in-memory map genuinely catches a repeat
-// deleteCombat firing for the same combat id within a session (e.g. a
-// module conflict or a dev hot-reload double-registering the hook), which
-// is the actual scenario this guard exists to protect against.
-const encounterPagesByCombatId = new Map();
-
 /**
- * Create a new Encounter JournalEntry+page for a just-ended combat, file it
- * onto the timeline's newest timepoint, and remember its uuid in
- * encounterPagesByCombatId so a repeat deleteCombat firing for this same
- * combat id merges into it instead of creating a duplicate (see the map's
- * doc comment above). Page shape (native type "text" + the
- * monks-enhanced-journal.type flag + defaultObject seed) comes from
- * data/mej-entry.mjs's createMejEntry, shared with the docx import wizard
- * (Task 11) - see that module's header comment for why MEJ pages are
- * shaped this way.
+ * Create a new Encounter JournalEntry+page for a combat, file it onto the
+ * timeline's newest timepoint, and remember its uuid in the Combat's
+ * ENCOUNTER_PAGE_FLAG so combat end merges into it instead of creating a
+ * duplicate. The flag write needs the Combat document alive, which holds at
+ * combatStart (and on the create-at-end fallback it is skipped quietly:
+ * deleteCombat fires after the delete completed). Page shape (native type
+ * "text" + the monks-enhanced-journal.type flag + defaultObject seed) comes
+ * from data/mej-entry.mjs's createMejEntry, shared with the docx import
+ * wizard - see that module's header comment for why MEJ pages are shaped
+ * this way.
  */
 async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
   const campaign = captureCampaign();
@@ -174,7 +166,11 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
   const page = await createMejEntry(MEJ_ENCOUNTER_TYPE, name, wrapOutcomeHtml(buildDescriptionHtml(outcome, unlinkedNames)), {
     actors: buildEncounterActorRows(participants)
   }, campaign ? { default: baselineOwnership(campaign) } : null, campaign?.id ?? null);
-  encounterPagesByCombatId.set(combat.id, page.uuid);
+  try {
+    await combat.setFlag(MODULE_ID, ENCOUNTER_PAGE_FLAG, page.uuid);
+  } catch {
+    // Combat already deleted (create-at-end fallback): nothing left to link.
+  }
   await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
   return page;
 }
@@ -199,16 +195,25 @@ async function mergeEncounter(page, participants, outcome, unlinkedNames) {
   });
 }
 
-/** Capture a just-ended combat as an Encounter entry, creating or merging as needed. */
+/** Start of combat -> create the Encounter entry from the opening roster. */
+async function captureCombatStart(combat) {
+  if (!game.settings.get(MODULE_ID, AUTO_CAPTURE_SETTING)) return;
+  // combatStart fires only on the client that began combat, so no GM
+  // election is needed (unlike the broadcast deleteCombat below).
+  if (!game.user.isGM) return;
+  if (combat.getFlag(MODULE_ID, ENCOUNTER_PAGE_FLAG)) return;
+
+  const scene = combat.scene ?? game.scenes?.current ?? null;
+  const participants = collapseParticipants(combatParticipants(combat));
+  const unlinkedNames = describeUnlinkedParticipants(participants);
+  await createEncounter(combat, participants, "", unlinkedNames, scene?.name ?? null);
+}
+
+/** Capture a just-ended combat: merge into the start-created Encounter, or create one when combat began before capture was on. */
 async function captureCombatEnd(combat) {
   if (!game.settings.get(MODULE_ID, AUTO_CAPTURE_SETTING)) return;
-  // Single-writer election, mirroring campaign-record's own reasoning: a
-  // plain `game.user.isGM` guard would run this once per connected GM
-  // client. deleteCombat broadcasts to every client (unlike combatStart or
-  // preDeleteCombat, which only ever fire locally on whoever performed the
-  // action), so - unlike those hooks - gating on the elected activeGM here
-  // is both safe and necessary to avoid duplicate Encounter creation when
-  // more than one GM is online.
+  // Single-writer election: deleteCombat broadcasts to every client, so a
+  // plain `game.user.isGM` guard would run once per connected GM.
   if (game.user !== game.users.activeGM) return;
 
   // C8: the combat's OWN scene first. game.scenes.current is whatever this
@@ -219,7 +224,7 @@ async function captureCombatEnd(combat) {
   const outcome = buildOutcome(combat);
   const unlinkedNames = describeUnlinkedParticipants(participants);
 
-  const existingUuid = encounterPagesByCombatId.get(combat.id);
+  const existingUuid = combat.getFlag(MODULE_ID, ENCOUNTER_PAGE_FLAG);
   const existingPage = existingUuid ? await fromUuid(existingUuid) : null;
   if (existingPage) await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
   else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
@@ -322,7 +327,12 @@ export function registerAutoCapture() {
     recordDeparture(combatant.combat, combatant);
   });
 
-  // Combat ends -> capture (or merge into) the Encounter entry.
+  // Combat starts -> create the Encounter entry.
+  Hooks.on("combatStart", (combat) => {
+    captureCombatStart(combat).catch((err) => console.error(`${MODULE_ID} | auto-capture: combat start capture failed`, err));
+  });
+
+  // Combat ends -> merge the final roster + outcome into it.
   Hooks.on("deleteCombat", (combat) => {
     captureCombatEnd(combat).catch((err) => console.error(`${MODULE_ID} | auto-capture: combat capture failed`, err));
   });

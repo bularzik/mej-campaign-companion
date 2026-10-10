@@ -21,7 +21,7 @@ describe("buildSessionPageData", () => {
     expect(data.name).toBe("Session 3");
     expect(data.system).toEqual({ recap: "<p>the party arrives</p>", gmNotes: "" });
     expect(data.flags[MODULE_ID]).toEqual({
-      session: { sessionNumber: 3, campaignDate, attendees: [], secrets: [] }
+      session: { sessionNumber: 3, campaignDate, attendees: [], secrets: [], autoTimepoint: false }
     });
   });
 

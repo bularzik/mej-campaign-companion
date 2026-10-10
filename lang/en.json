@@ -11,7 +11,7 @@
       },
       "autoCaptureEncounters": {
         "name": "Auto-Capture Encounters",
-        "hint": "When enabled, ending a combat creates (or updates) an Encounter journal entry summarizing the participants and outcome, and files it onto the campaign timeline's newest timepoint."
+        "hint": "When enabled, starting a combat creates an Encounter journal entry from its participants, and ending it adds the outcome. The entry is filed onto the campaign timeline's newest timepoint."
       },
       "autoCaptureSharedMedia": {
         "name": "Auto-Capture Shared Media",

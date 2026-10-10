@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Every session gets a timepoint, and encounters are captured when combat starts.
+
+- **Added:** creating a Session now adds a timepoint to the campaign's timeline. It takes the session's name and in-world campaign date and time, and the session is attached to it. A session with no date yet is stamped with the current world date, and that date is written into the session so the two match. Renaming the session or changing its date updates the timepoint; deleting the timepoint is respected. Docx-imported sessions are unchanged (the import wizard still makes its own dated timepoints).
+- **Fixed:** a GM could be left with no way to add a timepoint. **Add Timepoint** now also shows when a scope has no timeline yet, and creates the timeline on demand.
+- **Changed:** **Auto-Capture Encounters** creates the Encounter entry when combat starts, from the opening roster. Ending combat merges the final roster and outcome into it, keeping anything you wrote. A combat that started before capture was on still gets its Encounter at the end.
+- **Changed:** **Auto-Capture Encounters** is now on by default. Worlds that never changed the setting will start capturing; turn it off in Module Settings.
+- **Fixed:** captures (encounters and shared media) were silently dropped when the timeline had no timepoints. They now create a timepoint dated to the current world date and file onto it.
+
 ## 0.24.1 (2026-10-09)
 
 A readable Session tab attendee list.

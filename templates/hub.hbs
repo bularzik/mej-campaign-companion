@@ -170,11 +170,21 @@
                             {{/if}}
                             {{else}}
                             <p class="instruction">{{localize 'MEJCampaignCompanion.hub.timelineEmptyState'}}</p>
+                            {{#if this.canEdit}}
+                            <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                                <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                            </button>
+                            {{/if}}
                             {{/if}}
                         </div>
                         {{/each}}
                         {{#unless timeline.stacks.length}}
                         <p class="mej-cc-timeline-empty">{{localize "MEJCampaignCompanion.hub.timelineEmptyScope"}}</p>
+                        {{#if timeline.canAdd}}
+                        <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                            <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                        </button>
+                        {{/if}}
                         {{/unless}}
                         </div>
                     </div>
