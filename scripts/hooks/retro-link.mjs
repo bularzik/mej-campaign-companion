@@ -15,7 +15,7 @@ import {
 } from "../constants.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { linkableRegions } from "../logic/link-targets.mjs";
-import { campaignIdOf, isTimelineJournal, isCampaignPortal, isLinkableEntity } from "../logic/campaigns.mjs";
+import { campaignIdOf, isTimelineJournal, isCampaignPortal, isPartyNotebook, isLinkableEntity } from "../logic/campaigns.mjs";
 
 /**
  * MEJ's own New Entry dialog creates the entry FIRST (with
@@ -28,7 +28,7 @@ import { campaignIdOf, isTimelineJournal, isCampaignPortal, isLinkableEntity } f
  * its pages and flags, so both predicates work on it here.
  */
 function isMejCandidate(entry) {
-  if (isTimelineJournal(entry) || isCampaignPortal(entry)) return false;
+  if (isTimelineJournal(entry) || isCampaignPortal(entry) || isPartyNotebook(entry)) return false;
   if (mejType(entry)) return true;
   const mejFlags = entry.flags?.["monks-enhanced-journal"];
   return !!(mejFlags?.pagetype || mejFlags?.type);
@@ -78,7 +78,7 @@ function planForBurst(entries) {
   const gmNotesLabel = game.i18n.localize(`${I18N}.retroLink.gmNotes`);
   const pages = [];
   for (const e of game.journal.contents) {
-    if (isTimelineJournal(e) || isCampaignPortal(e)) continue;
+    if (isTimelineJournal(e) || isCampaignPortal(e) || isPartyNotebook(e)) continue;
     const entryViewers = viewerIds(e, users, isVisibleToUser);
     const campaignId = campaignIdOf(e);
     for (const p of e.pages.contents) {

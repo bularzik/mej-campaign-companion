@@ -2,7 +2,7 @@
 // can load it directly - same convention as hub-index.mjs. Operates on
 // doc-shaped plain objects: folders have .flags/.folder, entries have
 // .documentName/.folder/.flags, pages have .documentName/.parent.
-import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N } from "../constants.mjs";
+import { MODULE_ID, CAMPAIGN_FLAG, CAMPAIGN_DOCUMENT_TYPE, I18N, PARTY_NOTEBOOK_FLAG } from "../constants.mjs";
 import { normalizeGroups } from "./player-groups.mjs";
 
 /** The campaign flag object ({ ownershipDefault, ... }) or null. */
@@ -115,6 +115,11 @@ export function isTimelineJournal(entry) {
   return !!entry?.flags?.[MODULE_ID]?.timeline;
 }
 
+/** Is this the campaign's hidden party-relationships notebook (spec 2026-10-10 §2.1)? */
+export function isPartyNotebook(entry) {
+  return entry?.flags?.[MODULE_ID]?.[PARTY_NOTEBOOK_FLAG] === true;
+}
+
 /** "none"|"observer"|"owner" -> ownership level; `levels` is CONST.DOCUMENT_OWNERSHIP_LEVELS (injected for testability). Unknown -> OBSERVER. */
 export function ownershipLevelFor(key, levels) {
   const map = { none: levels.NONE, observer: levels.OBSERVER, owner: levels.OWNER };
@@ -212,7 +217,7 @@ export function isCampaignPortal(doc) {
  */
 export function isLinkableEntity(entry, mejTypeOf) {
   if (!entry) return false;
-  return !!mejTypeOf(entry) && !isTimelineJournal(entry) && !isCampaignPortal(entry);
+  return !!mejTypeOf(entry) && !isTimelineJournal(entry) && !isCampaignPortal(entry) && !isPartyNotebook(entry);
 }
 
 /** The page carries the companion's portal marker (stamped by buildCampaignPortalData and upgradeEntryToCampaign). */

@@ -3,7 +3,7 @@
 // is NOT vitest-loadable; keep anything testable in logic/campaigns.mjs.
 import { MODULE_ID, CAMPAIGN_FLAG, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
 import {
-  isCampaignFolder, campaignOf, campaignFlagOf, isTimelineJournal, isCampaignPortal,
+  isCampaignFolder, campaignOf, campaignFlagOf, isTimelineJournal, isCampaignPortal, isPartyNotebook,
   ownershipLevelFor, bulkOwnershipPlan, canConvertFolder, hasPortalMarker, isCampaignTypedPage
 } from "../logic/campaigns.mjs";
 import { buildCampaignPortalData } from "../logic/campaign-portal-data.mjs";
@@ -171,13 +171,13 @@ async function doUpgrade(entry, { ownershipDefault }) {
 /** Visibility-filtered members of a campaign; the campaign's timeline journal and portal are excluded (spec §1). */
 export function campaignEntries(campaign, { user = game.user } = {}) {
   return game.journal.contents.filter((e) =>
-    campaignOf(e)?.id === campaign.id && !isTimelineJournal(e) && !isCampaignPortal(e) && isVisibleToUser(e, user));
+    campaignOf(e)?.id === campaign.id && !isTimelineJournal(e) && !isCampaignPortal(e) && !isPartyNotebook(e) && isVisibleToUser(e, user));
 }
 
 /** Visibility-filtered entries under no campaign (any type - spec §2 Unfiled scope), timeline journals and portals excluded. */
 export function unfiledEntries({ user = game.user } = {}) {
   return game.journal.contents.filter((e) =>
-    !campaignOf(e) && !isTimelineJournal(e) && !isCampaignPortal(e) && isVisibleToUser(e, user));
+    !campaignOf(e) && !isTimelineJournal(e) && !isCampaignPortal(e) && !isPartyNotebook(e) && isVisibleToUser(e, user));
 }
 
 /** The campaign's ownership baseline as a CONST.DOCUMENT_OWNERSHIP_LEVELS value (spec §5). */
