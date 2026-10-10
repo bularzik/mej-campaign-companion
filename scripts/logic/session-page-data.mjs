@@ -43,7 +43,10 @@ export function buildSessionPageData(name, html, campaignDate, sessionNumber) {
           sessionNumber: sessionNumber ?? null,
           campaignDate: campaignDate ?? null,
           attendees: [],
-          secrets: []
+          secrets: [],
+          // The import wizard files its own dated timepoints; opt out of the
+          // automatic per-session one (hooks/session-timepoint.mjs).
+          autoTimepoint: false
         }
       },
       "monks-enhanced-journal": { type: SESSION_TYPE }

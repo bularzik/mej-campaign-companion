@@ -118,7 +118,7 @@
                         </div>
                         <div class="mej-cc-timeline-scroll">
                         {{#each timeline.stacks}}
-                        <div class="mej-cc-timeline-stack" data-journal-id="{{this.journalId}}">
+                        <div class="mej-cc-timeline-stack" data-journal-id="{{this.journalId}}"{{#if this.campaignId}} data-campaign-id="{{this.campaignId}}"{{/if}}>
                             {{#if this.name}}<h3 class="mej-cc-timeline-campaign">{{this.name}}</h3>{{/if}}
                             {{#if this.hasJournal}}
                             <div class="mej-cc-order-menu" role="group" aria-label="{{localize 'MEJCampaignCompanion.hub.orderBy'}}">
@@ -170,11 +170,21 @@
                             {{/if}}
                             {{else}}
                             <p class="instruction">{{localize 'MEJCampaignCompanion.hub.timelineEmptyState'}}</p>
+                            {{#if this.canEdit}}
+                            <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                                <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                            </button>
+                            {{/if}}
                             {{/if}}
                         </div>
                         {{/each}}
                         {{#unless timeline.stacks.length}}
                         <p class="mej-cc-timeline-empty">{{localize "MEJCampaignCompanion.hub.timelineEmptyScope"}}</p>
+                        {{#if timeline.canAdd}}
+                        <button type="button" class="mej-cc-add-timepoint" data-action="addTimepoint">
+                            <i class="fas fa-plus"></i> {{localize 'MEJCampaignCompanion.hub.addTimepoint'}}
+                        </button>
+                        {{/if}}
                         {{/unless}}
                         </div>
                     </div>

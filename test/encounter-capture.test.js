@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildEncounterActorRows, rowsFromEncounterActors, describeUnlinkedParticipants, buildEncounterName,
+  buildEncounterActorRows, rowsFromEncounterActors, rekeyByBaseActor, describeUnlinkedParticipants, buildEncounterName,
   OUTCOME_MARKER, wrapOutcomeHtml, mergeOutcomeHtml
 } from "../scripts/logic/encounter-capture.mjs";
 
@@ -203,5 +203,28 @@ describe("mergeOutcomeHtml", () => {
     html = mergeOutcomeHtml(html, "<p>B.</p>");
     html = mergeOutcomeHtml(html, "<p>C.</p>");
     expect(html).toBe(`<p>Notes.</p>${wrapped("<p>C.</p>")}`);
+  });
+});
+
+describe("rekeyByBaseActor", () => {
+  it("sums unlinked-token rows of one base actor so a start-then-end merge does not double count", () => {
+    const stored = rowsFromEncounterActors(buildEncounterActorRows([
+      { id: "Scene.s.Token.a.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.s.Token.a.Actor.gob123456789012" },
+      { id: "Scene.s.Token.b.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.s.Token.b.Actor.gob123456789012" }
+    ]));
+    const fresh = [
+      { id: "Scene.s.Token.a.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.s.Token.a.Actor.gob123456789012" },
+      { id: "Scene.s.Token.b.Actor.gob123456789012", name: "Goblin", count: 1, actor: "Scene.s.Token.b.Actor.gob123456789012" }
+    ];
+    const a = rekeyByBaseActor(stored);
+    const b = rekeyByBaseActor(fresh);
+    expect(a.map((r) => r.count)).toEqual([2]);
+    expect(b.map((r) => r.count)).toEqual([2]);
+    expect(b[0].id).toBe("gob123456789012");
+  });
+
+  it("leaves actor-less rows keyed as given", () => {
+    expect(rekeyByBaseActor([{ id: "name:Mook", name: "Mook", count: 2, actor: null }]))
+      .toEqual([{ id: "name:Mook", name: "Mook", count: 2, actor: null }]);
   });
 });
