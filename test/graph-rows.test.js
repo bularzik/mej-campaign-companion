@@ -32,8 +32,8 @@ describe("graphRowsFor", () => {
       entry("J.b", "B", [page("quest")])
     ], ctx());
     expect(rows).toEqual([
-      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [], playerConnections: [] },
-      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [], playerConnections: [] }
+      { uuid: "J.a", name: "A", type: "person", img: null, relationships: [], partyLines: [] },
+      { uuid: "J.b", name: "B", type: "quest", img: null, relationships: [], partyLines: [] }
     ]);
   });
 
@@ -90,24 +90,12 @@ describe("graphRowsFor", () => {
   });
 });
 
-describe("graphRowsFor player connections (spec 2026-10-09 §6.1)", () => {
-  const pcPage = (type, flag) => ({ __type: type, __rels: [], __pc: flag });
-  const flag = {
-    c1: { id: "c1", to: "J.b", authorId: "u2", authorName: "Jo", shared: true,
-      sides: { from: { notes: { u2: { label: "Sister of", secret: "never in the graph" } } }, to: { notes: { u2: { label: "Brother of" } } } } },
-    c2: { id: "c2", to: "J.b", authorId: "u2", authorName: "Jo", shared: false, sides: {} }
-  };
-  const pcCtx = (over = {}) => ctx({ playerConnectionsOf: (p) => p.__pc, canSeeEntry: () => true, ...over });
-  it("lists the connections this viewer may see, with the author's main labels and no secrets", () => {
-    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx());
-    expect(rows[0].playerConnections).toEqual([{ id: "c1", to: "J.b", authorName: "Jo", fromLabel: "Sister of", toLabel: "Brother of" }]);
+describe("graphRowsFor party lines", () => {
+  it("attaches partyLines from the injected reader", () => {
+    const rows = graphRowsFor([entry("J.a", "A", [page("person")])], ctx({ partyLinesOf: (uuid) => (uuid === "J.a" ? [{ other: "J.b" }] : []) }));
+    expect(rows[0].partyLines).toEqual([{ other: "J.b" }]);
   });
-  it("the GM sees private ones too", () => {
-    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx({ isGM: true }));
-    expect(rows[0].playerConnections.map((p) => p.id)).toEqual(["c1", "c2"]);
-  });
-  it("a target the viewer can't see drops the connection", () => {
-    const rows = graphRowsFor([entry("J.a", "A", [pcPage("person", flag)])], pcCtx({ canSeeEntry: (u) => u !== "J.b" }));
-    expect(rows[0].playerConnections).toEqual([]);
+  it("defaults to [] without a reader", () => {
+    expect(graphRowsFor([entry("J.a", "A", [page("person")])], ctx())[0].partyLines).toEqual([]);
   });
 });

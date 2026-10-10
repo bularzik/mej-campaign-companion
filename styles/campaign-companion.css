@@ -983,8 +983,8 @@
   stroke-dasharray: 4 3;
 }
 
-/* Player connections (spec 2026-10-09 §6.1): dotted, their own colour. */
-.mej-cc-graph-edge.player {
+/* Party relationships (spec 2026-10-10 §5.1): dotted, their own colour. */
+.mej-cc-graph-edge.party {
   stroke: #2f7d6d;
   stroke-width: 2;
   stroke-dasharray: 1 4;
@@ -1240,7 +1240,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   stroke: var(--color-light-5, #9f8475);
 }
 
-.theme-dark .mej-cc-graph-edge.player {
+.theme-dark .mej-cc-graph-edge.party {
   stroke: #6fd0b9;
 }
 

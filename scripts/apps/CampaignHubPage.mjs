@@ -81,7 +81,7 @@ const HUB_STATE = {
   graphMode: "all",
   graphCenterUuid: null,
   graphBacklinks: false,
-  graphPlayerConnections: true,
+  graphPartyRelationships: true,
   pendingTab: null,
   // Timeline id handed over by openTimelineInHub (sidebar/link open of a
   // timeline journal). Consumed by #timelineSelection on the next render,
@@ -1901,11 +1901,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         this.render({ parts: ["main"] });
       });
     }
-    const playerToggle = html.querySelector('[data-action-change="toggleGraphPlayerConnections"]');
-    if (playerToggle && !playerToggle.dataset.ccBound) {
-      playerToggle.dataset.ccBound = "1";
-      playerToggle.addEventListener("change", () => {
-        this.state.graphPlayerConnections = playerToggle.checked;
+    const partyToggle = html.querySelector('[data-action-change="toggleGraphPartyRelationships"]');
+    if (partyToggle && !partyToggle.dataset.ccBound) {
+      partyToggle.dataset.ccBound = "1";
+      partyToggle.addEventListener("change", () => {
+        this.state.graphPartyRelationships = partyToggle.checked;
         this.render({ parts: ["main"] });
       });
     }

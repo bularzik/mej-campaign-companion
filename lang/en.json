@@ -414,7 +414,7 @@
       "ego": "Focus",
       "all": "Whole campaign",
       "backlinks": "Show mention links",
-      "playerConnections": "Show player connections",
+      "partyRelationships": "Show party relationships",
       "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
     },
     "prep": {
