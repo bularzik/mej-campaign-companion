@@ -1,7 +1,7 @@
 // Inline edit plumbing shared by Relationships-tab injections: debounced
 // saves, and keeping a live block (and the caret) across the re-render a
 // save causes (Review Focus 2). Moved from the 0.25.0 player-connections
-// modules unchanged except the draft selector.
+// modules unchanged except the draft selector and the fieldSelector option.
 
 export const DEBOUNCE_MS = 400;
 
@@ -20,20 +20,23 @@ export function debounce(fn, ms = DEBOUNCE_MS) {
  * draft holding text its change event has not sent yet. Focus on a button
  * is not editing (a Reveal/Share click should show its result at once).
  * Removal by a re-render is not "leaving": the check after focusout ignores
- * a disconnected block. `onSettled` runs when an edit ends.
+ * a disconnected block. `onSettled` runs when an edit ends. With
+ * `fieldSelector`, only focus in a field inside a matching element counts.
  */
-export function trackEditing(block, onSettled) {
+export function trackEditing(block, onSettled, { fieldSelector = null } = {}) {
   let field = null;
   let caret = null;
+  // Only fields inside `fieldSelector` count (the party lines, not MEJ's own inputs).
+  const counts = (node) => node instanceof HTMLInputElement && (!fieldSelector || !!node.closest(fieldSelector));
   const draftOf = (target) => target?.closest?.(".mej-cc-party-line.new");
   const settle = () => setTimeout(() => {
     if (!block.isConnected) return;
     const active = block.ownerDocument.activeElement;
-    field = active instanceof HTMLInputElement && block.contains(active) ? active : null;
+    field = counts(active) && block.contains(active) ? active : null;
     if (!tracker.editing()) onSettled();
   }, 0);
   block.addEventListener("focusin", (event) => {
-    field = event.target instanceof HTMLInputElement ? event.target : null;
+    field = counts(event.target) ? event.target : null;
   });
   block.addEventListener("focusout", settle);
   block.addEventListener("input", (event) => {

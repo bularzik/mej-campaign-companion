@@ -6,12 +6,13 @@
 // carried across the re-render its own save causes (inline-edit.mjs).
 import { MODULE_ID, I18N, PARTY_ROWS_FLAG } from "../constants.mjs";
 import {
-  linesForEntry, findPair, createRowUpdate, labelUpdate, deleteUpdate, targetProblem, eligibleTargets, normalizeRows
+  linesForEntry, findPair, sideOf, createRowUpdate, labelUpdate, deleteUpdate, targetProblem, eligibleTargets, normalizeRows
 } from "../logic/party-rows.mjs";
 import { readableNotebooks, writeNotebookFor } from "../data/party-notebook.mjs";
 import { canAddParty, playerConnectionsEnabled } from "./rel-tab-wrap.mjs";
 import {
-  buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList
+  buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList,
+  lineFilter, groupTypeOf, oneShotCreate
 } from "../apps/party-lines.mjs";
 import { trackEditing, shouldKeepBlock } from "../apps/inline-edit.mjs";
 import { pickPartyTarget } from "../apps/party-target-picker.mjs";
@@ -26,8 +27,16 @@ const F = (key, data) => game.i18n.format(`${I18N}.party.${key}`, data);
 const asElement = (html) => (html instanceof HTMLElement ? html : html?.[0] instanceof HTMLElement ? html[0] : null);
 const typedPageOf = (entry) => entry?.pages?.contents?.find((p) => mejType(p)) ?? null;
 const entryType = (entry) => (typedPageOf(entry) ? mejType(typedPageOf(entry)) || null : null);
+const resolve = (uuid) => {
+  try {
+    return typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  } catch {
+    return null;
+  }
+};
+const exists = (uuid) => resolve(uuid) instanceof JournalEntry;
 const canLimitedUuid = (uuid) => {
-  const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  const doc = resolve(uuid);
   return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
 };
 
@@ -46,6 +55,7 @@ function targetInfo(uuid) {
 }
 
 function typeLabel(type) {
+  if (!type || type === "defunct") return game.i18n.localize("MonksEnhancedJournal.Unknown");
   const known = game.MonksEnhancedJournal?.getTypeLabels?.() ?? {};
   return game.i18n.localize(known[type] ?? type);
 }
@@ -71,31 +81,69 @@ async function write(notebookUuid, update) {
 
 const stamp = () => ({ user: { id: game.user.id, name: game.user.name }, now: Date.now() });
 
-async function addTarget(sheet, entry, targetUuid) {
-  const nb = writeNotebookFor(entry);
-  if (!nb) return void ui.notifications.warn(L("noNotebook"));
-  const ctx = { sourceUuid: entry.uuid, allowed: [...(sheet.allowedRelationships ?? [])], typeOf: entryType,
-    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true };
-  const target = fromUuidSync(targetUuid);
-  const problem = targetProblem(target instanceof JournalEntry ? target : null, ctx);
-  if (problem) return void ui.notifications.warn(L(`drop.${problem}`));
-  const rows = normalizeRows(nb.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG]);
-  const existing = findPair(rows, entry.uuid, targetUuid);
-  if (existing) return focusLine(sheet, nb.uuid, existing.key);           // spec §3.4
-  const { key, update } = createRowUpdate({ sourceUuid: entry.uuid, targetUuid, ...stamp() });
-  pendingFocus = { notebookUuid: nb.uuid, key };
-  await write(nb.uuid, update);
+/** Write a label on a line's side of its current row (no-op when the row is gone). */
+async function saveLabel(line, value) {
+  const nb = resolve(line.notebookUuid);
+  const row = normalizeRows(nb?.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG]).find((r) => r.key === line.key);
+  const update = row ? labelUpdate(row, line.side, value, stamp()) : null;
+  if (update) await write(line.notebookUuid, update);
 }
 
-let pendingFocus = null;
-function focusLine(sheet, notebookUuid, key) {
-  const root = sheet.element instanceof HTMLElement ? sheet.element : document;
+/**
+ * The line to focus after the next render, per window (the window key from
+ * windowOf): set by the picker and drop paths only, cleared on a failed write.
+ */
+const pendingFocus = new WeakMap();
+
+/**
+ * Add a party row from `entry` to `targetUuid`. `win` is the window (key)
+ * to focus the line in - picker and drop only. `label` (placeholder line)
+ * goes into the same write as the create; on an existing pair it is saved
+ * on this entry's side. Resolves the line { notebookUuid, key, side }, or null.
+ */
+async function addTarget(sheet, entry, targetUuid, { win = null, label = undefined } = {}) {
+  const nb = writeNotebookFor(entry);
+  if (!nb) {
+    ui.notifications.warn(L("noNotebook"));
+    return null;
+  }
+  const ctx = { sourceUuid: entry.uuid, allowed: [...(sheet.allowedRelationships ?? [])], typeOf: entryType,
+    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true };
+  const target = resolve(targetUuid);
+  const problem = targetProblem(target instanceof JournalEntry ? target : null, ctx);
+  if (problem) {
+    ui.notifications.warn(L(`drop.${problem}`));
+    return null;
+  }
+  const rows = normalizeRows(nb.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG]);
+  const existing = findPair(rows, entry.uuid, targetUuid);
+  if (existing) {                                                          // spec §3.4
+    const line = { notebookUuid: nb.uuid, key: existing.key, side: sideOf(existing, entry.uuid) };
+    if (win) focusLine(win, line.notebookUuid, line.key);
+    if (label !== undefined) await saveLabel(line, label);
+    return line;
+  }
+  const { key, update } = createRowUpdate({ sourceUuid: entry.uuid, targetUuid, label: label ?? "", ...stamp() });
+  const focus = { notebookUuid: nb.uuid, key };
+  if (win) pendingFocus.set(win, focus);
+  const ok = await write(nb.uuid, update);
+  if (!ok) {
+    if (win && pendingFocus.get(win) === focus) pendingFocus.delete(win);
+    return null;
+  }
+  return { notebookUuid: nb.uuid, key, side: "a" };
+}
+
+/** Focus a party line inside this window only - never elsewhere in the document. */
+function focusLine(win, notebookUuid, key) {
+  const root = win instanceof HTMLElement ? win : win?.element instanceof HTMLElement ? win.element : null;
+  if (!root) return;
   const line = root.querySelector(`.mej-cc-party-line[data-notebook-uuid="${CSS.escape(notebookUuid)}"][data-key="${CSS.escape(key)}"]`);
   line?.scrollIntoView({ block: "nearest" });
   line?.querySelector("input")?.focus();
 }
 
-async function openPicker(sheet, entry) {
+async function openPicker(sheet, entry, win) {
   const ctx = { sourceUuid: entry.uuid, allowed: [...(sheet.allowedRelationships ?? [])], typeOf: entryType,
     canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true };
   const rows = eligibleTargets(game.journal.contents, ctx).map((r) => ({
@@ -103,17 +151,17 @@ async function openPicker(sheet, entry) {
   }));
   if (!rows.length) return void ui.notifications.info(L("noTargets"));
   const uuid = await pickPartyTarget({ sourceName: entry.name, rows });
-  if (uuid) await addTarget(sheet, entry, uuid);
+  if (uuid) await addTarget(sheet, entry, uuid, { win });
 }
 
-async function onDrop(event, sheet, entry) {
+async function onDrop(event, sheet, entry, win) {
   event.preventDefault();
   const data = foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
   let uuid = null;
   if (data?.type === "JournalEntry") uuid = data.uuid;
   else if (data?.type === "JournalEntryPage") uuid = (await fromUuid(data.uuid))?.parent?.uuid ?? null;
   if (!uuid) return void ui.notifications.warn(L("drop.not-journal"));
-  await addTarget(sheet, entry, uuid);
+  await addTarget(sheet, entry, uuid, { win });
 }
 
 function ensureList(host) {
@@ -162,23 +210,21 @@ const windowOf = (sheet, host) => host.closest(".application") ?? sheet;
 /** Party lines and empty "add a label" lines into MEJ's freshly rendered list. */
 function decorateList(sheet, entry, list, lines, canAdd, lbl) {
   const handlers = {
-    open: (uuid) => { const doc = fromUuidSync(uuid); if (doc) game.MonksEnhancedJournal.openJournalEntry(doc); },
-    save: (line, value) => {
-      const nb = fromUuidSync(line.notebookUuid);
-      const row = normalizeRows(nb?.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG]).find((r) => r.key === line.key);
-      const update = row ? labelUpdate(row, line.side, value, stamp()) : null;
-      if (update) write(line.notebookUuid, update);
-    },
+    open: (uuid) => { const doc = resolve(uuid); if (doc) game.MonksEnhancedJournal.openJournalEntry(doc); },
+    save: (line, value) => saveLabel(line, value)
+      .catch((err) => console.error(`${MODULE_ID} | party relationship save failed`, err)),
     remove: (line) => write(line.notebookUuid, deleteUpdate(line.key))
+      .catch((err) => console.error(`${MODULE_ID} | party relationship delete failed`, err))
   };
   const seen = new Set(lines.map((l) => l.other));
   placeLines(list, lines, {
     gmRowFor: (uuid) => list.querySelector(`li.item:not(.mej-cc-party-only)[data-uuid="${CSS.escape(uuid)}"]`),
-    typeOf: (uuid) => entryType(fromUuidSync(uuid)) ?? "",
+    typeOf: (uuid) => groupTypeOf(uuid, { exists, typeOf: (u) => entryType(resolve(u)) }),
     groupHeader: groupHeaderIn(list),
     buildLine: (line) => buildPartyLine(document, { line, editable: canWriteIn(line.notebookUuid), labels: lbl }, handlers),
     buildRow: (line) => buildPartyRow(document, {
-      line, target: targetInfo(line.other) ?? { uuid: line.other, name: L("unresolved"), img: FALLBACK_IMG, type: "" },
+      line, target: targetInfo(line.other)
+        ?? { uuid: line.other, name: L("unresolved"), img: FALLBACK_IMG, type: "", unresolved: true },
       editable: canWriteIn(line.notebookUuid), labels: lbl
     }, handlers)
   });
@@ -188,29 +234,27 @@ function decorateList(sheet, entry, list, lines, canAdd, lbl) {
     const uuid = gmRow.dataset.uuid;
     if (seen.has(uuid) || !canLimitedUuid(uuid)) continue;
     const cell = gmRow.querySelector(".item-relationship:last-of-type") ?? gmRow;
-    cell.append(buildPartyLine(document, { line: null, editable: true, labels: lbl }, {
-      create: async (value) => {
-        await addTarget(sheet, entry, uuid);
-        const nb = writeNotebookFor(entry);
-        const row = findPair(normalizeRows(nb?.flags?.[MODULE_ID]?.[PARTY_ROWS_FLAG]), entry.uuid, uuid);
-        const update = row ? labelUpdate(row, row.a === entry.uuid ? "a" : "b", value, stamp()) : null;
-        if (update) await write(nb.uuid, update);
-      }
-    }));
+    // One-shot: the first value creates the row with its label in one write;
+    // later input on this same field labels that row. No focus steal.
+    const create = oneShotCreate({
+      create: (value) => addTarget(sheet, entry, uuid, { label: value }),
+      save: saveLabel
+    });
+    cell.append(buildPartyLine(document, { line: null, editable: true, labels: lbl }, { create }));
   }
 }
 
 /** The Add button and (when MEJ would refuse this user) a party drop zone, on the fresh tab. */
-function decorateTab(sheet, entry, tab, canAdd, lbl) {
+function decorateTab(sheet, entry, tab, canAdd, lbl, win) {
   if (canAdd) {
     tab.querySelector(".relationships")?.append(buildAddButton(document, { labels: lbl }, () =>
-      openPicker(sheet, entry).catch((err) => console.error(`${MODULE_ID} | party add failed`, err))));
+      openPicker(sheet, entry, win).catch((err) => console.error(`${MODULE_ID} | party add failed`, err))));
   }
   const mode = dropMode({ isGM: game.user.isGM, isOwner: entry.isOwner === true, canAdd });
   if (mode === "party") {
     const zone = tab.querySelector(".relationships .items-list");
     zone?.addEventListener("dragover", (event) => event.preventDefault());
-    zone?.addEventListener("drop", (event) => onDrop(event, sheet, entry)
+    zone?.addEventListener("drop", (event) => onDrop(event, sheet, entry, win)
       .catch((err) => console.error(`${MODULE_ID} | party drop failed`, err)));
   }
 }
@@ -225,6 +269,7 @@ function inject(sheet, html) {
   tab.classList.add(MARK);
 
   const key = windowOf(sheet, tab);
+  const win = key instanceof HTMLElement ? key : element;
   const prev = live.get(key);
   const canAdd = canAddParty(sheet, entry);
   const lbl = labels();
@@ -233,31 +278,34 @@ function inject(sheet, html) {
   if (prev && shouldKeepBlock({ prevPageUuid: prev.pageUuid, pageUuid: page.uuid, editing: prev.tracker.editing() })
     && carryList(tab, prev)) {
     prev.stale = true;
-    decorateTab(sheet, entry, tab, canAdd, lbl);
+    decorateTab(sheet, entry, tab, canAdd, lbl, key);
     return;
   }
   live.delete(key);
 
-  const lines = linesForEntry(entry.uuid, readableNotebooks(), { canLimited: canLimitedUuid });
+  const lines = linesForEntry(entry.uuid, readableNotebooks(), {
+    canLimited: lineFilter({ isGM: game.user.isGM, exists, canLimited: canLimitedUuid })
+  });
   if (!lines.length && !canAdd) return;
   const list = ensureList(tab);
   if (!list) return;
   decorateList(sheet, entry, list, lines, canAdd, lbl);
   isolatePartyEdits(list);
   const state = { list, pageUuid: page.uuid, stale: false };
+  // Only party fields count as editing: MEJ's own inputs re-render as MEJ intends.
   state.tracker = trackEditing(list, () => {
     // Renders were skipped while typing: re-render once the edit settles.
     if (!state.stale || live.get(key) !== state) return;
     state.stale = false;
     sheet.render();
-  });
+  }, { fieldSelector: ".mej-cc-party-line" });
   live.set(key, state);
-  decorateTab(sheet, entry, tab, canAdd, lbl);
+  decorateTab(sheet, entry, tab, canAdd, lbl, key);
 
-  if (pendingFocus) {
-    const { notebookUuid, key: rowKey } = pendingFocus;
-    pendingFocus = null;
-    focusLine({ element }, notebookUuid, rowKey);
+  const focus = pendingFocus.get(key);
+  if (focus) {
+    pendingFocus.delete(key);
+    focusLine(win, focus.notebookUuid, focus.key);
   }
 }
 

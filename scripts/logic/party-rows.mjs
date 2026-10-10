@@ -89,13 +89,14 @@ export function linesForEntry(uuid, notebooks, { canLimited }) {
   return lines;
 }
 
-export function createRowUpdate({ sourceUuid, targetUuid, user, now }) {
+/** `label` (optional) is the source side's first label, so create + label is one write. */
+export function createRowUpdate({ sourceUuid, targetUuid, user, now, label = "" }) {
   const key = pairId(sourceUuid, targetUuid);
   return {
     key,
     update: {
       [`${ROOT}.${key}`]: {
-        a: sourceUuid, b: targetUuid, labels: { a: "", b: "" },
+        a: sourceUuid, b: targetUuid, labels: { a: str(label).trim().slice(0, LABEL_MAX), b: "" },
         createdBy: user.id, createdName: user.name, editedBy: user.id, editedName: user.name, updated: now
       }
     }

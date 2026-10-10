@@ -113,6 +113,12 @@ describe("update paths", () => {
       }
     });
   });
+  it("createRowUpdate can carry the source side's first label (one write for create + label)", () => {
+    const { key, update } = createRowUpdate({ sourceUuid: B, targetUuid: A, user, now: 9, label: "  Ally " });
+    expect(update[`flags.${P}.partyRows.${key}`].labels).toEqual({ a: "Ally", b: "" });
+    const long = createRowUpdate({ sourceUuid: B, targetUuid: A, user, now: 9, label: "x".repeat(LABEL_MAX + 5) });
+    expect(long.update[`flags.${P}.partyRows.${long.key}`].labels.a).toHaveLength(LABEL_MAX);
+  });
   it("labelUpdate touches only that side plus edit stamp (unknown fields survive)", () => {
     const row = normalizeRows({ k1: { a: A, b: B } })[0];
     expect(labelUpdate(row, "b", "  Rival ", { user, now: 3 })).toEqual({

@@ -71,7 +71,7 @@ export function buildPartyLine(doc, { line, editable, labels }, handlers = {}) {
 
 /** A party-only pair as a MEJ-styled row (sheet-relationships.hbs markup). */
 export function buildPartyRow(doc, { line, target, editable, labels }, handlers = {}) {
-  const li = el(doc, "li", "item flexrow mej-cc-party-only");
+  const li = el(doc, "li", `item flexrow mej-cc-party-only${target.unresolved ? " mej-cc-party-unresolved" : ""}`);
   li.dataset.uuid = target.uuid;
   const name = el(doc, "div", "item-name clickable");
   const img = el(doc, "img", "item-image large actor-icon");
@@ -153,6 +153,43 @@ export function carryList(tab, { list, tracker }) {
   }
   tracker.restoreFocus();
   return true;
+}
+
+/**
+ * Which other ends this viewer gets lines for (spec §3.2): LIMITED on the
+ * other entry, or - for the GM only - an other end that no longer resolves,
+ * so they can see and delete the dead row.
+ */
+export function lineFilter({ isGM, exists, canLimited }) {
+  return (uuid) => (isGM === true && !exists(uuid)) || canLimited(uuid) === true;
+}
+
+/** The group a party-only row goes into: MEJ's defunct ("Unknown") group when unresolved. */
+export function groupTypeOf(uuid, { exists, typeOf }) {
+  return exists(uuid) ? (typeOf(uuid) ?? "") : "defunct";
+}
+
+/**
+ * The placeholder line's input handler: the first value creates the row
+ * (`create(value)` resolves the new line, or null when nothing was made);
+ * later values save a label on that line. Calls run one at a time, so text
+ * typed while the create is in flight labels the row it made. A throw is
+ * logged, never an unhandled rejection.
+ */
+export function oneShotCreate({ create, save }) {
+  let created = null;
+  let chain = Promise.resolve();
+  return (value) => {
+    chain = chain.then(async () => {
+      try {
+        if (created) await save(created, value);
+        else created = (await create(value)) ?? null;
+      } catch (err) {
+        console.error("mej-campaign-companion | party relationship edit failed", err);
+      }
+    });
+    return chain;
+  };
 }
 
 /** Whose drop handles an entry dropped on the tab (spec §3.3). */

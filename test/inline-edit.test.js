@@ -99,6 +99,25 @@ describe("trackEditing - a re-render never wipes text being typed", () => {
   });
 });
 
+describe("trackEditing - fieldSelector limits what counts as editing", () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  it("focus in a field outside the selector (MEJ's own input) is not an edit; inside it is", async () => {
+    const block = document.createElement("ol");
+    block.innerHTML = '<li><input class="mej" name="x"><div class="mej-cc-party-line"><input class="party"></div></li>';
+    document.body.append(block);
+    const onSettled = vi.fn();
+    const tracker = trackEditing(block, onSettled, { fieldSelector: ".mej-cc-party-line" });
+    block.querySelector("input.mej").focus();
+    expect(tracker.editing()).toBe(false);
+    block.querySelector("input.party").focus();
+    expect(tracker.editing()).toBe(true);
+    block.querySelector("input.mej").focus();
+    await tick();
+    expect(tracker.editing()).toBe(false);
+    expect(onSettled).toHaveBeenCalled();
+  });
+});
+
 describe("shouldKeepBlock", () => {
   it("keeps the live block only for the same page while an edit is in progress", () => {
     expect(shouldKeepBlock({ prevPageUuid: "P1", pageUuid: "P1", editing: true })).toBe(true);

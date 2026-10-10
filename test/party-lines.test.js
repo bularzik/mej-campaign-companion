@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList, DETACHED_FORM
+  buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList, DETACHED_FORM,
+  lineFilter, groupTypeOf, oneShotCreate
 } from "../scripts/apps/party-lines.mjs";
 import { DEBOUNCE_MS, trackEditing, shouldKeepBlock } from "../scripts/apps/inline-edit.mjs";
 
@@ -190,5 +191,74 @@ describe("carryList (edit carried across a re-render)", () => {
     const list = document.createElement("ol");
     const bare = document.createElement("div");
     expect(carryList(bare, { list, tracker: trackEditing(list, () => {}) })).toBe(false);
+  });
+});
+
+// Spec §3.2: a row whose other end no longer resolves shows to the GM only,
+// as an "Unknown" party-only row they can delete.
+describe("unresolved targets (GM only)", () => {
+  const exists = (uuid) => uuid !== "JournalEntry.gone";
+  const canLimited = (uuid) => uuid === "JournalEntry.m";
+  it("lineFilter: GM sees unresolved uuids; players never do; resolvable ones still need LIMITED", () => {
+    const gm = lineFilter({ isGM: true, exists, canLimited });
+    const player = lineFilter({ isGM: false, exists, canLimited });
+    expect(gm("JournalEntry.gone")).toBe(true);
+    expect(player("JournalEntry.gone")).toBe(false);
+    expect(gm("JournalEntry.m")).toBe(true);
+    expect(gm("JournalEntry.hidden")).toBe(false);
+    expect(player("JournalEntry.m")).toBe(true);
+  });
+  it("groupTypeOf: unresolved goes to MEJ's defunct group", () => {
+    const typeOf = () => "person";
+    expect(groupTypeOf("JournalEntry.gone", { exists, typeOf })).toBe("defunct");
+    expect(groupTypeOf("JournalEntry.m", { exists, typeOf })).toBe("person");
+  });
+  it("buildPartyRow marks an unresolved row and keeps its delete", () => {
+    const remove = vi.fn();
+    const li = buildPartyRow(document, {
+      line: line({ other: "JournalEntry.gone" }),
+      target: { uuid: "JournalEntry.gone", name: "Unknown entry", img: "fallback.svg", type: "", unresolved: true },
+      editable: true, labels
+    }, { remove });
+    expect(li.classList.contains("mej-cc-party-unresolved")).toBe(true);
+    expect(li.querySelector(".item-name a").textContent).toBe("Unknown entry");
+    li.querySelector(".mej-cc-party-delete").click();
+    expect(remove).toHaveBeenCalled();
+  });
+});
+
+// The placeholder line creates once; later input labels the row it made.
+describe("oneShotCreate", () => {
+  it("first value creates; later values save to the created line; calls are serialized", async () => {
+    let release;
+    const create = vi.fn(() => new Promise((r) => { release = () => r({ key: "k9" }); }));
+    const save = vi.fn(async () => {});
+    const send = oneShotCreate({ create, save });
+    const first = send("A");
+    const second = send("Al");
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(save).not.toHaveBeenCalled();
+    release();
+    await Promise.all([first, second]);
+    expect(create).toHaveBeenCalledWith("A");
+    expect(save).toHaveBeenCalledWith({ key: "k9" }, "Al");
+    await send("Ally");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenLastCalledWith({ key: "k9" }, "Ally");
+  });
+  it("a failed create (null) is retried on the next value; a throw is logged, not rejected", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const create = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(null).mockResolvedValueOnce({ key: "k1" });
+    const save = vi.fn();
+    const send = oneShotCreate({ create, save });
+    await expect(send("a")).resolves.toBeUndefined();
+    expect(err).toHaveBeenCalled();
+    await send("b");
+    await send("c");
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(save).not.toHaveBeenCalled();
+    await send("d");
+    expect(save).toHaveBeenCalledWith({ key: "k1" }, "d");
+    err.mockRestore();
   });
 });
