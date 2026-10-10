@@ -6,7 +6,10 @@
 // except while someone is typing in it (trackEditing): then the live block
 // is carried into the new render and rebuilt once the edit settles.
 import { MODULE_ID, I18N, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
-import { normalizeConnections, canSeeConnection, sideView, countOtherNotes } from "../logic/player-connections.mjs";
+import {
+  normalizeConnections, canSeeConnection, sideView, countOtherNotes, targetProblem, eligibleTargets
+} from "../logic/player-connections.mjs";
+import { promptPlayerConnection } from "../apps/player-connection-dialog.mjs";
 import { buildConnectionsBlock, groupSideViews } from "../apps/player-connections-block.mjs";
 import { incomingConnections, typedPageOf } from "./player-connections-index.mjs";
 import { playerConnectionsEnabled } from "./rel-tab-wrap.mjs";
@@ -180,6 +183,39 @@ async function run(request) {
 
 const target = (view) => ({ fromUuid: view.from, connectionId: view.id, side: view.side });
 
+function targetCtx(sheet, entry, page) {
+  return {
+    sourceUuid: entry.uuid,
+    allowed: [...(sheet.allowedRelationships ?? [])],
+    authorId: game.user.id,
+    existing: normalizeConnections(page.flags?.[MODULE_ID]?.[PLAYER_CONNECTIONS_FLAG], entry.uuid),
+    typeOf: (doc) => entryType(doc),
+    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true
+  };
+}
+
+async function openAddDialog(sheet, entry, page, targetUuid = null) {
+  const rows = eligibleTargets(game.journal.contents, targetCtx(sheet, entry, page)).map((r) => ({
+    uuid: r.uuid, name: r.name, img: targetInfo(r.uuid)?.img ?? FALLBACK_IMG, typeLabel: typeLabel(r.type)
+  }));
+  if (!rows.length) return void ui.notifications.info(L("noTargets"));
+  return promptPlayerConnection({
+    sourceName: entry.name, rows, targetUuid,
+    save: (values) => run({ op: "add", fromUuid: entry.uuid, payload: values })
+  });
+}
+
+async function onDrop(event, sheet, entry, page) {
+  const data = foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
+  let dropped = null;
+  if (data?.type === "JournalEntry" && typeof data.uuid === "string") dropped = await fromUuid(data.uuid);
+  else if (data?.type === "JournalEntryPage" && typeof data.uuid === "string") dropped = (await fromUuid(data.uuid))?.parent ?? null;
+  if (!(dropped instanceof JournalEntry)) dropped = null;
+  const problem = targetProblem(dropped, targetCtx(sheet, entry, page));
+  if (problem) return void ui.notifications.warn(game.i18n.localize(`${I18N}.playerConnections.drop.${problem}`));
+  return openAddDialog(sheet, entry, page, dropped.uuid);
+}
+
 function handlersFor(sheet, entry, page, rowsById) {
   return {
     open: (uuid) => {
@@ -199,7 +235,12 @@ function handlersFor(sheet, entry, page, rowsById) {
       const body = others > 0 ? F("deleteBodyNotes", { count: others }) : L("deleteBody");
       if (!(await confirm(L("deleteTitle"), body))) return;
       return run({ op: "delete", ...target(view) });
-    }
+    },
+    add: () => openAddDialog(sheet, entry, page)
+      .catch((err) => console.error(`${MODULE_ID} | add connection failed`, err)),
+    // Players only: the GM records relationships with MEJ's own drop zone.
+    drop: game.user.isGM ? undefined : (event) => onDrop(event, sheet, entry, page)
+      .catch((err) => console.error(`${MODULE_ID} | connection drop failed`, err))
   };
 }
 

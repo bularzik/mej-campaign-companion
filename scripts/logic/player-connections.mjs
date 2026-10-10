@@ -323,3 +323,25 @@ export function buildReverseIndex(sources) {
 export function incomingFor(index, toUuid) {
   return index?.inbound.get(toUuid) ?? [];
 }
+
+// ---- Targets for the Add dialog and drop (spec §4.6, §7) -------------------
+
+/** Why `target` can't be connected from the source by this author, or null. */
+export function targetProblem(target, { sourceUuid, allowed, authorId, existing, typeOf, canLimited }) {
+  if (!target) return "not-journal";
+  if (target.uuid === sourceUuid) return "self";
+  if (!canLimited(target)) return "no-access";
+  const type = typeOf(target);
+  if (!type || !(allowed ?? []).includes(type)) return "type-not-allowed";
+  if ((existing ?? []).some((c) => c.authorId === authorId && c.to === target.uuid)) return "duplicate";
+  return null;
+}
+
+export function eligibleTargets(entries, ctx, filter = "") {
+  const q = String(filter).trim().toLocaleLowerCase();
+  return [...(entries ?? [])]
+    .filter((entry) => targetProblem(entry, ctx) === null)
+    .filter((entry) => !q || String(entry.name ?? "").toLocaleLowerCase().includes(q))
+    .map((entry) => ({ uuid: entry.uuid, name: String(entry.name ?? ""), type: ctx.typeOf(entry) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
