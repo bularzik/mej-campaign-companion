@@ -116,6 +116,23 @@ export function relationshipsHtml(resolved, includeGM, heading) {
 }
 
 /**
+ * HTML for an entry's player connections (spec 2026-10-09 §6.2): lines from
+ * exportLines(), each with its notes as a nested list. Empty string when
+ * nothing renders. Every value is escaped - labels are player-written.
+ * @param {{text:string, children:string[]}[]} lines
+ * @param {string} heading localized "Player connections" label
+ */
+export function playerConnectionsHtml(lines, heading) {
+  if (!lines?.length) return "";
+  const items = lines.map((line) => {
+    const nested = line.children.length
+      ? `<ul>${line.children.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "";
+    return `<li>${escapeHtml(line.text)}${nested}</li>`;
+  }).join("");
+  return `<p><strong>${escapeHtml(heading)}</strong></p><ul>${items}</ul>`;
+}
+
+/**
  * Body HTML for a "session" record: optional Session Number / Campaign Date
  * lines, then the recap. GM notes are NOT embedded here - they're passed
  * back separately as record.system.gmNotes, which doc-export.mjs's own
@@ -159,12 +176,14 @@ export function sessionBodyHtml(page, { sessionNumberLabel, campaignDateLabel, f
  * @param {{
  *   includeGM: boolean,
  *   relationships?: {name:string, hidden?:boolean}[],
- *   labels: {relationships:string, sessionNumber:string, campaignDate:string},
+ *   playerConnections?: {text:string, children:string[]}[],
+ *   labels: {relationships:string, playerConnections?:string, sessionNumber:string, campaignDate:string},
  *   formatCampaignDate?: (cd:object) => string
  * }} opts
  */
 export function recordSnapshot(row, opts) {
-  const { includeGM, relationships, labels, formatCampaignDate } = opts;
+  const { includeGM, relationships, playerConnections, labels, formatCampaignDate } = opts;
+  const pcHtml = playerConnectionsHtml(playerConnections, labels.playerConnections ?? "");
   if (row.kind === SESSION_KIND) {
     const session = sessionData(row.page);
     return {
@@ -177,10 +196,10 @@ export function recordSnapshot(row, opts) {
         campaignDateLabel: labels.campaignDate,
         formatCampaignDate,
         includeGM
-      })
+      }) + pcHtml
     };
   }
-  const html = stripSecretSections(bodyText(row.page), { includeAll: includeGM }) + relationshipsHtml(relationships, includeGM, labels.relationships);
+  const html = stripSecretSections(bodyText(row.page), { includeAll: includeGM }) + relationshipsHtml(relationships, includeGM, labels.relationships) + pcHtml;
   return { name: row.name, kind: row.kind, hidden: false, system: {}, html };
 }
 

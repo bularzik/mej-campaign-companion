@@ -345,3 +345,42 @@ export function eligibleTargets(entries, ctx, filter = "") {
     .map((entry) => ({ uuid: entry.uuid, name: String(entry.name ?? ""), type: ctx.typeOf(entry) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// ---- Word export (spec §6.2) -----------------------------------------------
+
+/**
+ * Lines for one entry's "Player connections" list, from this entry's side:
+ * `Mara — Sister of (by Dana)`, other players' notes nested beneath, secrets
+ * as `Secret: …`. GM export with GM content: everything, private ones
+ * marked. Otherwise: shared connections plus the exporter's own private
+ * ones; secrets only when revealed or written by the exporter.
+ */
+export function exportLines(items, { includeGM, viewerId, labels }) {
+  const secretShown = (note, writerId) => includeGM || note.revealed === true || writerId === viewerId;
+  return (items ?? [])
+    .filter(({ row }) => includeGM || row.shared || row.authorId === viewerId)
+    .map(({ row, side, otherName }) => {
+      const notes = row.sides[side].notes;
+      const main = notes[row.authorId];
+      const text = [
+        otherName,
+        main?.label ? `— ${main.label}` : null,
+        `(${labels.by(row.authorName)})`,
+        includeGM && !row.shared ? `(${labels.private})` : null
+      ].filter(Boolean).join(" ");
+      const children = [];
+      if (main?.secret && secretShown(main, row.authorId)) children.push(`${labels.secret}: ${main.secret}`);
+      const others = Object.entries(notes)
+        .filter(([writerId]) => writerId !== row.authorId)
+        .sort(([, a], [, b]) => a.authorName.localeCompare(b.authorName));
+      for (const [writerId, note] of others) {
+        const parts = [];
+        if (note.label) parts.push(`"${note.label}"`);
+        if (note.secret && secretShown(note, writerId)) parts.push(`${labels.secret}: ${note.secret}`);
+        if (parts.length) children.push(`${note.authorName}: ${parts.join(" — ")}`);
+      }
+      return { text, children, otherName };
+    })
+    .sort((a, b) => a.otherName.localeCompare(b.otherName))
+    .map(({ text, children }) => ({ text, children }));
+}
