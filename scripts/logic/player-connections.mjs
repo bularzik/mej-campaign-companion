@@ -5,6 +5,8 @@
 // every reader goes through normalizeConnections so hand-edited or
 // half-synced flags are skipped, never thrown on (spec §2, §7).
 
+import { MODULE_ID, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
+
 export const LABEL_MAX = 200;
 export const SECRET_MAX = 500;
 export const SIDES = ["from", "to"];
@@ -139,4 +141,138 @@ export function sideView(row, side, { userId, isGM, enabled, knownUserIds, canOb
 /** Notes on either side written by someone other than the connection author (spec §3 confirmations). */
 export function countOtherNotes(row) {
   return SIDES.reduce((n, side) => n + Object.keys(row.sides[side].notes).filter((id) => id !== row.authorId).length, 0);
+}
+
+// ---- GM-side validation and writes (spec §5) ------------------------------
+
+export const OPS = ["add", "setShared", "delete", "setNote", "deleteNote", "setRevealed"];
+const BASE = `flags.${MODULE_ID}.${PLAYER_CONNECTIONS_FLAG}`;
+const fail = (reason) => ({ ok: false, reason });
+const OK = Object.freeze({ ok: true });
+const NOOP = Object.freeze({ ok: true, noop: true });
+
+/** {label, secret} cleaned to the spec limits, or null when either is invalid (or the label is required and empty). */
+function notePair(note, { required }) {
+  if (note !== undefined && note !== null && !isObj(note)) return null;
+  const label = cleanText(note?.label, LABEL_MAX);
+  const secret = cleanText(note?.secret, SECRET_MAX);
+  if (label === null || secret === null) return null;
+  if (required && !label) return null;
+  return { label, secret };
+}
+
+/**
+ * Every check the active GM runs before writing (spec §5). `ctx` is built
+ * GM-side from the live documents and the SOCKET sender - never from the
+ * payload. Writes address rows by connectionId and notes by sender id, so a
+ * connection/note that isn't found is never written to (gone / no-op).
+ */
+export function validateRequest(op, request, ctx) {
+  if (!OPS.includes(op)) return fail("bad-request");
+  const { sender, enabled, source, typeOf, canAccess, connections } = ctx;
+  if (!source || source.typed !== true) return fail("no-entry");
+  if (source.locked === true) return fail("locked");
+  const payload = isObj(request?.payload) ? request.payload : {};
+
+  if (op === "add") {
+    if (!enabled) return fail("disabled");
+    const to = payload.to;
+    if (typeof to !== "string" || !to.length) return fail("bad-request");
+    if (to === source.uuid) return fail("self");
+    if (!canAccess(source.uuid, "OBSERVER")) return fail("no-access");
+    const type = typeOf(to);
+    if (!type || !canAccess(to, "LIMITED")) return fail("no-access");
+    if (!(source.allowed ?? []).includes(type)) return fail("type-not-allowed");
+    if (connections.some((c) => c.authorId === sender.id && c.to === to)) return fail("duplicate");
+    if (!notePair(payload.fromNote ?? null, { required: true })) return fail("bad-label");
+    if (payload.toNote !== undefined && !notePair(payload.toNote, { required: false })) return fail("bad-label");
+    return OK;
+  }
+
+  const conn = connections.find((c) => c.id === request?.connectionId) ?? null;
+  const sees = (c) => canSeeConnection(c, { userId: sender.id, isGM: sender.isGM === true, canSeeEntry: (u) => canAccess(u, "LIMITED") });
+  const side = request?.side;
+  switch (op) {
+    case "setShared":
+      if (!conn) return fail("gone");
+      if (conn.authorId !== sender.id) return fail("not-author");
+      return OK;
+    case "delete":
+      if (!conn) return NOOP;
+      if (conn.authorId !== sender.id && sender.isGM !== true) return fail("not-author");
+      return OK;
+    case "setNote": {
+      if (!enabled) return fail("disabled");
+      if (!conn) return fail("gone");
+      if (!SIDES.includes(side)) return fail("bad-request");
+      if (!sees(conn)) return fail("no-access");
+      const sideUuid = side === "from" ? source.uuid : conn.to;
+      if (sender.isGM !== true && !canAccess(sideUuid, "OBSERVER")) return fail("no-access");
+      if (!notePair(payload, { required: false })) return fail("bad-label");
+      return OK;
+    }
+    case "deleteNote": {
+      if (!conn) return NOOP;
+      if (!SIDES.includes(side)) return fail("bad-request");
+      const writer = typeof payload.noteUserId === "string" ? payload.noteUserId : sender.id;
+      if (!Object.hasOwn(conn.sides[side].notes, writer)) return NOOP;
+      if (writer !== sender.id && sender.isGM !== true) return fail("not-author");
+      return OK;
+    }
+    case "setRevealed":
+      if (!enabled) return fail("disabled");
+      if (!conn) return fail("gone");
+      if (!SIDES.includes(side)) return fail("bad-request");
+      if (!Object.hasOwn(conn.sides[side].notes, sender.id)) return fail("gone");
+      if (!sees(conn)) return fail("no-access");
+      return OK;
+  }
+  return fail("bad-request");
+}
+
+/**
+ * The page.update() data for a validated request (spec §5): keyed paths
+ * and `-=` deletes only, so two players writing at once never overwrite
+ * each other. Call only after validateRequest returned { ok: true } without
+ * `noop` - the path segments (connectionId, side, note writer) are trusted
+ * here because validation found them in the stored flag.
+ */
+export function connectionUpdate(op, request, { senderId, senderName, now, newId, connections }) {
+  const payload = isObj(request?.payload) ? request.payload : {};
+  const cid = request?.connectionId;
+  const side = request?.side;
+  const noteKey = (s, uid) => `${BASE}.${cid}.sides.${s}.notes.${uid}`;
+  const noteDelete = (s, uid) => `${BASE}.${cid}.sides.${s}.notes.-=${uid}`;
+  const makeNote = ({ label, secret }, revealed = false) => ({ authorName: senderName, label, secret, revealed, updated: now });
+  switch (op) {
+    case "add": {
+      const fromNote = notePair(payload.fromNote, { required: true });
+      const toNote = payload.toNote === undefined ? null : notePair(payload.toNote, { required: false });
+      const toNotes = toNote && (toNote.label || toNote.secret) ? { [senderId]: makeNote(toNote) } : {};
+      return {
+        [`${BASE}.${newId}`]: {
+          id: newId, to: payload.to, authorId: senderId, authorName: senderName,
+          shared: payload.shared !== false, created: now,
+          sides: { from: { notes: { [senderId]: makeNote(fromNote) } }, to: { notes: toNotes } }
+        }
+      };
+    }
+    case "setShared":
+      return { [`${BASE}.${cid}.shared`]: payload.shared === true };
+    case "delete":
+      return { [`${BASE}.-=${cid}`]: null };
+    case "setNote": {
+      const { label, secret } = notePair(payload, { required: false });
+      if (!label && !secret) return { [noteDelete(side, senderId)]: null };
+      const prior = connections.find((c) => c.id === cid)?.sides[side].notes[senderId];
+      return { [noteKey(side, senderId)]: makeNote({ label, secret }, prior?.revealed === true && secret.length > 0) };
+    }
+    case "deleteNote": {
+      const writer = typeof payload.noteUserId === "string" ? payload.noteUserId : senderId;
+      return { [noteDelete(side, writer)]: null };
+    }
+    case "setRevealed":
+      return { [`${noteKey(side, senderId)}.revealed`]: payload.revealed === true };
+  }
+  return {};
 }
