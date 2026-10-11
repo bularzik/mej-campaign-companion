@@ -1,6 +1,6 @@
 // test/sheet-registration.test.js
 import { describe, it, expect } from "vitest";
-import { missingSheetRegistrations, missingOwnRegistration, planSheetRegistrations, sheetRegistrationEntries } from "../scripts/logic/sheet-registration.mjs";
+import { missingSheetRegistrations, missingOwnRegistration, planSheetRegistrations, sheetRegistrationEntries, ensureSheetTypeEntries } from "../scripts/logic/sheet-registration.mjs";
 
 const SESSION_TYPE = "mej-campaign-companion.session";
 const HUB_TYPE = "campaign-hub";
@@ -229,5 +229,28 @@ describe("sheetRegistrationEntries", () => {
     expect(entries[0].sheetClass).toBe(MediaPageSheet);
     expect(entries[1].documentClass).toBe("JournalEntry");
     expect(entries[1].sheetClass).toBe(TimelineJournalSheet);
+  });
+});
+
+describe("ensureSheetTypeEntries", () => {
+  // Foundry 14.369's registerSheet skips a sub-type with no sheetClasses
+  // entry; the Hub's synthetic "campaign-hub" type never has one.
+  it("creates an empty entry for a type that has none and reports it", () => {
+    const sheetClasses = {};
+    expect(ensureSheetTypeEntries(sheetClasses, ["campaign-hub"])).toEqual(["campaign-hub"]);
+    expect(sheetClasses).toEqual({ "campaign-hub": {} });
+  });
+
+  it("leaves existing entries, and the sheets registered in them, untouched", () => {
+    const pdf = { "core.JournalEntryPagePDFSheet": {} };
+    const sheetClasses = { pdf };
+    expect(ensureSheetTypeEntries(sheetClasses, ["pdf", "video"])).toEqual(["video"]);
+    expect(sheetClasses.pdf).toBe(pdf);
+    expect(sheetClasses.video).toEqual({});
+  });
+
+  it("does nothing without a sheetClasses map or types", () => {
+    expect(ensureSheetTypeEntries(undefined, ["campaign-hub"])).toEqual([]);
+    expect(ensureSheetTypeEntries({}, undefined)).toEqual([]);
   });
 });

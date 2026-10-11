@@ -135,3 +135,30 @@ export function sheetRegistrationEntries(missing, { SessionSheet, CampaignHubPag
     options: { types: ["base"], makeDefault: false, canBeDefault: false, label: `${i18n}.sheettype.timelineJournal` } });
   return out;
 }
+
+/**
+ * Give every type in `types` a sheetClasses entry before registerSheet runs.
+ * Through Foundry 14.368, registerSheet created a missing entry itself; from
+ * 14.369 it warns "Unable to register sheet ... for unknown sub-type" and
+ * skips the type. The Hub's synthetic type (HUB_PAGE_ID) is not a declared
+ * JournalEntryPage sub-type, so it never has an entry and its registration
+ * was dropped - the Hub then failed to open. Only effective once game.ready
+ * is true: before that, initializeSheets() rebuilds sheetClasses from
+ * game.documentTypes, discarding anything created here, so the ready-time
+ * repair is what lands the Hub registration on 14.369. Existing entries
+ * (and the sheets already registered in them) are left untouched, so this
+ * is a no-op on earlier builds.
+ * @param {object} sheetClasses  CONFIG.JournalEntryPage.sheetClasses (or a lookalike)
+ * @param {string[]} types       the sub-type keys about to be registered
+ * @returns {string[]} the types an entry was created for
+ */
+export function ensureSheetTypeEntries(sheetClasses, types) {
+  if (!sheetClasses) return [];
+  const created = [];
+  for (const type of types ?? []) {
+    if (sheetClasses[type]) continue;
+    sheetClasses[type] = {};
+    created.push(type);
+  }
+  return created;
+}
