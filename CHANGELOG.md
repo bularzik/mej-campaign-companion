@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.26.0 (2026-10-11)
 
 - Party relationships replace Player connections. Players' relationships
   now live in MEJ's own Relationships list, one per pair of entries,
