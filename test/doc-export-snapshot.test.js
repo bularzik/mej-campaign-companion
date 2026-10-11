@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { JSDOM } from "jsdom";
 import {
-  eligibleEntries, orderEligibleEntries, relationshipsHtml, sessionBodyHtml,
+  eligibleEntries, orderEligibleEntries, relationshipsHtml, partyRelationshipsHtml, sessionBodyHtml,
   pageRelationships, recordSnapshot, buildGroupSnapshot, SESSION_KIND
 } from "../scripts/logic/doc-export-snapshot.mjs";
 import { snapshotToDocModel } from "../scripts/logic/doc-export.mjs";
@@ -151,6 +151,14 @@ describe("relationshipsHtml", () => {
 
   it("escapes relationship names", () => {
     expect(relationshipsHtml([{ name: "<script>", hidden: false }], false, "R")).not.toContain("<script>");
+  });
+});
+
+describe("partyRelationshipsHtml", () => {
+  it("party relationships list renders after Relationships with escaped text", () => {
+    const html = partyRelationshipsHtml([{ text: "Mara — <i>Sister</i> (edited by Jo)" }], "Party relationships");
+    expect(html).toContain("Party relationships");
+    expect(html).toContain("Mara — &lt;i&gt;Sister&lt;/i&gt; (edited by Jo)");
   });
 });
 

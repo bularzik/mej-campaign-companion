@@ -4,13 +4,15 @@
 // opens-entry, 200-node cap. What changed: rows come from the CALLER's
 // (scoped) entry list via logic/graph-rows.mjs instead of walking all of
 // game.journal, and pane state lives in the Hub's HUB_STATE.
-import { MODULE_ID, PLAYER_GROUPS_SETTING } from "../constants.mjs";
+import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
 import { graphRowsFor } from "../logic/graph-rows.mjs";
 import { imageFor } from "../logic/default-image.mjs";
 import { graphSignature } from "../logic/graph-signature.mjs";
 import { panViewBox } from "../logic/graph-pan.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
+import { linesForEntry } from "../logic/party-rows.mjs";
+import { readableNotebooks } from "../data/party-notebook.mjs";
 import { backlinkPairs } from "../search/live-index.mjs";
 import * as d3 from "../../vendor/d3-force.esm.js";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -32,6 +34,12 @@ const drawnSignature = new WeakMap();
 
 /** Compute the scoped graph + the template context for the pane. */
 export function prepareGraphContext(entries, state) {
+  const notebooks = readableNotebooks();
+  const canLimitedUuid = (uuid) => {
+    if (game.user.isGM) return true;
+    const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
+    return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
+  };
   const rows = graphRowsFor(entries, {
     isGM: game.user.isGM,
     userId: game.user.id,
@@ -45,18 +53,15 @@ export function prepareGraphContext(entries, state) {
     // placeholder otherwise (MEJ's own art for its built-in types, the
     // companion's for session/campaign), null for types with no art.
     imageOf: (page, type) => imageFor(page.src, type),
-    // Player connections (spec 2026-10-09 §6.1): the from-page's flag, and
-    // LIMITED+ on both endpoints for a player (canSeeConnection).
-    playerConnectionsOf: (page) => page.flags?.[MODULE_ID]?.playerConnections,
-    canSeeEntry: (uuid) => {
-      const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
-      return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
-    }
+    // Party relationships (spec 2026-10-10 §5.1): readable notebooks, LIMITED+
+    // on the other end for a player (the GM sees all).
+    partyLinesOf: (uuid) => linesForEntry(uuid, notebooks, { canLimited: canLimitedUuid })
   });
-  const includePlayer = state.graphPlayerConnections !== false;
+  const includeParty = state.graphPartyRelationships !== false;
   const graph = buildGraph(rows, state.graphBacklinks ? backlinkPairs() : [], {
     mode: state.graphMode, centerUuid: state.graphCenterUuid,
-    includeBacklinks: state.graphBacklinks, includePlayer, isGM: game.user.isGM, maxNodes: MAX_NODES
+    includeBacklinks: state.graphBacklinks, includeParty, isGM: game.user.isGM,
+    editedLabel: (name) => game.i18n.format(`${I18N}.party.edited`, { name }), maxNodes: MAX_NODES
   });
   return {
     graph,
@@ -64,7 +69,7 @@ export function prepareGraphContext(entries, state) {
       isEgo: state.graphMode === "ego",
       centerUuid: state.graphCenterUuid,
       includeBacklinks: state.graphBacklinks,
-      includePlayer,
+      includeParty,
       truncated: graph.truncated === true
     }
   };

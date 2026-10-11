@@ -1,5 +1,5 @@
 // Shared "re-render the sheets showing these entries" helper for the live
-// hooks (secrets-ui reveals, player-connections index). Deliberately imports
+// hooks (secrets-ui reveals, party relationships). Deliberately imports
 // nothing so any hook module can use it without pulling in another's graph.
 
 /**

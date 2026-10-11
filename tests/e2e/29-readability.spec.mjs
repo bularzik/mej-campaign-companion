@@ -212,21 +212,17 @@ test.describe("29 readability", () => {
       await person.pages.contents[0].update({
         [`flags.${MOD}.secretReveals.secret-rd1`]: { users: [user1.id], groups: [], all: false, revealedAt: Date.now() }
       });
-      // A player connection with a revealed secret and another player's note (spec 2026-10-09).
-      const user2 = game.users.getName("User 2");
-      const now = Date.now();
-      await person.pages.contents[0].update({
-        [`flags.${MOD}.playerConnections.rdpc1`]: {
-          id: "rdpc1", to: ally.uuid, authorId: user1.id, authorName: user1.name, shared: true, created: now,
-          sides: {
-            from: { notes: {
-              [user1.id]: { authorName: user1.name, label: "sworn friend", secret: "saved her life", revealed: true, updated: now },
-              [user2.id]: { authorName: user2.name, label: "rivals, really", secret: "", revealed: false, updated: now }
-            } },
-            to: { notes: { [user1.id]: { authorName: user1.name, label: "owes a life", secret: "", revealed: false, updated: now } } }
-          }
-        }
-      });
+      // A party relationship on Person <-> Ally (spec 2026-10-10), User 1 a
+      // Contributor so the player pass gets the editable line and Add button.
+      await campaign.update({ [`flags.${MOD}.campaign.contributors`]: { userIds: [user1.id], groupIds: [] } });
+      const { ensurePartyNotebook, syncNotebookOwnership } = await import(`${mod}/data/party-notebook.mjs`);
+      const { createRowUpdate } = await import(`${mod}/logic/party-rows.mjs`);
+      const notebook = await ensurePartyNotebook(game.folders.get(campaign.id));
+      await syncNotebookOwnership(game.folders.get(campaign.id));
+      await notebook.update(createRowUpdate({
+        sourceUuid: person.uuid, targetUuid: ally.uuid, label: "sworn friend",
+        user: { id: user1.id, name: user1.name }, now: Date.now()
+      }).update);
       const sessionName = `${P}Session`;
       const sessionPage = buildSessionPageData(sessionName,
         `<p>We met @UUID[${person.uuid}]{the person}.</p><section class="secret" id="secret-rd2"><p>GM aside.</p></section>`,
@@ -371,8 +367,14 @@ test.describe("29 readability", () => {
           });
           await settle(page, 400);
         }, [`${S} .mej-cc-knowledge`, `${S} .mej-cc-secret-audience`, `${S} .mej-cc-query-embed`, `${S} .mej-cc-actor-link`]);
-        await check("person relationships player connections", () => sheetTab(page, "relationships"),
-          `${S} .mej-cc-player-connections`);
+        await check("person relationships party line", () => sheetTab(page, "relationships"),
+          `${S} .mej-cc-party-line`);
+        await check("party picker", async () => {
+          await shell(page).locator(".mej-cc-party-add button").first().click();
+          await page.waitForSelector(".mej-cc-party-picker", { timeout: 10_000 });
+          await settle(page, 300);
+        }, ".mej-cc-party-picker");
+        await closeDialogs(page);
         // The GM relationships tab carries no companion text: its audience
         // controls are icon-only and the row text is MEJ's own markup.
 
@@ -506,8 +508,8 @@ test.describe("29 readability", () => {
             });
             await settle(page, 300);
           }, [`${S} .mej-cc-knowledge`, `${S} .mej-cc-secret-audience`, `${S} .mej-cc-query-embed`]);
-          await check(`${bg}: person player connections`, () => sheetTab(page, "relationships"),
-            `${S} .mej-cc-player-connections`);
+          await check(`${bg}: person party line`, () => sheetTab(page, "relationships"),
+            `${S} .mej-cc-party-line`);
           await check(`${bg}: hub index`, async () => {
             await openHub(page);
             await hubTab(page, "index");
@@ -555,10 +557,12 @@ test.describe("29 readability", () => {
           await settle(page, 400);
         }, [`${S} .mej-cc-knowledge`, `${S} section.secret.mej-cc-revealed-to-you`]);
         await check("player relationships", () => sheetTab(page, "relationships"),
-          [`${S} .mej-cc-rel-secret, ${S} .mej-cc-rel-revealed, ${S} .mej-cc-known-connections`, `${S} .mej-cc-player-connections`]);
-        await check("player connection dialog", () => openDialog(page, "player-connection-dialog.mjs", "promptPlayerConnection",
-          { sourceName: `${PREFIX}Person`, rows: [{ uuid: seed.allyUuid, name: `${PREFIX}Ally`, img: "icons/svg/book.svg", typeLabel: "Person" }] }),
-          "[data-rd-scan]");
+          [`${S} .mej-cc-rel-secret, ${S} .mej-cc-rel-revealed, ${S} .mej-cc-known-connections`, `${S} .mej-cc-party-line`]);
+        await check("player party picker", async () => {
+          await shell(page).locator(".mej-cc-party-add button").first().click();
+          await page.waitForSelector(".mej-cc-party-picker", { timeout: 10_000 });
+          await settle(page, 300);
+        }, ".mej-cc-party-picker");
         await closeDialogs(page);
       } finally {
         await closeShell(page).catch(() => {});

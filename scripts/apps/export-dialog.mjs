@@ -13,7 +13,7 @@
 // (same node kinds in, same docx.iife.js vendor bundle) - only the vendor
 // path (loadVendorGlobal, this module's own Task 11 asset) and localization
 // keys differ.
-import { MODULE_ID, I18N, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
+import { MODULE_ID, I18N } from "../constants.mjs";
 import { snapshotToDocModel, replaceUuidTags } from "../logic/doc-export.mjs";
 import {
   eligibleEntries, orderEligibleEntries, recordSnapshot, pageRelationships,
@@ -25,8 +25,8 @@ import { getTimelineJournal } from "../data/timeline-journal.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
-import { normalizeConnections, exportLines } from "../logic/player-connections.mjs";
-import { incomingConnections } from "../hooks/player-connections-index.mjs";
+import { linesForEntry, exportLines } from "../logic/party-rows.mjs";
+import { readableNotebooks } from "../data/party-notebook.mjs";
 
 /**
  * doc-export.mjs is ported byte-for-byte from campaign-record, including
@@ -130,40 +130,52 @@ function resolvedRelationships(page) {
  * which have a parent to inherit from).
  */
 function isDefaultPlayerVisible(uuid) {
-  const doc = fromUuidSync(uuid);
+  const doc = safeResolve(uuid);
   if (!doc) return false;
   const levels = CONST.DOCUMENT_OWNERSHIP_LEVELS;
   return (doc.ownership?.default ?? levels.NONE) >= levels.LIMITED;
 }
 
-/** Export lines for one row's player connections, both ends (spec §6.2). Unresolved ends are dropped. */
-function playerConnectionLines(row, includeGM, labels) {
-  const nameOf = (uuid) => fromUuidSync(uuid)?.name ?? null;
-  const items = [
-    ...normalizeConnections(row.page?.flags?.[MODULE_ID]?.[PLAYER_CONNECTIONS_FLAG], row.uuid)
-      .map((r) => ({ row: r, side: "from", otherName: nameOf(r.to) })),
-    ...incomingConnections(row.uuid).map(({ row: r }) => ({ row: r, side: "to", otherName: nameOf(r.from) }))
-  ].filter((item) => item.otherName);
-  return exportLines(items, { includeGM, viewerId: game.user.id, labels });
+/** fromUuidSync that never throws (row uuids are player-written data); null when unresolvable. */
+function safeResolve(uuid) {
+  try {
+    return typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Export lines for one entry's party relationships (spec 2026-10-10 §5.2):
+ * only rows the viewer can read, where the other entry is readable at
+ * LIMITED or better. A player-safe export (includeGM false) also drops lines
+ * whose other entry players can't see by default (isDefaultPlayerVisible,
+ * the same gate the export uses for timeline links).
+ */
+function partyLines(row, notebooks, includeGM) {
+  const canLimited = (uuid) => {
+    const doc = safeResolve(uuid);
+    return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true
+      && (includeGM || isDefaultPlayerVisible(uuid));
+  };
+  const lines = linesForEntry(row.uuid, notebooks, { canLimited })
+    .map((l) => ({ ...l, otherName: safeResolve(l.other)?.name ?? game.i18n.localize(`${I18N}.party.unresolved`) }));
+  return exportLines(lines, { edited: (name) => game.i18n.format(`${I18N}.party.edited`, { name }) });
 }
 
 async function runExport(selectedRows, includeGM, timepoints) {
   try {
     const labels = {
       relationships: game.i18n.localize(`${I18N}.export.relationships`),
-      playerConnections: game.i18n.localize(`${I18N}.export.playerConnections`),
+      partyRelationships: game.i18n.localize(`${I18N}.export.partyRelationships`),
       sessionNumber: game.i18n.localize(`${I18N}.export.sessionNumber`),
       campaignDate: game.i18n.localize(`${I18N}.export.campaignDate`)
     };
-    const pcLabels = {
-      by: (name) => game.i18n.format(`${I18N}.playerConnections.by`, { name }),
-      private: game.i18n.localize(`${I18N}.export.private`),
-      secret: game.i18n.localize(`${I18N}.export.secret`)
-    };
+    const notebooks = readableNotebooks();
     const buildRecord = (row) => recordSnapshot(row, {
       includeGM,
       relationships: row.kind === SESSION_KIND ? undefined : resolvedRelationships(row.page),
-      playerConnections: playerConnectionLines(row, includeGM, pcLabels),
+      partyRelationships: partyLines(row, notebooks, includeGM),
       labels,
       formatCampaignDate
     });

@@ -25,7 +25,7 @@ export function normalizeRelationships(flagValue) {
 
 const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = null, includeBacklinks = false, includePlayer = true, isGM = false, maxNodes = 200 } = {}) {
+export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = null, includeBacklinks = false, includeParty = true, editedLabel = (n) => `edited by ${n}`, isGM = false, maxNodes = 200 } = {}) {
   const byUuid = new Map(rows.map((r) => [r.uuid, r]));
 
   // Relationship edges (undirected, deduped), hidden ones GM-only unless the
@@ -39,28 +39,23 @@ export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = nul
       const key = pairKey(row.uuid, rel.uuid);
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
-      edges.push({ source: row.uuid, target: rel.uuid, kind: "relationship", label: rel.label ?? "", hidden: rel.hidden === true });
+      edges.push({ id: `rel:${rel.id}`, source: row.uuid, target: rel.uuid, kind: "relationship", label: rel.label ?? "", hidden: rel.hidden === true });
     }
   }
-  // Player connections (spec 2026-10-09 §6.1): one line per pair, after GM
-  // relationships (a GM edge the viewer has wins) and before mention links.
-  // Several connections on a pair collapse; the tooltip lists each author
-  // with both sides' main labels.
-  if (includePlayer) {
-    const byPair = new Map();
+  // Party relationships (spec 2026-10-10 §5.1): after GM relationships (a GM
+  // edge the viewer has wins), before mention links. Filtered here, as data,
+  // so later tag/highlight filters sit beside it.
+  if (includeParty) {
     for (const row of rows) {
-      for (const pc of row.playerConnections ?? []) {
-        if (!byUuid.has(pc.to)) continue;
-        const key = pairKey(row.uuid, pc.to);
+      for (const pl of row.partyLines ?? []) {
+        if (!byUuid.has(pl.other)) continue;
+        const key = pairKey(row.uuid, pl.other);
         if (seenPairs.has(key)) continue;
-        if (!byPair.has(key)) byPair.set(key, { source: row.uuid, target: pc.to, lines: [] });
-        const labels = [pc.fromLabel, pc.toLabel].filter((s) => typeof s === "string" && s.length).join(" / ");
-        byPair.get(key).lines.push(labels ? `${pc.authorName}: ${labels}` : pc.authorName);
+        seenPairs.add(key);
+        const labels = [pl.label, pl.otherLabel].filter((s) => typeof s === "string" && s.length).join(" / ");
+        const tooltip = [labels, pl.editedName ? editedLabel(pl.editedName) : ""].filter(Boolean).join("\n");
+        edges.push({ id: `party:${pl.notebookUuid}:${pl.key}`, source: row.uuid, target: pl.other, kind: "party", label: "", tooltip });
       }
-    }
-    for (const [key, edge] of byPair) {
-      seenPairs.add(key);
-      edges.push({ source: edge.source, target: edge.target, kind: "player", label: "", tooltip: edge.lines.join("\n") });
     }
   }
   if (includeBacklinks) {
@@ -69,7 +64,7 @@ export function buildGraph(rows, backlinkPairs, { mode = "all", centerUuid = nul
       const key = pairKey(source, target);
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
-      edges.push({ source, target, kind: "backlink" });
+      edges.push({ id: `link:${key}`, source, target, kind: "backlink" });
     }
   }
 

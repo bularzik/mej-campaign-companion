@@ -8,7 +8,7 @@ If you're running the game rather than playing in it, read the [GM guide](gm-gui
 
 Your GM's world is organised into **campaigns** — a folder of entries plus a **portal entry** that opens straight into the module's home base, the **Campaign Hub**. Everything you can reach from your seat comes through one of three things: session pages, the Hub, and the entries your GM has shared with you.
 
-The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**, plus **Relationships** whenever you can add a player connection there or have one to see (see [Recording connections](#recording-connections)).
+The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**, plus **Relationships** whenever you can add a party relationship there or have one to see (see [Recording relationships](#recording-relationships)).
 
 ![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the three tabs Recap, Session and Notes, and the session's shared recap on the Recap tab with an edit pencil beside it](images/session-sheet-player.png)
 
@@ -84,21 +84,26 @@ When your GM does reveal a relationship to you, it turns up in two places: as a 
 
 One thing to expect on a big campaign: the graph draws at most 200 entries at a time. Past that it shows the notice "Too many entries to draw — filter to reduce (showing the most-connected 200)." and keeps the most-connected ones — narrow the campaign picker's scope if you hit it.
 
-## Recording connections
+## Recording relationships
 
-You can note what your character thinks ties two entries together — "Sister of", "Owes money to", "Saw them at the docks" — without waiting for your GM to draw it.
+You can note what the party thinks ties two entries together ("Sister of", "Owes money to", "Saw them at the docks") without waiting for your GM to draw it. These are **party relationships**: the party's shared beliefs, kept beside your GM's own relationships and never overwriting them. You can add them if your GM has made you one of the campaign's **Contributors**.
 
-Open an entry and go to its **Relationships** tab. Below your GM's relationships is a **Player connections** block. Click **Add connection** (or drag a journal entry from the sidebar onto the block), pick the other entry, and fill in:
+Open an entry and go to its **Relationships** tab. Your GM's relationships are listed as usual. To add one of your own, either:
 
-- **Connection (this entry)**: how this entry relates to the other one (required).
-- **Connection (other entry)**: the same tie seen from the other side (optional). It's what shows on the other entry.
-- A **Secret** for either side (optional). It is hidden from other players (not shown on the sheet, graph or export) until you click **Reveal** next to it; **Hide** puts it back.
-- **Share with party**: on by default, so the rest of the party sees the connection. Untick it to hide the connection from other players; the icon on the row switches it later. Making a shared connection private asks for confirmation first when other players have added notes, and those notes are then hidden from their writers until it is shared again.
-- **A note on privacy**: this is display-level privacy, the same as Monk's Enhanced Journal's own hidden relationships. Private connections and unrevealed secrets are stored on the journal page, which every client that can see the entry receives. The companion hides them in the interface, but a player using the browser's developer tools could read them, so don't put anything truly secret there.
+- drag a journal entry from the sidebar onto the list, or
+- click **Add relationship** at the foot of the list, type in the search box, and pick the entry.
 
-Other players can add one note of their own under your connection on either side ("half-sister, actually"). Their notes show beneath your row with their name, and only they can edit them. You edit your own labels and secrets right in the row; changes save when you leave the field. Clear both fields of a note to remove it, or use the bin to delete the whole connection (it asks first, and says how many other players' notes go with it).
+If you own the entry you're on, dropping another entry onto its list makes a regular relationship, the same kind your GM makes, rather than a party one. **Add relationship** always adds a party relationship.
 
-Saving needs your GM to be connected. If they aren't, you'll see "A GM must be connected to save connections." and nothing is saved. Your connections also show as dotted lines on the Hub's **Graph** (untick **Show player connections** to hide them). If your GM turns off **Players can create connections**, existing connections stay visible but can't be edited.
+A new line appears with an empty label and the cursor in it. Type how this entry relates to the other one; it saves as you type. Nothing else is required, and the label can stay empty.
+
+- There is **one party relationship per pair** of entries, and each side has its own label, like Monk's Enhanced Journal's reciprocal rows: what you type on Ilva's page shows on Ilva's page; Mara's page has its own label for the same pair. Adding a pair that already exists just takes you to its line.
+- Where your GM already has a relationship between the two entries, the party's label sits on the same line, just under the GM's.
+- **Any Contributor can edit or delete** any party relationship. Each line shows who edited it last ("edited by Jo"). The bin removes the pair from both entries; adding it again is the way back.
+- **No GM needs to be online.** Your edits save straight away. (In a campaign your GM hasn't opened since updating, you may see "A GM must open the world once before party relationships can be added in this campaign.")
+- Players who aren't Contributors see the party's labels but can't change them.
+
+Party relationships also show on the Hub's **Graph** as dotted lines (untick **Show party relationships** to hide them). If your GM turns off **Players can add party relationships**, existing ones stay visible but read-only.
 
 ## When secrets are revealed to you
 

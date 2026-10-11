@@ -24,7 +24,7 @@ describe("buildGraph", () => {
   it("whole-campaign mode: relationship edges, hidden edges GM-only, edges only between present nodes", () => {
     const player = buildGraph(rows, [], { mode: "all", isGM: false });
     expect(player.nodes).toHaveLength(4);
-    expect(player.edges).toEqual([{ source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false }]);
+    expect(player.edges).toEqual([{ id: "rel:r1", source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false }]);
     const gm = buildGraph(rows, [], { mode: "all", isGM: true });
     expect(gm.edges).toHaveLength(2);
   });
@@ -32,8 +32,8 @@ describe("buildGraph", () => {
   it("backlink overlay adds dashed pairs without duplicating relationship edges", () => {
     const g = buildGraph(rows, [...pairs, { source: "JournalEntry.a", target: "JournalEntry.b", gmOnly: false }], { mode: "all", isGM: false, includeBacklinks: true });
     expect(g.edges).toEqual([
-      { source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false },
-      { source: "JournalEntry.d", target: "JournalEntry.a", kind: "backlink" }
+      { id: "rel:r1", source: "JournalEntry.a", target: "JournalEntry.b", kind: "relationship", label: "", hidden: false },
+      { id: "link:JournalEntry.a|JournalEntry.d", source: "JournalEntry.d", target: "JournalEntry.a", kind: "backlink" }
     ]);
   });
 
@@ -85,7 +85,7 @@ describe("edge labels (Phase C)", () => {
       { uuid: "U.b", name: "B", type: "person", relationships: [] }
     ];
     const g = buildGraph(rows, [], { isGM: false });
-    expect(g.edges).toEqual([{ source: "U.a", target: "U.b", kind: "relationship", label: "Nemesis", hidden: true }]);
+    expect(g.edges).toEqual([{ id: "rel:r", source: "U.a", target: "U.b", kind: "relationship", label: "Nemesis", hidden: true }]);
   });
 
   it("a non-GM does NOT see a hidden edge without revealedToViewer", () => {
@@ -98,36 +98,33 @@ describe("edge labels (Phase C)", () => {
   });
 });
 
-describe("buildGraph player edges (spec 2026-10-09 §6.1)", () => {
-  const pc = (to, authorName, fromLabel = "", toLabel = "") => ({ id: `${authorName}-${to}`, to, authorName, fromLabel, toLabel });
-  const rowsWith = (aRels = [], aPcs = [], bPcs = []) => [
-    { uuid: "J.a", name: "A", type: "person", relationships: aRels, playerConnections: aPcs },
-    { uuid: "J.b", name: "B", type: "person", relationships: [], playerConnections: bPcs }
+describe("buildGraph party edges (spec 2026-10-10 §5.1)", () => {
+  const pl = (other, over = {}) => ({ other, label: "Sister of", otherLabel: "Older sister", editedName: "Jo",
+    notebookUuid: "JournalEntry.nb", key: "k1", ...over });
+  const rows = (aRels = [], aParty = [], bParty = []) => [
+    { uuid: "J.a", name: "A", type: "person", relationships: aRels, partyLines: aParty },
+    { uuid: "J.b", name: "B", type: "person", relationships: [], partyLines: bParty }
   ];
-  it("one player edge per pair, a tooltip line per connection", () => {
-    const g = buildGraph(rowsWith([], [pc("J.b", "Dana", "Sister of", "Brother of"), pc("J.b", "Jo", "Rival")]), [], { isGM: false });
-    expect(g.edges).toEqual([{ source: "J.a", target: "J.b", kind: "player", label: "", tooltip: "Dana: Sister of / Brother of\nJo: Rival" }]);
+  it("one party edge per pair with a stable id and both labels in the tooltip", () => {
+    const g = buildGraph(rows([], [pl("J.b")], [pl("J.a", { label: "Older sister", otherLabel: "Sister of" })]), [], { isGM: false });
+    expect(g.edges).toEqual([{ id: "party:JournalEntry.nb:k1", source: "J.a", target: "J.b", kind: "party", label: "",
+      tooltip: "Sister of / Older sister\nedited by Jo" }]);
   });
-  it("connections stored on either end of the same pair collapse into one edge", () => {
-    const g = buildGraph(rowsWith([], [pc("J.b", "Dana", "Sister of")], [pc("J.a", "Jo", "Cousin of")]), [], {});
-    expect(g.edges).toHaveLength(1);
-    expect(g.edges[0].tooltip).toBe("Dana: Sister of\nJo: Cousin of");
-  });
-  it("a GM relationship on the pair wins", () => {
-    const g = buildGraph(rowsWith([{ id: "r1", uuid: "J.b", hidden: false, label: "ally" }], [pc("J.b", "Dana", "x")]), [], {});
+  it("a visible GM edge wins", () => {
+    const g = buildGraph(rows([{ id: "r1", uuid: "J.b", hidden: false, label: "x" }], [pl("J.b")]), [], { isGM: false });
     expect(g.edges.map((e) => e.kind)).toEqual(["relationship"]);
+    expect(g.edges[0].id).toBe("rel:r1");
   });
-  it("a GM edge hidden from this player leaves their player edge", () => {
-    const g = buildGraph(rowsWith([{ id: "r1", uuid: "J.b", hidden: true, label: "secret" }], [pc("J.b", "Dana", "x")]), [], { isGM: false });
-    expect(g.edges.map((e) => e.kind)).toEqual(["player"]);
+  it("a GM edge hidden from this player leaves the party edge", () => {
+    const g = buildGraph(rows([{ id: "r1", uuid: "J.b", hidden: true, label: "x" }], [pl("J.b")]), [], { isGM: false });
+    expect(g.edges.map((e) => e.kind)).toEqual(["party"]);
   });
-  it("player edges beat mention links; includePlayer:false drops them and lets the link through", () => {
-    const links = [{ source: "J.a", target: "J.b" }];
-    expect(buildGraph(rowsWith([], [pc("J.b", "Dana", "x")]), links, { includeBacklinks: true }).edges.map((e) => e.kind)).toEqual(["player"]);
-    expect(buildGraph(rowsWith([], [pc("J.b", "Dana", "x")]), links, { includeBacklinks: true, includePlayer: false }).edges.map((e) => e.kind)).toEqual(["backlink"]);
+  it("includeParty false drops party edges as data, not styling", () => {
+    const g = buildGraph(rows([], [pl("J.b")]), [], { isGM: false, includeParty: false });
+    expect(g.edges).toEqual([]);
   });
-  it("only the author when both labels are empty; a missing endpoint draws nothing", () => {
-    expect(buildGraph(rowsWith([], [pc("J.b", "Dana")]), [], {}).edges[0].tooltip).toBe("Dana");
-    expect(buildGraph(rowsWith([], [pc("J.zzz", "Dana", "x")]), [], {}).edges).toEqual([]);
+  it("editedLabel localizes the tooltip", () => {
+    const g = buildGraph(rows([], [pl("J.b")]), [], { editedLabel: (n) => `von ${n}` });
+    expect(g.edges[0].tooltip).toBe("Sister of / Older sister\nvon Jo");
   });
 });

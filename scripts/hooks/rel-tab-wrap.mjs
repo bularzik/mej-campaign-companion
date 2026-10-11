@@ -1,4 +1,5 @@
-// Companion wrap of MEJ's _prepareTabs (spec 2026-10-09 §4.7). MEJ deletes
+// Companion wrap of MEJ's _prepareTabs for party relationships (spec
+// 2026-10-10 §3.1; the wrap itself dates from 0.25.0). MEJ deletes
 // the relationships tab INSIDE the wrapped method, so the wrap works on its
 // result: for a non-GM and the "primary" group it removes the tab when §3
 // says hidden, and restores it from the parent class's _prepareTabs (the
@@ -7,17 +8,17 @@
 // alike), so it is wrapped too; the decision is idempotent. Subclasses that
 // call super._prepareTabs (SessionSheet, CampaignHubPage) inherit it.
 // Never patches MEJ: installWraps (libWrapper when usable, manual otherwise).
-import { MODULE_ID, PLAYER_GROUPS_SETTING, PLAYER_CONNECTIONS_SETTING, PLAYER_CONNECTIONS_FLAG } from "../constants.mjs";
+import { MODULE_ID, PLAYER_GROUPS_SETTING, PLAYER_CONNECTIONS_SETTING } from "../constants.mjs";
 import { installWraps } from "../logic/mej-wraps.mjs";
 import { wrapEnv } from "../integrations/wrap-env.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
-import { normalizeConnections, canSeeConnection } from "../logic/player-connections.mjs";
 import { relationshipsTabVisible, countVisibleGmRows, applyRelationshipsTab } from "../logic/rel-tab-visibility.mjs";
-import { incomingConnections } from "./player-connections-index.mjs";
+import { readableNotebooks, writeNotebookFor } from "../data/party-notebook.mjs";
+import { linesForEntry } from "../logic/party-rows.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 
-/** World setting "Players can create connections"; false if unreadable. */
+/** World setting "Players can add party relationships"; false if unreadable. */
 export function playerConnectionsEnabled() {
   try {
     return game.settings.get(MODULE_ID, PLAYER_CONNECTIONS_SETTING) !== false;
@@ -26,10 +27,26 @@ export function playerConnectionsEnabled() {
   }
 }
 
+const safeResolve = (uuid) => {
+  try {
+    return typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  } catch {
+    return null;
+  }
+};
+
 const canLimited = (uuid) => {
-  const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  const doc = safeResolve(uuid);
   return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
 };
+
+/** Spec §2.5 write rule for adding from this entry: setting on, writer on the notebook, allowed types. */
+export function canAddParty(sheet, entry) {
+  if (!playerConnectionsEnabled()) return false;
+  if ((sheet.allowedRelationships?.length ?? 0) === 0) return false;
+  const nb = writeNotebookFor(entry);
+  return !!nb && (game.user.isGM || nb.isOwner === true) && entry.testUserPermission(game.user, "LIMITED") === true;
+}
 
 function relTabDecision(sheet) {
   const page = sheet.document;
@@ -51,16 +68,11 @@ function relTabDecision(sheet) {
       canSeeTarget: canLimited
     }
   );
-  const see = (row) => canSeeConnection(row, { userId: game.user.id, isGM: false, canSeeEntry: canLimited });
-  const visiblePlayerRows =
-    normalizeConnections(page.flags?.[MODULE_ID]?.[PLAYER_CONNECTIONS_FLAG], entry.uuid).filter(see).length
-    + incomingConnections(entry.uuid).filter(({ row }) => see(row)).length;
-  const canAdd = playerConnectionsEnabled()
-    && entry.testUserPermission(game.user, "OBSERVER") === true
-    && (sheet.allowedRelationships?.length ?? 0) > 0;
+  const visiblePartyRows = linesForEntry(entry.uuid, readableNotebooks(), { canLimited }).length;
+  const canAdd = canAddParty(sheet, entry);
   return {
     hiddenBySetting,
-    visible: relationshipsTabVisible({ isGM: false, visibleGmRows, visiblePlayerRows, canAdd })
+    visible: relationshipsTabVisible({ isGM: false, visibleGmRows, visiblePartyRows, canAdd })
   };
 }
 

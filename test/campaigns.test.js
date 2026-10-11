@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MODULE_ID } from "../scripts/constants.mjs";
-import { adoptionPlan, campaignChoicePlan, campaignControls, contributorsOf, isContributor, contributorChoices } from "../scripts/logic/campaigns.mjs";
+import { adoptionPlan, campaignChoicePlan, campaignControls, contributorsOf, isContributor, contributorChoices, isPartyNotebook, isLinkableEntity } from "../scripts/logic/campaigns.mjs";
 import { readFileSync } from "node:fs";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
@@ -437,5 +437,17 @@ describe("contributorChoices", () => {
       users: [{ id: "u1", name: "Ana", checked: false }, { id: "u2", name: "Zed", checked: true }],
       groups: [{ id: "g1", name: "Party", checked: true }]
     });
+  });
+});
+
+describe("isPartyNotebook", () => {
+  const nb = { flags: { "mej-campaign-companion": { partyNotebook: true } }, pages: { contents: [] } };
+  it("detects the flag", () => {
+    expect(isPartyNotebook(nb)).toBe(true);
+    expect(isPartyNotebook({ flags: {} })).toBe(false);
+    expect(isPartyNotebook(null)).toBe(false);
+  });
+  it("is never linkable, even if something gave it a MEJ type", () => {
+    expect(isLinkableEntity(nb, () => "person")).toBe(false);
   });
 });

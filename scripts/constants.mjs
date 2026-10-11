@@ -161,9 +161,12 @@ export const MEJ_MODULE_ID = "monks-enhanced-journal";
 export const MEJ_ALLOW_PLAYER_SETTING = "allow-player";
 export const WARN_PLAYER_ACCESS_SETTING = "warnPlayerAccess";
 
-// Player connections (spec 2026-10-09). Page flag, world setting, and the
-// player -> active GM relay pair (hooks/player-connections-relay.mjs).
+// Party relationships (spec 2026-10-10). The flag is the retired 0.25.0
+// player-connections page flag (only the old-flag cleanup reads it); the
+// setting keeps its stored id and now gates party relationships.
 export const PLAYER_CONNECTIONS_FLAG = "playerConnections";
 export const PLAYER_CONNECTIONS_SETTING = "playerConnectionsEnabled";
-export const PLAYER_CONNECTION_ACTION = "player-connection";
-export const PLAYER_CONNECTION_RESULT_ACTION = "player-connection-result";
+
+/** Party relationships (spec 2026-10-10): notebook marker and row map on the notebook JournalEntry. */
+export const PARTY_NOTEBOOK_FLAG = "partyNotebook";
+export const PARTY_ROWS_FLAG = "partyRows";

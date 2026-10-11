@@ -154,14 +154,14 @@ export async function registerCore() {
     registerRelationshipsUi();
   });
 
-  await step("player connections index", async () => {
-    const { registerPlayerConnectionsIndex } = await import("../hooks/player-connections-index.mjs");
-    registerPlayerConnectionsIndex();
+  await step("party notebook", async () => {
+    const { registerPartyNotebook } = await import("../hooks/party-notebook.mjs");
+    registerPartyNotebook();
   });
 
-  await step("player connections ui", async () => {
-    const { registerPlayerConnectionsUi } = await import("../hooks/player-connections-ui.mjs");
-    registerPlayerConnectionsUi();
+  await step("party relationships ui", async () => {
+    const { registerPartyRelationshipsUi } = await import("../hooks/party-relationships-ui.mjs");
+    registerPartyRelationshipsUi();
   });
 
   await step("portal rename sync", async () => {
