@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed:** on Foundry 14.369 the Campaign Hub would not open (and a saved Hub tab logged "Cannot convert undefined or null to object" when the Enhanced Journal opened). Foundry 14.369 skips sheet registrations for a page type it has no entry for, which dropped the Hub's. The companion now creates that entry before registering, so the Hub registers at ready on 14.369 and behaves as before on earlier builds.
+
 ## 0.26.0 (2026-10-11)
 
 - Party relationships replace Player connections. Players' relationships

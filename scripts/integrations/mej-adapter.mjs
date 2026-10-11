@@ -11,7 +11,7 @@ import {
 import { resolveMode, MODE_API, MODE_NATIVE, MODE_ABSENT } from "../logic/mej-mode.mjs";
 import { mejTypeWith, isSessionDoc } from "../logic/mej-type.mjs";
 import { planFlagHeal } from "../logic/session-flag-heal.mjs";
-import { planSheetRegistrations, sheetRegistrationEntries } from "../logic/sheet-registration.mjs";
+import { planSheetRegistrations, sheetRegistrationEntries, ensureSheetTypeEntries } from "../logic/sheet-registration.mjs";
 import { initSearchHooks } from "../search/live-index.mjs";
 import { registerAutoLink } from "../hooks/auto-link.mjs";
 import { registerRetroLink } from "../hooks/retro-link.mjs";
@@ -259,6 +259,9 @@ export function registerCompanionSheets(classes) {
     // DocumentSheetConfig.registerSheet (against JournalEntry for the
     // timeline redirect, JournalEntryPage for everything else) so each
     // registration survives the rebuild Foundry does when game.ready flips.
+    // Foundry 14.369+ skips a sub-type with no sheetClasses entry, which the
+    // Hub's synthetic type never has - give it one first.
+    if (entry.documentClass === "JournalEntryPage") ensureSheetTypeEntries(CONFIG.JournalEntryPage.sheetClasses, entry.options.types);
     foundry.applications.apps.DocumentSheetConfig.registerSheet(
       entry.documentClass === "JournalEntry" ? JournalEntry : JournalEntryPage,
       MODULE_ID, entry.sheetClass, entry.options
