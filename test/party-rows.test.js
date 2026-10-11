@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   LABEL_MAX, entryIdOf, pairId, normalizeRows, findPair, sideOf, targetProblem, eligibleTargets,
-  linesForEntry, createRowUpdate, labelUpdate, deleteUpdate, exportLines
+  linesForEntry, createRowUpdate, labelUpdate, deleteUpdate, exportLines, affectedUuids
 } from "../scripts/logic/party-rows.mjs";
 
 const A = "JournalEntry.aaaaaaaaaaaaaaaa";
@@ -33,7 +33,10 @@ describe("normalizeRows", () => {
       k1: { a: A, b: B, labels: { a: "Sister of", b: 7 }, createdName: "Dana", editedName: "Jo", updated: 5 },
       bad1: { a: A },
       bad2: "nope",
-      bad3: { a: A, b: A }
+      bad3: { a: A, b: A },
+      bad4: { a: A, b: "Compendium.x.y.JournalEntry.bbbbbbbbbbbbbbbb" },
+      bad5: { a: "JournalEntry.a.JournalEntryPage.b", b: B },
+      bad6: { a: "garbage", b: B }
     });
     expect(rows).toEqual([{
       key: "k1", a: A, b: B, labels: { a: "Sister of", b: "7" },
@@ -88,7 +91,7 @@ describe("linesForEntry", () => {
   it("returns this entry's side and the other side", () => {
     const lines = linesForEntry(B, [nb("JournalEntry.n1", "Red", flag1)], { canLimited: () => true });
     expect(lines).toEqual([{
-      notebookUuid: "JournalEntry.n1", key: "k1", campaignName: "Red", other: A,
+      notebookUuid: "JournalEntry.n1", key: "k1", campaignName: "", other: A,
       side: "b", label: "Older sister", otherLabel: "Sister of", editedName: "Jo"
     }]);
   });
@@ -98,6 +101,11 @@ describe("linesForEntry", () => {
   it("keeps the same pair from two notebooks, one line each", () => {
     const lines = linesForEntry(A, [nb("n1", "Red", flag1), nb("n2", "Blue", flag1)], { canLimited: () => true });
     expect(lines.map((l) => l.campaignName)).toEqual(["Red", "Blue"]);
+  });
+  it("campaign name only when the same pair shows from more than one notebook (spec §2.5)", () => {
+    const flag2 = { k2: { a: A, b: C, labels: { a: "Rival", b: "" } } };
+    const lines = linesForEntry(A, [nb("n1", "Red", { ...flag1, ...flag2 }), nb("n2", "Blue", flag1)], { canLimited: () => true });
+    expect(lines.map((l) => [l.other, l.campaignName])).toEqual([[B, "Red"], [C, ""], [B, "Blue"]]);
   });
 });
 
@@ -148,8 +156,26 @@ describe("exportLines", () => {
       { otherName: "Bram", label: "", editedName: "Dana" }
     ];
     expect(exportLines(lines, labels)).toEqual([
-      { text: "Bram (edited by Dana)", children: [] },
-      { text: "Mara — Sister of (edited by Jo)", children: [] }
+      { text: "Bram (edited by Dana)" },
+      { text: "Mara — Sister of (edited by Jo)" }
     ]);
+  });
+});
+
+describe("affectedUuids", () => {
+  const before = { k1: { a: A, b: B }, k2: { a: A, b: C } };
+  it("label edit: the changed row's two ends only", () => {
+    const after = { k1: { a: A, b: B, labels: { a: "x" } }, k2: { a: A, b: C } };
+    expect(affectedUuids(["k1"], before, after).sort()).toEqual([A, B].sort());
+  });
+  it("delete (-=key) resolves a/b from the rows before the update", () => {
+    expect(affectedUuids(["-=k2"], before, { k1: before.k1 }).sort()).toEqual([A, C].sort());
+  });
+  it("create: a/b from the rows after", () => {
+    expect(affectedUuids(["k3"], before, { ...before, k3: { a: B, b: C } }).sort()).toEqual([B, C].sort());
+  });
+  it("unknown keys and bad input give []", () => {
+    expect(affectedUuids(["zz"], before, before)).toEqual([]);
+    expect(affectedUuids(undefined, null, null)).toEqual([]);
   });
 });

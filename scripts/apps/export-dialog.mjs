@@ -130,24 +130,36 @@ function resolvedRelationships(page) {
  * which have a parent to inherit from).
  */
 function isDefaultPlayerVisible(uuid) {
-  const doc = fromUuidSync(uuid);
+  const doc = safeResolve(uuid);
   if (!doc) return false;
   const levels = CONST.DOCUMENT_OWNERSHIP_LEVELS;
   return (doc.ownership?.default ?? levels.NONE) >= levels.LIMITED;
 }
 
+/** fromUuidSync that never throws (row uuids are player-written data); null when unresolvable. */
+function safeResolve(uuid) {
+  try {
+    return typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Export lines for one entry's party relationships (spec 2026-10-10 §5.2).
- * Same rule for GM and player exports: only rows the viewer can read, and
- * only where the other entry is readable at LIMITED or better.
+ * Export lines for one entry's party relationships (spec 2026-10-10 §5.2):
+ * only rows the viewer can read, where the other entry is readable at
+ * LIMITED or better. A player-safe export (includeGM false) also drops lines
+ * whose other entry players can't see by default (isDefaultPlayerVisible,
+ * the same gate the export uses for timeline links).
  */
-function partyLines(row, notebooks) {
+function partyLines(row, notebooks, includeGM) {
   const canLimited = (uuid) => {
-    const doc = fromUuidSync(uuid);
-    return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
+    const doc = safeResolve(uuid);
+    return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true
+      && (includeGM || isDefaultPlayerVisible(uuid));
   };
   const lines = linesForEntry(row.uuid, notebooks, { canLimited })
-    .map((l) => ({ ...l, otherName: fromUuidSync(l.other)?.name ?? game.i18n.localize(`${I18N}.party.unresolved`) }));
+    .map((l) => ({ ...l, otherName: safeResolve(l.other)?.name ?? game.i18n.localize(`${I18N}.party.unresolved`) }));
   return exportLines(lines, { edited: (name) => game.i18n.format(`${I18N}.party.edited`, { name }) });
 }
 
@@ -163,7 +175,7 @@ async function runExport(selectedRows, includeGM, timepoints) {
     const buildRecord = (row) => recordSnapshot(row, {
       includeGM,
       relationships: row.kind === SESSION_KIND ? undefined : resolvedRelationships(row.page),
-      partyRelationships: partyLines(row, notebooks),
+      partyRelationships: partyLines(row, notebooks, includeGM),
       labels,
       formatCampaignDate
     });

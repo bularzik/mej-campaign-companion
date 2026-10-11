@@ -67,6 +67,9 @@ const partyOnly = (page, uuid) => relTab(page).locator(`li.mej-cc-party-only[dat
 const gmRow = (page, uuid) => relTab(page).locator(`li.item:not(.mej-cc-party-only)[data-uuid="${uuid}"]`);
 /** The party line (not the empty "add a label" placeholder) for the pair with `uuid`. */
 const lineFor = (page, uuid) => relTab(page).locator(`li.item[data-uuid="${uuid}"] .mej-cc-party-line:not(.new)`);
+/** A GM row's party line, asserted inside MEJ's relationship cell (never after .item-controls). */
+const gmLine = (page, uuid, sel = ":not(.new)") =>
+  gmRow(page, uuid).locator(`:scope > .item-relationship > .mej-cc-party-line${sel}`);
 const addButton = (page) => relTab(page).locator(".mej-cc-party-add button");
 const picker = (page) => page.locator(".mej-cc-party-picker");
 
@@ -187,7 +190,7 @@ test.describe("33 party relationships", () => {
     await openRelTab(u1.page, ilva.id);
     // Live check (b): MEJ's _toggleDisabled must not reach the party controls.
     await expect(addButton(u1.page)).toBeEnabled();
-    await expect(gmRow(u1.page, bram.uuid).locator(".mej-cc-party-line.new input")).toBeEnabled();
+    await expect(gmLine(u1.page, bram.uuid, ".new").locator("input")).toBeEnabled();
 
     const how = await dragFromSidebar(u1.page, mara, folderId);
     test.info().annotations.push({ type: "drop-mode", description: how });
@@ -228,8 +231,9 @@ test.describe("33 party relationships", () => {
     await d.locator(`.mej-cc-party-pick[data-uuid="${bram.uuid}"]`).click();
     await expect(d).toHaveCount(0, { timeout: 10_000 });
 
-    const line = gmRow(u1.page, bram.uuid).locator(".mej-cc-party-line:not(.new)");
+    const line = gmLine(u1.page, bram.uuid);
     await expect(line).toHaveCount(1, { timeout: 15_000 });
+    await expect(gmRow(u1.page, bram.uuid).locator(":scope > .mej-cc-party-line")).toHaveCount(0);
     await expect(line.locator("input.mej-cc-party-input")).toBeFocused();
     await expect(partyOnly(u1.page, bram.uuid)).toHaveCount(0);
     expect(await rowFor(u1.page, folderId, ilva.uuid, bram.uuid)).not.toBeNull();

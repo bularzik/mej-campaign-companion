@@ -116,19 +116,15 @@ export function relationshipsHtml(resolved, includeGM, heading) {
 }
 
 /**
- * HTML for an entry's party relationships (spec 2026-10-10): lines from
- * exportLines(), each with its notes as a nested list. Empty string when
- * nothing renders. Every value is escaped - labels are player-written.
- * @param {{text:string, children:string[]}[]} lines
+ * HTML for an entry's party relationships (spec 2026-10-10): one item per
+ * line from exportLines(). Empty string when nothing renders. Every value is
+ * escaped - labels are player-written.
+ * @param {{text:string}[]} lines
  * @param {string} heading localized "Party relationships" label
  */
 export function partyRelationshipsHtml(lines, heading) {
   if (!lines?.length) return "";
-  const items = lines.map((line) => {
-    const nested = line.children.length
-      ? `<ul>${line.children.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "";
-    return `<li>${escapeHtml(line.text)}${nested}</li>`;
-  }).join("");
+  const items = lines.map((line) => `<li>${escapeHtml(line.text)}</li>`).join("");
   return `<p><strong>${escapeHtml(heading)}</strong></p><ul>${items}</ul>`;
 }
 

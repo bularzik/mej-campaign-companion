@@ -12,7 +12,7 @@ import { readableNotebooks, writeNotebookFor } from "../data/party-notebook.mjs"
 import { canAddParty, playerConnectionsEnabled } from "./rel-tab-wrap.mjs";
 import {
   buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList,
-  lineFilter, groupTypeOf, oneShotCreate
+  lineFilter, groupTypeOf, oneShotCreate, relationshipCellOf
 } from "../apps/party-lines.mjs";
 import { trackEditing, shouldKeepBlock } from "../apps/inline-edit.mjs";
 import { pickPartyTarget } from "../apps/party-target-picker.mjs";
@@ -48,7 +48,7 @@ function labels() {
 }
 
 function targetInfo(uuid) {
-  const entry = fromUuidSync(uuid);
+  const entry = resolve(uuid);
   if (!(entry instanceof JournalEntry)) return null;
   const type = entryType(entry) ?? "";
   return { uuid, name: entry.name, img: imageFor(typedPageOf(entry)?.src, type) ?? FALLBACK_IMG, type };
@@ -63,7 +63,7 @@ function typeLabel(type) {
 /** Can this viewer edit rows in this notebook (spec §2.5)? */
 function canWriteIn(notebookUuid) {
   if (!playerConnectionsEnabled() && !game.user.isGM) return false;
-  const nb = fromUuidSync(notebookUuid);
+  const nb = resolve(notebookUuid);
   return !!nb && (game.user.isGM || nb.isOwner === true);
 }
 
@@ -233,7 +233,7 @@ function decorateList(sheet, entry, list, lines, canAdd, lbl) {
   for (const gmRow of list.querySelectorAll("li.item:not(.mej-cc-party-only)[data-uuid]")) {
     const uuid = gmRow.dataset.uuid;
     if (seen.has(uuid) || !canLimitedUuid(uuid)) continue;
-    const cell = gmRow.querySelector(".item-relationship:last-of-type") ?? gmRow;
+    const cell = relationshipCellOf(gmRow);
     // One-shot: the first value creates the row with its label in one write;
     // later input on this same field labels that row. No focus steal.
     const create = oneShotCreate({

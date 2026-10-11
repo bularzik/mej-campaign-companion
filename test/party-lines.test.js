@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   buildPartyLine, buildPartyRow, buildAddButton, placeLines, dropMode, isolatePartyEdits, carryList, DETACHED_FORM,
-  lineFilter, groupTypeOf, oneShotCreate
+  lineFilter, groupTypeOf, oneShotCreate, relationshipCellOf
 } from "../scripts/apps/party-lines.mjs";
 import { DEBOUNCE_MS, trackEditing, shouldKeepBlock } from "../scripts/apps/inline-edit.mjs";
 
@@ -75,7 +75,9 @@ describe("placeLines (Review Focus 4)", () => {
   it("lines under a GM row go into that row; party-only rows go into their type group", () => {
     document.body.innerHTML = `<ol class="item-list">
       <li><header><div class="name">Person</div></header></li>
-      <li class="item" data-uuid="JournalEntry.g"><div class="item-relationship"></div></li>
+      <li class="item flexrow" data-uuid="JournalEntry.g"><div class="item-name"></div>
+        <div class="item-relationship flexcol"><input class="item-field"></div>
+        <div class="item-controls owner"></div></li>
     </ol>`;
     const list = document.querySelector("ol");
     const built = [];
@@ -86,8 +88,26 @@ describe("placeLines (Review Focus 4)", () => {
       buildLine: (l) => { const d = document.createElement("div"); d.className = "line"; built.push(l.key); return d; },
       buildRow: (l) => { const li = document.createElement("li"); li.className = "party-only"; li.dataset.key = l.key; return li; }
     });
-    expect(list.querySelector('li[data-uuid="JournalEntry.g"] .item-relationship .line')).not.toBeNull();
+    // MEJ's row ends with .item-controls: the line lands inside the relationship cell, not after the controls.
+    const gm = list.querySelector('li[data-uuid="JournalEntry.g"]');
+    expect(gm.querySelector(":scope > .item-relationship > .line")).not.toBeNull();
+    expect(gm.querySelector(":scope > .line")).toBeNull();
+    expect(gm.lastElementChild.classList.contains("item-controls")).toBe(true);
     expect(list.querySelector("li.party-only").previousElementSibling.dataset.uuid).toBe("JournalEntry.g");
+  });
+});
+
+describe("relationshipCellOf", () => {
+  it("the last direct .item-relationship child (MEJ's additional-field row has two)", () => {
+    document.body.innerHTML = `<li class="item"><div class="item-name"></div>
+      <div class="item-relationship" id="extra"></div><div class="item-relationship" id="main"></div>
+      <div class="item-controls owner"></div></li>`;
+    expect(relationshipCellOf(document.querySelector("li")).id).toBe("main");
+  });
+  it("falls back to the row when it has no relationship cell", () => {
+    document.body.innerHTML = `<li class="item"><div class="item-controls owner"></div></li>`;
+    const li = document.querySelector("li");
+    expect(relationshipCellOf(li)).toBe(li);
   });
 });
 

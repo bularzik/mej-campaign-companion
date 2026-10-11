@@ -93,6 +93,8 @@ Open an entry and go to its **Relationships** tab. Your GM's relationships are l
 - drag a journal entry from the sidebar onto the list, or
 - click **Add relationship** at the foot of the list, type in the search box, and pick the entry.
 
+If you own the entry you're on, dropping another entry onto its list makes a regular relationship, the same kind your GM makes, rather than a party one. **Add relationship** always adds a party relationship.
+
 A new line appears with an empty label and the cursor in it. Type how this entry relates to the other one; it saves as you type. Nothing else is required, and the label can stay empty.
 
 - There is **one party relationship per pair** of entries, and each side has its own label, like Monk's Enhanced Journal's reciprocal rows: what you type on Ilva's page shows on Ilva's page; Mara's page has its own label for the same pair. Adding a pair that already exists just takes you to its line.

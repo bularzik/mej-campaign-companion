@@ -121,7 +121,7 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 ### Party relationships
 
 - The party's beliefs about how people, places and factions connect, kept in MEJ's own Relationships list beside (never overwriting) the GM's canon relationships. Where both exist for a pair they share one line: the GM's label, then the party's beneath it.
-- Who can write: the campaign's **Contributors** (users and player groups). Everyone who can see both entries can read them.
+- Who can write: the campaign's **Contributors** (users and player groups). Reading needs the campaign's baseline access as well as sight of both entries: rows live on the campaign's party notebook, so a campaign with a "none" baseline hides them from everyone who isn't a Contributor.
 - How to add: drop a journal entry onto the Relationships list, or click **Add relationship** and pick an entry in a search-only picker. The new line's label is edited inline and saves as you type; nothing but the target is required.
 - One party relationship per pair of entries, with a label per side (like MEJ's reciprocal rows), editable and deletable by any Contributor; each line shows who edited it last.
 - No GM needs to be online: rows are stored on a hidden per-campaign notebook entry the Contributors own, and players write to it directly. The GM's client creates the notebook on load and when a campaign gains Contributors, and keeps its ownership in step with them.

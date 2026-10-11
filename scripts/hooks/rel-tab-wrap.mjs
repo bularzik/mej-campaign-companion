@@ -1,4 +1,5 @@
-// Companion wrap of MEJ's _prepareTabs (spec 2026-10-09 §4.7; rule 2 per 2026-10-10 §3.1). MEJ deletes
+// Companion wrap of MEJ's _prepareTabs for party relationships (spec
+// 2026-10-10 §3.1; the wrap itself dates from 0.25.0). MEJ deletes
 // the relationships tab INSIDE the wrapped method, so the wrap works on its
 // result: for a non-GM and the "primary" group it removes the tab when §3
 // says hidden, and restores it from the parent class's _prepareTabs (the
@@ -17,7 +18,7 @@ import { linesForEntry } from "../logic/party-rows.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 
-/** World setting "Players can create connections"; false if unreadable. */
+/** World setting "Players can add party relationships"; false if unreadable. */
 export function playerConnectionsEnabled() {
   try {
     return game.settings.get(MODULE_ID, PLAYER_CONNECTIONS_SETTING) !== false;
@@ -26,8 +27,16 @@ export function playerConnectionsEnabled() {
   }
 }
 
+const safeResolve = (uuid) => {
+  try {
+    return typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  } catch {
+    return null;
+  }
+};
+
 const canLimited = (uuid) => {
-  const doc = typeof uuid === "string" ? fromUuidSync(uuid) : null;
+  const doc = safeResolve(uuid);
   return doc instanceof JournalEntry && doc.testUserPermission(game.user, "LIMITED") === true;
 };
 

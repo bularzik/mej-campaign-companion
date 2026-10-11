@@ -18,6 +18,7 @@ import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
 import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
+import { registerPartyNotebookDirectory } from "./hooks/party-notebook-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
@@ -211,6 +212,10 @@ Hooks.once("init", () => {
   // 2026-09-06 §2) - pure-logic imports only, safe at init like the two above.
   registerCampaignDirectory();
 
+  // Party notebooks never show in the journal sidebar (spec 2026-10-10 §4.4).
+  // At init so the sidebar's first render is caught - pure-logic import only.
+  registerPartyNotebookDirectory();
+
   // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
   registerRecapRefresh();
 
@@ -329,7 +334,7 @@ Hooks.once("ready", async () => {
   // ready, so the prototype wrap is in place before any menu is built.
   if (game.modules.get("monks-enhanced-journal")?.active) registerEntityFromSelection();
 
-  // Player connections (spec 2026-10-09 §4.7): sheets render after ready, so
+  // Party relationships (spec 2026-10-10 §3.1): sheets render after ready, so
   // the _prepareTabs wrap is in place before any Relationships tab is built.
   if (game.modules.get("monks-enhanced-journal")?.active) {
     registerRelationshipsTabWrap().catch((err) => console.error(`${MODULE_ID} | relationships tab wrap failed`, err));

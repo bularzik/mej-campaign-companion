@@ -30,7 +30,8 @@ export function normalizeRows(flagValue) {
   if (!isObj(flagValue)) return [];
   const rows = [];
   for (const [key, r] of Object.entries(flagValue)) {
-    if (!isObj(r) || typeof r.a !== "string" || typeof r.b !== "string" || !r.a || !r.b || r.a === r.b) continue;
+    // Both ends must be world JournalEntry uuids (compendium/page/garbage rows are skipped).
+    if (!isObj(r) || !entryIdOf(r.a) || !entryIdOf(r.b) || r.a === r.b) continue;
     const labels = isObj(r.labels) ? r.labels : {};
     rows.push({
       key, a: r.a, b: r.b,
@@ -71,7 +72,11 @@ export function eligibleTargets(entries, ctx, filter = "") {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** One line per readable row touching `uuid`, in notebook order (spec §2.5, §3.2). */
+/**
+ * One line per readable row touching `uuid`, in notebook order (spec §2.5,
+ * §3.2). `campaignName` is set only when the same pair shows from more than
+ * one notebook (cross-campaign entities); otherwise it is "".
+ */
 export function linesForEntry(uuid, notebooks, { canLimited }) {
   const lines = [];
   for (const nb of notebooks ?? []) {
@@ -81,12 +86,40 @@ export function linesForEntry(uuid, notebooks, { canLimited }) {
       const other = side === "a" ? row.b : row.a;
       if (!canLimited(other)) continue;
       lines.push({
-        notebookUuid: nb.uuid, key: row.key, campaignName: nb.campaignName, other, side,
+        notebookUuid: nb.uuid, key: row.key, campaignName: nb.campaignName ?? "", other, side,
         label: row.labels[side], otherLabel: row.labels[side === "a" ? "b" : "a"], editedName: row.editedName
       });
     }
   }
+  const notebooksPerOther = new Map();
+  for (const l of lines) {
+    if (!notebooksPerOther.has(l.other)) notebooksPerOther.set(l.other, new Set());
+    notebooksPerOther.get(l.other).add(l.notebookUuid);
+  }
+  for (const l of lines) if (notebooksPerOther.get(l.other).size < 2) l.campaignName = "";
   return lines;
+}
+
+/**
+ * Entry uuids whose views must re-render after a notebook update: the a/b
+ * ends of every changed row key, read from the rows after the update and
+ * (for deletes, `-=key`) from the rows before it. Pure.
+ * @param {string[]} changedKeys keys of changes.flags[MODULE_ID].partyRows
+ * @param {object} rowsBefore raw partyRows flag before the update (or a cache)
+ * @param {object} rowsAfter  raw partyRows flag after the update
+ */
+export function affectedUuids(changedKeys, rowsBefore, rowsAfter) {
+  const out = new Set();
+  for (const raw of changedKeys ?? []) {
+    const key = String(raw).replace(/^-=/, "");
+    for (const rows of [rowsBefore, rowsAfter]) {
+      const r = isObj(rows) ? rows[key] : null;
+      if (!isObj(r)) continue;
+      if (typeof r.a === "string" && r.a) out.add(r.a);
+      if (typeof r.b === "string" && r.b) out.add(r.b);
+    }
+  }
+  return [...out];
 }
 
 /** `label` (optional) is the source side's first label, so create + label is one write. */
@@ -126,7 +159,6 @@ export function exportLines(lines, labels) {
     .sort((x, y) => x.otherName.localeCompare(y.otherName))
     .map((l) => ({
       text: [l.otherName, l.label ? `— ${l.label}` : null, l.editedName ? `(${labels.edited(l.editedName)})` : null]
-        .filter(Boolean).join(" "),
-      children: []
+        .filter(Boolean).join(" ")
     }));
 }

@@ -156,7 +156,7 @@ describe("relationshipsHtml", () => {
 
 describe("partyRelationshipsHtml", () => {
   it("party relationships list renders after Relationships with escaped text", () => {
-    const html = partyRelationshipsHtml([{ text: "Mara — <i>Sister</i> (edited by Jo)", children: [] }], "Party relationships");
+    const html = partyRelationshipsHtml([{ text: "Mara — <i>Sister</i> (edited by Jo)" }], "Party relationships");
     expect(html).toContain("Party relationships");
     expect(html).toContain("Mara — &lt;i&gt;Sister&lt;/i&gt; (edited by Jo)");
   });

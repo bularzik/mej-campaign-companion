@@ -106,6 +106,16 @@ export function buildAddButton(doc, { labels }, onClick) {
 }
 
 /**
+ * The cell a party line goes into on a GM row: the row's last direct
+ * `.item-relationship` child (MEJ's rows end with `.item-controls`, so
+ * `:last-of-type` matches nothing there); the row itself as a fallback.
+ */
+export function relationshipCellOf(gmRow) {
+  const cells = gmRow.querySelectorAll(":scope > .item-relationship");
+  return cells.length ? cells[cells.length - 1] : gmRow;
+}
+
+/**
  * Put each line in MEJ's list: under its GM row's relationship cell when one
  * is rendered, else as a party-only row at the end of its type group (a
  * header is created by `groupHeader` when MEJ rendered none).
@@ -114,7 +124,7 @@ export function placeLines(list, lines, { gmRowFor, typeOf, groupHeader, buildLi
   for (const line of lines) {
     const gmRow = gmRowFor(line.other);
     if (gmRow) {
-      (gmRow.querySelector(".item-relationship:last-of-type") ?? gmRow).append(buildLine(line));
+      relationshipCellOf(gmRow).append(buildLine(line));
       continue;
     }
     const header = groupHeader(typeOf(line.other));
