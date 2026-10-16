@@ -719,7 +719,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       typeLabel: this.#typeLabel(hit.type),
       matches: hit.matches.map((m) => ({
         fieldLabel: this.#fieldLabel(m.field),
-        snippet: stripUuidLinks(m.snippet, { nameOf: (uuid) => fromUuidSync(uuid, { strict: false })?.name ?? null })
+        snippet: stripUuidLinks(m.snippet, {
+          // Name only for entries the viewer may see; a hidden target falls back to the id tail.
+          nameOf: (uuid) => {
+            const doc = fromUuidSync(uuid, { strict: false });
+            return doc && (game.user.isGM || doc.testUserPermission?.(game.user, "LIMITED")) ? doc.name : null;
+          }
+        })
       }))
     }));
     return {

@@ -12,7 +12,7 @@ describe("stripUuidLinks", () => {
   it("handles several links and leaves other @ text alone", () => {
     expect(stripUuidLinks("@UUID[A.1]{One} and @UUID[B.2]{Two} at @home")).toBe("One and Two at @home");
   });
-  it("a truncated link at the snippet edge is dropped, not left dangling (Review Focus 4)", () => {
+  it("a truncated link at the snippet edge is dropped, not left dangling", () => {
     expect(stripUuidLinks("…he arrived @UUID[JournalEntry.ab")).toBe("…he arrived ");
     expect(stripUuidLinks("…he arrived @UUID[JournalEntry.abc]{the Du")).toBe("…he arrived the Du");
   });
