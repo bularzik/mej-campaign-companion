@@ -20,6 +20,8 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
 const NODE_R = 14;
+// Wait this long after a plain click before focusing, so a double-click can win.
+const FOCUS_DELAY_MS = 250;
 
 let activeSim = null;
 // Cleanup for a drag still in flight, if any (C9). A pointerdown installs
@@ -83,7 +85,7 @@ function typeHue(type) {
 }
 
 /** Draw the graph into `svg` (replacing its contents), wiring drag/zoom/click. */
-export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
+export function drawGraphPane(svg, graph, { centerUuid, onOpen, onFocus = null }) {
   if (!svg) return;
   const width = svg.clientWidth || 800;
   const height = svg.clientHeight || 540;
@@ -106,6 +108,8 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   // a time, so this is shared across every node's click handler and drag
   // binding (see the click handler and bindDrag below).
   let dragged = false;
+  // Pending plain-click focus, cancelled by a double-click (see click handler).
+  let focusTimer = null;
 
   // THIS draw's simulation, not the module-global one (C9). The handlers below
   // are installed before the simulation exists (bindDrag runs while building
@@ -214,9 +218,22 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
       g.append(clip, image);
     }
     g.append(label);
-    g.addEventListener("click", () => {
+    // Plain click focuses on the node (spec 2026-10-15 item 12); double-click
+    // or Ctrl/Cmd-click opens the entry, which was the only click action before.
+    // Focusing re-renders the pane and replaces this SVG, which would swallow
+    // the dblclick that follows two clicks. So the focus is deferred briefly and
+    // cancelled by the second click of a double-click (event.detail >= 2).
+    g.addEventListener("click", (event) => {
       if (dragged) return;
-      onOpen(node.uuid);
+      if (!onFocus || event.ctrlKey || event.metaKey) { onOpen(node.uuid); return; }
+      clearTimeout(focusTimer);
+      if (event.detail >= 2) return; // part of a double-click; dblclick opens
+      focusTimer = setTimeout(() => onFocus(node.uuid), FOCUS_DELAY_MS);
+    });
+    g.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      clearTimeout(focusTimer);
+      if (!dragged) onOpen(node.uuid);
     });
     bindDrag(g, node);
     svg.append(g);

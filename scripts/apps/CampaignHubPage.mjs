@@ -53,6 +53,7 @@ import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.m
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
+import { focusTransition, focusPickerRows } from "../logic/graph-focus.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -186,6 +187,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       setGraphMode: CampaignHubPage.onSetGraphMode,
+      focusOnEntry: CampaignHubPage.onFocusOnEntry,
       openHelp: CampaignHubPage.onOpenHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
@@ -449,6 +451,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
     this.#graphData = graphPrep.graph;
     context.graph = graphPrep.context;
+    // Only nodes already in the viewer's permission-filtered graph.
+    context.graph.focusRows = focusPickerRows(graphPrep.graph.nodes, this.state.graphCenterUuid);
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -1623,6 +1627,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
+  /** Focus the graph on `uuid` from inside the pane (node click or picker). */
+  static focusOn(uuid) {
+    const next = focusTransition(this.state, uuid);
+    if (!next.changed) return;
+    this.state.graphMode = next.graphMode;
+    this.state.graphCenterUuid = next.graphCenterUuid;
+    this.render({ parts: ["main"] });
+  }
+
+  static onFocusOnEntry(event, target) {
+    const uuid = target.value ?? target.closest("[data-uuid]")?.dataset.uuid;
+    if (uuid) CampaignHubPage.focusOn.call(this, uuid);
+  }
+
   // Timepoint label + optional campaign-date prompt. Mirrors campaign-record's
   // hub-mixin #promptTimepoint (see mej-campaign-companion's task-7 reference).
   static async #promptTimepoint(initial = {}, { titleKey, okKey = `${I18N}.hub.create` } = {}) {
@@ -1907,6 +1925,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       });
     }
 
+    const focusSelect = html.querySelector('select[name="graph-focus"]');
+    if (focusSelect && !focusSelect.dataset.ccBound) {
+      focusSelect.dataset.ccBound = "1";
+      focusSelect.addEventListener("change", (event) => CampaignHubPage.focusOn.call(this, event.target.value));
+    }
+
     const tlSelect = html.querySelector('select[name="timeline-select"]');
     if (tlSelect && !tlSelect.dataset.ccBound) {
       tlSelect.dataset.ccBound = "1";
@@ -2030,7 +2054,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         onOpen: async (uuid) => {
           const entry = await fromUuid(uuid);
           if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
-        }
+        },
+        onFocus: (uuid) => CampaignHubPage.focusOn.call(this, uuid)
       });
     };
     if (this.tabGroups?.primary === "graph") drawGraph();

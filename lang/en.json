@@ -421,7 +421,10 @@
       "all": "Whole campaign",
       "backlinks": "Show mention links",
       "partyRelationships": "Show party relationships",
-      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
+      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200).",
+      "focusOn": "Focus on an entry",
+      "focusOnPick": "Focus on…",
+      "openEntry": "Double-click a node to open it"
     },
     "prep": {
       "title": "Session prep board",
