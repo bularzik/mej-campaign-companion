@@ -23,6 +23,7 @@ import { orderTimelines, partitionTimelines } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
+import { stripUuidLinks } from "../logic/snippet-text.mjs";
 import { getCalendarMonths, calendarBounds, hasCalendar, formatCampaignDate, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date.mjs";
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
@@ -716,7 +717,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       name: hit.name,
       icon: this.#typeIcon(hit.type),
       typeLabel: this.#typeLabel(hit.type),
-      matches: hit.matches.map((m) => ({ fieldLabel: this.#fieldLabel(m.field), snippet: m.snippet }))
+      matches: hit.matches.map((m) => ({
+        fieldLabel: this.#fieldLabel(m.field),
+        snippet: stripUuidLinks(m.snippet, { nameOf: (uuid) => fromUuidSync(uuid, { strict: false })?.name ?? null })
+      }))
     }));
     return {
       query: this.state.searchQuery,
