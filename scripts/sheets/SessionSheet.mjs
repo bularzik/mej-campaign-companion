@@ -24,7 +24,7 @@ import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote, updateNote, deleteNote } from "../data/notes-store.mjs";
-import { linkNoteText } from "../hooks/note-links.mjs";
+import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 import { noteToPlainText } from "../logic/note-text.mjs";
 import { currentSession } from "../logic/current-session.mjs";
 // The hooks module's openSessionPage (the campaign's open Session page); a different openSessionPage lives in integrations/mej-adapter.mjs.
@@ -229,11 +229,10 @@ export class SessionSheet extends EnhancedJournalSheet {
     const campaign = campaignOf(this.document);
     if (campaign) {
       const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const enrich = (html) => foundry.applications.ux.TextEditor.implementation.enrichHTML(html, { async: true });
       const rows = streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime });
       context.notesStream = {
         canWrite: !!notesEntryOf(campaign)?.isOwner,
-        rows: await Promise.all(rows.map(async (r) => ({ ...r, text: await enrich(r.text) })))
+        rows: await Promise.all(rows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
       };
       const open = openCampaignSession(campaign);
       const cs = currentSession(campaign);
@@ -242,7 +241,7 @@ export class SessionSheet extends EnhancedJournalSheet {
         campaign, session: open && cs ? { uuid: open.uuid, name: open.name, startedAt: cs.startedAt } : null,
         notes: listNotes(campaign), user: game.user, formatTime, canWrite: false
       });
-      if (tonight) tonight.recent = await Promise.all(tonight.recent.map(async (n) => ({ ...n, text: await enrich(n.text) })));
+      if (tonight) tonight.recent = await Promise.all(tonight.recent.map(async (n) => ({ ...n, text: await enrichNoteText(n.text) })));
       context.tonight = tonight;
     } else {
       context.notesStream = { canWrite: false, rows: [] };

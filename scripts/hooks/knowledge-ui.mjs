@@ -15,7 +15,7 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
-import { linkNoteText, canMentionInNotes } from "./note-links.mjs";
+import { linkNoteText, canMentionInNotes, enrichNoteText } from "./note-links.mjs";
 import { openSessionPage as openCampaignSession } from "./current-session.mjs";
 import { streamRows } from "../logic/tonight.mjs";
 import { historyGroups } from "../logic/history.mjs";
@@ -168,13 +168,12 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // the enriched output is safe for {{{ }}}.
   const campaign = campaignOf(page);
   const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const enrich = (text) => foundry.applications.ux.TextEditor.implementation.enrichHTML(text, { async: true });
   const noteRows = campaign ? streamRows(listNotes(campaign, { mentionsUuid: entryUuid }), game.user, { formatTime }).reverse() : [];
   const partyNotes = {
     // The button needs write access AND audience containment: the link prefix
     // is code-built, so it must not name an entry some notes reader cannot see.
     canWrite: !!campaign && !!notesEntryOf(campaign)?.isOwner && canMentionInNotes(campaign, page.parent ?? page),
-    rows: await Promise.all(noteRows.map(async (r) => ({ ...r, text: await enrich(r.text) })))
+    rows: await Promise.all(noteRows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
   };
   const sessions = campaign ? campaign.contents.filter((e) => isSessionDoc(e) && e.pages.contents[0]).map((e) => ({
     uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER

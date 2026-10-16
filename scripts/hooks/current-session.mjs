@@ -105,7 +105,9 @@ export async function endSession(campaign) {
     formatTime: (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   });
   if (!draft) return;
-  const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(draft, { relativeTo: page, async: true });
+  // The draft is already built from escaped note text (recapDraft), so it is enriched as-is with notes' enricher set.
+  const { NOTE_ENRICH_OPTIONS } = await import("./note-links.mjs");
+  const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(draft, { relativeTo: page, async: true, ...NOTE_ENRICH_OPTIONS });
   const append = await foundry.applications.api.DialogV2.confirm({
     window: { title: game.i18n.localize(`${I18N}.session.draftTitle`) },
     content: `<p>${game.i18n.localize(`${I18N}.session.draftHint`)}</p><div class="mej-cc-draft-preview">${enriched}</div>`,

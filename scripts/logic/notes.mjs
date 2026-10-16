@@ -63,6 +63,18 @@ function normalizeOne(id, raw) {
   };
 }
 
+const ENTITY_AMP = /&(?![A-Za-z][A-Za-z0-9]*;|#[0-9]+;|#x[0-9A-Fa-f]+;)/g;
+
+/**
+ * Render-time source for a note's text (defence in depth, ruling R12). Stored text is already
+ * escaped, so an `&` that starts a valid character reference is kept (entities decode to text,
+ * never markup); everything else HTML-significant is escaped. Idempotent.
+ */
+export function noteHtmlSource(text) {
+  if (typeof text !== "string") return "";
+  return text.replace(ENTITY_AMP, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 export function normalizeNotes(flagValue) {
   if (!flagValue || typeof flagValue !== "object" || Array.isArray(flagValue)) return [];
   return Object.entries(flagValue)

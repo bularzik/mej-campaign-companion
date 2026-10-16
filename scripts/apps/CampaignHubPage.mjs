@@ -51,7 +51,7 @@ import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 import { tonightContext } from "../logic/tonight.mjs";
 import { currentSession } from "../logic/current-session.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
-import { linkNoteText } from "../hooks/note-links.mjs";
+import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 // openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
 import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
 import { validNoteText } from "../logic/notes.mjs";
@@ -426,10 +426,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     // Note rows carry escaped text + @UUID shorthand (ruling R3); enrich here so the
     // template can render labelHtml with triple-stash. Timepoint rows are untouched.
-    const enrichNote = (html) => foundry.applications.ux.TextEditor.implementation.enrichHTML(html, { async: true });
     for (const stack of stacks) {
       for (const row of stack.rows ?? []) {
-        if (row.kind === "note") row.labelHtml = await enrichNote(row.label);
+        if (row.kind === "note") row.labelHtml = await enrichNoteText(row.label);
       }
     }
     const scopeContext = this.#campaignScopeContext();
@@ -510,8 +509,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     });
     if (!ctx) return null;
     // Stored note text is escaped + @UUID shorthand (linkNoteText / normalizeNotes), so enriched output is safe for {{{ }}}.
-    const enrich = (html) => foundry.applications.ux.TextEditor.implementation.enrichHTML(html, { async: true });
-    ctx.recent = await Promise.all(ctx.recent.map(async (n) => ({ ...n, text: await enrich(n.text) })));
+    ctx.recent = await Promise.all(ctx.recent.map(async (n) => ({ ...n, text: await enrichNoteText(n.text) })));
     return ctx;
   }
 

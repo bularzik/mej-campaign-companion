@@ -7,6 +7,7 @@
 // emits shorthand, never anchors); enrichment happens at render time. Escaping
 // and typed-enricher neutralization live in logic/note-text.mjs.
 import { linkNoteHtml } from "../logic/note-text.mjs";
+import { noteHtmlSource } from "../logic/notes.mjs";
 import { noteMayMention } from "../logic/note-about.mjs";
 import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
@@ -38,4 +39,17 @@ export function linkNoteText(campaign, text) {
     }));
   const candidates = dropAmbiguousNames(selectCandidates({ pages, selfId: null })).kept;
   return linkNoteHtml(text, candidates);
+}
+
+/** Enrichers notes never need, switched off on every note render. */
+export const NOTE_ENRICH_OPTIONS = { secrets: false, rolls: false, embeds: false };
+
+/**
+ * The one render path for note text: escape again (idempotent), then enrich with the
+ * unused enrichers disabled. Output is safe for triple-stash.
+ */
+export function enrichNoteText(text, options = {}) {
+  return foundry.applications.ux.TextEditor.implementation.enrichHTML(noteHtmlSource(text), {
+    ...options, async: true, ...NOTE_ENRICH_OPTIONS
+  });
 }

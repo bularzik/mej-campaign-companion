@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   NOTE_KINDS, validNoteText, normalizeNotes, mentionsOf, noteCreateUpdate, noteEditUpdate, noteDeleteUpdate,
-  noteRetractUpdate, noteAudienceUpdate, canEditNote, visibleNotes, notesForSession, notesMentioning, heldNotes, noteCountsBySession
+  noteRetractUpdate, noteAudienceUpdate, noteHtmlSource, canEditNote, visibleNotes, notesForSession, notesMentioning, heldNotes, noteCountsBySession
 } from "../scripts/logic/notes.mjs";
 import { NOTE_TEXT_MAX } from "../scripts/constants.mjs";
 
@@ -154,5 +154,26 @@ describe("reveal note payload stores only model fields (R8)", () => {
       "at", "audience", "authorId", "authorName", "editedAt", "kind", "mentions", "ref", "retracted", "sessionUuid", "text", "worldDate"
     ]);
     expect(JSON.stringify(update)).not.toContain("SECRET");
+  });
+});
+
+describe("noteHtmlSource", () => {
+  const cases = [
+    ["<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;"],
+    ['<img src=x onerror="alert(1)">', "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"],
+    ["Zed&#x27;s &amp; Tavern", "Zed&#x27;s &amp; Tavern"],
+    ["a & b", "a &amp; b"],
+    ["met @UUID[JournalEntry.e1]{Duke}", "met @UUID[JournalEntry.e1]{Duke}"]
+  ];
+  for (const [input, expected] of cases) {
+    it(`escapes ${input}`, () => expect(noteHtmlSource(input)).toBe(expected));
+    it(`is idempotent on ${input}`, () => expect(noteHtmlSource(noteHtmlSource(input))).toBe(noteHtmlSource(input)));
+  }
+  it("leaves no markup characters in the image payload", () => {
+    const out = noteHtmlSource('<img src=x onerror="alert(1)">');
+    expect(out).not.toMatch(/[<"]/);
+  });
+  it("returns empty string for non-strings", () => {
+    for (const v of [undefined, null, 5, {}, []]) expect(noteHtmlSource(v)).toBe("");
   });
 });

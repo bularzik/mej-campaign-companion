@@ -1630,6 +1630,13 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-tonight-recent { list-style: none; margin: 0; padding: 0; font-size: .9em; }
 .mej-cc-tonight-recent li { padding: 1px 0; }
 .mej-cc-note-meta { color: var(--mej-cc-ink-muted); margin-right: 6px; }
+.mej-cc-timepoint-note .mej-cc-note-meta { margin-left: 6px; }
+
+/* Timeline note rows take the link token (already a guarded pair on these surfaces) as their second colour. */
+.monks-enhanced-journal .mej-cc-hub-container .mej-cc-timepoint-note :is(.mej-cc-timepoint-label, .mej-cc-timepoint-date) {
+  color: var(--mej-cc-link);
+  opacity: 1;
+}
 .mej-cc-draft-preview { max-height: 40vh; overflow: auto; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); padding: 6px; }
 .mej-cc-notes-stream { margin-top: 10px; }
 .mej-cc-notes-stream h3 { margin: 0 0 4px; }
