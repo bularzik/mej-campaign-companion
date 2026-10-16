@@ -451,8 +451,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
     this.#graphData = graphPrep.graph;
     context.graph = graphPrep.context;
-    // Only nodes already in the viewer's permission-filtered graph.
-    context.graph.focusRows = focusPickerRows(graphPrep.graph.nodes, this.state.graphCenterUuid);
+    // Every entry the viewer may see in scope (same permission-filtered rows
+    // as the graph, but uncapped and not narrowed to the ego neighbourhood).
+    context.graph.focusRows = focusPickerRows(graphPrep.pickerNodes,this.state.graphCenterUuid);
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -1629,6 +1630,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   /** Focus the graph on `uuid` from inside the pane (node click or picker). */
   static focusOn(uuid) {
+    // A deferred node-click focus can land after the Hub closed; the shell page
+    // has no close hook, so bail on an explicitly un-rendered window.
+    if (this.rendered === false) return;
     const next = focusTransition(this.state, uuid);
     if (!next.changed) return;
     this.state.graphMode = next.graphMode;
