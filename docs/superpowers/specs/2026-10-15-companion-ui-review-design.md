@@ -161,7 +161,8 @@ Kind: **UI** = change to how existing function is presented; **Gap** = function 
 
 | # | Change | Kind | Size | Jobs |
 |---|--------|------|------|------|
-| 1 | **Notes primitive and session notes stream.** A note = text, author, time, in-world date, session, mentioned entries. Stored on a hidden per-campaign party notebook (PR #49 pattern) so players write without a GM online. Rendered on the Session page in order with author tokens. Auto-link runs on save. | Gap | L | 4.1, 4.2, 4.4 |
+| 1 | **Notes primitive and session notes stream.** A note = text, author, time, in-world date, session, mentioned entries. Stored on a hidden per-campaign notes entry (PR #49 pattern, separate from the relationships notebook) owned by every player at baseline ≥ view, so players write without a GM online. Rendered on the Session page in order with author tokens. Auto-link runs on save. | Gap | L | 4.1, 4.2, 4.4 |
+| 1a | **Recap draft at End session.** Offers the GM or scribe a draft recap assembled from the session's notes in order, inserted into the recap editor for editing, never saved without a click. | Gap | S after #1 | 4.2 |
 | 2 | **Current session and Tonight strip.** One open session per campaign at a time; GM **Start session** / **End session** (New Session stays as the prep-ahead path). Strip on every Hub tab and Session page with a capture box and last three notes. "No session running" state. | Gap | M | 4.1, 4.2 |
 | 3 | **`/note` chat command** and "Note about this" on entry pages, both writing through #1. Held-until-session behaviour when none is open. | Gap | S after #1 | 4.1 |
 | 4 | **Player-scoped Hub.** Campaign name as title and no picker for single-campaign players; remove All/Unfiled/spillover/"Selected elsewhere" from the player view; shell control scopes to the open entry's campaign. | UI | S | 4.5, 4.6 |
@@ -188,7 +189,6 @@ Items 1–3 are one feature and should be designed together; 4, 9, 10 and 11 are
 - **Open questions list.** A per-campaign list of things the party wants to find out ("Who paid off the guards?"), each a note flagged as a question, closable with a link to the note that answered it. The GM's Quest type covers objectives the GM sets; this covers the party's own.
 - **Per-character perspective.** A note can be tagged "in character" so the Sessions view can filter to one character's view of events.
 - **Narrow layout.** Players increasingly join on tablets; the Hub's header and tab strip already wrap awkwardly at the stock sheet's width (seen live). A single-column layout under about 900px.
-- **Recap assist.** End session offers the GM/scribe a draft recap assembled from the session's notes in order, to edit rather than write from blank.
 
 ## 8. Constraints
 
@@ -216,10 +216,10 @@ A fresh reader planned from this document and asked five questions. Two are the 
 - How `/note` registers (chat command hook vs. `chatMessage` hook) and the exact short aliases.
 - Ordering of the wording pass with any in-flight branch to avoid conflicts.
 
-## 11. Open to the owner
+## 11. Decided by the owner (2026-10-15)
 
-1. **Who can write notes by default?** Today only campaign Contributors own the party notebook (`logic/party-access.mjs`), and a new campaign has none, so the headline capture feature would be dead until the GM finds the Contributors checkboxes. Recommendation: every player at a campaign baseline of **Players can view** or above can write notes, with notes on their own hidden entry so this does not also make everyone a party-relationship writer. The alternative keeps Contributors as the single gate and auto-adds connected players to it at Start session.
-2. **Notes stream in addition to the recap, or the recap alone?** The owner's Google-Doc model is one narrative per session. The stream adds attributed, timestamped lines and entity-side visibility; it also adds a second thing to look at on the Session page. Recommendation: keep both, with the stream feeding a recap draft at End session (§7), so the narrative stays the artifact and the stream is how it gets written during play.
+1. **Who can write notes by default.** Every player at a campaign baseline of **Players can view** or above can write notes. Notes live on their own hidden per-campaign entry, separate from the party-relationships notebook, so this does not also make everyone a party-relationship writer; Contributors keep gating relationships and entity extraction as today. (Today only Contributors own the party notebook, `logic/party-access.mjs`, and a new campaign has none.)
+2. **Notes stream beside the recap.** The Session page keeps the one collaborative recap as the narrative artifact and adds the attributed, timestamped notes stream as the way it gets written during play. End session offers a recap draft assembled from the stream (promoted from §7 into the change list as item 1a).
 
 ## 12. Evidence appendix
 
