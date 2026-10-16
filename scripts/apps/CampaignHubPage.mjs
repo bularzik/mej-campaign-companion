@@ -15,7 +15,7 @@
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { renderAwaitable } from "../sheets/awaitable-render.mjs";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, SESSION_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, SESSION_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING, MEJ_MODULE_ID } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls, contributorChoices, readContributors } from "../logic/campaigns.mjs";
@@ -30,7 +30,7 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId } from "../logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
@@ -59,7 +59,7 @@ import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
 import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 // openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
 import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
-import { validNoteText } from "../logic/notes.mjs";
+import { validNoteText, noteCountsBySession } from "../logic/notes.mjs";
 import { focusTransition, focusPickerRows } from "../logic/graph-focus.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
@@ -258,6 +258,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // its truncated-notice/drawn-graph sync - see hub-graph-pane.mjs).
   #graphData = null;
 
+  // The opening-tab decision (defaultHubTab) runs once per instance, so a tab
+  // the viewer picks afterwards is never pulled back to Sessions on re-render.
+  #openingTabDecided = false;
+
   static get type() {
     return HUB_PAGE_ID;
   }
@@ -330,6 +334,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (group === "primary" && this.state.pendingTab) {
       this.tabGroups.primary = this.state.pendingTab;
       this.state.pendingTab = null;
+      this.#openingTabDecided = true;
+    }
+    if (group === "primary" && !this.#openingTabDecided) {
+      this.#openingTabDecided = true;
+      // MEJ stores the viewer's last shell tab per document (pagestate.<id>.tabId) and seeds tabGroups from it.
+      const storedTab = game.user.getFlag(MEJ_MODULE_ID, `pagestate.${this.document?.id}.tabId`) ?? null;
+      const campaign = game.user.isGM ? null : this.#tonightCampaign(this.#scope().campaign);
+      this.tabGroups.primary = defaultHubTab({
+        isGM: game.user.isGM, storedTab,
+        hasOpenSession: !!(campaign && openCampaignSession(campaign)),
+        fallback: this.tabGroups.primary
+      });
     }
     const tabs = super._prepareTabs(group);
     if (group !== "primary") return tabs;
@@ -707,7 +723,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const pages = this.#scopedEntries().flatMap((entry) =>
       entry.pages.contents.filter((p) => isSession(p) && canSee(p))
     );
+    // Per-page note counts keyed by Session page uuid; listNotes is audience-filtered, so a player counts only what they can see.
+    const { campaign, unfiled } = this.#scope();
+    const campaigns = unfiled ? [] : (campaign ? [campaign] : getCampaigns());
+    const noteCounts = noteCountsBySession(campaigns.flatMap((c) => listNotes(c)));
     const rows = sessionRows(pages, {
+      noteCounts,
       formatDate: (d) => formatCampaignDate(d),
       // Unrevealed secrets stay out of the preview unless the viewer sees them on the sheet (GM / owner).
       recapText: (p) => {

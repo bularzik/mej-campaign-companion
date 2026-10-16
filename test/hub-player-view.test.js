@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId } from "../scripts/logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../scripts/logic/hub-player-view.mjs";
 
 const one = [{ id: "c1", name: "Radiant Citadel" }];
 const two = [{ id: "c1", name: "Radiant Citadel" }, { id: "c2", name: "Vale" }];
@@ -70,5 +70,22 @@ describe("lockedScopeId", () => {
   });
   it("picker mode keeps the stored scope", () => {
     expect(lockedScopeId({ mode: "picker", campaignId: null }, "c2")).toBe("c2");
+  });
+});
+
+describe("defaultHubTab", () => {
+  it("player with no stored tab lands on Sessions while a session is open", () => {
+    expect(defaultHubTab({ isGM: false, storedTab: null, hasOpenSession: true, fallback: "index" })).toBe("sessions");
+  });
+  it("a stored tab wins over the open session", () => {
+    expect(defaultHubTab({ isGM: false, storedTab: "timeline", hasOpenSession: true, fallback: "index" })).toBe("timeline");
+  });
+  it("GM is unaffected by an open session", () => {
+    expect(defaultHubTab({ isGM: true, storedTab: null, hasOpenSession: true, fallback: "index" })).toBe("index");
+    expect(defaultHubTab({ isGM: true, storedTab: "graph", hasOpenSession: true, fallback: "index" })).toBe("graph");
+  });
+  it("no open session keeps the existing default", () => {
+    expect(defaultHubTab({ isGM: false, storedTab: null, hasOpenSession: false, fallback: "index" })).toBe("index");
+    expect(defaultHubTab({ isGM: false, storedTab: "", hasOpenSession: false, fallback: "index" })).toBe("index");
   });
 });
