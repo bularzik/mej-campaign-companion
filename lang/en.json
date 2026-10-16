@@ -11,6 +11,7 @@
       "noPartyNotes": "Nothing noted about this yet.",
       "about": "Note about this",
       "aboutTitle": "Note about {name}",
+      "aboutHidden": "This entry isn't visible to everyone who reads the campaign's notes, so it can't be noted here.",
       "elsewhere": "Elsewhere",
       "tonight": {
         "started": "started {time}",

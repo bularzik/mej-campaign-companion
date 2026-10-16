@@ -15,11 +15,11 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
-import { linkNoteText } from "./note-links.mjs";
+import { linkNoteText, canMentionInNotes } from "./note-links.mjs";
 import { openSessionPage as openCampaignSession } from "./current-session.mjs";
 import { streamRows } from "../logic/tonight.mjs";
 import { historyGroups } from "../logic/history.mjs";
-import { noteAboutPrefix } from "../logic/note-about.mjs";
+import { noteAboutPrefix, fitsNoteLimit } from "../logic/note-about.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { isSessionDoc } from "../logic/mej-type.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
@@ -171,10 +171,12 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   const enrich = (text) => foundry.applications.ux.TextEditor.implementation.enrichHTML(text, { async: true });
   const noteRows = campaign ? streamRows(listNotes(campaign, { mentionsUuid: entryUuid }), game.user, { formatTime }).reverse() : [];
   const partyNotes = {
-    canWrite: !!campaign && !!notesEntryOf(campaign)?.isOwner,
+    // The button needs write access AND audience containment: the link prefix
+    // is code-built, so it must not name an entry some notes reader cannot see.
+    canWrite: !!campaign && !!notesEntryOf(campaign)?.isOwner && canMentionInNotes(campaign, page.parent ?? page),
     rows: await Promise.all(noteRows.map(async (r) => ({ ...r, text: await enrich(r.text) })))
   };
-  const sessions = campaign ? campaign.contents.filter((e) => isSessionDoc(e)).map((e) => ({
+  const sessions = campaign ? campaign.contents.filter((e) => isSessionDoc(e) && e.pages.contents[0]).map((e) => ({
     uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER
   })) : [];
   const history = historyGroups(backlinks, sessions);
@@ -231,6 +233,8 @@ function bindNoteAbout(panel, page) {
     noteAboutBusy = true;
     try {
       const entry = page.parent ?? page;
+      const refuse = () => ui.notifications.warn(game.i18n.localize(`${I18N}.notes.aboutHidden`));
+      if (!canMentionInNotes(campaign, entry)) return refuse();
       const raw = await foundry.applications.api.DialogV2.prompt({
         window: { title: game.i18n.format(`${I18N}.notes.aboutTitle`, { name: entry.name }) },
         content: `<textarea name="text" rows="3" maxlength="2000" style="width:100%" placeholder="${foundry.utils.escapeHTML(game.i18n.localize(`${I18N}.notes.capturePlaceholder`))}"></textarea>`,
@@ -239,9 +243,16 @@ function bindNoteAbout(panel, page) {
       });
       const text = validNoteText(raw);
       if (!text) return;
+      // Audience can change while the dialog is open: check again before writing.
+      if (!canMentionInNotes(campaign, entry)) return refuse();
+      const stored = `${noteAboutPrefix(entry.uuid, entry.name)} ${linkNoteText(campaign, text)}`;
+      if (!fitsNoteLimit(stored)) {
+        ui.notifications.warn(game.i18n.localize(`${I18N}.notes.badText`));
+        return;
+      }
       try {
         await addNote(campaign, {
-          text: `${noteAboutPrefix(entry.uuid, entry.name)} ${linkNoteText(campaign, text)}`,
+          text: stored,
           sessionUuid: openCampaignSession(campaign)?.uuid ?? null,
           worldDate: currentWorldComponents()
         });

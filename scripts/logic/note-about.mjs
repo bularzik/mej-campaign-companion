@@ -1,6 +1,15 @@
 // The link prefix "Note about this" puts on a note. Built by code, never typed
 // by the user, so the entry name (user-controlled) must not be able to break
 // out of the `{label}` or inject shorthand/enrichers of its own. Pure.
+import { audienceContains } from "./link-audience.mjs";
+import { NOTE_TEXT_MAX } from "../constants.mjs";
+
+/** Containment: every notes reader can also see the entry being linked. */
+export const noteMayMention = (notesReaderIds, entryViewerIds) => audienceContains(notesReaderIds, entryViewerIds);
+
+/** The final stored string fits the store's limit. */
+export const fitsNoteLimit = (text) => String(text).length <= NOTE_TEXT_MAX;
+
 const LABEL_ESCAPES = [
   ["&", "&amp;"], ["<", "&lt;"], [">", "&gt;"], ['"', "&quot;"],
   ["]", "&#93;"], ["}", "&#125;"], ["@", "&#64;"], ["[", "&#91;"]

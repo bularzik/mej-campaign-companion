@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { historyGroups } from "../scripts/logic/history.mjs";
-import { noteAboutPrefix } from "../scripts/logic/note-about.mjs";
+import { noteAboutPrefix, noteMayMention, fitsNoteLimit } from "../scripts/logic/note-about.mjs";
 
 describe("historyGroups", () => {
   const sessions = [
@@ -22,6 +22,20 @@ describe("historyGroups", () => {
   it("omits empty groups", () => {
     expect(historyGroups([backlinks[1]], sessions)).toEqual([{ session: null, rows: [backlinks[1]] }]);
     expect(historyGroups([], sessions)).toEqual([]);
+  });
+});
+
+describe("noteMayMention / fitsNoteLimit", () => {
+  it("allows an entry whose viewers contain every notes reader", () => {
+    expect(noteMayMention(["a", "b"], ["a", "b", "c"])).toBe(true);
+  });
+  it("refuses an entry visible to fewer users than the notes readers", () => {
+    expect(noteMayMention(["a", "b"], ["a"])).toBe(false);
+    expect(noteMayMention(["a"], [])).toBe(false);
+  });
+  it("checks the final length against the store limit", () => {
+    expect(fitsNoteLimit("x".repeat(2000))).toBe(true);
+    expect(fitsNoteLimit("x".repeat(2001))).toBe(false);
   });
 });
 
