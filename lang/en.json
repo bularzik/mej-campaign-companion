@@ -136,6 +136,12 @@
       "campaignStructureSkipped": "{count} campaign page(s) could not be converted — see the console."
     },
     "hub": {
+      "sessions": {
+        "number": "Session {n}",
+        "notes": "Notes",
+        "emptyGm": "No sessions yet. Use New Session to create one.",
+        "emptyPlayer": "Your GM hasn't started a session yet. When they do, it will appear here."
+      },
       "title": "Campaign Hub",
       "openCampaignHub": "Open Campaign Hub",
       "tabs": {

@@ -285,6 +285,18 @@
   opacity: 0.7;
 }
 
+/* Sessions pane (spec 2026-10-15 §5.1): newest first, one card per session. */
+.mej-cc-sessions-list { padding: 4px 0; }
+.mej-cc-session-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid var(--color-border-light-tertiary, #7a7971); }
+.mej-cc-session-row:hover { background: var(--mej-cc-chip-bg); }
+.mej-cc-session-row-head { display: flex; align-items: baseline; gap: 8px; }
+.mej-cc-session-number { font-weight: bold; color: var(--mej-cc-ink); }
+.mej-cc-session-name { flex: 1; color: var(--mej-cc-ink); }
+.mej-cc-session-date { color: var(--mej-cc-ink-muted); font-size: var(--font-size-12, 12px); }
+.mej-cc-session-attendees { display: flex; flex-wrap: wrap; gap: 4px; }
+.mej-cc-session-attendee { font-size: var(--font-size-11, 11px); color: var(--mej-cc-ink-muted); background: var(--mej-cc-chip-bg); border-radius: 3px; padding: 0 5px; }
+.mej-cc-session-preview { margin: 0; color: var(--mej-cc-ink-muted); font-size: var(--font-size-12, 12px); }
+
 /* Timeline pane */
 .mej-cc-timeline {
   gap: 0.5em;
