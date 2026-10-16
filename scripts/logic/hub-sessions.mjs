@@ -31,7 +31,7 @@ function numberOf(session) {
  * @param {object[]} pages  Session JournalEntryPages (any order)
  * @returns {{uuid,entryUuid,name,number,worldDate,attendees,recapPreview,noteCount}[]}
  */
-export function sessionRows(pages, { noteCounts = new Map(), formatDate = () => "", attendeeNames = () => [] } = {}) {
+export function sessionRows(pages, { noteCounts = new Map(), formatDate = () => "", attendeeNames = () => [], recapText = (p) => p?.system?.recap ?? "" } = {}) {
   const rows = (pages ?? []).map((p) => {
     const session = p?.flags?.[MODULE_ID]?.session ?? {};
     const attendees = Array.isArray(session.attendees) ? session.attendees : [];
@@ -42,7 +42,7 @@ export function sessionRows(pages, { noteCounts = new Map(), formatDate = () => 
       number: numberOf(session),
       worldDate: session.campaignDate ? (formatDate(session.campaignDate) ?? "") : "",
       attendees: attendeeNames(attendees) ?? [],
-      recapPreview: recapPreview(p.system?.recap ?? ""),
+      recapPreview: recapPreview(recapText(p) ?? ""),
       noteCount: noteCounts.get(p.uuid) ?? 0
     };
   });

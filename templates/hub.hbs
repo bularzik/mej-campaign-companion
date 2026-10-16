@@ -102,7 +102,7 @@
                             {{#each sessions.rows}}
                             <li class="mej-cc-session-row item" data-uuid="{{this.uuid}}" data-action="openSessionRow">
                                 <div class="mej-cc-session-row-head">
-                                    {{#if this.number}}<span class="mej-cc-session-number">{{localize "MEJCampaignCompanion.hub.sessions.number" n=this.number}}</span>{{/if}}
+                                    {{#if this.hasNumber}}<span class="mej-cc-session-number">{{localize "MEJCampaignCompanion.hub.sessions.number" n=this.number}}</span>{{/if}}
                                     <span class="mej-cc-session-name">{{this.name}}</span>
                                     {{#if this.worldDate}}<span class="mej-cc-session-date">{{this.worldDate}}</span>{{/if}}
                                     {{#if this.noteCount}}<span class="mej-cc-mention-badge" title="{{localize 'MEJCampaignCompanion.hub.sessions.notes'}}"><i class="fa-solid fa-note-sticky"></i>{{this.noteCount}}</span>{{/if}}

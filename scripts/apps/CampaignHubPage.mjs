@@ -45,6 +45,7 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
+import { stripSecretSections } from "../logic/secret-blocks.mjs";
 import { sessionRows } from "../logic/hub-sessions.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
@@ -649,15 +650,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     );
     const rows = sessionRows(pages, {
       formatDate: (d) => formatCampaignDate(d),
+      // Unrevealed secrets stay out of the preview unless the viewer sees them on the sheet (GM / owner).
+      recapText: (p) => {
+        const recap = p.system?.recap ?? "";
+        return game.user.isGM || p.isOwner ? recap : stripSecretSections(recap);
+      },
       attendeeNames: (uuids) => uuids.map((u) => {
         const actor = fromUuidSync(u, { strict: false });
-        if (!actor) return null;
+        if (!actor || !(game.user.isGM || actor.testUserPermission(game.user, "LIMITED"))) return null;
         const player = attendeePlayerName(actor, game.users);
         return player ? `${actor.name} (${player})` : actor.name;
       }).filter(Boolean)
     });
     return {
-      rows,
+      rows: rows.map((r) => ({ ...r, hasNumber: r.number !== null })),
       empty: game.i18n.localize(game.user.isGM ? `${I18N}.hub.sessions.emptyGm` : `${I18N}.hub.sessions.emptyPlayer`)
     };
   }

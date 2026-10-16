@@ -55,3 +55,18 @@ describe("sessionRows", () => {
     expect(sessionRows(undefined)).toEqual([]);
   });
 });
+
+describe("sessionRows recapText option", () => {
+  const recap = '<p>Open.</p><section class="secret" id="secret-a"><p>Hidden twist</p></section><section class="secret revealed" id="secret-b"><p>Known</p></section>';
+  it("stripping option drops unrevealed secrets and keeps revealed ones", async () => {
+    const { stripSecretSections } = await import("../scripts/logic/secret-blocks.mjs");
+    const [row] = sessionRows([page("U1", "S", { sessionNumber: 0 }, recap)], { recapText: (p) => stripSecretSections(p.system.recap) });
+    expect(row.recapPreview).not.toContain("Hidden twist");
+    expect(row.recapPreview).toContain("Known");
+    expect(row.number).toBe(0);
+  });
+  it("default reads system.recap unchanged", () => {
+    const [row] = sessionRows([page("U1", "S", {}, recap)]);
+    expect(row.recapPreview).toContain("Hidden twist");
+  });
+});
