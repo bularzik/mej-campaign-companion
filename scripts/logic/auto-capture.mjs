@@ -126,13 +126,17 @@ export function mergeGalleryImages(existing, entries) {
  * Resolve what a GM's "Show Players" share should file as media, or null when
  * the current user isn't the sharing GM. `options` is the shareImage() call's
  * argument; `appOptions` is the ImagePopout application's options.
- * @returns {{src:string|undefined, caption:string}|null}
+ * `users` are the share's recipients: ImagePopout#shareImage({users}) and
+ * Journal.showImage(src, {users}) both take user ids, and an empty or missing
+ * list means every player (verified in Foundry 13.351 and 14.369 source).
+ * @returns {{src:string|undefined, caption:string, users:string[]}|null}
  */
 export function resolveSharedMediaShare({ isGM, options = {}, appOptions = {} }) {
   if (!isGM) return null;
   return {
     src: options.image ?? appOptions?.src,
-    caption: options.caption || appOptions?.caption || options.title || appOptions?.window?.title || ""
+    caption: options.caption || appOptions?.caption || options.title || appOptions?.window?.title || "",
+    users: Array.isArray(options.users) ? options.users.filter((u) => typeof u === "string" && u) : []
   };
 }
 
@@ -153,4 +157,17 @@ export function installShareImageWrap({ libWrapperModule, libWrapper, moduleId, 
   }
   registerManual();
   return "manual";
+}
+
+/**
+ * Which campaign receives captures (spec 2026-10-15 §5.7): the explicit
+ * setting when it names an existing campaign; otherwise the only campaign
+ * when there is exactly one; otherwise null with the reason.
+ */
+export function resolveCaptureCampaign(settingId, campaigns) {
+  const list = campaigns ?? [];
+  const set = settingId ? list.find((c) => c.id === settingId) ?? null : null;
+  if (set) return { campaign: set, reason: "set" };
+  if (list.length === 1) return { campaign: list[0], reason: "single" };
+  return { campaign: null, reason: list.length ? "multi" : "none" };
 }

@@ -1,8 +1,11 @@
 /**
  * Pure decision for whether a about-to-be-created JournalEntry should get
- * player-writable default ownership, per the `playersWriteSessions` world
- * setting. No Foundry imports - callers pass in the entry's raw creation
- * data and the setting's current value. Covers BOTH of the companion's
+ * player-writable default ownership. Inside a campaign the campaign's
+ * ownership baseline decides (`campaignBaseline` >= `observerLevel` grants;
+ * a GM-only campaign never does, even with the legacy setting on); outside
+ * any campaign (`campaignBaseline` null) the `playersWriteSessions` world
+ * setting decides. No Foundry imports - callers pass in the entry's raw
+ * creation data, the setting's current value and the numeric baseline. Covers BOTH of the companion's
  * session-creation paths with one predicate:
  *  - MEJ's own "New Entry" UI sets `flags.monks-enhanced-journal.pagetype`
  *    on the JournalEntry itself before create() (see
@@ -28,8 +31,17 @@
  * (campaign-companion.mjs) covers both creation paths without duplicating
  * the ownership-setting logic in the import wizard itself.
  */
-export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions }) {
-  if (!playersWriteSessions) return false;
+export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions, campaignBaseline = null, observerLevel = 2, explicitDefault = null }) {
+  const inCampaign = campaignBaseline !== null && campaignBaseline !== undefined;
+  // Inside a campaign the baseline decides (spec 2026-10-15 item 8): a
+  // campaign players can at least view makes its sessions theirs to write;
+  // a GM-only campaign never does, whatever the legacy setting says. An
+  // explicit creation-time default below observer (the import wizard's
+  // "GM only" audience sends NONE) is the creator's choice and wins.
+  // Outside a campaign the legacy world setting keeps deciding, unchanged.
+  const explicitOk = explicitDefault === null || explicitDefault === undefined || explicitDefault >= observerLevel;
+  const granted = inCampaign ? (campaignBaseline >= observerLevel && explicitOk) : playersWriteSessions === true;
+  if (!granted) return false;
   const pagetype = entryData?.flags?.["monks-enhanced-journal"]?.pagetype;
   if (pagetype === sessionType) return true;
   return Array.isArray(entryData?.pages)
@@ -50,4 +62,23 @@ export function sessionEntriesNeedingOwnership(entries, { sessionType, sessionDo
     const pages = Array.isArray(e?.pages) ? e.pages : (e?.pages?.contents ?? []);
     return pages.some((p) => p?.type === sessionDocumentType || p?.type === sessionType);
   });
+}
+
+/**
+ * Target default ownership for one campaign member when the campaign
+ * baseline is bulk-applied or the entry is un-hidden. Non-session entries get
+ * the baseline unchanged. A session entry in a campaign whose baseline is
+ * observer or above stays OWNER (the same grant `shouldOwnSessionEntry`
+ * gives at creation), so "Apply to all current members" and the eye toggle
+ * never take back players' recap write access; below observer it is the
+ * baseline (NONE). Accepts a live JournalEntry (pages collection) or plain
+ * creation-shaped data.
+ */
+export function campaignSessionTargetLevel(entry, baseline, { sessionType, sessionDocumentType, observerLevel = 2, ownerLevel = 3 }) {
+  const pages = Array.isArray(entry?.pages) ? entry.pages : (entry?.pages?.contents ?? []);
+  const isSession = shouldOwnSessionEntry({ flags: entry?.flags, pages }, {
+    sessionType, sessionDocumentType, playersWriteSessions: false,
+    campaignBaseline: baseline, observerLevel
+  });
+  return isSession ? ownerLevel : baseline;
 }

@@ -24,6 +24,7 @@ import { noteAboutPrefix, fitsNoteLimit } from "../logic/note-about.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { isSessionDoc } from "../logic/mej-type.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
+import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { currentWorldComponents } from "../logic/campaign-calendar.mjs";
 
 function asElement(html) {
@@ -333,8 +334,11 @@ function bindPanel(panel, page, sheet, shellHosted) {
     await page.update({ [`flags.${MODULE_ID}.attributes`]: rows });
     refresh();
   });
-  panel.querySelectorAll(".mej-cc-attr-delete").forEach((a) => a.addEventListener("click", () => {
-    a.closest("[data-attr-id]")?.remove();
+  panel.querySelectorAll(".mej-cc-attr-delete").forEach((a) => a.addEventListener("click", async () => {
+    const row = a.closest("[data-attr-id]");
+    const name = row?.querySelector(".mej-cc-attr-key")?.value ?? "";
+    if (!(await confirmDelete({ kind: "attribute", name }))) return;
+    row?.remove();
     commitAttributes();
   }));
   panel.querySelectorAll(".mej-cc-attr-key, .mej-cc-attr-value, .mej-cc-attr-hidden").forEach((input) =>

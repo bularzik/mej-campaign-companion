@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveTargetGroup, collapseParticipants, mergeParticipants, matchPlaceForScene, pickLatestTimepoint, summarizeOutcome, pickNewestTimepoint, isVideoSrc, appendGalleryImage, mergeGalleryImages, resolveSharedMediaShare, installShareImageWrap } from "../scripts/logic/auto-capture.mjs";
+import { resolveTargetGroup, collapseParticipants, mergeParticipants, matchPlaceForScene, pickLatestTimepoint, summarizeOutcome, pickNewestTimepoint, isVideoSrc, appendGalleryImage, mergeGalleryImages, resolveSharedMediaShare, installShareImageWrap, resolveCaptureCampaign } from "../scripts/logic/auto-capture.mjs";
 
 describe("resolveTargetGroup", () => {
   const groups = [{ id: "a" }, { id: "b" }];
@@ -202,7 +202,16 @@ describe("resolveSharedMediaShare", () => {
   });
   it("tolerates missing options and appOptions", () => {
     const r = resolveSharedMediaShare({ isGM: true });
-    expect(r).toEqual({ src: undefined, caption: "" });
+    expect(r).toEqual({ src: undefined, caption: "", users: [] });
+  });
+  it("a share to all players has no recipients (ImagePopout#shareImage and Journal.showImage shapes)", () => {
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png" } }).users).toEqual([]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: [] } }).users).toEqual([]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: undefined } }).users).toEqual([]);
+  });
+  it("a share to selected players carries their ids", () => {
+    expect(resolveSharedMediaShare({ isGM: true, options: { users: ["u1", "u2"] }, appOptions: { src: "b.png" } }).users).toEqual(["u1", "u2"]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: ["u1", 7, ""] } }).users).toEqual(["u1"]);
   });
 });
 
@@ -257,5 +266,22 @@ describe("installShareImageWrap", () => {
     expect(mode).toBe("manual");
     expect(deps.warn).toHaveBeenCalledWith(boom);
     expect(deps.registerManual).toHaveBeenCalledOnce();
+  });
+});
+
+describe("resolveCaptureCampaign", () => {
+  const a = { id: "a" }, b = { id: "b" };
+  it("an explicit, existing target wins", () => {
+    expect(resolveCaptureCampaign("b", [a, b])).toEqual({ campaign: b, reason: "set" });
+  });
+  it("a single campaign is the target even when the setting is empty or stale", () => {
+    expect(resolveCaptureCampaign("", [a])).toEqual({ campaign: a, reason: "single" });
+    expect(resolveCaptureCampaign("zzz", [a])).toEqual({ campaign: a, reason: "single" });
+  });
+  it("several campaigns and no valid target: multi", () => {
+    expect(resolveCaptureCampaign("", [a, b])).toEqual({ campaign: null, reason: "multi" });
+  });
+  it("no campaigns: none (legacy loose behaviour)", () => {
+    expect(resolveCaptureCampaign("", [])).toEqual({ campaign: null, reason: "none" });
   });
 });

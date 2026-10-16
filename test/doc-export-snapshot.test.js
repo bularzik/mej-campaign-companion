@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { JSDOM } from "jsdom";
 import {
   eligibleEntries, orderEligibleEntries, relationshipsHtml, partyRelationshipsHtml, sessionBodyHtml,
-  pageRelationships, recordSnapshot, buildGroupSnapshot, SESSION_KIND
+  pageRelationships, recordSnapshot, buildGroupSnapshot, SESSION_KIND,
+  scopeExportRows, campaignTimepoints
 } from "../scripts/logic/doc-export-snapshot.mjs";
 import { snapshotToDocModel } from "../scripts/logic/doc-export.mjs";
 import { RECORD_TYPE_MARKER_RE, suggestType } from "../scripts/logic/doc-import.mjs";
@@ -388,4 +389,27 @@ describe("FIELD_RENDERERS collision safety (place/shop/loot/quest/encounter)", (
         .not.toThrow();
     });
   }
+});
+
+describe("scopeExportRows", () => {
+  const rows = [{ uuid: "a" }, { uuid: "b" }, { uuid: "c" }];
+  const campaignIdOf = (row) => ({ a: "camp1", b: null, c: "camp2" })[row.uuid];
+  it("campaign scope keeps only that campaign's rows (unfiled excluded: export is a record, not a link scope)", () => {
+    expect(scopeExportRows(rows, { scope: "campaign", campaignId: "camp1", campaignIdOf })).toEqual([{ uuid: "a" }]);
+  });
+  it("world scope keeps everything", () => {
+    expect(scopeExportRows(rows, { scope: "world", campaignId: "camp1", campaignIdOf })).toEqual(rows);
+  });
+  it("campaign scope with no campaign id falls back to everything", () => {
+    expect(scopeExportRows(rows, { scope: "campaign", campaignId: null, campaignIdOf })).toEqual(rows);
+  });
+});
+
+describe("campaignTimepoints (Review Focus 2: empty default timeline, populated second one)", () => {
+  it("concatenates every timeline's points in timeline order", () => {
+    const t1 = { id: "t1" }, t2 = { id: "t2" };
+    const points = { t1: [], t2: [{ id: "p1", label: "Later", links: [] }] };
+    expect(campaignTimepoints([t1, t2], (t) => points[t.id])).toEqual([{ id: "p1", label: "Later", links: [] }]);
+  });
+  it("no timelines -> []", () => expect(campaignTimepoints([], () => [])).toEqual([]));
 });

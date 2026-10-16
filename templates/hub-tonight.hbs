@@ -21,7 +21,7 @@
     {{#if tonight.recent.length}}
     <ol class="mej-cc-tonight-recent">
         {{#each tonight.recent}}
-        <li><span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}</span> <span class="mej-cc-note-text">{{{this.text}}}</span></li>
+        <li><span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span> <span class="mej-cc-note-text">{{{this.text}}}</span></li>
         {{/each}}
     </ol>
     {{/if}}

@@ -113,7 +113,13 @@ test.describe("10 secrets hub + prep board", () => {
     await settle(page, 500);
     const board = page.locator(".mej-cc-prep-board");
     await expect(board.locator(".mej-cc-prep-secrets li", { hasText: "tracker-clue" })).toHaveCount(1);
-    await board.locator('.mej-cc-prep-secrets li a[data-action="toggleSecret"]').first().click();
+    // The board's eye toggle is gone (one reveal control per secret): reveal
+    // through its audience control, choosing Everyone in the dialog.
+    await board.locator('.mej-cc-prep-secrets li a[data-action="revealSecret"]').first().click();
+    const revealDialog = page.locator(".application.dialog", { hasText: "Reveal secret to" });
+    await expect(revealDialog).toBeVisible();
+    await revealDialog.locator('input[name="all"]').check();
+    await revealDialog.locator("button", { hasText: "Apply" }).click();
     await settle(page, 500);
     const revealed = await page.evaluate((id) => {
       const pageDoc = game.journal.get(id).pages.contents[0];

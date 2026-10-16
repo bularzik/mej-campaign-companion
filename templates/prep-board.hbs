@@ -13,7 +13,6 @@
         <ol>
             {{#each secrets}}
             <li data-id="{{this.id}}" class="{{#if this.revealedAny}}revealed{{/if}}">
-                <a data-action="toggleSecret" data-tooltip="{{localize 'MEJCampaignCompanion.prep.toggleAll'}}"><i class="fa-solid {{#if this.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
                 <span class="mej-cc-prep-secret-text">{{this.text}}</span>
                 <a data-action="revealSecret" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}">
                     <i class="fa-solid fa-user-secret"></i>{{#if this.audienceCount}}<span class="mej-cc-audience-count">{{this.audienceCount}}</span>{{/if}}
@@ -34,7 +33,9 @@
         </ol>
     </section>
     <section class="mej-cc-prep-notes flexcol">
-        <header>{{localize 'MEJCampaignCompanion.prep.notes'}}</header>
-        <textarea name="notes" placeholder="{{localize 'MEJCampaignCompanion.prep.notesPlaceholder'}}">{{notes}}</textarea>
+        <header>{{localize 'MEJCampaignCompanion.prep.gmNotes'}}
+            <a data-action="editGmNotes" data-tooltip="{{localize 'MEJCampaignCompanion.prep.editGmNotes'}}"><i class="fa-solid fa-pen-to-square"></i> {{localize 'MEJCampaignCompanion.prep.editGmNotes'}}</a>
+        </header>
+        <div class="mej-cc-prep-gm-notes">{{#if gmNotes}}{{{gmNotes}}}{{else}}<p class="instruction">{{localize 'MEJCampaignCompanion.prep.noGmNotes'}}</p>{{/if}}</div>
     </section>
 </div>

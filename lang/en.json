@@ -27,6 +27,7 @@
       "streamTitle": "Notes",
       "none": "No notes yet. Type one above, or use /note in chat.",
       "edited": "edited",
+      "retracted": "Retracted",
       "edit": "Edit note",
       "delete": "Delete note",
       "deleteConfirm": "Delete this note? This cannot be undone.",
@@ -36,6 +37,12 @@
         "ambiguous": "More than one campaign could take that note. Open the one you mean and use its capture box.",
         "none": "You aren't in a campaign that takes notes yet."
       }
+    },
+    "revealNote": {
+      "block": "Revealed a secret from {name}",
+      "checklist": "Revealed a session secret from {name}",
+      "relationship": "Revealed a relationship on {name}",
+      "media": "Showed \"{name}\" to the players"
     },
     "party": {
       "notebookName": "Party relationships — {campaign}",
@@ -54,7 +61,8 @@
         "not-journal": "Only journal entries in this world can be related.",
         "self": "An entry can't be related to itself.",
         "no-access": "You can't see that entry.",
-        "type-not-allowed": "This kind of entry can't be related here."
+        "type-not-allowed": "This kind of entry can't be related here.",
+        "other-campaign": "That entry belongs to another campaign."
       }
     },
     "errors": {
@@ -75,8 +83,8 @@
         "hint": "When enabled, images and videos a GM shows to players are automatically filed onto the campaign timeline's newest timepoint."
       },
       "playersWriteSessions": {
-        "name": "Players Write Sessions",
-        "hint": "New Session entries are owned by all players, so any player can edit the shared recap. Turning this on also offers to grant ownership of existing sessions.",
+        "name": "Players Write Sessions (outside campaigns)",
+        "hint": "Sessions created inside a campaign whose Player access is at least \"Players can view\" are already editable by players (re-apply the baseline to cover older ones). Turn this on only to make sessions outside any campaign player-editable too; it also offers ownership of existing sessions.",
         "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
         "applied": "Updated ownership on {count} session entries.",
         "applyFailed": "Granting session ownership failed — see the console."
@@ -119,7 +127,10 @@
       "injured": "Injured",
       "fled": "Fled",
       "noCasualties": "All combatants unharmed.",
-      "unlinked": "No linked actor: {names}"
+      "unlinked": "No linked actor: {names}",
+      "encounterCaptured": "Encounter \"{name}\" recorded on the campaign timeline.",
+      "encounterUpdated": "Encounter \"{name}\" updated with the outcome.",
+      "mediaCaptured": "\"{name}\" filed on the campaign timeline."
     },
     "placeholder": {
       "session": "New Session"
@@ -143,6 +154,8 @@
       "draftSkip": "Not now",
       "draftAppended": "Draft appended to the recap.",
       "editRecap": "Edit recap",
+      "recapSaving": "Saving recap…",
+      "recapSaved": "Recap saved.",
       "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
       "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
@@ -164,8 +177,6 @@
       "secrets": "Secrets",
       "addSecret": "Add secret",
       "deleteSecret": "Delete secret",
-      "revealSecret": "Reveal to Players",
-      "hideSecret": "Hide from Players",
       "secretPlaceholder": "Secret text…",
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
@@ -226,7 +237,8 @@
       "applyBaselineNow": "Apply to all current members now",
       "baselineApplied": "Updated default permissions on {count} entries.",
       "contributors": "Contributors",
-      "contributorsHint": "Contributors can add party relationships, and create entries from selected text in this campaign's pages while a GM is connected.",
+      "manageGroups": "Manage player groups…",
+      "contributorsHint": "Contributors can take notes, add party relationships and create entries from selected text in this campaign. Entry creation needs a GM connected.",
       "contributorsUsers": "Players",
       "contributorsGroups": "Player groups",
       "adoptOffer": "This world has campaign content but no campaign. Create one from it?",
@@ -257,7 +269,7 @@
       "noEntries": "No journal entries yet.",
       "newSession": "New session",
       "newSessionFailed": "Could not create the session. Check the console for details.",
-      "captureNoCampaign": "No campaign set to receive captures — choose one in the Hub.",
+      "captureNoCampaign": "Several campaigns exist and none is set to receive captures — choose one under Tools → Auto-capture campaign.",
       "captureTarget": "Auto-capture campaign",
       "captureTargetSet": "Captures will file into \"{name}\".",
       "orderBy": "Order by",
@@ -333,7 +345,7 @@
         "delete": "Delete dashboard",
         "name": "Name",
         "query": "Query",
-        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>; anything else is full-text search.",
+        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>, scope:all (inline queries only); anything else is full-text search.",
         "showPlayers": "Visible to players",
         "visibleToPlayers": "Visible to players",
         "badQuery": "That query can't be parsed ({reason}).",
@@ -377,7 +389,7 @@
       "players": "Players",
       "groups": "Groups",
       "noPlayers": "No player users in this world.",
-      "noGroups": "No groups defined yet — manage them on the Hub's Secrets tab.",
+      "noGroups": "No groups defined yet — add them from Campaign settings or the Hub's Secrets tab.",
       "apply": "Apply",
       "revealTitle": "Reveal secret",
       "whisperHeader": "A secret from {name} has been revealed to you:",
@@ -398,7 +410,16 @@
       "addGroup": "Add group",
       "editGroup": "Edit group",
       "groupName": "Group name",
-      "groupMembers": "Members"
+      "groupMembers": "Members",
+      "groupsManagerTitle": "Player groups",
+      "noGroupsYet": "No player groups yet."
+    },
+    "confirmDelete": {
+      "dashboard": { "title": "Delete dashboard", "body": "Delete the dashboard \"{name}\"? Its saved query is removed for everyone." },
+      "group": { "title": "Delete player group", "body": "Delete the group \"{name}\"? Secrets revealed to it stay revealed to its members until you change their audience." },
+      "secret": { "title": "Delete secret", "body": "Delete the secret \"{name}\" from this session's checklist?" },
+      "attribute": { "title": "Delete attribute", "body": "Delete the attribute \"{name}\"?" },
+      "attendee": { "title": "Remove attendee", "body": "Remove {name} from this session's attendees?" }
     },
     "import": {
       "title": "Import Document",
@@ -452,6 +473,9 @@
       "title": "Export to Word",
       "button": "Export to Word",
       "download": "Download",
+      "scope": "Export",
+      "scopeCampaign": "This campaign ({name}) with its timelines",
+      "scopeWorld": "Whole world",
       "includeGM": "Include GM Content",
       "includeGMHint": "When checked, session GM notes, GM-only objectives, relationships hidden from players, and unrevealed secret sections are included in the export. Party relationships are exported either way.",
       "nothingToExport": "There are no journal entries to export yet.",
@@ -497,11 +521,12 @@
       "noAttendees": "No attendees yet.",
       "secrets": "Secrets & clues",
       "noSecrets": "No secrets on this session.",
-      "toggleAll": "Reveal/hide for everyone",
       "linked": "Linked entries",
       "noLinked": "No linked entries.",
-      "notes": "Scratch notes",
-      "notesPlaceholder": "GM-only notes for running this session…"
+      "gmNotes": "GM Notes",
+      "editGmNotes": "Edit on the session",
+      "noGmNotes": "No GM notes yet — add them on the session's Session tab.",
+      "scratchHeading": "Scratch notes"
     },
     "retroLink": {
       "title": "Auto-Link New Entry",

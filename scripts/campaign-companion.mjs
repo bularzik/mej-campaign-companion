@@ -13,7 +13,7 @@ import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.m
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly, readyWiring } from "./integrations/mej-adapter.mjs";
 import { installReadyGate } from "./integrations/ready-gate.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
-import { getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
+import { baselineOwnership, getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
@@ -24,7 +24,7 @@ import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
 import { registerRelationshipsTabWrap } from "./hooks/rel-tab-wrap.mjs";
-import { isTimelineJournal, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
+import { isTimelineJournal, campaignOfFolder, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
 import { campaignTimelines, ensureTimelineJournal } from "./data/timeline-journal.mjs";
 import { planCampaignStructure } from "./logic/campaign-migration.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
@@ -259,7 +259,18 @@ Hooks.once("setup", () => {
 Hooks.on("preCreateJournalEntry", (entry, data) => {
   if (!game.user.isGM) return;
   const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
-  if (!shouldOwnSessionEntry(data, { sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions })) return;
+  // data.folder is an id string at preCreate (or, defensively, a Folder-like
+  // object); campaignOfFolder walks ancestors, so a session nested in a
+  // campaign sub-folder resolves to the campaign.
+  const folderId = typeof data?.folder === "string" ? data.folder : data?.folder?.id;
+  const folder = entry.folder ?? (folderId ? game.folders.get(folderId) : null) ?? null;
+  const campaign = campaignOfFolder(folder);
+  const campaignBaseline = campaign ? baselineOwnership(campaign) : null;
+  if (!shouldOwnSessionEntry(data, {
+    sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions,
+    campaignBaseline, observerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER,
+    explicitDefault: data?.ownership?.default ?? null
+  })) return;
   entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
 
@@ -274,7 +285,31 @@ Hooks.on("activateControls", (ej, ctrls) => {
     icon: "fa-solid fa-timeline",
     type: "button",
     visible: true,
-    callback: () => openHub()
+    callback: async () => {
+      // Scope the Hub to the campaign of the entry the shell is showing
+      // (spec 2026-10-15 item 4). HUB_CAMPAIGN_SCOPE_SETTING is client-scoped,
+      // so players may write it too. Failures never block opening the Hub.
+      try {
+        const [{ hubScopeForOpenDocument }, { campaignIdOf }, { setHubScope }] = await Promise.all([
+          import("./logic/hub-open-scope.mjs"),
+          import("./logic/campaigns.mjs"),
+          import("./apps/CampaignHubPage.mjs")
+        ]);
+        const shell = ej ?? game.MonksEnhancedJournal?.journal;
+        const doc = shell?.rendered ? shell.document : null;
+        const scope = hubScopeForOpenDocument(doc, {
+          campaignIdOf,
+          isHubPlaceholder: (d) => d?.type === HUB_PAGE_ID || d?.id === HUB_PAGE_ID
+        });
+        if (scope) {
+          setHubScope(scope);
+          await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, scope);
+        }
+      } catch (err) {
+        console.error(`${MODULE_ID} | scoping the hub to the open entry failed`, err);
+      }
+      return openHub();
+    }
   });
 });
 
@@ -550,4 +585,8 @@ Hooks.once("ready", async () => {
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
+
+  import("./hooks/prep-notes-migrate.mjs")
+    .then((m) => m.migratePrepNotes())
+    .catch((err) => console.error(`${MODULE_ID} | prep-notes fold failed`, err));
 });

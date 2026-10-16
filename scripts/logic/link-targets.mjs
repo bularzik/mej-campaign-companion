@@ -30,3 +30,8 @@ export function linkableRegions(page) {
 export function sameLinkScope(campaignIdA, campaignIdB) {
   return !campaignIdA || !campaignIdB || campaignIdA === campaignIdB;
 }
+
+/** Backlink rows whose source is in linking reach of the target (spec 2026-10-15 §5.6). */
+export function scopeBacklinks(rows, targetCampaignId, campaignIdOfUuid) {
+  return (rows ?? []).filter((row) => sameLinkScope(targetCampaignId ?? null, campaignIdOfUuid(row.uuid) ?? null));
+}

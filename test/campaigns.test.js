@@ -145,6 +145,13 @@ describe("campaigns module", async () => {
       ]);
       expect(bulkOwnershipPlan([], 2)).toEqual([]);
     });
+    it("accepts a per-entry level function (campaign sessions keep OWNER)", async () => {
+      const { bulkOwnershipPlan } = await import("../scripts/logic/campaigns.mjs");
+      const entries = [{ id: "s", ownership: { default: 3 } }, { id: "p", ownership: { default: 3 } }];
+      expect(bulkOwnershipPlan(entries, (e) => (e.id === "s" ? 3 : 2))).toEqual([
+        { _id: "p", "ownership.default": 2 }
+      ]);
+    });
     it("with skipLevel, also skips entries hidden (at skipLevel) - a bulk apply must not un-hide them", async () => {
       const { bulkOwnershipPlan } = await import("../scripts/logic/campaigns.mjs");
       const entries = [

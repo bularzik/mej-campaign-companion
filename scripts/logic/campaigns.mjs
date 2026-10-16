@@ -157,14 +157,18 @@ export function canAttachToTimeline(entry, timelineJournal) {
  * ONLY the default level - per-user overrides are separate keys.
  */
 export function bulkOwnershipPlan(entries, level, { skipLevel } = {}) {
+  // `level` is a number, or a function(entry) -> number for per-entry targets
+  // (campaign sessions keep their player-owner grant, see campaignSessionTargetLevel).
+  const levelOf = typeof level === "function" ? level : () => level;
   return (entries ?? [])
-    .filter((e) => {
+    .map((e) => ({ e, target: levelOf(e) }))
+    .filter(({ e, target }) => {
       const current = e.ownership?.default ?? null;
-      if (current === level) return false;
+      if (current === target) return false;
       if (skipLevel !== undefined && current === skipLevel) return false;
       return true;
     })
-    .map((e) => ({ _id: e.id, "ownership.default": level }));
+    .map(({ e, target }) => ({ _id: e.id, "ownership.default": target }));
 }
 
 /**

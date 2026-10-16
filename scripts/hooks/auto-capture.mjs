@@ -46,16 +46,16 @@ import { getTimepoints, addTimepoint, addLink } from "../data/timepoints.mjs";
 import { currentWorldComponents, formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
-import { isCampaignFolder } from "../logic/campaigns.mjs";
 import { getCampaigns, baselineOwnership } from "../data/campaign-store.mjs";
 import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
-  resolveSharedMediaShare, installShareImageWrap
+  resolveSharedMediaShare, installShareImageWrap, resolveCaptureCampaign
 } from "../logic/auto-capture.mjs";
 import {
   buildEncounterActorRows, rowsFromEncounterActors, rekeyByBaseActor, describeUnlinkedParticipants, buildEncounterName,
   wrapOutcomeHtml, mergeOutcomeHtml
 } from "../logic/encounter-capture.mjs";
+import { fileMediaNote } from "./reveal-filing.mjs";
 
 /** Live combatants as raw {actorUuid, name} entries. */
 function combatParticipants(combat) {
@@ -88,23 +88,32 @@ async function recordDeparture(combat, combatant) {
 // ending or a Show-Players share firing while a GM is mid-import would
 // otherwise race that write too. See filing-queue.mjs's header comment.
 
-/** The campaign that receives captures (spec §4), or null. Null in a world WITH campaigns means "decline"; null in a zero-campaign world means "legacy loose behavior". */
-function captureCampaign() {
+/** The campaign that receives captures, resolved per logic/auto-capture.mjs#resolveCaptureCampaign. Reason "none" (no campaigns) keeps the legacy loose behavior. */
+function captureTarget() {
   const id = game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING);
-  const folder = id ? game.folders.get(id) : null;
-  return folder && isCampaignFolder(folder) ? folder : null;
+  return resolveCaptureCampaign(id, getCampaigns());
 }
 
-/** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
+/** A readable file name from a media src: last path segment, without ?query/#hash, URI-decoded. */
+function mediaDisplayName(src) {
+  const last = String(src ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+}
+
+/** File a document/image link onto the timeline's newest timepoint. Resolves true when filed, false when it declined (no target / no timeline). */
 async function fileOntoNewestTimepoint(link) {
-  const campaign = captureCampaign();
-  if (!campaign && getCampaigns().length) return; // campaigns exist but no target: decline silently for media
+  const { campaign, reason } = captureTarget();
+  if (reason === "multi") return false; // several campaigns, no target chosen: decline silently for media
   // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
   // never prompts and never follows the Hub's currently-viewed one.
   const journal = await ensureTimelineJournal(campaign);
   if (!journal) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);
-    return;
+    return false;
   }
   // A timeline with no timepoints used to drop the capture; give it one
   // dated "now" so the capture always lands somewhere.
@@ -115,6 +124,7 @@ async function fileOntoNewestTimepoint(link) {
     tp = await addTimepoint(journal, label, null, now);
   }
   await addLink(journal, tp.id, link);
+  return true;
 }
 
 /**
@@ -155,8 +165,8 @@ function buildDescriptionHtml(outcome, unlinkedNames) {
  * this way.
  */
 async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
-  const campaign = captureCampaign();
-  if (!campaign && getCampaigns().length) {
+  const { campaign, reason } = captureTarget();
+  if (reason === "multi") {
     ui.notifications.warn(game.i18n.localize(`${I18N}.hub.captureNoCampaign`));
     return null;
   }
@@ -171,7 +181,8 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
   } catch {
     // Combat already deleted (create-at-end fallback): nothing left to link.
   }
-  await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
+  const filed = await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
+  if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterCaptured`, { name: page.name }));
   return page;
 }
 
@@ -226,18 +237,26 @@ async function captureCombatEnd(combat) {
 
   const existingUuid = combat.getFlag(MODULE_ID, ENCOUNTER_PAGE_FLAG);
   const existingPage = existingUuid ? await fromUuid(existingUuid) : null;
-  if (existingPage) await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
-  else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
+  if (existingPage) {
+    await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
+    ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterUpdated`, { name: existingPage.name }));
+  } else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
 }
 
 /**
  * File a GM-shared image/video onto the timeline's newest timepoint
- * (Show Players capture).
+ * (Show Players capture), and a note on the capture campaign's open session.
  */
-function captureSharedImage(src, caption) {
+function captureSharedImage(src, caption, users = []) {
   if (!src) return;
+  // Showing players something files a note on the open session whether or
+  // not media capture onto the timeline is on (spec 2026-10-15 §9). A share
+  // to selected players files a note only those players can read.
+  fileMediaNote({ campaign: captureTarget().campaign, src, name: caption || mediaDisplayName(src), users });
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
-  queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" }));
+  queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" })).then((filed) => {
+    if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || mediaDisplayName(src) }));
+  });
 }
 
 /** Install both shareImage capture wraps (see registerAutoCapture's comment for why two). */
@@ -257,7 +276,7 @@ function installShareCaptureWraps() {
     wrapper: function (wrapped, options = {}) {
       const result = wrapped(options);
       const share = resolveSharedMediaShare({ isGM: game.user.isGM, options, appOptions: this.options });
-      if (share) captureSharedImage(share.src, share.caption);
+      if (share) captureSharedImage(share.src, share.caption, share.users);
       return result;
     },
     registerManual: () => {
@@ -265,7 +284,7 @@ function installShareCaptureWraps() {
       ImagePopout.prototype.shareImage = function (options = {}) {
         const result = original.call(this, options);
         const share = resolveSharedMediaShare({ isGM: game.user.isGM, options, appOptions: this.options });
-        if (share) captureSharedImage(share.src, share.caption);
+        if (share) captureSharedImage(share.src, share.caption, share.users);
         return result;
       };
     },
@@ -292,16 +311,16 @@ function installShareCaptureWraps() {
     target: "foundry.documents.collections.Journal.showImage",
     wrapper: function (wrapped, src, config = {}) {
       const result = wrapped(src, config);
-      const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title } });
-      if (share) captureSharedImage(share.src, share.caption);
+      const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title, users: config.users } });
+      if (share) captureSharedImage(share.src, share.caption, share.users);
       return result;
     },
     registerManual: () => {
       const original = Journal.showImage;
       Journal.showImage = function (src, config = {}) {
         const result = original.call(this, src, config);
-        const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title } });
-        if (share) captureSharedImage(share.src, share.caption);
+        const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title, users: config.users } });
+        if (share) captureSharedImage(share.src, share.caption, share.users);
         return result;
       };
     },

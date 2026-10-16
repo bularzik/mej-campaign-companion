@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { parseQuery, matchesMeta, runQuery } from "../scripts/logic/query-grammar.mjs";
+import { parseQuery, matchesMeta, runQuery, scopeHits } from "../scripts/logic/query-grammar.mjs";
 import { createIndex, indexRecord } from "../scripts/logic/search-index.mjs";
 
 describe("parseQuery", () => {
   it("splits typed tokens from free text", () => {
     expect(parseQuery("type:person tag:villain attr:faction=Zhentarim red wizard")).toEqual({
-      types: ["person"], tags: ["villain"], attrs: [{ key: "faction", value: "Zhentarim" }], text: "red wizard"
+      types: ["person"], tags: ["villain"], attrs: [{ key: "faction", value: "Zhentarim" }], text: "red wizard", scope: "campaign"
     });
   });
   it("supports valueless attr tokens and case-insensitive prefixes", () => {
-    expect(parseQuery("Attr:patron TAG:ally")).toEqual({ types: [], tags: ["ally"], attrs: [{ key: "patron", value: null }], text: "" });
+    expect(parseQuery("Attr:patron TAG:ally")).toEqual({ types: [], tags: ["ally"], attrs: [{ key: "patron", value: null }], text: "", scope: "campaign" });
   });
   it("throws on empty/whitespace queries", () => {
     expect(() => parseQuery("   ")).toThrow("empty-query");
@@ -24,13 +24,13 @@ describe("parseQuery", () => {
     expect(() => parseQuery("type:=broken")).toThrow("bad-type");
   });
   it("keeps attr:, ((, and an unclosed quote as free text", () => {
-    expect(parseQuery("attr:")).toEqual({ types: [], tags: [], attrs: [], text: "attr:" });
-    expect(parseQuery("((")).toEqual({ types: [], tags: [], attrs: [], text: "((" });
-    expect(parseQuery("\"unclosed")).toEqual({ types: [], tags: [], attrs: [], text: "\"unclosed" });
+    expect(parseQuery("attr:")).toEqual({ types: [], tags: [], attrs: [], text: "attr:", scope: "campaign" });
+    expect(parseQuery("((")).toEqual({ types: [], tags: [], attrs: [], text: "((", scope: "campaign" });
+    expect(parseQuery("\"unclosed")).toEqual({ types: [], tags: [], attrs: [], text: "\"unclosed", scope: "campaign" });
   });
   it("still accepts every dotted/dashed type key and a valueless attr", () => {
     expect(parseQuery("type:mej-campaign-companion.session attr:patron")).toEqual({
-      types: ["mej-campaign-companion.session"], tags: [], attrs: [{ key: "patron", value: null }], text: ""
+      types: ["mej-campaign-companion.session"], tags: [], attrs: [{ key: "patron", value: null }], text: "", scope: "campaign"
     });
   });
 });
@@ -68,4 +68,25 @@ describe("runQuery", () => {
     expect(hits.map((h) => h.uuid)).toEqual(["u2", "u1"]); // name-sorted
     expect(hits[0].matches).toEqual([]);
   });
+});
+
+describe("scope token (spec 2026-10-15 §5.6)", () => {
+  it("defaults to campaign scope", () => expect(parseQuery("type:person").scope).toBe("campaign"));
+  it("scope:all opts out and is not free text", () => {
+    const p = parseQuery("type:person scope:all");
+    expect(p.scope).toBe("all");
+    expect(p.text).toBe("");
+  });
+  it("rejects an unknown scope value", () => expect(() => parseQuery("type:person scope:mine")).toThrow("bad-scope"));
+  it("scope alone is still an empty query", () => expect(() => parseQuery("scope:all")).toThrow("empty-query"));
+});
+
+describe("scopeHits (Review Focus 3)", () => {
+  const hits = [{ uuid: "a" }, { uuid: "b" }, { uuid: "c" }];
+  const cid = (uuid) => ({ a: "c1", b: "c2", c: null })[uuid];
+  it("campaign page: same campaign and unfiled only", () => {
+    expect(scopeHits(hits, { scope: "campaign" }, "c1", cid)).toEqual([{ uuid: "a" }, { uuid: "c" }]);
+  });
+  it("unfiled page: everything", () => expect(scopeHits(hits, { scope: "campaign" }, null, cid)).toEqual(hits));
+  it("scope:all: everything", () => expect(scopeHits(hits, { scope: "all" }, "c1", cid)).toEqual(hits));
 });

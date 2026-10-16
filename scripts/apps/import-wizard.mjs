@@ -13,7 +13,7 @@
 // HandlebarsApplicationMixin(ApplicationV2) - no AppV1-\>AppV2 migration was
 // needed here; this class is a straight structural port of that one.
 import {
-  MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
+  SESSION_TYPE, SESSION_DOCUMENT_TYPE, MODULE_ID, I18N, COMPANION_IMPORT_TYPES, AUTO_LINK_SETTING, PLAYERS_WRITE_SESSIONS_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING
 } from "../constants.mjs";
 import { campaignOfFolder, campaignIdOf, destinationFolderOptions, resolveDestinationId, subfolderApplies, isLinkableEntity } from "../logic/campaigns.mjs";
@@ -37,6 +37,7 @@ import { viewerIds, audienceViewerIdsForImport, filterCandidatesForAudience } fr
 import { sameLinkScope } from "../logic/link-targets.mjs";
 import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { shouldOwnSessionEntry } from "../logic/session-ownership.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -570,14 +571,15 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     //
     // Per-row effective audience: campaign-companion.mjs's own
     // preCreateJournalEntry hook (via shouldOwnSessionEntry,
-    // logic/session-ownership.mjs) grants "session" rows default-OWNER
-    // (player-visible) ownership whenever the playersWriteSessions world
-    // setting is ON, regardless of the audience chosen here - silently
-    // overriding a "GM only" import for those rows. Link "session" rows
-    // against "players"-audience candidates in that case so a GM-only
-    // import with playersWriteSessions ON can't produce a player-visible
-    // page linking to GM-only entities; every other row keeps the chosen
-    // audience's candidates.
+    // logic/session-ownership.mjs) may grant "session" rows default-OWNER
+    // (player-visible) ownership: inside a campaign whose baseline is at
+    // least observer, unless this import's explicit ownership is below
+    // observer (a "GM only" import sends NONE and wins); outside a campaign
+    // when playersWriteSessions is ON. We ask the SAME predicate, with the
+    // same campaign baseline and explicit ownership, whether a session row
+    // ends up player-owned, and if so link it against "players"-audience
+    // candidates so it can't be a player-visible page linking to GM-only
+    // entities; every other row keeps the chosen audience's candidates.
     let linkedCount = 0;
     const linkAudience = audience === "default"
       ? (campaign && baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER ? "players" : "gm")
@@ -585,11 +587,19 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
     if (game.settings.get(MODULE_ID, AUTO_LINK_SETTING)) {
       try {
         const candidates = this.#linkCandidates(linkAudience, plan.warnings, campaign?.id ?? null);
-        const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
+        const sessionRowPlayerOwned = shouldOwnSessionEntry(
+          { pages: [{ type: SESSION_DOCUMENT_TYPE }] },
+          {
+            sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE,
+            playersWriteSessions: game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING),
+            campaignBaseline: campaign ? baselineOwnership(campaign) : null,
+            observerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER,
+            explicitDefault: ownership?.default ?? null
+          });
         const seenWarnings = new Set(plan.warnings);
         let sessionCandidates = null;
         const candidatesForPage = (page) => {
-          if (!playersWriteSessions || page.type !== "session") return candidates;
+          if (!sessionRowPlayerOwned || page.type !== "session") return candidates;
           if (sessionCandidates === null) {
             const scratch = [];
             sessionCandidates = this.#linkCandidates("players", scratch, campaign?.id ?? null);

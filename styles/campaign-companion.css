@@ -1215,9 +1215,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   text-decoration: line-through;
 }
 
-.mej-cc-prep-notes textarea {
+.mej-cc-prep-notes .mej-cc-prep-gm-notes {
   min-height: 90px;
-  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 /* Retroactive auto-link confirm dialog */
@@ -1668,6 +1669,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-tonight-recent li { padding: 1px 0; }
 .mej-cc-note-meta { color: var(--mej-cc-ink-muted); margin-right: 6px; }
 .mej-cc-timepoint-note .mej-cc-note-meta { margin-left: 6px; }
+.mej-cc-note-badge { font-style: italic; text-transform: uppercase; font-size: .85em; letter-spacing: .03em; }
 
 /* Timeline note rows take the link token (already a guarded pair on these surfaces) as their second colour. */
 .monks-enhanced-journal .mej-cc-hub-container .mej-cc-timepoint-note :is(.mej-cc-timepoint-label, .mej-cc-timepoint-date) {

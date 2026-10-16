@@ -179,3 +179,24 @@ describe("affectedUuids", () => {
     expect(affectedUuids(undefined, null, null)).toEqual([]);
   });
 });
+
+describe("targetProblem campaign scope (spec 2026-10-15 §5.6)", () => {
+  const base = { sourceUuid: A, allowed: ["person"], typeOf: () => "person", canLimited: () => true };
+  const target = { uuid: B, name: "B" };
+  it("another campaign is refused", () => {
+    expect(targetProblem(target, { ...base, sourceCampaignId: "c1", campaignIdOf: () => "c2" })).toBe("other-campaign");
+  });
+  it("same campaign or unfiled on either side is fine", () => {
+    expect(targetProblem(target, { ...base, sourceCampaignId: "c1", campaignIdOf: () => "c1" })).toBeNull();
+    expect(targetProblem(target, { ...base, sourceCampaignId: "c1", campaignIdOf: () => null })).toBeNull();
+    expect(targetProblem(target, { ...base, sourceCampaignId: null, campaignIdOf: () => "c2" })).toBeNull();
+  });
+  it("callers that pass no scope keep today's behaviour", () => {
+    expect(targetProblem(target, base)).toBeNull();
+  });
+  it("the picker list omits other-campaign entries", () => {
+    const list = [{ uuid: B, name: "Bea" }, { uuid: "JournalEntry.cccccccccccccccc", name: "Cy" }];
+    const ctx = { ...base, sourceCampaignId: "c1", campaignIdOf: (d) => (d.name === "Cy" ? "c2" : "c1") };
+    expect(eligibleTargets(list, ctx).map((r) => r.name)).toEqual(["Bea"]);
+  });
+});

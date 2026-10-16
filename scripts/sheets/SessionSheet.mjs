@@ -14,11 +14,13 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { renderAwaitable } from "./awaitable-render.mjs";
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
+import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
 import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
+import { recapClosePlan } from "../logic/recap-save-state.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
@@ -33,6 +35,8 @@ import { tonightContext, streamRows } from "../logic/tonight.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
+import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
+import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
@@ -73,7 +77,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       editGmNotes: SessionSheet.onEditGmNotes,
       addSecret: SessionSheet.onAddSecret,
       deleteSecret: SessionSheet.onDeleteSecret,
-      toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
       secretAudience: SessionSheet.onSecretAudience,
       removeAttendee: SessionSheet.onRemoveAttendee,
@@ -180,7 +183,7 @@ export class SessionSheet extends EnhancedJournalSheet {
           // GM badge needs its own audienceAll flag so that case still
           // renders a marker instead of silently showing no badge.
           const a = normalizeAudience(s.audience);
-          return { ...s, audienceAll: a.all, audienceCount: a.users.length + a.groups.length };
+          return { ...s, audienceAll: s.revealed === true || a.all === true, audienceCount: a.users.length + a.groups.length };
         })
       : session.secrets
           .filter((s) => s.revealed || canSee(s.audience, game.user.id, groups))
@@ -425,6 +428,19 @@ export class SessionSheet extends EnhancedJournalSheet {
     const editor = this.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap'] prose-mirror")
       ?? $(".editor-parent[data-editor-id='recap'] prose-mirror", this.trueElement).get(0);
     const opening = !(editor?.open ?? false);
+    if (!opening && editor) {
+      const plan = recapClosePlan({ live: editor.value, stored: this.document?.system?.recap });
+      if (plan === "saving") {
+        const uuid = this.document.uuid;
+        ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaving`));
+        const hookId = Hooks.on("updateJournalEntryPage", (page, changes, options, userId) => {
+          if (page.uuid !== uuid || changes?.system?.recap === undefined || userId !== game.user.id) return;
+          Hooks.off("updateJournalEntryPage", hookId);
+          ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaved`));
+        });
+        setTimeout(() => Hooks.off("updateJournalEntryPage", hookId), 10_000);
+      }
+    }
     $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", opening);
     $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", !opening).toggleClass("fa-save", opening);
     if (editor) editor.open = opening;
@@ -469,27 +485,17 @@ export class SessionSheet extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     const id = target.closest("[data-id]")?.dataset.id;
     const session = sessionData(this.document);
+    const item = session.secrets.find((s) => s.id === id);
+    if (!(await confirmDelete({ kind: "secret", name: item?.text ?? "" }))) return;
     const secrets = session.secrets.filter((s) => s.id !== id);
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
     this.render();
   }
 
-  static async onToggleSecret(event, target) {
-    if (!game.user.isGM) return;
-    const id = target.closest("[data-id]")?.dataset.id;
-    const session = sessionData(this.document);
-    const secrets = session.secrets.map((s) => {
-      if (s.id !== id) return s;
-      const revealed = !s.revealed;
-      return { ...s, revealed, revealedAt: revealed ? Date.now() : null };
-    });
-    await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
-    this.render();
-  }
-
-  // Per-player/group reveal for one checklist item (spec §4/§8). "Everyone"
-  // remains onToggleSecret's revealed flag; this dialog manages the
-  // audience field. Reveal whispers the item text to new recipients.
+  // The one reveal control for a checklist item (spec §4/§8, 2026-10-15
+  // §5.7). "Everyone" is carried by the item's `revealed` flag, named
+  // players/groups by `audience`; applyChecklistAudience keeps them in step.
+  // Reveal whispers the item text to new recipients.
   static async onSecretAudience(event, target) {
     if (!game.user.isGM) return;
     const id = target.closest("[data-id]")?.dataset.id;
@@ -499,7 +505,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     const audience = await promptAudience({
       title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`),
-      audience: item.audience, groups
+      audience: checklistSeed(item), groups
     });
     if (!audience) return;
     // Re-read fresh data after the dialog closes rather than reusing the
@@ -507,18 +513,20 @@ export class SessionSheet extends EnhancedJournalSheet {
     // mutated secrets while this dialog was open, and writing back the
     // stale array would silently revert that concurrent edit. The item may
     // even have been deleted in the meantime - bail with no write if so.
-    // The whisper still uses the pre-dialog item.audience as
-    // previousAudience: that's the audience the GM actually saw and
-    // compared against in the dialog.
+    // The whisper still uses the pre-dialog seed as previousAudience:
+    // that's the audience the GM actually saw and compared against in the
+    // dialog (an already-everyone item whispers nobody again).
     const current = sessionData(this.document).secrets;
     if (!current.find((s) => s.id === id)) return;
-    const secrets = current.map((s) => (s.id === id ? { ...s, audience } : s));
+    const secrets = current.map((s) => (s.id === id ? applyChecklistAudience(s, audience) : s));
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    const entryName = this.document.parent?.name ?? this.document.name;
+    await fileRevealChange({ entry: this.document.parent, target: this.document, kind: "checklist", id, previous: checklistSeed(item), audience, label: revealLabel("checklist", entryName) });
     await sendRevealWhisper({
-      audience, previousAudience: item.audience, groups,
+      audience, previousAudience: checklistSeed(item), groups,
       html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
       entryUuid: this.document.parent?.uuid ?? this.document.uuid,
-      entryName: this.document.parent?.name ?? this.document.name
+      entryName
     });
     this.render();
   }
@@ -536,6 +544,11 @@ export class SessionSheet extends EnhancedJournalSheet {
 
   static async onRemoveAttendee(event, target) {
     const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    // Name comes from the clicked row itself (the sheet's own markup), which
+    // is element-agnostic; fall back to the actor name when it is missing.
+    const name = target.closest("[data-uuid]")?.querySelector?.(".mej-cc-attendee-name")?.textContent?.trim()
+      || fromUuidSync(uuid)?.name || "";
+    if (!(await confirmDelete({ kind: "attendee", name }))) return;
     const session = sessionData(this.document);
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });

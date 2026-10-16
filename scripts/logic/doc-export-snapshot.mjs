@@ -258,3 +258,18 @@ export function buildGroupSnapshot(name, timepoints, selectedRows, buildRecord, 
     records: (selectedRows ?? []).map(buildRecord)
   };
 }
+
+/**
+ * Export scope (spec 2026-10-15 §5.6): "campaign" keeps rows filed in that
+ * campaign; "world" (or no campaign id) keeps everything. Unfiled entries
+ * are NOT part of a campaign export - an export is the campaign's record.
+ */
+export function scopeExportRows(rows, { scope, campaignId, campaignIdOf }) {
+  if (scope !== "campaign" || !campaignId) return [...(rows ?? [])];
+  return (rows ?? []).filter((row) => campaignIdOf(row) === campaignId);
+}
+
+/** Every timepoint of every given timeline, timeline order first, then each timeline's own order. */
+export function campaignTimepoints(timelines, getTimepoints) {
+  return (timelines ?? []).flatMap((t) => getTimepoints(t) ?? []);
+}

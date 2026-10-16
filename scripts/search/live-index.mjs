@@ -16,13 +16,14 @@
 // is the one place that overrides the record's uuid/name to the parent
 // entry's before handing it to indexRecord/removeRecord.
 import { createIndex, indexRecord, removeRecord, search } from "../logic/search-index.mjs";
-import { runQuery } from "../logic/query-grammar.mjs";
+import { runQuery, parseQuery, scopeHits } from "../logic/query-grammar.mjs";
 import { extractRecord, splitHiddenAttributes, bodyText } from "../logic/field-extractors.mjs";
 import { getTags, getAttributes, splitAttributeText } from "../logic/knowledge-flags.mjs";
 import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, backlinksFor, visibleMentionCounts } from "../logic/backlink-index.mjs";
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { campaignIdOf } from "../logic/campaigns.mjs";
+import { scopeBacklinks } from "../logic/link-targets.mjs";
 import { invalidatesSearchIndex } from "../logic/index-invalidation.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
@@ -214,6 +215,12 @@ export function runQueryAll(queryString) {
   return hits.filter((hit) => userCanSee(hit.uuid));
 }
 
+/** runQueryAll, then campaign scope for an enricher rendering inside `pageCampaignId` (null = unfiled page, no filter). */
+export function runQueryScoped(queryString, pageCampaignId) {
+  const parsed = parseQuery(queryString);
+  return scopeHits(runQueryAll(queryString), parsed, pageCampaignId, (uuid) => campaignIdOf(fromUuidSync(uuid)));
+}
+
 /** Can the current user see this entry uuid at all (spec §2's OBSERVER gate)? */
 function userCanSee(uuid) {
   const entry = fromUuidSync(uuid);
@@ -228,8 +235,10 @@ function userCanSee(uuid) {
  */
 export function backlinksForEntry(targetUuid) {
   const idx = ensureIndex();
-  return backlinksFor(backlinks, targetUuid, { gm: game.user.isGM })
-    .filter(({ uuid }) => userCanSee(uuid))
+  const target = fromUuidSync(targetUuid);
+  const rows = backlinksFor(backlinks, targetUuid, { gm: game.user.isGM })
+    .filter(({ uuid }) => userCanSee(uuid));
+  return scopeBacklinks(rows, target ? campaignIdOf(target) : null, (uuid) => campaignIdOf(fromUuidSync(uuid)))
     .map(({ uuid, count, gmOnly }) => {
       const rec = idx.records.get(uuid);
       return { uuid, count, gmOnly, name: rec?.name ?? fromUuidSync(uuid)?.name ?? uuid, type: rec?.type ?? "" };

@@ -12,6 +12,7 @@ import { bodyRegion } from "../logic/field-extractors.mjs";
 import { suppressRevealToggles } from "../logic/secret-reveal-toggles.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { refreshViewsMatching } from "./view-refresh.mjs";
+import { fileRevealChange, revealLabel } from "./reveal-filing.mjs";
 
 const REVEALS_FLAG = "secretReveals";
 
@@ -188,6 +189,7 @@ async function editAudience(entry, page, sectionId, section, sheet, shellHosted)
   if (!audience) return;
   const stored = await applyBlockReveal(page, sectionId, audience, { legacyAll: record?.all === true });
   await page.update({ [`flags.${MODULE_ID}.${REVEALS_FLAG}.${sectionId}`]: stored });
+  await fileRevealChange({ entry, target: page, kind: "block", id: sectionId, previous, audience, label: revealLabel("block", entry.name) });
   // Whisper the section's content (already enriched in the GM's DOM) minus our own button.
   const clone = section.cloneNode(true);
   clone.querySelector(":scope > .mej-cc-secret-audience")?.remove();

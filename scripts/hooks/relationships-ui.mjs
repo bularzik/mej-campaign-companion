@@ -15,6 +15,7 @@ import { normalizeGroups } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { fileRevealChange, revealLabel } from "./reveal-filing.mjs";
 
 const MEJ_FLAGS = "monks-enhanced-journal";
 const REL_FLAG = "relReveals";
@@ -54,6 +55,7 @@ async function editRelAudience(entry, relId, kind, { label, secret }, sheet, she
   const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.${titleKey}`), audience: previous, groups });
   if (!audience) return;
   await entry.update({ [`flags.${MODULE_ID}.${REL_FLAG}.${relId}.${kind}`]: audience });
+  await fileRevealChange({ entry, target: entry, kind: "rel", id: `${relId}-${kind}`, previous, audience, label: revealLabel("rel", entry.name) });
   const esc = foundry.utils.escapeHTML;
   const text = kind === "secret" ? secret : label;
   await sendRevealWhisper({

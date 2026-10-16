@@ -18,6 +18,7 @@ import { trackEditing, shouldKeepBlock } from "../apps/inline-edit.mjs";
 import { pickPartyTarget } from "../apps/party-target-picker.mjs";
 import { imageFor } from "../logic/default-image.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
+import { campaignIdOf } from "../logic/campaigns.mjs";
 
 const FALLBACK_IMG = "icons/svg/book.svg";
 const MARK = "mej-cc-party-injected";
@@ -108,7 +109,8 @@ async function addTarget(sheet, entry, targetUuid, { win = null, label = undefin
     return null;
   }
   const ctx = { sourceUuid: entry.uuid, allowed: [...(sheet.allowedRelationships ?? [])], typeOf: entryType,
-    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true };
+    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true,
+    sourceCampaignId: campaignIdOf(entry), campaignIdOf: (doc) => campaignIdOf(doc) };
   const target = resolve(targetUuid);
   const problem = targetProblem(target instanceof JournalEntry ? target : null, ctx);
   if (problem) {
@@ -145,7 +147,8 @@ function focusLine(win, notebookUuid, key) {
 
 async function openPicker(sheet, entry, win) {
   const ctx = { sourceUuid: entry.uuid, allowed: [...(sheet.allowedRelationships ?? [])], typeOf: entryType,
-    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true };
+    canLimited: (doc) => doc.testUserPermission(game.user, "LIMITED") === true,
+    sourceCampaignId: campaignIdOf(entry), campaignIdOf: (doc) => campaignIdOf(doc) };
   const rows = eligibleTargets(game.journal.contents, ctx).map((r) => ({
     uuid: r.uuid, name: r.name, img: targetInfo(r.uuid)?.img ?? FALLBACK_IMG, typeLabel: typeLabel(r.type)
   }));
