@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recapPreview, sessionRows } from "../scripts/logic/hub-sessions.mjs";
+import { recapPreview, sessionRows, visibleAttendeeNames } from "../scripts/logic/hub-sessions.mjs";
 
 const P = "mej-campaign-companion";
 const page = (uuid, name, session, recap = "") => ({
@@ -17,6 +17,31 @@ describe("recapPreview", () => {
   });
   it("turns @UUID[...]{Label} into Label before cutting", () => {
     expect(recapPreview("Met @UUID[JournalEntry.abc]{the Duke} at dawn")).toBe("Met the Duke at dawn");
+  });
+  it("decodes common entities after stripping tags", () => {
+    expect(recapPreview("<p>Tom &amp; Jerry &lt;3 &quot;cheese&quot; &#39;n&#39; &nbsp;more</p>")).toBe("Tom & Jerry <3 \"cheese\" 'n' more");
+    expect(recapPreview("&lt;b&gt;not a tag&lt;/b&gt;")).toBe("<b>not a tag</b>");
+  });
+  it("treats table, list and section tags as separators", () => {
+    expect(recapPreview("<table><tr><td>one</td><td>two</td></tr></table><ul><li>a</li></ul><hr><pre>x</pre><section>y</section><ol><li>z</li></ol><th>h</th>"))
+      .toBe("one two a x y z h");
+  });
+});
+
+describe("visibleAttendeeNames", () => {
+  const doc = (name, perm) => ({ name, id: name, testUserPermission: () => perm });
+  const base = (resolve, isGM = false) => ({ resolve, isGM, user: {}, users: [], playerName: (a) => (a.name === "Aria" ? "Dana" : "") });
+  it("does not throw on a compendium index entry (no testUserPermission); hides it from players", () => {
+    const entry = { name: "Index Goblin", uuid: "Compendium.x.y" };
+    expect(visibleAttendeeNames(["c"], base(() => entry))).toEqual([]);
+  });
+  it("hides a hidden actor, names a visible one with and without a player", () => {
+    const map = { h: doc("Secret", false), a: doc("Aria", true), b: doc("Bram", true) };
+    expect(visibleAttendeeNames(["h", "a", "b", "gone"], base((u) => map[u] ?? null))).toEqual(["Aria (Dana)", "Bram"]);
+  });
+  it("a GM sees everything, including index entries", () => {
+    const entry = { name: "Index Goblin" };
+    expect(visibleAttendeeNames(["c", "h"], base((u) => (u === "c" ? entry : doc("Secret", false)), true))).toEqual(["Index Goblin", "Secret"]);
   });
 });
 

@@ -231,8 +231,9 @@
                             <label class="mej-cc-graph-backlinks mej-cc-graph-party"><input type="checkbox" data-action-change="toggleGraphPartyRelationships" {{#if graph.includeParty}}checked{{/if}}>
                                 {{localize "MEJCampaignCompanion.graph.partyRelationships"}}</label>
                             {{#if graph.truncated}}<span class="mej-cc-graph-truncated">{{localize "MEJCampaignCompanion.graph.truncated"}}</span>{{/if}}
+                            <span class="mej-cc-graph-hint">{{localize "MEJCampaignCompanion.graph.openEntry"}}</span>
                         </div>
-                        <svg class="mej-cc-graph-svg" data-tooltip="{{localize 'MEJCampaignCompanion.graph.openEntry'}}"></svg>
+                        <svg class="mej-cc-graph-svg"></svg>
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.search.active}} active{{/if}}" data-group="primary" data-tab="search">

@@ -47,7 +47,7 @@ import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
 import { stripSecretSections } from "../logic/secret-blocks.mjs";
-import { sessionRows } from "../logic/hub-sessions.mjs";
+import { sessionRows, visibleAttendeeNames } from "../logic/hub-sessions.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
@@ -398,8 +398,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
     } else {
-      const campaigns = getCampaigns();
-      if (!campaigns.length) {
+      // GM-only campaign names must never reach a player's stack headings.
+      const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
+      if (!getCampaigns().length) {
         // Pre-adoption world: legacy singleton behavior, unchanged.
         const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
         stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
@@ -499,7 +500,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   /** The effective scope id: a single-campaign player is locked to it; players never hold "unfiled" (the option is GM-only). */
   #effectiveScopeId() {
     const id = lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
-    return !game.user.isGM && id === "unfiled" ? "" : id;
+    if (game.user.isGM) return id;
+    if (id === "unfiled") return "";
+    return id && !this.#visibleCampaigns().some((c) => c.id === id) ? "" : id;
   }
 
   /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
@@ -579,7 +582,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     if (selected && !options.some((o) => o.value === selectedId)) {
       const owner = campaignOf(selected);
-      const label = owner ? game.i18n.format(`${I18N}.hub.timeline.otherCampaignLabel`, { name: selected.name, campaign: owner.name }) : selected.name;
+      const ownerVisible = owner && (game.user.isGM || this.#visibleCampaigns().some((c) => c.id === owner.id));
+      const label = ownerVisible ? game.i18n.format(`${I18N}.hub.timeline.otherCampaignLabel`, { name: selected.name, campaign: owner.name }) : selected.name;
       options.push({ value: "__sep2", label: game.i18n.localize(`${I18N}.hub.timeline.otherGroup`), disabled: true, selected: false });
       options.push({ value: selectedId, label, selected: true });
     }
@@ -663,12 +667,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         const recap = p.system?.recap ?? "";
         return game.user.isGM || p.isOwner ? recap : stripSecretSections(recap);
       },
-      attendeeNames: (uuids) => uuids.map((u) => {
-        const actor = fromUuidSync(u, { strict: false });
-        if (!actor || !(game.user.isGM || actor.testUserPermission(game.user, "LIMITED"))) return null;
-        const player = attendeePlayerName(actor, game.users);
-        return player ? `${actor.name} (${player})` : actor.name;
-      }).filter(Boolean)
+      attendeeNames: (uuids) => visibleAttendeeNames(uuids, {
+        resolve: (u) => fromUuidSync(u, { strict: false }),
+        isGM: game.user.isGM, user: game.user, users: game.users, playerName: attendeePlayerName
+      })
     });
     return {
       rows: rows.map((r) => ({ ...r, hasNumber: r.number !== null })),

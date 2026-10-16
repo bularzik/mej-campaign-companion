@@ -7,7 +7,7 @@ const MODULE_ID = "mej-campaign-companion";
 
 // Block-level tags separate words (become a space); every other tag is
 // inline and is removed without a space (Controller ruling 1).
-const BLOCK_TAG = /<\/?(?:p|br|div|li|h[1-6]|tr|blockquote)\b[^>]*>/gi;
+const BLOCK_TAG = /<\/?(?:p|br|div|li|h[1-6]|tr|td|th|ul|ol|hr|pre|section|table|blockquote)\b[^>]*>/gi;
 const ANY_TAG = /<[^>]*>/g;
 
 /** Tag-stripped, whitespace-collapsed first `max` characters of a recap. */
@@ -17,9 +17,32 @@ export function recapPreview(html, max = 140) {
     .replace(BLOCK_TAG, " ")
     .replace(ANY_TAG, "")
     .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/**
+ * Attendee display names a viewer may see. `resolve(uuid)` may return a full
+ * document, a compendium index entry (no testUserPermission) or null; only
+ * full documents the viewer can see at LIMITED (a GM sees all) are named.
+ * @param {string[]} uuids
+ * @param {{resolve:Function,isGM:boolean,user:object,users:Iterable,playerName:Function}} ctx
+ */
+export function visibleAttendeeNames(uuids, { resolve, isGM, user, users, playerName }) {
+  return (uuids ?? []).map((u) => {
+    const actor = resolve(u);
+    if (!actor) return null;
+    const isDoc = typeof actor.testUserPermission === "function";
+    if (!isGM && !(isDoc && actor.testUserPermission(user, "LIMITED"))) return null;
+    const player = isDoc ? playerName(actor, users) : "";
+    return player ? `${actor.name} (${player})` : actor.name;
+  }).filter(Boolean);
 }
 
 function numberOf(session) {
