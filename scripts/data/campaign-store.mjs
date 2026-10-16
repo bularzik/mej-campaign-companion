@@ -1,7 +1,8 @@
 // Foundry glue over logic/campaigns.mjs (spec §1): the seam every other
 // subsystem consumes for campaign scope. Imports Foundry globals, so it
 // is NOT vitest-loadable; keep anything testable in logic/campaigns.mjs.
-import { MODULE_ID, CAMPAIGN_FLAG, AUTO_CAPTURE_CAMPAIGN_SETTING } from "../constants.mjs";
+import { MODULE_ID, CAMPAIGN_FLAG, AUTO_CAPTURE_CAMPAIGN_SETTING, SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
+import { campaignSessionTargetLevel } from "../logic/session-ownership.mjs";
 import {
   isCampaignFolder, campaignOf, campaignFlagOf, isTimelineJournal, isCampaignPortal, isPartyNotebook, isNotesEntry,
   ownershipLevelFor, bulkOwnershipPlan, canConvertFolder, hasPortalMarker, isCampaignTypedPage
@@ -186,6 +187,15 @@ export function baselineOwnership(campaign) {
   return ownershipLevelFor(key, CONST.DOCUMENT_OWNERSHIP_LEVELS);
 }
 
+/** Per-entry baseline target: campaign sessions stay player-owned (see campaignSessionTargetLevel). */
+function sessionAwareLevel(entry, baseline) {
+  const L = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+  return campaignSessionTargetLevel(entry, baseline, {
+    sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE,
+    observerLevel: L.OBSERVER, ownerLevel: L.OWNER
+  });
+}
+
 /**
  * Spec §5 bulk apply: set every member's ownership.default to the baseline.
  * Skips entries currently hidden (NONE) via the eye toggle - a bulk apply
@@ -208,7 +218,7 @@ export async function applyBaselineToMembers(campaign) {
   const level = baselineOwnership(campaign);
   const portal = campaignPortal(campaign);
   const targets = [...campaignEntries(campaign, { user: game.user }), ...(portal ? [portal] : [])];
-  const updates = bulkOwnershipPlan(targets, level, {
+  const updates = bulkOwnershipPlan(targets, (e) => sessionAwareLevel(e, level), {
     skipLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
   });
   if (updates.length) await JournalEntry.updateDocuments(updates);
@@ -220,6 +230,10 @@ export async function setEntryHidden(entry, hidden) {
   if (!game.user.isGM || !entry) return;   // C12, see applyBaselineToMembers
   const level = hidden
     ? CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
-    : baselineOwnership(campaignOf(entry));
+    : (campaignOf(entry)
+      ? sessionAwareLevel(entry, baselineOwnership(campaignOf(entry)))
+      // Unfiled: no campaign baseline to grant from (the legacy
+      // playersWriteSessions setting governs those), so plain OBSERVER.
+      : baselineOwnership(null));
   await entry.update({ "ownership.default": level });
 }

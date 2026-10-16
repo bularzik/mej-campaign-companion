@@ -63,3 +63,22 @@ export function sessionEntriesNeedingOwnership(entries, { sessionType, sessionDo
     return pages.some((p) => p?.type === sessionDocumentType || p?.type === sessionType);
   });
 }
+
+/**
+ * Target default ownership for one campaign member when the campaign
+ * baseline is bulk-applied or the entry is un-hidden. Non-session entries get
+ * the baseline unchanged. A session entry in a campaign whose baseline is
+ * observer or above stays OWNER (the same grant `shouldOwnSessionEntry`
+ * gives at creation), so "Apply to all current members" and the eye toggle
+ * never take back players' recap write access; below observer it is the
+ * baseline (NONE). Accepts a live JournalEntry (pages collection) or plain
+ * creation-shaped data.
+ */
+export function campaignSessionTargetLevel(entry, baseline, { sessionType, sessionDocumentType, observerLevel = 2, ownerLevel = 3 }) {
+  const pages = Array.isArray(entry?.pages) ? entry.pages : (entry?.pages?.contents ?? []);
+  const isSession = shouldOwnSessionEntry({ flags: entry?.flags, pages }, {
+    sessionType, sessionDocumentType, playersWriteSessions: false,
+    campaignBaseline: baseline, observerLevel
+  });
+  return isSession ? ownerLevel : baseline;
+}

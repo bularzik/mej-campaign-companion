@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldOwnSessionEntry, sessionEntriesNeedingOwnership } from "../scripts/logic/session-ownership.mjs";
+import { shouldOwnSessionEntry, sessionEntriesNeedingOwnership, campaignSessionTargetLevel } from "../scripts/logic/session-ownership.mjs";
 import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../scripts/constants.mjs";
 
 // Derived from the same constants the production code (campaign-companion.mjs)
@@ -90,5 +90,28 @@ describe("shouldOwnSessionEntry with a campaign baseline (spec 2026-10-15 item 8
   });
   it("outside a campaign the explicit default is ignored (legacy semantics unchanged)", () => {
     expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: null, playersWriteSessions: true, explicitDefault: 0 }))).toBe(true);
+  });
+});
+
+describe("campaignSessionTargetLevel (bulk apply / un-hide keep the session grant)", () => {
+  const o = { sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, observerLevel: 2, ownerLevel: 3 };
+  const session = { flags: { "monks-enhanced-journal": { pagetype: SESSION_TYPE } }, pages: [] };
+  const livePages = { flags: {}, pages: { contents: [{ type: SESSION_DOCUMENT_TYPE }] } };
+  const person = { flags: { "monks-enhanced-journal": { pagetype: "person" } }, pages: [{ type: "text" }] };
+  it("session in an observer campaign -> OWNER", () => {
+    expect(campaignSessionTargetLevel(session, 2, o)).toBe(3);
+    expect(campaignSessionTargetLevel(livePages, 2, o)).toBe(3);
+  });
+  it("session in a none campaign -> NONE", () => {
+    expect(campaignSessionTargetLevel(session, 0, o)).toBe(0);
+  });
+  it("editor / owner baselines keep OWNER for sessions", () => {
+    expect(campaignSessionTargetLevel(session, 3, o)).toBe(3);
+    expect(campaignSessionTargetLevel(session, 4, o)).toBe(3);
+  });
+  it("non-session entries get the baseline unchanged", () => {
+    expect(campaignSessionTargetLevel(person, 2, o)).toBe(2);
+    expect(campaignSessionTargetLevel(person, 0, o)).toBe(0);
+    expect(campaignSessionTargetLevel(person, 3, o)).toBe(3);
   });
 });

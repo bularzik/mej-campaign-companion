@@ -84,7 +84,7 @@
       },
       "playersWriteSessions": {
         "name": "Players Write Sessions (outside campaigns)",
-        "hint": "Sessions inside a campaign whose Player access is at least \"Players can view\" are already editable by players. Turn this on only to make sessions outside any campaign player-editable too; it also offers ownership of existing sessions.",
+        "hint": "Sessions created inside a campaign whose Player access is at least \"Players can view\" are already editable by players (re-apply the baseline to cover older ones). Turn this on only to make sessions outside any campaign player-editable too; it also offers ownership of existing sessions.",
         "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
         "applied": "Updated ownership on {count} session entries.",
         "applyFailed": "Granting session ownership failed — see the console."

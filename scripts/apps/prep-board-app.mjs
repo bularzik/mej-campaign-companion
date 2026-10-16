@@ -10,6 +10,7 @@ import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal
 import { sessionData } from "../sheets/session-data.mjs";
 import { outboundRefsForEntry, mentionBadgeCounts } from "../search/live-index.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
+import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -121,6 +122,8 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!current.find((s) => s.id === id)) return;
       const secrets = current.map((s) => (s.id === id ? applyChecklistAudience(s, audience) : s));
       await this.page.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+      const entryName = this.page.parent?.name ?? this.page.name;
+      await fileRevealChange({ entry: this.page.parent, target: this.page, kind: "checklist", id, previous: checklistSeed(item), audience, label: revealLabel("checklist", entryName) });
       await sendRevealWhisper({
         audience, previousAudience: checklistSeed(item), groups,
         html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
