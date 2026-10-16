@@ -75,7 +75,7 @@ A **header bar** runs across the top of the Hub, above the pane tabs. Left to ri
 - The **gear** is **Campaign settings**, and it appears only while the picker is scoped to one campaign — it isn't there in **All campaigns** or **Unfiled**.
 - **New session** creates a Session entry, as above.
 - **Tools** opens a small menu with four items: **Import a Word document**, **Export to Word**, **Auto-capture campaign**, and **Open the full user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
-- **Help** is not in the Tools menu: the **Help** (?) button beside the tabs opens a short in-Hub panel, and the link to the full guide moved inside it.
+- **Help** is not in the Tools menu: the **Help** (?) button beside the tabs opens a short in-Hub panel, and the link to the full guide is inside that panel (and the Tools menu still has **Open the full user guide**).
 
 Below the header bar are **seven panes**: **Entries** (the index), **Sessions**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. **Sessions** lists every Session page in scope, newest number first, with its in-world date, attendees and recap preview. A player sees Sessions first and no Secrets tab — it isn't rendered for a non-GM at all. This section covers Entries and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
 
@@ -160,19 +160,21 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 
 ![The Tags and Attributes sections on a Person entry, showing two tag chips and two attribute rows, the second marked player-hidden](images/knowledge-tags-attributes.png)
 
-**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Entries's mention-count badges come from:
+**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Entries pane's mention-count badges come from:
 
 ![The Mentioned in backlinks section, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
 **How mentions and relationships relate.** They are two different things, on purpose. Mentions are *derived*: prose → auto-link → `@UUID` link → this list and the graph's dashed mention edges. Relationships are *curated*: the rows you add on an entry's Relationships tab, with their own labels and per-row hiding, drawn as the graph's solid edges. The module never turns a mention into a relationship or a relationship into a link — a name appearing in a paragraph says nothing about how two entries are related, and only you can.
 
-**The relationship graph.** The graph is the Hub's own **Graph** pane, sitting between Timeline and Search — there is no graph button on any entry sheet's window header in current MEJ v14 builds, so the Graph tab is the route. Three controls sit above the canvas:
+**The relationship graph.** The graph is the Hub's own **Graph** pane, sitting between Timeline and Search — there is no graph button on any entry sheet's window header in current MEJ v14 builds, so the Graph tab is the route. Five controls sit above the canvas:
 
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
-- **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
+- **Focus** centres on one entry and shows only its direct connections. Click a node, or pick an entry from the **Focus on…** list beside it, to choose which entry to centre on; it stays unavailable until one is chosen.
+- **Focus on…**, a picker, lists the entries in scope so you can centre the graph on any of them without hunting for its node.
 - **Show mention links**, a checkbox, layers `@UUID` backlinks on top of the relationship edges. It's off by default.
+- **Show party relationships**, a checkbox, draws the party's own relationships as dotted lines.
 
-Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node opens its entry.
+Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node focuses the graph on it, and double-clicking it (or Ctrl/Cmd-clicking) opens its entry.
 
 The graph is capped at the **200 most-connected** entries, for performance — additional nodes, and the links to them, are left out of the view. When that happens it says so above the canvas: "Too many entries to draw — filter to reduce (showing the most-connected 200)." Scope the Hub to a single campaign to get back under the cap.
 
@@ -354,7 +356,7 @@ Campaign Companion works against a stock Monk's Enhanced Journal install, not ju
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub and Session sheets normally still open inside MEJ's shell, the same as API mode — the companion adapts MEJ's own functions to make that work. If a future MEJ update ever breaks that adaptation, they fall back to their own standalone window instead; a `shell hosting unavailable` warning in the browser console is the tell.
 
-Header buttons are not one of the differences either: Campaign Companion registers an "open graph" button on every entry sheet and a "prep board" button on Session sheets through MEJ's header-button hook in both modes, but some MEJ v14 builds do not render companion header buttons at all. Neither surface depends on them — the graph is a Hub tab and can be focused on any entry from inside it (click a node, or use **Focus on…**), and the prep board opens from the button in the Session tab's Secrets block.
+Header buttons are not one of the differences either: Campaign Companion registers an "open graph" button on every entry sheet and a "prep board" button on Session sheets through MEJ's header-button hook in both modes, but some MEJ v14 builds do not render companion header buttons at all. Neither surface depends on them — the graph is a Hub tab and can be focused on any entry from inside it (click a node to focus on it, or use **Focus on…**; double-click or Ctrl/Cmd-click a node to open its entry), and the prep board opens from the button in the Session tab's Secrets block.
 
 If your world moves between a build with the extension API and a stock build (in either direction), no migration step is needed — a stock MEJ install strips the module's own MEJ type flag from Session pages, and an API-carrying build's GM client silently re-stamps it the next time it loads.
 
