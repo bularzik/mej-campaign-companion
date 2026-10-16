@@ -1,6 +1,6 @@
 // test/player-groups.test.js
 import { describe, it, expect } from "vitest";
-import { normalizeGroups, upsertGroup, deleteGroup, groupsSummary } from "../scripts/logic/player-groups.mjs";
+import { normalizeGroups, upsertGroup, deleteGroup, groupsSummary, mergeGroupTicks } from "../scripts/logic/player-groups.mjs";
 
 describe("normalizeGroups", () => {
   it("drops rows without id or name, coerces members", () => {
@@ -48,4 +48,26 @@ describe("groupsSummary", () => {
     ]);
   });
   it("empty input gives []", () => expect(groupsSummary(undefined, users)).toEqual([]));
+});
+
+describe("mergeGroupTicks", () => {
+  const fresh = [
+    { id: "a", name: "A", checked: true },
+    { id: "b", name: "B", checked: false },
+    { id: "n", name: "New", checked: false }
+  ];
+  it("a rendered group the GM unticked stays unticked even if saved as checked", () => {
+    expect(mergeGroupTicks(fresh, ["a", "b"], []).find((c) => c.id === "a").checked).toBe(false);
+  });
+  it("a rendered group the GM ticked stays ticked even if saved as unchecked", () => {
+    expect(mergeGroupTicks(fresh, ["a", "b"], ["b"]).find((c) => c.id === "b").checked).toBe(true);
+  });
+  it("a new group (not rendered before) uses its saved state", () => {
+    expect(mergeGroupTicks(fresh, ["a", "b"], ["a"]).find((c) => c.id === "n").checked).toBe(false);
+    expect(mergeGroupTicks([{ id: "n", name: "New", checked: true }], [], [])[0].checked).toBe(true);
+  });
+  it("a deleted group is dropped", () => {
+    const out = mergeGroupTicks(fresh.filter((c) => c.id !== "a"), ["a", "b"], ["a", "b"]);
+    expect(out.map((c) => c.id)).toEqual(["b", "n"]);
+  });
 });

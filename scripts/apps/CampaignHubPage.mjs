@@ -40,7 +40,7 @@ import { normalizeAudience } from "../logic/reveal-state.mjs";
 import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
 import { sectionRevealedAll } from "../logic/secret-blocks.mjs";
 import { bodyRegion } from "../logic/field-extractors.mjs";
-import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-groups.mjs";
+import { normalizeGroups, upsertGroup, deleteGroup, mergeGroupTicks } from "../logic/player-groups.mjs";
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
@@ -1403,7 +1403,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           ${choices.users.map((c) => box("contributorUser", c)).join("")}</div>
         <div class="form-group stacked mej-cc-contributor-groups"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsGroups`))}</label>
           ${choices.groups.map((c) => box("contributorGroup", c)).join("") || `<p class="notes">${esc(game.i18n.localize(`${I18N}.secrets.noGroupsYet`))}</p>`}
-          <button type="button" data-action="manageGroups"><i class="fa-solid fa-users-gear"></i> ${esc(game.i18n.localize(`${I18N}.hub.manageGroups`))}</button></div>
+          <button type="button" data-manage-groups><i class="fa-solid fa-users-gear"></i> ${esc(game.i18n.localize(`${I18N}.hub.manageGroups`))}</button></div>
       </fieldset>`;
     const content = `
       <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
@@ -1442,16 +1442,19 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         contributors: readContributors(button.form)
       }) },
       render: (event, dialog) => {
-        dialog.element.querySelector('[data-action="manageGroups"]')?.addEventListener("click", async (ev) => {
+        dialog.element.querySelector("[data-manage-groups]")?.addEventListener("click", async (ev) => {
           ev.preventDefault();
-          await openGroupsManager();
-          // Repaint the group checkboxes from the fresh setting; keep what was ticked.
           const host = dialog.element.querySelector(".mej-cc-contributor-groups");
-          const ticked = new Set([...host.querySelectorAll('input[name="contributorGroup"]:checked')].map((i) => i.value));
-          const fresh = contributorChoices(game.users.contents, game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), campaignFlagOf(campaign)).groups
-            .map((c) => ({ ...c, checked: ticked.has(c.id) || c.checked }));
+          // Snapshot what was rendered and ticked before the manager opens, so an
+          // unticked group is never re-ticked from the saved flag afterwards.
+          const renderedIds = [...host.querySelectorAll('input[name="contributorGroup"]')].map((i) => i.value);
+          await openGroupsManager();
+          const ticked = [...host.querySelectorAll('input[name="contributorGroup"]:checked')].map((i) => i.value);
+          const fresh = mergeGroupTicks(
+            contributorChoices(game.users.contents, game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), campaignFlagOf(campaign)).groups,
+            renderedIds, ticked);
           host.querySelectorAll("label.checkbox, p.notes").forEach((n) => n.remove());
-          const btn = host.querySelector('[data-action="manageGroups"]');
+          const btn = host.querySelector("[data-manage-groups]");
           const html = fresh.map((c) => box("contributorGroup", c)).join("") || `<p class="notes">${esc(game.i18n.localize(`${I18N}.secrets.noGroupsYet`))}</p>`;
           btn.insertAdjacentHTML("beforebegin", html);
         });
