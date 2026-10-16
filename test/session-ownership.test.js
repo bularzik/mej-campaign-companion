@@ -79,4 +79,16 @@ describe("shouldOwnSessionEntry with a campaign baseline (spec 2026-10-15 item 8
   it("a non-session shape is never owned", () => {
     expect(shouldOwnSessionEntry({ pages: [{ type: "text" }] }, o({ campaignBaseline: 3 }))).toBe(false);
   });
+  it("an explicit creation-time default below observer wins inside a campaign (GM-only import)", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 2, explicitDefault: 0 }))).toBe(false);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 3, explicitDefault: 0 }))).toBe(false);
+  });
+  it("an explicit observer-or-above default, or none given, still grants", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 2, explicitDefault: 2 }))).toBe(true);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 2, explicitDefault: undefined }))).toBe(true);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 2, explicitDefault: null }))).toBe(true);
+  });
+  it("outside a campaign the explicit default is ignored (legacy semantics unchanged)", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: null, playersWriteSessions: true, explicitDefault: 0 }))).toBe(true);
+  });
 });

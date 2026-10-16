@@ -31,13 +31,16 @@
  * (campaign-companion.mjs) covers both creation paths without duplicating
  * the ownership-setting logic in the import wizard itself.
  */
-export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions, campaignBaseline = null, observerLevel = 2 }) {
+export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions, campaignBaseline = null, observerLevel = 2, explicitDefault = null }) {
   const inCampaign = campaignBaseline !== null && campaignBaseline !== undefined;
   // Inside a campaign the baseline decides (spec 2026-10-15 item 8): a
   // campaign players can at least view makes its sessions theirs to write;
-  // a GM-only campaign never does, whatever the legacy setting says.
-  // Outside a campaign the legacy world setting keeps deciding.
-  const granted = inCampaign ? campaignBaseline >= observerLevel : playersWriteSessions === true;
+  // a GM-only campaign never does, whatever the legacy setting says. An
+  // explicit creation-time default below observer (the import wizard's
+  // "GM only" audience sends NONE) is the creator's choice and wins.
+  // Outside a campaign the legacy world setting keeps deciding, unchanged.
+  const explicitOk = explicitDefault === null || explicitDefault === undefined || explicitDefault >= observerLevel;
+  const granted = inCampaign ? (campaignBaseline >= observerLevel && explicitOk) : playersWriteSessions === true;
   if (!granted) return false;
   const pagetype = entryData?.flags?.["monks-enhanced-journal"]?.pagetype;
   if (pagetype === sessionType) return true;

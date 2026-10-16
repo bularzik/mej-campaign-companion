@@ -129,7 +129,7 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 
 ### Player collaboration
 
-- Sessions created inside a campaign whose baseline is **Players can view** or **Players can edit** are owned by all players, so they can edit the shared recap directly; `playersWriteSessions` (off by default) now only covers sessions outside any campaign, and turning it on also offers to grant ownership of existing sessions. Closing the recap editor shows "Saving recap…" then "Recap saved." Players without file-upload permission get inline images through a GM relay. See [Player collaboration notes](#player-collaboration-notes).
+- Sessions created inside a campaign whose baseline is **Players can view** or **Players can edit** are owned by all players, so they can edit the shared recap directly (an import marked GM only stays GM-only). In a session players own, secret blocks inside the recap are visible to those players; keep secrets in GM Notes or the session's secret checklist. `playersWriteSessions` (off by default) now only covers sessions outside any campaign, and turning it on also offers to grant ownership of existing sessions. Closing the recap editor shows "Saving recap…" then "Recap saved." Players without file-upload permission get inline images through a GM relay. See [Player collaboration notes](#player-collaboration-notes).
 - Players can reach the Hub (five panes), search without GM-only content, see the relationships revealed to them, and — as campaign Contributors — create entities from a selection. Walkthrough: [Player Guide](docs/player-guide.md).
 
 ### Party relationships

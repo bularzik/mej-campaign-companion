@@ -431,9 +431,9 @@ export class SessionSheet extends EnhancedJournalSheet {
       const plan = recapClosePlan({ live: editor.value, stored: this.document?.system?.recap });
       if (plan === "saving") {
         const uuid = this.document.uuid;
-        ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaving`), { permanent: false });
-        const hookId = Hooks.on("updateJournalEntryPage", (page, changes) => {
-          if (page.uuid !== uuid || changes?.system?.recap === undefined) return;
+        ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaving`));
+        const hookId = Hooks.on("updateJournalEntryPage", (page, changes, options, userId) => {
+          if (page.uuid !== uuid || changes?.system?.recap === undefined || userId !== game.user.id) return;
           Hooks.off("updateJournalEntryPage", hookId);
           ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaved`));
         });

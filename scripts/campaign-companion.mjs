@@ -268,7 +268,8 @@ Hooks.on("preCreateJournalEntry", (entry, data) => {
   const campaignBaseline = campaign ? baselineOwnership(campaign) : null;
   if (!shouldOwnSessionEntry(data, {
     sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions,
-    campaignBaseline, observerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER
+    campaignBaseline, observerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER,
+    explicitDefault: data?.ownership?.default ?? null
   })) return;
   entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
