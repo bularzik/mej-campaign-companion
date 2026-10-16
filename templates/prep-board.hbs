@@ -13,7 +13,6 @@
         <ol>
             {{#each secrets}}
             <li data-id="{{this.id}}" class="{{#if this.revealedAny}}revealed{{/if}}">
-                <a data-action="toggleSecret" data-tooltip="{{localize 'MEJCampaignCompanion.prep.toggleAll'}}"><i class="fa-solid {{#if this.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></a>
                 <span class="mej-cc-prep-secret-text">{{this.text}}</span>
                 <a data-action="revealSecret" data-tooltip="{{localize 'MEJCampaignCompanion.secrets.audienceButton'}}">
                     <i class="fa-solid fa-user-secret"></i>{{#if this.audienceCount}}<span class="mej-cc-audience-count">{{this.audienceCount}}</span>{{/if}}

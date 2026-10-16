@@ -33,6 +33,7 @@ import { tonightContext, streamRows } from "../logic/tonight.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
+import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
@@ -73,7 +74,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       editGmNotes: SessionSheet.onEditGmNotes,
       addSecret: SessionSheet.onAddSecret,
       deleteSecret: SessionSheet.onDeleteSecret,
-      toggleSecret: SessionSheet.onToggleSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
       secretAudience: SessionSheet.onSecretAudience,
       removeAttendee: SessionSheet.onRemoveAttendee,
@@ -180,7 +180,7 @@ export class SessionSheet extends EnhancedJournalSheet {
           // GM badge needs its own audienceAll flag so that case still
           // renders a marker instead of silently showing no badge.
           const a = normalizeAudience(s.audience);
-          return { ...s, audienceAll: a.all, audienceCount: a.users.length + a.groups.length };
+          return { ...s, audienceAll: s.revealed === true || a.all === true, audienceCount: a.users.length + a.groups.length };
         })
       : session.secrets
           .filter((s) => s.revealed || canSee(s.audience, game.user.id, groups))
@@ -474,22 +474,10 @@ export class SessionSheet extends EnhancedJournalSheet {
     this.render();
   }
 
-  static async onToggleSecret(event, target) {
-    if (!game.user.isGM) return;
-    const id = target.closest("[data-id]")?.dataset.id;
-    const session = sessionData(this.document);
-    const secrets = session.secrets.map((s) => {
-      if (s.id !== id) return s;
-      const revealed = !s.revealed;
-      return { ...s, revealed, revealedAt: revealed ? Date.now() : null };
-    });
-    await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
-    this.render();
-  }
-
-  // Per-player/group reveal for one checklist item (spec §4/§8). "Everyone"
-  // remains onToggleSecret's revealed flag; this dialog manages the
-  // audience field. Reveal whispers the item text to new recipients.
+  // The one reveal control for a checklist item (spec §4/§8, 2026-10-15
+  // §5.7). "Everyone" is carried by the item's `revealed` flag, named
+  // players/groups by `audience`; applyChecklistAudience keeps them in step.
+  // Reveal whispers the item text to new recipients.
   static async onSecretAudience(event, target) {
     if (!game.user.isGM) return;
     const id = target.closest("[data-id]")?.dataset.id;
@@ -499,7 +487,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     const audience = await promptAudience({
       title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`),
-      audience: item.audience, groups
+      audience: checklistSeed(item), groups
     });
     if (!audience) return;
     // Re-read fresh data after the dialog closes rather than reusing the
@@ -507,15 +495,15 @@ export class SessionSheet extends EnhancedJournalSheet {
     // mutated secrets while this dialog was open, and writing back the
     // stale array would silently revert that concurrent edit. The item may
     // even have been deleted in the meantime - bail with no write if so.
-    // The whisper still uses the pre-dialog item.audience as
-    // previousAudience: that's the audience the GM actually saw and
-    // compared against in the dialog.
+    // The whisper still uses the pre-dialog seed as previousAudience:
+    // that's the audience the GM actually saw and compared against in the
+    // dialog (an already-everyone item whispers nobody again).
     const current = sessionData(this.document).secrets;
     if (!current.find((s) => s.id === id)) return;
-    const secrets = current.map((s) => (s.id === id ? { ...s, audience } : s));
+    const secrets = current.map((s) => (s.id === id ? applyChecklistAudience(s, audience) : s));
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
     await sendRevealWhisper({
-      audience, previousAudience: item.audience, groups,
+      audience, previousAudience: checklistSeed(item), groups,
       html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
       entryUuid: this.document.parent?.uuid ?? this.document.uuid,
       entryName: this.document.parent?.name ?? this.document.name

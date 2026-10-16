@@ -6,6 +6,7 @@
 import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, isRevealed } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
+import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
 import { outboundRefsForEntry, mentionBadgeCounts } from "../search/live-index.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
@@ -21,7 +22,6 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
     position: { width: 560, height: 640 },
     actions: {
       revealSecret: PrepBoardApp.onRevealSecret,
-      toggleSecret: PrepBoardApp.onToggleSecret,
       openLinked: PrepBoardApp.onOpenLinked
     }
   };
@@ -146,7 +146,7 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const item = session.secrets.find((s) => s.id === id);
       if (!item) return;
       const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
-      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`), audience: item.audience, groups });
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`), audience: checklistSeed(item), groups });
       if (!audience) return;
       // Re-read fresh data after the dialog closes rather than reusing the
       // pre-dialog `session` snapshot: a co-GM or another window (e.g. the
@@ -154,38 +154,21 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
       // mutated secrets while this dialog was open, and writing back the
       // stale array would silently revert that concurrent edit. The item
       // may even have been deleted in the meantime - bail with no write if
-      // so. The whisper still uses the pre-dialog item.audience as
-      // previousAudience: that's the audience the GM actually saw and
-      // compared against in the dialog.
+      // so. The whisper still uses the pre-dialog seed as previousAudience:
+      // that's the audience the GM actually saw and compared against in the
+      // dialog.
       const current = sessionData(this.page).secrets;
       if (!current.find((s) => s.id === id)) return;
-      const secrets = current.map((s) => (s.id === id ? { ...s, audience } : s));
+      const secrets = current.map((s) => (s.id === id ? applyChecklistAudience(s, audience) : s));
       await this.page.update({ [`${FLAG_SESSION}.secrets`]: secrets });
       await sendRevealWhisper({
-        audience, previousAudience: item.audience, groups,
+        audience, previousAudience: checklistSeed(item), groups,
         html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
         entryUuid: this.page.parent.uuid, entryName: this.page.parent.name
       });
       await this.render();
     } catch (err) {
       console.error(`${MODULE_ID} | prep board reveal secret failed`, err);
-    }
-  }
-
-  static async onToggleSecret(event, target) {
-    if (!game.user.isGM) return;
-    try {
-      const id = target.closest("[data-id]")?.dataset.id;
-      const session = sessionData(this.page);
-      const secrets = session.secrets.map((s) => {
-        if (s.id !== id) return s;
-        const revealed = !s.revealed;
-        return { ...s, revealed, revealedAt: revealed ? Date.now() : null };
-      });
-      await this.page.update({ [`${FLAG_SESSION}.secrets`]: secrets });
-      await this.render();
-    } catch (err) {
-      console.error(`${MODULE_ID} | prep board toggle secret failed`, err);
     }
   }
 

@@ -37,6 +37,7 @@ import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
+import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
 import { sectionRevealedAll } from "../logic/secret-blocks.mjs";
 import { bodyRegion } from "../logic/field-extractors.mjs";
 import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-groups.mjs";
@@ -1204,14 +1205,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (!page) return;
       const item = sessionData(page).secrets.find((s) => s.id === secretId);
       if (!item) return;
-      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`), audience: item.audience, groups });
+      const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.checklistRevealTitle`), audience: checklistSeed(item), groups });
       if (!audience) return;
       // Re-read fresh data after the dialog closes (Task 9 pattern) rather
       // than reusing the pre-dialog snapshot - see method doc comment.
       const current = sessionData(page).secrets;
       if (!current.find((s) => s.id === secretId)) return;
-      await page.update({ [`flags.${MODULE_ID}.session.secrets`]: current.map((s) => (s.id === secretId ? { ...s, audience } : s)) });
-      await sendRevealWhisper({ audience, previousAudience: item.audience, groups, html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`, entryUuid, entryName: entry.name });
+      await page.update({ [`flags.${MODULE_ID}.session.secrets`]: current.map((s) => (s.id === secretId ? applyChecklistAudience(s, audience) : s)) });
+      await sendRevealWhisper({ audience, previousAudience: checklistSeed(item), groups, html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`, entryUuid, entryName: entry.name });
     } else if (secretKind === "relationship") {
       const overlay = (entry.getFlag(MODULE_ID, "relReveals") ?? {})[secretId] ?? {};
       const kind = row.dataset.relKind ?? "row";
