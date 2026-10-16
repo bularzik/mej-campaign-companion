@@ -1,6 +1,5 @@
 <div class="mej-cc-import-wizard">
   {{#if isSource}}
-  <p class="hint">{{localize "MEJCampaignCompanion.import.reviewHint"}}</p>
   <fieldset class="mej-cc-import-source">
     <legend>{{localize "MEJCampaignCompanion.import.sourceLocal"}}</legend>
     <p class="hint">{{localize "MEJCampaignCompanion.import.sourceLocalHint"}}</p>
@@ -14,6 +13,7 @@
   {{/if}}
 
   {{#if isReview}}
+  <p class="hint">{{localize "MEJCampaignCompanion.import.reviewHint"}}</p>
   <form class="mej-cc-import-review">
     <div class="form-group mej-cc-import-destination">
       <label>{{localize "MEJCampaignCompanion.import.destination"}}</label>

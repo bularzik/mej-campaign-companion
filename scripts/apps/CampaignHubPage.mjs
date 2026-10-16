@@ -179,7 +179,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       renameTimeline: CampaignHubPage.onRenameTimeline,
       deleteTimeline: CampaignHubPage.onDeleteTimeline,
       addTimepoint: CampaignHubPage.onAddTimepoint,
-      renameTimepoint: CampaignHubPage.onRenameTimepoint,
+      editTimepoint: CampaignHubPage.onEditTimepoint,
       deleteTimepoint: CampaignHubPage.onDeleteTimepoint,
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
@@ -1735,7 +1735,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  static async onRenameTimepoint(event, target) {
+  static async onEditTimepoint(event, target) {
     if (!game.user.isGM) return;
     const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
     const journal = journalId ? game.journal.get(journalId) : null;

@@ -174,7 +174,7 @@ test.describe("02 hub + timeline", () => {
 
     // Rename the first.
     const first = shell.locator("li.mej-cc-timepoint").first();
-    await first.locator('button[data-action="renameTimepoint"]').click();
+    await first.locator('button[data-action="editTimepoint"]').click();
     const renameDialog = page.locator("dialog.application").last();
     await renameDialog.locator('input[name="label"]').fill(`${TT_PREFIX}Point A Renamed`);
     await renameDialog.locator('button[data-action="ok"]').click();
