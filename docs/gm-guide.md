@@ -55,7 +55,7 @@ The Session sheet has four tabs for a GM — **Recap**, **Session**, **Relations
 
 One thing worth knowing before you go looking for it: the Session tab's campaign date and the Hub's **Add timepoint** dialog are **not** the same layout. The Session tab asks for Year / Month / Day / **Hour** / **Minute** as separate fields; the Add timepoint dialog asks for Year / Month / Day and a single free-text **Time** — see [The timeline & campaign dates](#the-timeline--campaign-dates) below.
 
-The Session tab's **Secrets** block tracks secrets tied to this session specifically — separate from the block-level secrets covered under [Secrets](#secrets) below, though both reveal through the same audience machinery. Two icon-only buttons sit under the heading: **Add secret** adds a row, and **Prep board** opens the session prep board. Each secret row then carries an eye-slash, an audience control, and a trash:
+The Session tab's **Secrets** block tracks secrets tied to this session specifically — separate from the block-level secrets covered under [Secrets](#secrets) below, though both reveal through the same audience machinery. Two icon-only buttons sit under the heading: **Add secret** adds a row, and **Prep board** opens the session prep board. Each secret row then carries one audience control and a trash (deleting a secret asks you to confirm). The audience control is the only way to reveal a row: click it and tick **Everyone** at the top of its dialog to reveal to the whole table, or tick individual players or groups. A row revealed to everyone shows ✱ on the control; otherwise it shows the number of players it is revealed to. (The screenshot below predates this and still shows the old eye button.)
 
 ![The Session tab's Secrets block, with the Add secret and Prep board buttons above two secret rows and their hide, audience, and delete controls](images/session-checklist.png)
 
@@ -66,6 +66,8 @@ The Session tab's **Secrets** block tracks secrets tied to this session specific
 3. **End.** **End session** closes the open session and offers a **Recap draft** built from the notes everyone can read. Retracted notes and notes limited to an audience are left out. **Append to recap** writes the draft into the recap for you to edit; **Not now** writes nothing.
 
 Notes are not canon. They never mix into your own recap or GM notes unless you append the draft.
+
+**Reveals are filed for you.** With a session open, revealing a secret, a checklist clue or a relationship files a short note on the current session ("Revealed a secret from <entry>"). The note carries the reveal's audience, so it is soft-hidden from everyone the secret is hidden from, and it holds only the entry's name, never the secret text. Widening or narrowing the audience updates the note's audience; revealing to a second player files nothing new. Un-revealing marks the note **retracted**, which players no longer see and GMs see with a **retracted** badge. **Show Players** on an image files a media note readable by everyone. Nothing is filed when the entry is in no campaign or no session is open.
 
 Notes replicate to every player at a baseline of **Players can view** or above, and out-of-audience notes are hidden only by client-side filtering. See the README's [trust model for notes](../README.md#secrets).
 
@@ -84,7 +86,7 @@ A **header bar** runs across the top of the Hub, above the pane tabs. Left to ri
 - The **campaign picker** scopes every pane. [Campaigns](#campaigns) below covers it in full.
 - The **gear** is **Campaign settings**, and it appears only while the picker is scoped to one campaign — it isn't there in **All campaigns** or **Unfiled**.
 - **New session** creates a Session entry, as above.
-- **Tools** opens a small menu with four items: **Import a Word document**, **Export to Word**, **Auto-capture campaign**, and **Open the full user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
+- **Tools** opens a small menu with four items: **Import a Word document**, **Export to Word** (when the Hub is scoped to one campaign its dialog opens with an **Export** select: **This campaign (name) with its timelines**, the default, which lists only that campaign's entries and its own timelines, or **Whole world**), **Auto-capture campaign**, and **Open the full user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
 - **Help** is not in the Tools menu: the **Help** (?) button beside the tabs opens a short in-Hub panel, and the link to the full guide is inside that panel (and the Tools menu still has **Open the full user guide**).
 
 Below the header bar are **seven panes**: **Entries** (the index), **Sessions**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. **Sessions** lists every Session page in scope, newest number first, with its in-world date, attendees and recap preview. A player sees Sessions first and no Secrets tab — it isn't rendered for a non-GM at all. This section covers Entries and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
@@ -132,7 +134,9 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 **The adoption banner.** If your world already has MEJ-typed content but no campaign, the Entries pane shows a GM-only banner reading "This world has campaign content but no campaign. Create one from it?" with a **Create campaign from this world** button and a ✕ to dismiss it. It stops appearing once a campaign exists.
 
-**Auto-capture target.** **Tools → Auto-capture campaign** picks which campaign [auto-capture](#auto-capture) files things into. Be aware that with **zero** campaigns in the world, this control and both Unfiled filing buttons still render and are still clickable, and clicking any of them does nothing at all — no dialog, no message. Create a campaign first.
+**Auto-capture target.** **Tools → Auto-capture campaign** picks which campaign [auto-capture](#auto-capture) files things into. Be aware that with **zero** campaigns in the world, this control and both Unfiled filing buttons still render and are still clickable, and clicking any of them does nothing at all — no dialog, no message. Create a campaign first. With exactly one campaign in the world, auto-capture files into it with no target set; with several, an unset target makes auto-capture decline and tell you to choose one here.
+
+**The Hub control follows the open entry.** The shell's Campaign Hub control opens on the campaign of the entry you have open, not on whatever scope the Hub last held.
 
 ## The timeline & campaign dates
 
@@ -170,7 +174,7 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 
 ![The Tags and Attributes sections on a Person entry, showing two tag chips and two attribute rows, the second marked player-hidden](images/knowledge-tags-attributes.png)
 
-**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Entries pane's mention-count badges come from:
+**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". The list is scoped like auto-linking: an entry in a campaign shows mentions from that campaign and from unfiled entries, not from other campaigns. This is also where the Entries pane's mention-count badges come from:
 
 ![The Mentioned in backlinks section, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
@@ -208,7 +212,7 @@ Saved dashboards render as a row apiece — the name, the query in monospace, a 
 
 ![The Dashboards pane, showing a saved "Allies" query and its one live result](images/hub-dashboards.png)
 
-The same query syntax works as an `@CampaignQuery[...]` enricher you can drop directly into any MEJ entry's text — type `@CampaignQuery[type:person tag:ally]` and it renders its results inline wherever that text appears, the way it does on "The Gilded Flagon" below:
+The same query syntax works as an `@CampaignQuery[...]` enricher you can drop directly into any MEJ entry's text — type `@CampaignQuery[type:person tag:ally]` and it renders its results inline wherever that text appears, the way it does on "The Gilded Flagon" below. On a page that belongs to a campaign the results stay inside that campaign (plus unfiled entries); add `scope:all` to the inline query to search every campaign. A page in no campaign gets unscoped results.
 
 ![The Gilded Flagon's Description tab, with an inline @CampaignQuery result showing Mira Thornwood](images/campaign-query-inline.png)
 
@@ -243,7 +247,7 @@ Click **Create** and the companion makes a new entry of that type in the same fo
 
 If what you selected is already the name of one of your entities — ignoring capitals and extra spaces — the menu shows **Link to entry** instead of Create entry from selection. Choosing it turns the selection into a link to that entity straight away; if more than one entity has that name, a small picker asks which one you mean. Only entities that auto-link could use there count: ones in the same campaign (or unfiled), visible to every player who can see the page, and not the page you're on. So a GM-only NPC named in a player-visible page still offers Create.
 
-**Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
+**Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. The same Contributors also take notes and add party relationships in the campaign, and the fieldset's hint says so. A **Manage player groups…** button beside the lists opens the group manager, so you can add, edit or delete groups without leaving campaign settings. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
 
 ## Linking a Person to an actor
 
@@ -267,6 +271,8 @@ Two more opt-in settings automate filing things onto the timeline for you, so yo
 
 - **Auto-Capture Encounters** (on by default): when combat starts, this creates an Encounter journal entry from the participants, and when combat ends it adds the outcome. The entry is filed onto the campaign timeline's newest timepoint; if the timeline has none yet, one is created for the current world date.
 - **Auto-Capture Shared Media**: whenever you use Foundry's "Show Players" on an image or video, this files it onto that same newest timepoint automatically.
+
+Each capture confirms with a notification (for example "Encounter "name" recorded on the campaign timeline."), and a world with exactly one campaign needs no target set. With several campaigns and no target, the capture is declined with a notice pointing you to **Tools → Auto-capture campaign**.
 
 Both are independent of each other. Encounters are on by default; shared media is off by default. Which campaign they file into is set from **Tools → Auto-capture campaign** in the Hub's header bar — see [Campaigns](#campaigns). Neither ever blocks the operation it's hooked into — see [Troubleshooting](#troubleshooting) below.
 
@@ -300,9 +306,9 @@ Either way, every player you reveal to gets a private whisper naming the entry t
 
 ![The Hub Secrets tab, with type, state and per-player filter buttons above three unrevealed secrets, and the Player groups block below](images/hub-secrets-tab.png)
 
-**Player groups** live at the bottom of that same tab — named collections of players that act as reveal targets alongside individual players, so you can reveal one secret to "Inner Circle" instead of checking three players individually every time. **Add group** opens a dialog asking for a **Group name** and a **Members** fieldset of checkboxes, one per player; **Save** creates it. Existing groups list with their members and get a pen and a trash. Before you've made any, the block reads "No groups defined yet — manage them on the Hub's Secrets tab."
+**Player groups** live at the bottom of that same tab — named collections of players that act as reveal targets alongside individual players, so you can reveal one secret to "Inner Circle" instead of checking three players individually every time. **Add group** opens a dialog asking for a **Group name** and a **Members** fieldset of checkboxes, one per player; **Save** creates it. Existing groups list with their members and get a pen and a trash. Before you've made any, the block reads "No groups defined yet — add them from Campaign settings or the Hub's Secrets tab." The same groups are also editable from **Manage player groups…** in Campaign settings, and deleting a group asks you to confirm first.
 
-**The session prep board** is a GM-only board for tracking reveal decisions across a session. Open it from the **Prep board** button in the Session tab's Secrets block — that button is the only route, since current MEJ v14 builds don't render any companion button on an entry sheet's window header. The board shows the session's name, its **Attendees**, a numbered **Secrets & clues** list carrying the same hide and audience controls as the checklist, **Linked entries** (or "No linked entries."), and a **Scratch notes** textarea for anything else you want on hand while running the table:
+**The session prep board** is a GM-only board for tracking reveal decisions across a session. Open it from the **Prep board** button in the Session tab's Secrets block — that button is the only route, since current MEJ v14 builds don't render any companion button on an entry sheet's window header. The board shows the session's name, its **Attendees**, a numbered **Secrets & clues** list carrying the same audience control as the checklist (a single control per secret, with **Everyone** inside its dialog), **Linked entries** (or "No linked entries."), and the session's **GM Notes**, shown read-only with an **Edit on the session** link that opens the session sheet where they are edited. The board no longer has a separate scratch-notes box; any scratch notes written there before are folded into GM Notes once, so the session has one GM note field:
 
 ![The session prep board, showing attendees, the numbered secrets and clues list, linked entries, and a scratch-notes box](images/prep-board.png)
 
@@ -326,7 +332,7 @@ The docx import wizard turns a `.docx` (from Word or a Google Docs export) into 
 Export walks the other direction — selected entries and the timeline out into a round-trippable `.docx`:
 
 1. In the Hub's header bar, open **Tools** and click **Export to Word**.
-2. In the **Export to Word** dialog, check the entries you want included (everything is checked by default).
+2. In the **Export to Word** dialog, check the entries you want included (everything in scope is checked by default). When the Hub is scoped to a campaign the **Export** select starts on **This campaign (name) with its timelines**: only that campaign's entries are listed, and only its own timelines are written, never the world timeline. Switch it to **Whole world** to list and export everything.
 3. Leave **Include GM Content** unchecked to produce a document that's safe to hand directly to players — session GM notes and relationships hidden from players are left out. Check it if this export is for your own GM-side backup or reference.
 4. Click **Download**.
 
@@ -342,7 +348,7 @@ Dropping or pasting an image onto the recap is refused with a notice ("Close the
 
 Ownership is Foundry's: an owning player's client receives the whole page, including **GM Notes**, even though the sheet never shows them that tab. Keep anything that must stay hidden in a GM-only entry rather than a player-writable session.
 
-**Party relationships.** A campaign's **Contributors** (the users and player groups ticked in the Hub's Contributors fieldset) can record the party's relationships between entries on any Relationships tab: by dropping an entry onto the list or with **Add relationship**, then labelling it inline (see the Player Guide's "Recording relationships"). They are the party's beliefs, shown beside your MEJ relationships and never overwriting them; players never edit your rows. There is one party relationship per pair of entries, with a label per side, and any Contributor can edit or delete it. Contributors control who can write: add or remove someone there and their write access follows. A campaign baseline of "owner" gives every player ownership of the notebook too, so every player can write party relationships in that campaign; with a "none" baseline, non-Contributors can't read them. You see and can edit every party relationship too. No GM needs to be online for players to save.
+**Party relationships.** A campaign's **Contributors** (the users and player groups ticked in the Hub's Contributors fieldset) can record the party's relationships between entries on any Relationships tab: by dropping an entry onto the list or with **Add relationship**, then labelling it inline (the picker and the drop only accept entries in the same campaign as the one you are on, or unfiled entries, never another campaign's) (see the Player Guide's "Recording relationships"). They are the party's beliefs, shown beside your MEJ relationships and never overwriting them; players never edit your rows. There is one party relationship per pair of entries, with a label per side, and any Contributor can edit or delete it. Contributors control who can write: add or remove someone there and their write access follows. A campaign baseline of "owner" gives every player ownership of the notebook too, so every player can write party relationships in that campaign; with a "none" baseline, non-Contributors can't read them. You see and can edit every party relationship too. No GM needs to be online for players to save.
 
 The rows live in a hidden journal entry in each campaign's folder, named "Party relationships — <campaign>". Your client creates it when you load the world and whenever a campaign gains Contributors, and keeps its ownership in step with the Contributors (they own it; everyone else gets the campaign's baseline). It doesn't appear in the journal sidebar. Don't delete it: that deletes every party relationship in the campaign, and it comes back empty the next time you load the world. Party relationships draw as dotted lines in the Hub graph (**Show party relationships**) and are listed under each entry in Word export. Turn **Players can add party relationships** off in the module settings to freeze them for players; existing ones stay visible.
 
