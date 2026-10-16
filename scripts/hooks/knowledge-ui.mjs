@@ -13,6 +13,17 @@ import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-fl
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
+import { campaignOf } from "../logic/campaigns.mjs";
+import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
+import { linkNoteText } from "./note-links.mjs";
+import { openSessionPage as openCampaignSession } from "./current-session.mjs";
+import { streamRows } from "../logic/tonight.mjs";
+import { historyGroups } from "../logic/history.mjs";
+import { noteAboutPrefix } from "../logic/note-about.mjs";
+import { validNoteText } from "../logic/notes.mjs";
+import { isSessionDoc } from "../logic/mej-type.mjs";
+import { sessionData } from "../sheets/session-data.mjs";
+import { currentWorldComponents } from "../logic/campaign-calendar.mjs";
 
 function asElement(html) {
   if (!html) return null;
@@ -152,13 +163,28 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // OBSERVER access (confirmed live via 07-knowledge.spec.mjs's leak check).
   const attributes = canEdit ? getAttributes(page) : getAttributes(page).filter((a) => !a.playerHidden);
   const tags = getTags(page);
+  // Party notes about this entry, already audience-filtered by listNotes.
+  // Stored note text is escaped plus @UUID shorthand only (linkNoteText), so
+  // the enriched output is safe for {{{ }}}.
+  const campaign = campaignOf(page);
+  const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const enrich = (text) => foundry.applications.ux.TextEditor.implementation.enrichHTML(text, { async: true });
+  const noteRows = campaign ? streamRows(listNotes(campaign, { mentionsUuid: entryUuid }), game.user, { formatTime }).reverse() : [];
+  const partyNotes = {
+    canWrite: !!campaign && !!notesEntryOf(campaign)?.isOwner,
+    rows: await Promise.all(noteRows.map(async (r) => ({ ...r, text: await enrich(r.text) })))
+  };
+  const sessions = campaign ? campaign.contents.filter((e) => isSessionDoc(e)).map((e) => ({
+    uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER
+  })) : [];
+  const history = historyGroups(backlinks, sessions);
   const html = await foundry.applications.handlebars.renderTemplate(
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
     {
-      pageUuid: page.uuid, canEdit, tags, attributes, backlinks,
+      pageUuid: page.uuid, canEdit, tags, attributes, backlinks, partyNotes, history,
       collapsed: game.settings.get(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING),
       summary: knowledgeSummary(
-        { tags: tags.length, attributes: attributes.length, backlinks: backlinks.length },
+        { tags: tags.length, attributes: attributes.length, backlinks: backlinks.length, notes: partyNotes.rows.length },
         (key, data) => game.i18n.format(key, data)
       )
     }
@@ -190,7 +216,47 @@ async function saveAttributes(panel, page) {
   await page.update({ [`flags.${MODULE_ID}.attributes`]: rows });
 }
 
+// "Note about this": a party note prefixed with a link to the entry being
+// viewed. The prefix is built by code (noteAboutPrefix); the user's text goes
+// through linkNoteText like any note. No page text is ever copied in.
+let noteAboutBusy = false;
+
+function bindNoteAbout(panel, page) {
+  panel.querySelector('[data-action="noteAbout"]')?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation(); // the button sits in a <summary>; don't toggle the section
+    if (noteAboutBusy) return;
+    const campaign = campaignOf(page);
+    if (!campaign) return;
+    noteAboutBusy = true;
+    try {
+      const entry = page.parent ?? page;
+      const raw = await foundry.applications.api.DialogV2.prompt({
+        window: { title: game.i18n.format(`${I18N}.notes.aboutTitle`, { name: entry.name }) },
+        content: `<textarea name="text" rows="3" maxlength="2000" style="width:100%" placeholder="${foundry.utils.escapeHTML(game.i18n.localize(`${I18N}.notes.capturePlaceholder`))}"></textarea>`,
+        ok: { label: game.i18n.localize(`${I18N}.notes.capture`), callback: (ev, button) => button.form.elements.text.value },
+        rejectClose: false
+      });
+      const text = validNoteText(raw);
+      if (!text) return;
+      try {
+        await addNote(campaign, {
+          text: `${noteAboutPrefix(entry.uuid, entry.name)} ${linkNoteText(campaign, text)}`,
+          sessionUuid: openCampaignSession(campaign)?.uuid ?? null,
+          worldDate: currentWorldComponents()
+        });
+        ui.notifications.info(game.i18n.localize(`${I18N}.notes.captured`));
+      } catch (err) {
+        ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
+      }
+    } finally {
+      noteAboutBusy = false;
+    }
+  });
+}
+
 function bindPanel(panel, page, sheet, shellHosted) {
+  bindNoteAbout(panel, page);
   if (!game.user.isGM) {
     bindBacklinks(panel);
     return;
@@ -314,6 +380,10 @@ export function registerKnowledgePanel() {
     changes?.text?.content !== undefined || changes?.name !== undefined || changes?.ownership !== undefined;
   Hooks.on("updateJournalEntryPage", (page, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
   Hooks.on("updateJournalEntry", (entry, changes) => { if (relevantChange(changes)) scheduleRefresh(); });
+  // A note added, edited or removed (the notes entry's per-note flag keys).
+  Hooks.on("updateJournalEntry", (entry, changes) => {
+    if (changes?.flags?.[MODULE_ID]?.notes !== undefined) scheduleRefresh();
+  });
   Hooks.on("createJournalEntryPage", () => scheduleRefresh());
   // Pages embedded in JournalEntry.create({pages: [...]}) never fire
   // createJournalEntryPage - and that shape IS every real creation path here

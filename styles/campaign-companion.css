@@ -1636,3 +1636,5 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-note .mej-cc-note-text { flex: 1; }
 .mej-cc-note-edit, .mej-cc-note-delete { opacity: .6; cursor: pointer; }
 .mej-cc-note-edit:hover, .mej-cc-note-delete:hover { opacity: 1; }
+.mej-cc-knowledge-notes summary .mej-cc-note-about { float: right; font-size: .85em; cursor: pointer; }
+.mej-cc-history-session { margin: 6px 0 2px; font-size: .9em; color: var(--mej-cc-ink-muted); }

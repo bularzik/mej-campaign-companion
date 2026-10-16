@@ -19,6 +19,10 @@ describe("knowledgeSummary", () => {
   it("omits zero parts in the middle", () => {
     expect(knowledgeSummary({ tags: 2, attributes: 0, backlinks: 1 }, format)).toBe("tags:2 · mentionsOne:1");
   });
+  it("leads with party notes, using the plural and singular keys", () => {
+    expect(knowledgeSummary({ tags: 0, attributes: 0, backlinks: 0, notes: 2 }, format)).toBe("notes:2");
+    expect(knowledgeSummary({ tags: 1, notes: 1 }, format)).toBe("notesOne:1 · tagsOne:1");
+  });
   it("passes the full i18n key", () => {
     const keys = [];
     knowledgeSummary({ tags: 2 }, (k) => { keys.push(k); return ""; });

@@ -7,6 +7,11 @@
       "badText": "A note needs some text (2000 characters at most).",
       "notFound": "That note no longer exists.",
       "writeFailed": "Couldn't save the note.",
+      "partyNotes": "Party notes",
+      "noPartyNotes": "Nothing noted about this yet.",
+      "about": "Note about this",
+      "aboutTitle": "Note about {name}",
+      "elsewhere": "Elsewhere",
       "tonight": {
         "started": "started {time}",
         "count": "{count} notes",
@@ -333,6 +338,8 @@
     "knowledge": {
       "title": "Knowledge",
       "summary": {
+        "notes": "{count} notes",
+        "notesOne": "1 note",
         "tags": "{count} tags",
         "tagsOne": "1 tag",
         "attributes": "{count} attributes",
