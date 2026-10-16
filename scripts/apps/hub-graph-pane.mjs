@@ -8,6 +8,7 @@ import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { buildGraph } from "../logic/graph-data.mjs";
 import { graphRowsFor } from "../logic/graph-rows.mjs";
 import { imageFor } from "../logic/default-image.mjs";
+import { createClickGate } from "../logic/graph-click.mjs";
 import { graphSignature } from "../logic/graph-signature.mjs";
 import { panViewBox } from "../logic/graph-pan.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
@@ -20,6 +21,10 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 const MEJ_FLAGS = "monks-enhanced-journal";
 const MAX_NODES = 200;
 const NODE_R = 14;
+// The pending deferred focus of the last-drawn pane, if any. Module-level like
+// releaseDrag: a redraw (or Hub close) must cancel it so it cannot fire
+// onFocus -> render against a replaced pane or a closed sheet.
+let pendingGate = null;
 
 let activeSim = null;
 // Cleanup for a drag still in flight, if any (C9). A pointerdown installs
@@ -31,6 +36,11 @@ let releaseDrag = null;
 // itself: a re-render that builds a NEW element gets no entry and therefore
 // always draws, which is exactly right.
 const drawnSignature = new WeakMap();
+
+/** Drop a deferred node-click focus (Hub close / teardown). */
+export function cancelPendingFocus() {
+  pendingGate?.cancel();
+}
 
 /** Compute the scoped graph + the template context for the pane. */
 export function prepareGraphContext(entries, state) {
@@ -65,6 +75,9 @@ export function prepareGraphContext(entries, state) {
   });
   return {
     graph,
+    // Every entry the viewer may see in scope (same permission-filtered rows),
+    // uncapped and not narrowed to the ego neighbourhood: feeds the Focus picker.
+    pickerNodes: rows.map(({ uuid, name, type }) => ({ uuid, name, type })),
     context: {
       isEgo: state.graphMode === "ego",
       centerUuid: state.graphCenterUuid,
@@ -83,7 +96,7 @@ function typeHue(type) {
 }
 
 /** Draw the graph into `svg` (replacing its contents), wiring drag/zoom/click. */
-export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
+export function drawGraphPane(svg, graph, { centerUuid, onOpen, onFocus = null }) {
   if (!svg) return;
   const width = svg.clientWidth || 800;
   const height = svg.clientHeight || 540;
@@ -99,6 +112,7 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   // A drag in flight belongs to the graph we are about to discard: end it
   // before its node elements are detached (C9).
   releaseDrag?.();
+  pendingGate?.cancel();
   svg.replaceChildren();
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
@@ -106,6 +120,8 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
   // a time, so this is shared across every node's click handler and drag
   // binding (see the click handler and bindDrag below).
   let dragged = false;
+  // Click/double-click arbitration (see logic/graph-click.mjs).
+  const gate = pendingGate = createClickGate({ onFocus, onOpen });
 
   // THIS draw's simulation, not the module-global one (C9). The handlers below
   // are installed before the simulation exists (bindDrag runs while building
@@ -130,6 +146,7 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
       const move = (event) => {
         if (!sim.current) return;
         dragged = true;
+        gate.cancel();
         const p = toSvg(event);
         node.fx = p.x;
         node.fy = p.y;
@@ -214,9 +231,18 @@ export function drawGraphPane(svg, graph, { centerUuid, onOpen }) {
       g.append(clip, image);
     }
     g.append(label);
-    g.addEventListener("click", () => {
-      if (dragged) return;
-      onOpen(node.uuid);
+    // Plain click focuses on the node (spec 2026-10-15 item 12); double-click
+    // or Ctrl/Cmd-click opens the entry, which was the only click action before.
+    // Focusing re-renders the pane and replaces this SVG, which would swallow
+    // the dblclick that follows two clicks. So the focus is deferred briefly and
+    // cancelled by the second click of a double-click, a drag, or a redraw.
+    g.addEventListener("click", (event) => {
+      if (dragged) { gate.cancel(); return; }
+      gate.click(node.uuid, { detail: event.detail, modifier: event.ctrlKey || event.metaKey });
+    });
+    g.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      if (dragged) gate.cancel(); else gate.dblclick(node.uuid);
     });
     bindDrag(g, node);
     svg.append(g);

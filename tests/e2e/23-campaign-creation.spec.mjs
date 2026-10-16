@@ -125,7 +125,7 @@ test.describe("23 campaign creation", () => {
     await showSidebar(page);
     const button = page.locator("#journal .directory-header button.mej-cc-create-campaign");
     await expect(button).toHaveCount(1);
-    await expect(button).toContainText("New Campaign");
+    await expect(button).toContainText("New campaign");
     const n = name("Sidebar");
     await button.click();
     await confirmNewCampaign(page, n, "owner");

@@ -32,7 +32,7 @@ const names = (tag) => ({
 });
 let N = names(`${RUN}t0`);
 let testSeq = 0;
-const MENU_LABEL = "Create Entity from Selection";
+const MENU_LABEL = "Create entry from selection";
 
 async function setSettings(page, { autoLink, retroLinkMode }) {
   await page.evaluate(async ({ autoLink, retroLinkMode, MOD }) => {

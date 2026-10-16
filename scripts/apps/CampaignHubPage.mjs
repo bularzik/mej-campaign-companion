@@ -15,7 +15,7 @@
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { renderAwaitable } from "../sheets/awaitable-render.mjs";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, SESSION_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls, contributorChoices, readContributors } from "../logic/campaigns.mjs";
@@ -23,12 +23,14 @@ import { orderTimelines, partitionTimelines } from "../logic/timelines.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { classifyDropData, filenameFromSrc } from "../logic/timeline-links.mjs";
+import { stripUuidLinks } from "../logic/snippet-text.mjs";
 import { getCalendarMonths, calendarBounds, hasCalendar, formatCampaignDate, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { parseCampaignDateInput, formatCreateDate } from "../logic/campaign-date.mjs";
 import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
@@ -44,6 +46,9 @@ import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
+import { stripSecretSections } from "../logic/secret-blocks.mjs";
+import { sessionRows, visibleAttendeeNames } from "../logic/hub-sessions.mjs";
+import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
@@ -55,6 +60,7 @@ import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 // openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
 import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
 import { validNoteText } from "../logic/notes.mjs";
+import { focusTransition, focusPickerRows } from "../logic/graph-focus.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -76,6 +82,7 @@ const HUB_STATE = {
   typeMenuOpen: false,
   sortMenuOpen: false,
   toolsMenuOpen: false,
+  helpOpen: false,
   timelineOrder: "manual",
   timelineShowNotes: true,
   restoreIndexFilterFocus: false,
@@ -171,6 +178,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     },
     actions: {
       openIndexRow: CampaignHubPage.onOpenIndexRow,
+      openSessionRow: CampaignHubPage.onOpenSessionRow,
       toggleTypeMenu: CampaignHubPage.onToggleTypeMenu,
       toggleSortMenu: CampaignHubPage.onToggleSortMenu,
       toggleToolsMenu: CampaignHubPage.onToggleToolsMenu,
@@ -179,7 +187,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       renameTimeline: CampaignHubPage.onRenameTimeline,
       deleteTimeline: CampaignHubPage.onDeleteTimeline,
       addTimepoint: CampaignHubPage.onAddTimepoint,
-      renameTimepoint: CampaignHubPage.onRenameTimepoint,
+      editTimepoint: CampaignHubPage.onEditTimepoint,
       deleteTimepoint: CampaignHubPage.onDeleteTimepoint,
       openLink: CampaignHubPage.onOpenLink,
       removeLink: CampaignHubPage.onRemoveLink,
@@ -188,7 +196,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       openImportWizard: CampaignHubPage.onOpenImportWizard,
       openExportDialog: CampaignHubPage.onOpenExportDialog,
       setGraphMode: CampaignHubPage.onSetGraphMode,
+      focusOnEntry: CampaignHubPage.onFocusOnEntry,
       openHelp: CampaignHubPage.onOpenHelp,
+      toggleHelp: CampaignHubPage.onToggleHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
       deleteDashboard: CampaignHubPage.onDeleteDashboard,
@@ -222,7 +232,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       root: true,
       template: `modules/${MODULE_ID}/templates/hub.hbs`,
       templates: ["templates/generic/tab-navigation.hbs"],
-      scrollable: [".mej-cc-index-list", ".mej-cc-timeline-list", ".mej-cc-search-list", ".mej-cc-dashboards-list", ".mej-cc-secrets-list"]
+      scrollable: [".mej-cc-index-list", ".mej-cc-sessions-list", ".mej-cc-timeline-list", ".mej-cc-search-list", ".mej-cc-dashboards-list", ".mej-cc-secrets-list"]
     }
   };
 
@@ -230,6 +240,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     primary: {
       tabs: [
         { id: "index", icon: "fa-solid fa-list" },
+        { id: "sessions", icon: "fa-solid fa-dice-d20" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
         { id: "graph", icon: "fa-solid fa-circle-nodes" },
         { id: "search", icon: "fa-solid fa-magnifying-glass" },
@@ -321,8 +332,24 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.state.pendingTab = null;
     }
     const tabs = super._prepareTabs(group);
-    if (group === "primary" && !game.user.isGM) delete tabs.secrets;
-    return tabs;
+    if (group !== "primary") return tabs;
+    const isGM = game.user.isGM;
+    if (!isGM) delete tabs.secrets;
+    // Player order: Sessions, Entries, Timeline, Graph, Search, and
+    // Dashboards only when one is visible to them (spec 2026-10-15 5.1).
+    // super returns an object keyed by id; rebuild it in the seat's order.
+    const hasVisibleDashboard = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).some((q) => q.showPlayers === true);
+    const ordered = playerTabOrder(Object.values(tabs), { isGM, hasVisibleDashboard });
+    const out = {};
+    for (const t of ordered) if (tabs[t.id]) out[t.id] = tabs[t.id];
+    // A player whose stored active tab was dropped lands on their first tab.
+    if (!out[this.tabGroups.primary]) {
+      const first = Object.keys(out)[0];
+      this.tabGroups.primary = first;
+      for (const t of Object.values(out)) t.active = t.id === first;
+      if (out[first]) out[first].cssClass = "active";
+    }
+    return out;
   }
 
   async _prepareBodyContext(context, options) {
@@ -382,8 +409,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM, campaign) }];
     } else {
-      const campaigns = getCampaigns();
-      if (!campaigns.length) {
+      // GM-only campaign names must never reach a player's stack headings.
+      const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
+      if (!getCampaigns().length) {
         // Pre-adoption world: legacy singleton behavior, unchanged.
         const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
         stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
@@ -432,14 +460,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       }
     }
     const scopeContext = this.#campaignScopeContext();
-    context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
+    context.header = {
+      mode: scopeContext.mode, title: scopeContext.title,
+      scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope,
+      toolsMenuOpen: this.state.toolsMenuOpen, helpOpen: this.state.helpOpen === true
+    };
     context.campaignControls = scopeContext.campaignControls;
     context.tonight = await this.#tonightContext(campaign);
     context.index = this.#indexContext();
+    context.sessions = this.#sessionsContext();
     context.timeline = { stacks, canAdd: isGM && !stacks.length && !unfiled, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
     this.#graphData = graphPrep.graph;
     context.graph = graphPrep.context;
+    // Every entry the viewer may see in scope (same permission-filtered rows
+    // as the graph, but uncapped and not narrowed to the ego neighbourhood).
+    context.graph.focusRows = focusPickerRows(graphPrep.pickerNodes,this.state.graphCenterUuid);
     context.search = this.#searchContext();
     context.dashboards = this.#dashboardsContext(isGM);
     // Secrets tracker (spec §7): GM-only pane. The tab header itself is
@@ -470,12 +506,30 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 
+  /** Campaigns this user can see (a GM sees all). A player counts a campaign only if they can see an entry or its portal. */
+  #visibleCampaigns() {
+    return getCampaigns().filter((c) => game.user.isGM || campaignEntries(c, { user: game.user }).length > 0 || (campaignPortal(c) && isVisibleToUser(campaignPortal(c), game.user)));
+  }
+
+  /** Header mode for this seat (title or picker). */
+  #headerMode() {
+    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), { isGM: game.user.isGM });
+  }
+
+  /** The effective scope id: a single-campaign player is locked to it; players never hold "unfiled" (the option is GM-only). */
+  #effectiveScopeId() {
+    const id = lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
+    if (game.user.isGM) return id;
+    if (id === "unfiled") return "";
+    return id && !this.#visibleCampaigns().some((c) => c.id === id) ? "" : id;
+  }
+
   /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
   #scope() {
     if (this.state.campaignId === null) {
       this.state.campaignId = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
     }
-    const id = this.state.campaignId;
+    const id = this.#effectiveScopeId();
     if (id === "unfiled") return { campaign: null, unfiled: true };
     const folder = id ? game.folders.get(id) : null;
     if (id && (!folder || !isCampaignFolder(folder))) {
@@ -575,7 +629,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
     if (selected && !options.some((o) => o.value === selectedId)) {
       const owner = campaignOf(selected);
-      const label = owner ? game.i18n.format(`${I18N}.hub.timeline.otherCampaignLabel`, { name: selected.name, campaign: owner.name }) : selected.name;
+      const ownerVisible = owner && (game.user.isGM || this.#visibleCampaigns().some((c) => c.id === owner.id));
+      const label = ownerVisible ? game.i18n.format(`${I18N}.hub.timeline.otherCampaignLabel`, { name: selected.name, campaign: owner.name }) : selected.name;
       options.push({ value: "__sep2", label: game.i18n.localize(`${I18N}.hub.timeline.otherGroup`), disabled: true, selected: false });
       options.push({ value: selectedId, label, selected: true });
     }
@@ -621,18 +676,53 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   #campaignScopeContext() {
     const campaigns = getCampaigns();
-    const current = this.state.campaignId ?? "";
-    const options = [
-      { value: "", label: game.i18n.localize(`${I18N}.hub.scope.all`), selected: current === "" },
-      ...campaigns.map((c) => ({ value: c.id, label: c.name, selected: current === c.id }))
-    ];
-    if (unfiledEntries({ user: game.user }).length) {
-      options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
-    }
-    if (game.user.isGM) {
-      options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
-    }
-    return { campaignControls: campaignControls(campaigns), options, isCampaignScope: !!current && current !== "unfiled" };
+    const headerMode = this.#headerMode();
+    const current = this.#effectiveScopeId();
+    const options = scopeOptionsForUser(
+      this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })),
+      current,
+      {
+        isGM: game.user.isGM,
+        hasUnfiled: unfiledEntries({ user: game.user }).length > 0,
+        labels: {
+          all: game.i18n.localize(`${I18N}.hub.scope.all`),
+          unfiled: game.i18n.localize(`${I18N}.hub.scope.unfiled`),
+          newCampaign: game.i18n.localize(`${I18N}.hub.scope.newCampaign`)
+        }
+      }
+    );
+    return {
+      campaignControls: campaignControls(campaigns),
+      options,
+      mode: headerMode.mode,
+      title: headerMode.title,
+      isCampaignScope: !!current && current !== "unfiled"
+    };
+  }
+
+  /** Sessions tab (spec 2026-10-15 §5.1): every Session page in scope the viewer may observe, newest number first. */
+  #sessionsContext() {
+    const isSession = (p) => p.type === SESSION_DOCUMENT_TYPE || p._source?.type === SESSION_DOCUMENT_TYPE;
+    const canSee = (p) => game.user.isGM || p.testUserPermission(game.user, "OBSERVER");
+    const pages = this.#scopedEntries().flatMap((entry) =>
+      entry.pages.contents.filter((p) => isSession(p) && canSee(p))
+    );
+    const rows = sessionRows(pages, {
+      formatDate: (d) => formatCampaignDate(d),
+      // Unrevealed secrets stay out of the preview unless the viewer sees them on the sheet (GM / owner).
+      recapText: (p) => {
+        const recap = p.system?.recap ?? "";
+        return game.user.isGM || p.isOwner ? recap : stripSecretSections(recap);
+      },
+      attendeeNames: (uuids) => visibleAttendeeNames(uuids, {
+        resolve: (u) => fromUuidSync(u, { strict: false }),
+        isGM: game.user.isGM, user: game.user, users: game.users, playerName: attendeePlayerName
+      })
+    });
+    return {
+      rows: rows.map((r) => ({ ...r, hasNumber: r.number !== null })),
+      empty: game.i18n.localize(game.user.isGM ? `${I18N}.hub.sessions.emptyGm` : `${I18N}.hub.sessions.emptyPlayer`)
+    };
   }
 
   #indexContext() {
@@ -676,20 +766,29 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // (testUserPermission LIMITED on the resolved entry) - this just shapes
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
-    const scopeId = this.state.campaignId || null;
+    const scopeId = this.#effectiveScopeId() || null;
     const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
     const results = hits.map((hit) => ({
       uuid: hit.uuid,
       name: hit.name,
       icon: this.#typeIcon(hit.type),
       typeLabel: this.#typeLabel(hit.type),
-      matches: hit.matches.map((m) => ({ fieldLabel: this.#fieldLabel(m.field), snippet: m.snippet }))
+      matches: hit.matches.map((m) => ({
+        fieldLabel: this.#fieldLabel(m.field),
+        snippet: stripUuidLinks(m.snippet, {
+          // Name only for entries the viewer may see; a hidden target falls back to the id tail.
+          nameOf: (uuid) => {
+            const doc = fromUuidSync(uuid, { strict: false });
+            return doc && (game.user.isGM || doc.testUserPermission?.(game.user, "LIMITED")) ? doc.name : null;
+          }
+        })
+      }))
     }));
     return {
       query: this.state.searchQuery,
       hasQuery: this.state.searchQuery.trim().length > 0,
       results,
-      spillover
+      spillover: this.#headerMode().mode === "picker" ? spillover : 0
     };
   }
 
@@ -771,7 +870,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // whole Hub render (spec §6).
   /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
   #scopeFilterRows(rows) {
-    const id = this.state.campaignId;
+    const id = this.#effectiveScopeId();
     if (!id) return rows;
     return rows.filter((r) => {
       const entry = fromUuidSync(r.uuid);
@@ -1538,11 +1637,26 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     window.open(guideUrl(game.user.isGM), "_blank", "noopener");
   }
 
+  // In-Hub help panel toggle (visible on every tab, every seat).
+  static onToggleHelp() {
+    this.state.helpOpen = !this.state.helpOpen;
+    this.state.toolsMenuOpen = false;
+    this.render({ parts: ["main"] });
+  }
+
   static onOpenIndexRow(event, target) {
     const uuid = target.closest("[data-uuid]")?.dataset.uuid;
     if (!uuid) return;
     fromUuid(uuid).then((entry) => {
       if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
+    });
+  }
+
+  static onOpenSessionRow(event, target) {
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    if (!uuid) return;
+    fromUuid(uuid).then((page) => {
+      if (page) openSessionPage(page);
     });
   }
 
@@ -1623,6 +1737,23 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!["ego", "all"].includes(mode)) return;
     this.state.graphMode = mode;
     this.render({ parts: ["main"] });
+  }
+
+  /** Focus the graph on `uuid` from inside the pane (node click or picker). */
+  static focusOn(uuid) {
+    // A deferred node-click focus can land after the Hub closed; the shell page
+    // has no close hook, so bail on an explicitly un-rendered window.
+    if (this.rendered === false) return;
+    const next = focusTransition(this.state, uuid);
+    if (!next.changed) return;
+    this.state.graphMode = next.graphMode;
+    this.state.graphCenterUuid = next.graphCenterUuid;
+    this.render({ parts: ["main"] });
+  }
+
+  static onFocusOnEntry(event, target) {
+    const uuid = target.value ?? target.closest("[data-uuid]")?.dataset.uuid;
+    if (uuid) CampaignHubPage.focusOn.call(this, uuid);
   }
 
   // Timepoint label + optional campaign-date prompt. Mirrors campaign-record's
@@ -1706,7 +1837,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  static async onRenameTimepoint(event, target) {
+  static async onEditTimepoint(event, target) {
     if (!game.user.isGM) return;
     const journalId = target.closest("[data-journal-id]")?.dataset.journalId;
     const journal = journalId ? game.journal.get(journalId) : null;
@@ -1919,6 +2050,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       });
     }
 
+    const focusSelect = html.querySelector('select[name="graph-focus"]');
+    if (focusSelect && !focusSelect.dataset.ccBound) {
+      focusSelect.dataset.ccBound = "1";
+      focusSelect.addEventListener("change", (event) => CampaignHubPage.focusOn.call(this, event.target.value));
+    }
+
     const tlSelect = html.querySelector('select[name="timeline-select"]');
     if (tlSelect && !tlSelect.dataset.ccBound) {
       tlSelect.dataset.ccBound = "1";
@@ -2051,7 +2188,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         onOpen: async (uuid) => {
           const entry = await fromUuid(uuid);
           if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
-        }
+        },
+        onFocus: (uuid) => CampaignHubPage.focusOn.call(this, uuid)
       });
     };
     if (this.tabGroups?.primary === "graph") drawGraph();

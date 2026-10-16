@@ -20,8 +20,8 @@ const N = {
   vex: `${PREFIX}Vex${RUN}`, twin: `${PREFIX}Twin${RUN}`, none: `${PREFIX}None${RUN}`,
   new: `${PREFIX}New${RUN}`
 };
-const CREATE = "Create Entity from Selection";
-const LINK = "Link to Entity";
+const CREATE = "Create entry from selection";
+const LINK = "Link to entry";
 const item = (page, label) => page.locator("#context-menu li", { hasText: label });
 const picker = (page) => page.locator("dialog.application", { hasText: LINK });
 const journalCount = (page) => page.evaluate(() => game.journal.size);
