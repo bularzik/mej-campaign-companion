@@ -36,6 +36,7 @@ import { validNoteText } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
 import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
+import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
@@ -519,6 +520,8 @@ export class SessionSheet extends EnhancedJournalSheet {
     if (!current.find((s) => s.id === id)) return;
     const secrets = current.map((s) => (s.id === id ? applyChecklistAudience(s, audience) : s));
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
+    const entryName = this.document.parent?.name ?? this.document.name;
+    await fileRevealChange({ entry: this.document.parent, target: this.document, kind: "checklist", id, previous: checklistSeed(item), audience, label: revealLabel("checklist", entryName) });
     await sendRevealWhisper({
       audience, previousAudience: checklistSeed(item), groups,
       html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,

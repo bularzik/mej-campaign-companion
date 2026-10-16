@@ -55,6 +55,7 @@ import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
+import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
 import { tonightContext } from "../logic/tonight.mjs";
 import { currentSession } from "../logic/current-session.mjs";
@@ -1196,6 +1197,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       if (!audience) return;
       const stored = await applyBlockReveal(page, secretId, audience, { legacyAll: record?.all === true });
       await page.update({ [`flags.${MODULE_ID}.secretReveals.${secretId}`]: stored });
+      await fileRevealChange({ entry, target: page, kind: "block", id: secretId, previous, audience, label: revealLabel("block", entry.name) });
       // Whisper the secret's actual content, not the 140-char index preview
       // (M5) - chat enrichment happens at render time, so the raw inner
       // HTML pulled straight off the page's body is fine unenriched. Falls
@@ -1216,6 +1218,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const current = sessionData(page).secrets;
       if (!current.find((s) => s.id === secretId)) return;
       await page.update({ [`flags.${MODULE_ID}.session.secrets`]: current.map((s) => (s.id === secretId ? applyChecklistAudience(s, audience) : s)) });
+      await fileRevealChange({ entry, target: page, kind: "checklist", id: secretId, previous: checklistSeed(item), audience, label: revealLabel("checklist", entry.name) });
       await sendRevealWhisper({ audience, previousAudience: checklistSeed(item), groups, html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`, entryUuid, entryName: entry.name });
     } else if (secretKind === "relationship") {
       const overlay = (entry.getFlag(MODULE_ID, "relReveals") ?? {})[secretId] ?? {};
@@ -1224,6 +1227,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const audience = await promptAudience({ title: game.i18n.localize(`${I18N}.secrets.relRevealTitle`), audience: previous, groups });
       if (!audience) return;
       await entry.update({ [`flags.${MODULE_ID}.relReveals.${secretId}.${kind}`]: audience });
+      await fileRevealChange({ entry, target: entry, kind: "rel", id: `${secretId}-${kind}`, previous, audience, label: revealLabel("rel", entry.name) });
       await sendRevealWhisper({ audience, previousAudience: previous, groups, html: `<p>${foundry.utils.escapeHTML(row.dataset.preview ?? entry.name)}</p>`, entryUuid, entryName: entry.name });
     }
     this.render({ parts: ["main"] });

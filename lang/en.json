@@ -27,6 +27,7 @@
       "streamTitle": "Notes",
       "none": "No notes yet. Type one above, or use /note in chat.",
       "edited": "edited",
+      "retracted": "Retracted",
       "edit": "Edit note",
       "delete": "Delete note",
       "deleteConfirm": "Delete this note? This cannot be undone.",
@@ -36,6 +37,12 @@
         "ambiguous": "More than one campaign could take that note. Open the one you mean and use its capture box.",
         "none": "You aren't in a campaign that takes notes yet."
       }
+    },
+    "revealNote": {
+      "block": "Revealed a secret from {name}",
+      "checklist": "Revealed a session secret from {name}",
+      "relationship": "Revealed a relationship on {name}",
+      "media": "Showed \"{name}\" to the players"
     },
     "party": {
       "notebookName": "Party relationships — {campaign}",

@@ -66,7 +66,7 @@
                             <ol class="mej-cc-notes-list">
                                 {{#each notesStream.rows}}
                                 <li class="mej-cc-note" data-note-id="{{this.id}}">
-                                    <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.edited}} · {{localize 'MEJCampaignCompanion.notes.edited'}}{{/if}}</span>
+                                    <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.edited}} · {{localize 'MEJCampaignCompanion.notes.edited'}}{{/if}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span>
                                     <span class="mej-cc-note-text">{{{this.text}}}</span>
                                     {{#if this.canEdit}}
                                     <a class="mej-cc-note-edit" data-action="editNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.edit'}}"><i class="fa-solid fa-pen"></i></a>

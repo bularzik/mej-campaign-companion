@@ -140,6 +140,11 @@ export function noteAudienceUpdate(id, audience) {
   return { [path(id, "audience")]: normalizeAudienceOrNull(audience) };
 }
 
+/** Badges a note row shows. "Retracted" is GM-only: players never receive retracted notes (visibleNotes). */
+export function noteBadges(note, isGM) {
+  return { retracted: isGM === true && typeof note?.retracted === "number" };
+}
+
 export function canEditNote(note, user) {
   return !!user && (user.isGM === true || note?.authorId === user.id);
 }

@@ -18,7 +18,7 @@ describe("tonightContext", () => {
     const ctx = tonightContext({ ...base, notes, session: { uuid: S, name: "Session 3", startedAt: 1 } });
     expect(ctx).toMatchObject({ campaignName: "Vale", open: true, sessionName: "Session 3", sessionUuid: S, startedLabel: "T1", noteCount: 4, heldCount: 1, canCapture: true, canStart: false, canEnd: false });
     expect(ctx.recent.map((n) => n.id)).toEqual(["d", "c", "b"]);
-    expect(ctx.recent[0]).toEqual({ id: "d", authorName: "Jo", timeLabel: "T4", text: "d" });
+    expect(ctx.recent[0]).toEqual({ id: "d", authorName: "Jo", timeLabel: "T4", text: "d", retracted: false });
   });
   it("no session: GM can start; held count shows; capture allowed when writable", () => {
     const ctx = tonightContext({ ...base, user: { isGM: true, id: "gm" }, notes, session: null });

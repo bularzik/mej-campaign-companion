@@ -55,6 +55,7 @@ import {
   buildEncounterActorRows, rowsFromEncounterActors, rekeyByBaseActor, describeUnlinkedParticipants, buildEncounterName,
   wrapOutcomeHtml, mergeOutcomeHtml
 } from "../logic/encounter-capture.mjs";
+import { fileMediaNote } from "./reveal-filing.mjs";
 
 /** Live combatants as raw {actorUuid, name} entries. */
 function combatParticipants(combat) {
@@ -244,10 +245,13 @@ async function captureCombatEnd(combat) {
 
 /**
  * File a GM-shared image/video onto the timeline's newest timepoint
- * (Show Players capture).
+ * (Show Players capture), and a note on the capture campaign's open session.
  */
 function captureSharedImage(src, caption) {
   if (!src) return;
+  // Showing players something files a note on the open session whether or
+  // not media capture onto the timeline is on (spec 2026-10-15 §9).
+  fileMediaNote({ campaign: captureTarget().campaign, src, name: caption || mediaDisplayName(src) });
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
   queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" })).then((filed) => {
     if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || mediaDisplayName(src) }));

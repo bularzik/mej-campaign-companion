@@ -11,7 +11,7 @@
         <ol class="mej-cc-notes-list">
             {{#each partyNotes.rows}}
             <li class="mej-cc-note" data-note-id="{{this.id}}">
-                <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}</span>
+                <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span>
                 <span class="mej-cc-note-text">{{{this.text}}}</span>
             </li>
             {{/each}}
