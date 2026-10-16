@@ -90,7 +90,7 @@
       "notes": "Notes"
     },
     "session": {
-      "editRecap": "Edit Recap",
+      "editRecap": "Edit recap",
       "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
       "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
@@ -106,22 +106,23 @@
         "minute": "Minute"
       },
       "attendees": "Attendees",
-      "removeAttendee": "Remove Attendee",
+      "removeAttendee": "Remove attendee",
       "dragActorHint": "Drag an Actor here to add them as an attendee.",
+      "noAttendees": "No attendees recorded yet.",
       "secrets": "Secrets",
-      "addSecret": "Add Secret",
-      "deleteSecret": "Delete Secret",
+      "addSecret": "Add secret",
+      "deleteSecret": "Delete secret",
       "revealSecret": "Reveal to Players",
       "hideSecret": "Hide from Players",
-      "secretPlaceholder": "Secret text...",
+      "secretPlaceholder": "Secret text…",
       "noSecrets": "No secrets yet.",
       "gmNotes": "GM Notes",
-      "editGmNotes": "Edit GM Notes",
+      "editGmNotes": "Edit GM notes",
       "gmNotesSaveFailed": "GM notes could not be saved. See the console for details.",
-      "addImage": "Add Image"
+      "addImage": "Add image"
     },
     "campaign": {
-      "createButton": "New Campaign",
+      "createButton": "New campaign",
       "created": "Campaign \"{name}\" created.",
       "createFailed": "Could not create the campaign. Check the console for details.",
       "convertFolder": "Make this folder a campaign",
@@ -136,10 +137,17 @@
       "campaignStructureSkipped": "{count} campaign page(s) could not be converted — see the console."
     },
     "hub": {
+      "sessions": {
+        "number": "Session {n}",
+        "notes": "Notes",
+        "emptyGm": "No sessions yet. Use New Session to create one.",
+        "emptyPlayer": "Your GM hasn't started a session yet. When they do, it will appear here."
+      },
       "title": "Campaign Hub",
       "openCampaignHub": "Open Campaign Hub",
       "tabs": {
-        "index": "Index",
+        "index": "Entries",
+        "sessions": "Sessions",
         "timeline": "Timeline",
         "graph": "Graph",
         "search": "Search",
@@ -150,10 +158,10 @@
         "label": "Campaign",
         "all": "All campaigns",
         "unfiled": "Unfiled",
-        "newCampaign": "➕ New Campaign…"
+        "newCampaign": "➕ New campaign…"
       },
       "tools": "Tools",
-      "newCampaign": "New Campaign",
+      "newCampaign": "New campaign",
       "newCampaignName": "Name",
       "newCampaignBaseline": "Player access",
       "baseline": {
@@ -166,7 +174,7 @@
       "applyBaselineNow": "Apply to all current members now",
       "baselineApplied": "Updated default permissions on {count} entries.",
       "contributors": "Contributors",
-      "contributorsHint": "Contributors can create entities from selected text in this campaign's pages while a GM is connected.",
+      "contributorsHint": "Contributors can add party relationships, and create entries from selected text in this campaign's pages while a GM is connected.",
       "contributorsUsers": "Players",
       "contributorsGroups": "Player groups",
       "adoptOffer": "This world has campaign content but no campaign. Create one from it?",
@@ -179,37 +187,37 @@
       "linkMentionsTitle": "Find plain-text mentions of this campaign's entries in its pages and in unfiled entries, and offer to link them",
       "linkMentionsNone": "This campaign has no Enhanced Journal entries to link.",
       "noCampaignsYet": "No campaigns yet — create one from the campaign picker first.",
-      "hide": "Hide from players",
-      "reveal": "Reveal to players",
+      "hide": "Hide entry from players",
+      "reveal": "Share entry with players",
       "journalType": "Journal",
       "pdfType": "Document",
       "videoType": "Recording",
       "imageType": "Picture",
-      "allTypes": "All Types",
-      "typeFilter": "Filter by Type",
-      "sortBy": "Sort By",
+      "allTypes": "All types",
+      "typeFilter": "Filter by type",
+      "sortBy": "Sort by",
       "sort": {
         "name": "Name",
         "type": "Type"
       },
-      "filterName": "Filter by name...",
+      "filterName": "Filter by name…",
       "filteredCount": "{shown} of {total}",
       "noEntries": "No journal entries yet.",
-      "newSession": "New Session",
+      "newSession": "New session",
       "newSessionFailed": "Could not create the session. Check the console for details.",
       "captureNoCampaign": "No campaign set to receive captures — choose one in the Hub.",
       "captureTarget": "Auto-capture campaign",
       "captureTargetSet": "Captures will file into \"{name}\".",
-      "orderBy": "Order By",
+      "orderBy": "Order by",
       "order": {
         "manual": "Manual",
         "created": "Date Added",
         "campaign": "Campaign Date"
       },
       "noTimepoints": "No timepoints yet.",
-      "addTimepoint": "Add Timepoint",
-      "editTimepoint": "Edit Timepoint",
-      "deleteTimepoint": "Delete Timepoint",
+      "addTimepoint": "Add timepoint",
+      "editTimepoint": "Edit timepoint",
+      "deleteTimepoint": "Delete timepoint",
       "deleteTimepointConfirm": "Delete the timepoint \"{label}\"? This cannot be undone.",
       "save": "Save",
       "create": "Create",
@@ -225,15 +233,15 @@
       "campaignDateBadMonth": "Month is out of range for the active calendar.",
       "campaignDateBadDay": "Day is out of range for the selected month.",
       "campaignDateBadTime": "Time must be in HH:MM format and within range.",
-      "removeLink": "Remove Link",
-      "toggleShowPlayers": "Toggle Player Visibility",
+      "removeLink": "Remove link",
+      "toggleShowPlayers": "Show or hide for players",
       "brokenLink": "That link no longer resolves to anything.",
       "cannotAttach": "That item can't be attached to the timeline.",
       "wrongCampaign": "Entries can only attach to timepoints in their own campaign.",
       "dropFilesUnsupported": "Dropping files directly isn't supported yet - upload them to a journal entry first.",
       "showImageToPlayers": "Show Image to Players?",
       "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
-      "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
+      "timelineEmptyState": "No timeline yet.",
       "timelineEmptyScope": "No timeline in this scope.",
       "timeline": {
         "pickerLabel": "Timeline",
@@ -249,7 +257,7 @@
         "deleteBody": "Delete “{name}” and its {count} timepoints? This cannot be undone."
       },
       "search": {
-        "placeholder": "Search everything...",
+        "placeholder": "Search everything…",
         "noResults": "No matches.",
         "typeToSearch": "Type at least 2 characters to search.",
         "spillover": "{count} more matches in other campaigns — search all",
@@ -340,7 +348,7 @@
     },
     "import": {
       "title": "Import Document",
-      "button": "Import Document",
+      "button": "Import a Word document",
       "sourceLocal": "Word document (.docx)",
       "sourceLocalHint": "Choose a .docx file. In Google Docs use File → Download → Microsoft Word (.docx); from Word, any .docx works.",
       "chooseFile": "Choose .docx file",
@@ -388,7 +396,7 @@
     },
     "export": {
       "title": "Export to Word",
-      "button": "Export",
+      "button": "Export to Word",
       "download": "Download",
       "includeGM": "Include GM Content",
       "includeGMHint": "When checked, session GM notes, GM-only objectives, relationships hidden from players, and unrevealed secret sections are included in the export. Party relationships are exported either way.",
@@ -404,7 +412,17 @@
       "failed": "Could not generate the Word document. See the console for details."
     },
     "help": {
-      "open": "Open the user guide"
+      "title": "Help",
+      "menu": "Help",
+      "close": "Close help",
+      "open": "Open the full user guide",
+      "lines": {
+        "sessions": "Each game night is a Session. Your GM starts one; it lists who was there, the shared recap, and when it happened in the world.",
+        "notes": "Write what happened in the Session's recap. Mention a person or place by name and it becomes a link when you save.",
+        "entries": "Entries are the people, places, quests and things your GM has written up. Search finds words inside them; Entries lists them all.",
+        "reveals": "When your GM reveals a secret to you, you get a whisper in chat and the text appears on the entry with an orange rule.",
+        "lookBack": "Sessions and Timeline show what happened in order. Graph shows how entries connect; click a node to focus on it."
+      }
     },
     "graph": {
       "title": "Relationship Graph",
@@ -413,7 +431,10 @@
       "all": "Whole campaign",
       "backlinks": "Show mention links",
       "partyRelationships": "Show party relationships",
-      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200)."
+      "truncated": "Too many entries to draw — filter to reduce (showing the most-connected 200).",
+      "focusOn": "Focus on an entry",
+      "focusOnPick": "Focus on…",
+      "openEntry": "Double-click a node to open it"
     },
     "prep": {
       "title": "Session prep board",
@@ -452,26 +473,26 @@
       "openExternal": "Open in a new tab"
     },
     "entityFromSelection": {
-      "menu": "Create Entity from Selection",
-      "menuLink": "Link to Entity",
-      "pickTitle": "Link to Entity",
-      "pickLabel": "Entity",
+      "menu": "Create entry from selection",
+      "menuLink": "Link to entry",
+      "pickTitle": "Link to entry",
+      "pickLabel": "Entry",
       "link": "Link",
       "linked": "Linked the selection to {type} \"{name}\".",
       "linkedNoType": "Linked the selection to \"{name}\".",
       "linkedNot": "Could not link the selection to \"{name}\"; the page text changed.",
       "linkFailed": "Could not link the selection ({reason}).",
       "noGmLink": "No GM responded; nothing was linked.",
-      "title": "Create Entity from Selection",
+      "title": "Create entry from selection",
       "type": "Type",
       "name": "Name",
       "linkOthers": "Link other mentions",
       "create": "Create",
-      "nameRequired": "The entity needs a name.",
+      "nameRequired": "The entry needs a name.",
       "created": "Created {type} \"{name}\" and linked the selection.",
       "createdNotLinked": "Created {type} \"{name}\", but the selected text could not be linked automatically.",
       "awaitingReview": "Other mentions are waiting for GM review.",
-      "failed": "Could not create the entity ({reason}).",
+      "failed": "Could not create the entry ({reason}).",
       "noGm": "No GM responded; nothing was created.",
       "rejected": {
         "bad-payload": "the request was malformed",

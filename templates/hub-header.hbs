@@ -1,9 +1,13 @@
 <div class="mej-cc-hub-header">
+    {{#if (eq header.mode "title")}}
+    <h2 class="mej-cc-campaign-title" data-campaign-scope-title>{{header.title}}</h2>
+    {{else}}
     <select name="campaign-scope" class="mej-cc-campaign-scope" aria-label="{{localize 'MEJCampaignCompanion.hub.scope.label'}}">
         {{#each header.scopeOptions}}
         <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
         {{/each}}
     </select>
+    {{/if}}
     {{#if header.isCampaignScope}}{{#if isGM}}
     <button type="button" class="mej-cc-edit-campaign" data-action="editCampaign"
             data-tooltip="{{localize 'MEJCampaignCompanion.hub.editCampaign'}}">

@@ -3,6 +3,10 @@
         <div class="sheet-container mej-cc-hub-container flexcol">
             {{> "modules/mej-campaign-companion/templates/hub-header.hbs"}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
+            <button type="button" class="mej-cc-help-toggle" data-action="toggleHelp"
+                    aria-expanded="{{#if header.helpOpen}}true{{else}}false{{/if}}"
+                    data-tooltip="{{localize 'MEJCampaignCompanion.help.menu'}}"><i class="fa-solid fa-circle-question"></i> {{localize 'MEJCampaignCompanion.help.menu'}}</button>
+            {{> "modules/mej-campaign-companion/templates/hub-help.hbs"}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
                     <div class="tab-inner flexcol mej-cc-index">
@@ -96,6 +100,26 @@
                         </ol>
                     </div>
                 </div>
+                <div class="tab{{#if subtabs.sessions.active}} active{{/if}}" data-group="primary" data-tab="sessions">
+                    <div class="tab-inner flexcol mej-cc-sessions">
+                        <ol class="mej-cc-sessions-list item-list scrollable">
+                            {{#each sessions.rows}}
+                            <li class="mej-cc-session-row item" data-uuid="{{this.uuid}}" data-action="openSessionRow">
+                                <div class="mej-cc-session-row-head">
+                                    {{#if this.hasNumber}}<span class="mej-cc-session-number">{{localize "MEJCampaignCompanion.hub.sessions.number" n=this.number}}</span>{{/if}}
+                                    <span class="mej-cc-session-name">{{this.name}}</span>
+                                    {{#if this.worldDate}}<span class="mej-cc-session-date">{{this.worldDate}}</span>{{/if}}
+                                    {{#if this.noteCount}}<span class="mej-cc-mention-badge" title="{{localize 'MEJCampaignCompanion.hub.sessions.notes'}}"><i class="fa-solid fa-note-sticky"></i>{{this.noteCount}}</span>{{/if}}
+                                </div>
+                                {{#if this.attendees.length}}<div class="mej-cc-session-attendees">{{#each this.attendees}}<span class="mej-cc-session-attendee">{{this}}</span>{{/each}}</div>{{/if}}
+                                {{#if this.recapPreview}}<p class="mej-cc-session-preview">{{this.recapPreview}}</p>{{/if}}
+                            </li>
+                            {{else}}
+                            <li class="instruction">{{sessions.empty}}</li>
+                            {{/each}}
+                        </ol>
+                    </div>
+                </div>
                 <div class="tab{{#if subtabs.timeline.active}} active{{/if}}" data-group="primary" data-tab="timeline">
                     <div class="tab-inner flexcol mej-cc-timeline">
                         <div class="mej-cc-timeline-controls">
@@ -136,7 +160,7 @@
                                         <div class="mej-cc-timepoint-head">
                                             <span class="mej-cc-timepoint-label">{{this.label}}</span>
                                             {{#if this.canEdit}}
-                                            <button type="button" data-action="renameTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
+                                            <button type="button" data-action="editTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
                                             <button type="button" data-action="deleteTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.deleteTimepoint'}}"><i class="fas fa-trash"></i></button>
                                             {{/if}}
                                         </div>
@@ -194,6 +218,12 @@
                         <div class="mej-cc-graph-controls">
                             <button type="button" data-action="setGraphMode" data-mode="ego" class="{{#if graph.isEgo}}active{{/if}}" {{#unless graph.centerUuid}}disabled{{/unless}}>
                                 <i class="fa-solid fa-bullseye"></i> {{localize "MEJCampaignCompanion.graph.ego"}}</button>
+                            <select name="graph-focus" class="mej-cc-graph-focus" aria-label="{{localize 'MEJCampaignCompanion.graph.focusOn'}}">
+                                <option value="" {{#unless graph.centerUuid}}selected{{/unless}}>{{localize "MEJCampaignCompanion.graph.focusOnPick"}}</option>
+                                {{#each graph.focusRows}}
+                                <option value="{{this.uuid}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>
+                                {{/each}}
+                            </select>
                             <button type="button" data-action="setGraphMode" data-mode="all" class="{{#unless graph.isEgo}}active{{/unless}}">
                                 <i class="fa-solid fa-circle-nodes"></i> {{localize "MEJCampaignCompanion.graph.all"}}</button>
                             <label class="mej-cc-graph-backlinks"><input type="checkbox" data-action-change="toggleGraphBacklinks" {{#if graph.includeBacklinks}}checked{{/if}}>
@@ -201,6 +231,7 @@
                             <label class="mej-cc-graph-backlinks mej-cc-graph-party"><input type="checkbox" data-action-change="toggleGraphPartyRelationships" {{#if graph.includeParty}}checked{{/if}}>
                                 {{localize "MEJCampaignCompanion.graph.partyRelationships"}}</label>
                             {{#if graph.truncated}}<span class="mej-cc-graph-truncated">{{localize "MEJCampaignCompanion.graph.truncated"}}</span>{{/if}}
+                            <span class="mej-cc-graph-hint">{{localize "MEJCampaignCompanion.graph.openEntry"}}</span>
                         </div>
                         <svg class="mej-cc-graph-svg"></svg>
                     </div>

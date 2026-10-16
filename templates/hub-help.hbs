@@ -1,0 +1,16 @@
+{{#if header.helpOpen}}
+<section class="mej-cc-help" aria-label="{{localize 'MEJCampaignCompanion.help.title'}}">
+    <header>
+        <strong>{{localize "MEJCampaignCompanion.help.title"}}</strong>
+        <button type="button" data-action="toggleHelp" data-tooltip="{{localize 'MEJCampaignCompanion.help.close'}}"><i class="fa-solid fa-xmark"></i></button>
+    </header>
+    <ol>
+        <li>{{localize "MEJCampaignCompanion.help.lines.sessions"}}</li>
+        <li>{{localize "MEJCampaignCompanion.help.lines.notes"}}</li>
+        <li>{{localize "MEJCampaignCompanion.help.lines.entries"}}</li>
+        <li>{{localize "MEJCampaignCompanion.help.lines.reveals"}}</li>
+        <li>{{localize "MEJCampaignCompanion.help.lines.lookBack"}}</li>
+    </ol>
+    <button type="button" data-action="openHelp"><i class="fa-solid fa-arrow-up-right-from-square"></i> {{localize "MEJCampaignCompanion.help.open"}}</button>
+</section>
+{{/if}}

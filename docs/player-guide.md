@@ -26,7 +26,7 @@ If there's no pencil at all, you don't own that session — the **Players Write 
 
 ## If your GM has made you a contributor
 
-Some GMs turn on the **Contributors** setting for a campaign — on their side, from the Hub's campaign settings — and list you there, alone or as part of a player group. If they have, selecting a run of plain text (up to 80 characters, no line breaks) on one of that campaign's pages and right-clicking it shows a **Create Entity from Selection** item in the context menu, the same one your GM sees, alongside MEJ's own Extract to Journal Entry. Pick a type, adjust the name if you want, and click **Create**: the companion makes the new entry, links the text you selected to it, and — if you leave **Link other mentions** checked — offers up every other plain-text mention of that name to your GM's own Retroactive Auto-Link setting. If the text you selected is already the name of an entry you can see in that campaign, the item reads **Link to Entity** instead, and choosing it links your selection to that entry rather than making a new one (a picker asks which, if several share the name).
+Some GMs turn on the **Contributors** setting for a campaign — on their side, from the Hub's campaign settings — and list you there, alone or as part of a player group. If they have, selecting a run of plain text (up to 80 characters, no line breaks) on one of that campaign's pages and right-clicking it shows a **Create entry from selection** item in the context menu, the same one your GM sees, alongside MEJ's own Extract to Journal Entry. Pick a type, adjust the name if you want, and click **Create**: the companion makes the new entry, links the text you selected to it, and — if you leave **Link other mentions** checked — offers up every other plain-text mention of that name to your GM's own Retroactive Auto-Link setting. If the text you selected is already the name of an entry you can see in that campaign, the item reads **Link to entry** instead, and choosing it links your selection to that entry rather than making a new one (a picker asks which, if several share the name).
 
 Your request goes through an active GM's client, so it only works while a GM is connected — with none online the menu item isn't there at all. The entry that comes back has exactly the ownership a GM creating it in that campaign would give it — the campaign's **Player access** baseline — so who can see it follows that baseline, not the fact that you asked for it. If the baseline lets players see the campaign's entries, you (and the rest of the table) can see the new one like anything else your GM writes there, and it opens as a background tab next to the page you were on in the journal window. If the baseline is **GM only**, the entry is still created and your selection still becomes a link to it, but you won't get a tab for it and neither you nor the other players can open it until your GM shares it.
 
@@ -40,17 +40,17 @@ Once your campaign has more than a few sessions, you won't always remember which
 
 Campaign folders show a flag icon in the sidebar; everything inside one belongs to that campaign.
 
-A **header bar** runs across the top of the Hub. From your seat it holds two things: a **campaign picker** and a **Tools** button. The picker scopes every pane below it — it offers **All campaigns**, each campaign you're allowed to see, and **Unfiled** when there are any unfiled entries you can see, but not the GM-only option for creating one. **Tools** holds a single item for you, **Open the user guide**, which opens this document in a new browser tab. Your GM's header bar has more on it: a settings gear and a **New Session** button that aren't rendered for you.
+A **header bar** runs across the top of the Hub. If you can see only one campaign, it shows that campaign's name; otherwise it holds a **campaign picker**, and it always holds a **Tools** button. The picker scopes every pane below it — it offers **All campaigns** and each campaign you're allowed to see — no Unfiled entry and no option for creating a campaign, which are GM-only. **Tools** holds a single item for you, **Open the full user guide**, which opens this document in a new browser tab. Your GM's header bar has more on it: a settings gear and a **New session** button that aren't rendered for you.
 
-Below the header bar are the panes. **You see five** — **Index**, **Timeline**, **Graph**, **Search** and **Dashboards**. Your GM sees a sixth, **Secrets**, which isn't rendered for a non-GM at all.
+Below the header bar are the panes. **You see five** — **Sessions**, **Entries**, **Timeline**, **Graph** and **Search** — plus **Dashboards** when your GM has shared one. **Sessions** lists every session you can see, newest first, with who was there and the first line of its recap. Beside the tabs, the **Help** (?) button opens a short in-Hub summary; the full guide is linked from inside it, and **Tools** still has **Open the full user guide**. Your GM sees one more pane, **Secrets**, which isn't rendered for a non-GM at all.
 
-The **Index** lists every campaign-relevant entry you can see: each of your GM's typed entries (Person, Place, Quest, Shop, and so on) plus Session pages. Its toolbar gives you a type filter (labelled **All Types** until you check something, and built from the types actually present rather than a fixed list), a sort button offering **Name** or **Type**, and a **Filter by name...** box with a count beside it once you type. Each row shows a type glyph, the name, a mention-count badge where other entries link to it, the type, and the campaign it's filed into. Your GM's rows also carry hide and file buttons; yours carry none.
+The **Entries** pane (the index) lists every campaign-relevant entry you can see: each of your GM's typed entries (Person, Place, Quest, Shop, and so on) plus Session pages. Its toolbar gives you a type filter (labelled **All types** until you check something, and built from the types actually present rather than a fixed list), a sort button offering **Name** or **Type**, and a **Filter by name…** box with a count beside it once you type. Each row shows a type glyph, the name, a mention-count badge where other entries link to it, the type, and the campaign it's filed into. Your GM's rows also carry hide and file buttons; yours carry none.
 
-The **Search** pane is faster than scrolling the index once you know roughly what you're after. Its box is placeholdered **Search everything...**; type at least two characters and results appear as you type, each row naming the field the match landed in:
+The **Search** pane is faster than scrolling the index once you know roughly what you're after. Its box is placeholdered **Search everything…**; type at least two characters and results appear as you type, each row naming the field the match landed in:
 
 ![The Hub's Search pane with the query "caravan", matching Captain Aldric Vane, Serena of the Vale, Session 12 — Shadows over Daggerford and The Missing Caravan, each row listing the field the match was found in](images/hub-search.png)
 
-(That shot was taken from the GM's own seat — you can tell by the six tabs and the **New Session** button. It includes a **Secrets:** match line under Session 12 that a player's results would never turn up. Your own search only ever reaches what your permissions allow, the same rule that governs everything else in this guide.) One cosmetic wrinkle you may notice: snippets are taken from the raw page text, so a link can show through as `@UUID[...]` markup mid-sentence. It's only the preview that looks like that; the entry itself reads normally.
+(That shot was taken from the GM's own seat — you can tell by the seven tabs and the **New session** button. It includes a **Secrets:** match line under Session 12 that a player's results would never turn up. Your own search only ever reaches what your permissions allow, the same rule that governs everything else in this guide.) Where a match falls inside a link, the snippet shows the link's text (for example "the Duke"), not its markup.
 
 Your GM's typed entries — Persons, Places, Quests and the rest — also carry a knowledge panel at the foot of the sheet, and its **Mentioned in (N)** section lists which other entries link to it with a ×N count each — handy for tracing how two people or places you've heard of connect. It sits alongside **Tags** and **Attributes** in the same panel; from your seat all three are read-only, and an entry with no tags reads "No tags".
 
@@ -60,7 +60,7 @@ The **Dashboards** pane holds saved searches your GM has built. You'll see the o
 
 Every campaign has a **portal entry** — an ordinary-looking journal entry in your sidebar, named after the campaign. If your GM has given the campaign player access, it shows up for you like any other entry. Opening it doesn't show a page of text: it mounts the Campaign Hub, already scoped to that campaign, with the window title and the shell's tab both reading the campaign's name.
 
-![A campaign portal opened from a player's seat: the window and shell tab read "The Vale Chronicles", the campaign picker is already set to it, and the Hub shows five tabs with no gear and no New Session button](images/portal.png)
+![A campaign portal opened from a player's seat: the window and shell tab read "The Vale Chronicles", the campaign picker is already set to it, and the Hub shows five tabs with no gear and no New session button](images/portal.png)
 
 That makes the portal the easiest thing to bookmark: one click and you're in the Hub looking at just that campaign, with everything you're not allowed to see already stripped out. In the shot above the index holds the five entries this player can reach — two Persons, a Session, a Place and a Quest — and the rows carry no hide or file buttons, because those are your GM's.
 
@@ -70,13 +70,17 @@ The Hub's **Graph** pane is a visual map of how people, places and other entries
 
 ![The Graph pane in Whole campaign mode, showing The Missing Caravan linked to Captain Aldric Vane, The Gilded Flagon linked to Mira Thornwood, and Session 12 — Shadows over Daggerford unconnected; the two Persons draw their own portraits inside their node circles while the Quest and Place draw type icons](images/graph-player.png)
 
-Three controls sit above the canvas, and they're identical to your GM's:
+Five controls sit above the canvas, and they're identical to your GM's:
 
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
-- **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
+- **Focus** centres on one entry and shows only its direct connections. Click a node, or pick an entry from the **Focus on…** list beside it, to choose which entry to centre on; it stays unavailable until one is chosen.
+- **Focus on…**, a picker, lists the entries you can see so you can centre the graph on any of them without hunting for its node.
 - **Show mention links**, a checkbox, layers plain `@UUID` mentions on top of the relationship lines. It's off by default.
+- **Show party relationships**, a checkbox, draws party relationships as dotted lines.
 
-Each node draws the entry's own picture inside a type-coloured ring — the two Persons above carry portraits their GM gave them, while the Quest and the Place fall back to a type icon and the Session node is a plain coloured disc with no image. (Index rows never show the portrait; they always draw the glyph.)
+Clicking a node focuses the graph on it; double-click it (or Ctrl/Cmd-click) to open its entry.
+
+Each node draws the entry's own picture inside a type-coloured ring — the two Persons above carry portraits their GM gave them, while the Quest and the Place fall back to a type icon and the Session node is a plain coloured disc with no image. (Entries rows never show the portrait; they always draw the glyph.)
 
 Don't be surprised if your graph looks sparser than what your GM sees on their own screen. You'll see every entry that's relevant to you, but a line only appears between two of them once that specific relationship has been made visible to you. A node sitting there with no lines — "Session 12 — Shadows over Daggerford" above — just means the graph knows about it, but not (yet) how it connects to anything else from where you're standing.
 
@@ -131,7 +135,7 @@ The Hub's **Timeline** pane lays out your campaign's key moments in order — a 
 
 ![The Hub's Timeline pane with the picker set to "All timelines in scope", the Manual / Date Added / Campaign Date order buttons, and four timepoints: "The Caravan Departs" carrying an attached link to The Missing Caravan, "Mira's Warning", "The Ambush (staged)" and "Session 12 Convenes"](images/hub-timeline.png)
 
-(That shot is from the GM's seat. **+ Add Timepoint** at the bottom isn't rendered for you, and the pen and trash on each row are your GM's editing controls. What you get is the same timeline, read-only: the labels, the order, and anything attached to each point.)
+(That shot is from the GM's seat. **+ Add timepoint** at the bottom isn't rendered for you, and the pen and trash on each row are your GM's editing controls. What you get is the same timeline, read-only: the labels, the order, and anything attached to each point.)
 
 The pane leads with a **timeline picker**, because a world can hold more than one. Its options are **All timelines in scope** (where it starts), a greyed-out **— World timelines —** separator, and then the timelines themselves; a **★** before a name marks the campaign's default. Your GM's picker also has a **➕ New timeline…** option and rename/delete controls beside it — yours has neither.
 
@@ -147,8 +151,8 @@ Two empty states are worth recognising: a timeline that exists but holds nothing
 
 **Why didn't my name get linked?** When your GM types a name and it turns into a clickable link automatically, that only happens when every reader of that page would also be allowed to see what it links to. If a link would point somewhere you or another reader of that page can't see, it's left as plain text instead.
 
-**Where's the Secrets tab?** There isn't one for you. The Hub renders five panes for a player and six for a GM; **Secrets** is the GM's own tracker for everything they've hidden and everything they've revealed.
+**Where's the Secrets tab?** There isn't one for you. The Hub renders five panes for a player (six when a GM shares a dashboard) and seven for a GM; **Secrets** is the GM's own tracker for everything they've hidden and everything they've revealed.
 
 **Can the GM read my recap?** Yes — there is one recap per session and everyone at the table, GM included, reads and (if they own the entry) edits the same text. Treat it as public.
 
-**Why does a search snippet look like code?** Snippets come from the raw page text, so a link inside a matched sentence shows through as `@UUID[...]` markup. The entry itself is fine — it's only the preview.
+**What does a link look like in a search snippet?** A link inside a matched sentence shows just its text (for example "the Duke"), not the underlying link markup.

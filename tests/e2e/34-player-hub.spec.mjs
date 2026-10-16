@@ -1,0 +1,135 @@
+// Player-facing Hub (spec 2026-10-15 Plan A): a single-campaign player sees a
+// title instead of a picker, Sessions first, no GM blocks on the Session tab,
+// and an in-Hub help panel. Fixtures are TT- prefixed and swept.
+import { test, expect } from "@playwright/test";
+import {
+  login, settle, TT_PREFIX, deleteJournalsByPrefix, cleanupStrandedTestFolders, withGmPage,
+  trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404
+} from "./helpers/foundry.mjs";
+
+const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
+const RUN = Date.now().toString(36);
+const CAMPAIGN = `${TT_PREFIX}PH Campaign ${RUN}`;
+const SESSION = `${TT_PREFIX}PH Session ${RUN}`;
+
+async function seed(page) {
+  return page.evaluate(async ({ campaignName, sessionName }) => {
+    const { createCampaign, campaignPortal } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+    const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
+    const folder = await createCampaign(campaignName, { ownershipDefault: "observer" });
+    const pageData = buildSessionPageData(sessionName, "<p>We met the duke.</p>", { year: 1497, month: 5, day: 14 }, 12);
+    const session = await JournalEntry.create({ name: sessionName, folder: folder.id, ownership: { default: 2 }, pages: [pageData] });
+    return { folderId: folder.id, portalId: campaignPortal(folder)?.id ?? null, sessionId: session.id };
+  }, { campaignName: CAMPAIGN, sessionName: SESSION });
+}
+
+/** Open a campaign portal entry directly (its page type routes MEJ to the Hub sheet). */
+async function openPortal(page, portalId) {
+  await page.locator('[data-tab="journal"][data-action="tab"]').click();
+  await settle(page, 200);
+  await page.evaluate(async (id) => { await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)); }, portalId);
+  await settle(page, 600);
+  return page.locator("#MonksEnhancedJournal");
+}
+
+const tabIds = (shell) => shell.locator("nav.sheet-tabs a[data-tab]").evaluateAll((as) => as.map((a) => a.dataset.tab));
+
+test.describe("34 player Hub", () => {
+  let ids;
+
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => {
+      ids = await seed(gm);
+      // A player counts a campaign when they can see any member entry or its
+      // portal, so hide every member and the portal of every OTHER campaign
+      // (default ownership only) to leave User 1 exactly one; restored in afterAll.
+      const hide = await gm.evaluate(async (keep) => {
+        const { getCampaigns, campaignPortal, campaignEntries } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+        const out = [];
+        let error = null;
+        try {
+          for (const c of getCampaigns()) {
+            if (c.id === keep) continue;
+            const docs = [...campaignEntries(c), campaignPortal(c)].filter(Boolean);
+            for (const d of docs) {
+              out.push({ id: d.id, def: d.ownership?.default ?? 0 });
+              await d.update({ "ownership.default": 0 });
+            }
+          }
+        } catch (e) { error = String(e); }
+        return { out, error };
+      }, ids.folderId);
+      // Record before surfacing a failure so afterAll restores a partial hide.
+      ids.hidden = hide.out;
+      if (hide.error) throw new Error(hide.error);
+    });
+  });
+
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => {
+      await gm.evaluate(async (hidden) => {
+        for (const h of hidden ?? []) await game.journal.get(h.id)?.update({ "ownership.default": h.def });
+      }, ids?.hidden);
+      await deleteJournalsByPrefix(gm);
+      await cleanupStrandedTestFolders(gm);
+    });
+  });
+
+  test("1. header shows the campaign title and no picker; tabs start with Sessions", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "User 1");
+    const shell = await openPortal(page, ids.portalId);
+    await expect(shell.locator("[data-campaign-scope-title]")).toHaveText(CAMPAIGN);
+    await expect(shell.locator('select[name="campaign-scope"]')).toHaveCount(0);
+    const tabs = await tabIds(shell);
+    expect(tabs.slice(0, 5)).toEqual(["sessions", "index", "timeline", "graph", "search"]);
+    expect(tabs).not.toContain("secrets");
+    await expect(shell.locator('nav.sheet-tabs a[data-tab="index"]')).toContainText("Entries");
+    assertNoConsoleErrors(errors);
+  });
+
+  test("2. Sessions tab lists the session newest first with its preview", async ({ page }) => {
+    await login(page, "User 1");
+    const shell = await openPortal(page, ids.portalId);
+    await shell.locator('nav.sheet-tabs a[data-tab="sessions"]').click();
+    await settle(page, 300);
+    const row = shell.locator(".mej-cc-session-row").first();
+    await expect(row.locator(".mej-cc-session-number")).toHaveText("Session 12");
+    await expect(row.locator(".mej-cc-session-name")).toHaveText(SESSION);
+    await expect(row.locator(".mej-cc-session-preview")).toHaveText("We met the duke.");
+  });
+
+  test("3. a player's Session tab has no Secrets block and no drag hint", async ({ page }) => {
+    await login(page, "User 1");
+    await page.locator('[data-tab="journal"][data-action="tab"]').click();
+    await settle(page, 200);
+    await page.evaluate(async (id) => { await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)); }, ids.sessionId);
+    await settle(page, 600);
+    const shell = page.locator("#MonksEnhancedJournal");
+    await shell.locator('a[data-action="tab"][data-tab="session"]').click();
+    await settle(page, 300);
+    await expect(shell.locator(".secrets-section")).toHaveCount(0);
+    await expect(shell.locator(".attendees-list .instruction")).toHaveText("No attendees recorded yet.");
+  });
+
+  test("4. the Help button opens the panel; the guide link is inside it", async ({ page }) => {
+    await login(page, "User 1");
+    const shell = await openPortal(page, ids.portalId);
+    // The toggle beside the tabs (hub.hbs), not the close button inside the panel.
+    await shell.locator("button.mej-cc-help-toggle").click();
+    await settle(page, 300);
+    await expect(shell.locator(".mej-cc-help li")).toHaveCount(5);
+    await expect(shell.locator('.mej-cc-help button[data-action="openHelp"]')).toContainText("Open the full user guide");
+    await shell.locator('.mej-cc-help button[data-action="toggleHelp"]').click();
+    await settle(page, 300);
+    await expect(shell.locator(".mej-cc-help")).toHaveCount(0);
+  });
+
+  test("5. GM still gets the picker, Index labelled Entries, Secrets tab present", async ({ page }) => {
+    await login(page, "Gamemaster");
+    const shell = await openPortal(page, ids.portalId);
+    await expect(shell.locator('select[name="campaign-scope"]')).toHaveCount(1);
+    expect(await tabIds(shell)).toEqual(["index", "sessions", "timeline", "graph", "search", "dashboards", "secrets"]);
+    await expect(shell.locator('nav.sheet-tabs a[data-tab="index"]')).toContainText("Entries");
+  });
+});

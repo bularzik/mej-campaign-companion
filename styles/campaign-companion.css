@@ -133,6 +133,18 @@
   position: relative;
 }
 
+.mej-cc-hub-header .mej-cc-campaign-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-16, 16px);
+  line-height: 28px;
+  color: var(--mej-cc-ink);
+  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mej-cc-hub-header .mej-cc-tools-menu {
   right: 0;
   left: auto;
@@ -145,6 +157,13 @@
   width: 100%;
   text-align: left;
 }
+
+/* In-Hub help panel (spec 2026-10-15 item 11). */
+.mej-cc-help { margin: 6px; padding: 8px 10px; border: 1px solid var(--color-border-light-tertiary, #7a7971); border-radius: 4px; background: var(--mej-cc-chip-bg); color: var(--mej-cc-ink); }
+.mej-cc-help header { display: flex; justify-content: space-between; align-items: center; }
+.mej-cc-help ol { margin: 6px 0; padding-left: 18px; }
+.mej-cc-help li { margin: 2px 0; font-size: var(--font-size-12, 12px); }
+.mej-cc-help-toggle { align-self: flex-end; width: auto; margin: 2px 6px; padding: 0 8px; line-height: 22px; font-size: var(--font-size-12, 12px); }
 
 /* Index pane */
 .mej-cc-index {
@@ -272,6 +291,18 @@
   font-size: var(--font-size-11, 11px);
   opacity: 0.7;
 }
+
+/* Sessions pane (spec 2026-10-15 §5.1): newest first, one card per session. */
+.mej-cc-sessions-list { padding: 4px 0; }
+.mej-cc-session-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid var(--color-border-light-tertiary, #7a7971); }
+.mej-cc-session-row:hover { background: var(--mej-cc-chip-bg); }
+.mej-cc-session-row-head { display: flex; align-items: baseline; gap: 8px; }
+.mej-cc-session-number { font-weight: bold; color: var(--mej-cc-ink); }
+.mej-cc-session-name { flex: 1; color: var(--mej-cc-ink); }
+.mej-cc-session-date { color: var(--mej-cc-ink-muted); font-size: var(--font-size-12, 12px); }
+.mej-cc-session-attendees { display: flex; flex-wrap: wrap; gap: 4px; }
+.mej-cc-session-attendee { font-size: var(--font-size-11, 11px); color: var(--mej-cc-ink-muted); background: var(--mej-cc-chip-bg); border-radius: 3px; padding: 0 5px; }
+.mej-cc-session-preview { margin: 0; color: var(--mej-cc-ink-muted); font-size: var(--font-size-12, 12px); }
 
 /* Timeline pane */
 .mej-cc-timeline {
@@ -948,6 +979,12 @@
   align-items: center;
   gap: 0.3em;
   flex: 0 0 auto;
+}
+
+.mej-cc-graph-hint {
+  margin-left: auto;
+  font-size: var(--font-size-11, 11px);
+  color: var(--mej-cc-ink-muted);
 }
 
 .mej-cc-graph-truncated {

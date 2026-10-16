@@ -6,13 +6,13 @@ If you're a player on a table that uses Campaign Companion, read the [player gui
 
 ## What Campaign Companion adds
 
-Campaign Companion adds a campaign-and-session layer on top of MEJ. A **campaign** is a folder of entries plus its own portal entry that opens straight into the Hub. A **Session** page type records what happened at the table. The **Campaign Hub** indexes everything campaign-relevant across six panes. On top of that you get timelines you can bind to in-world dates, tags, attributes and a relationship graph for tracking who's connected to what, automatic linking and capture, GM-managed secrets, and Word document import/export.
+Campaign Companion adds a campaign-and-session layer on top of MEJ. A **campaign** is a folder of entries plus its own portal entry that opens straight into the Hub. A **Session** page type records what happened at the table. The **Campaign Hub** indexes everything campaign-relevant across seven panes. On top of that you get timelines you can bind to in-world dates, tags, attributes and a relationship graph for tracking who's connected to what, automatic linking and capture, GM-managed secrets, and Word document import/export.
 
 Everything it does builds on entries and pages MEJ already knows how to render — nothing here replaces MEJ, it extends it.
 
 The screenshot below is the Campaign Hub — the module's home base. You'll spend most of your GM prep time here once you're set up.
 
-![The Campaign Hub's Index pane in All campaigns scope, with the name filter narrowing the index to three rows; the two filed rows carry their campaign's name and a mention-count badge](images/hub-index.png)
+![The Campaign Hub's Entries pane in All campaigns scope, with the name filter narrowing the index to three rows; the two filed rows carry their campaign's name and a mention-count badge](images/hub-index.png)
 
 ## Installation & first-time setup
 
@@ -42,22 +42,22 @@ Create a Session entry the same way you'd create any other MEJ entry:
 4. From the **Type** dropdown, choose **Session**. (The same dropdown also lists **Campaign**, MEJ's name for the companion's campaign page type — but make campaigns from the Hub's own picker instead, as [Campaigns](#campaigns) below describes.)
 5. Confirm the dialog. MEJ opens the new Session entry.
 
-The Hub's **New Session** button, in its header bar, does the same thing without leaving the Hub. If you're running a stock MEJ install without the extension API, **New Session** is the only route — see [Running on stock MEJ (native mode)](#running-on-stock-mej-native-mode) below.
+The Hub's **New session** button, in its header bar, does the same thing without leaving the Hub. If you're running a stock MEJ install without the extension API, **New session** is the only route — see [Running on stock MEJ (native mode)](#running-on-stock-mej-native-mode) below.
 
-The Session sheet has four tabs for a GM — **Recap**, **Session**, **Relationships**, and **Notes**. A player sees three of those four: no Relationships tab. Above the tabs there is no generic page-schema header; what sits there instead depends on the entry and on who is looking. A Session that carries an **image** shows MEJ's own header with that image in it. A Session with **no image** shows anyone who can edit it — you, normally — a single compact row holding the name field and an **Add image** button, so the sheet keeps its rename control and its route to a picture without spending a quarter of the window on an empty header. A player who cannot edit an image-less Session sees neither header: the tab strip is the first thing on the sheet.
+The Session sheet has four tabs for a GM — **Recap**, **Session**, **Relationships**, and **Notes**. A player sees **Recap**, **Session** and **Notes**, plus **Relationships** whenever they can add a party relationship there or have one to see (see [Player collaboration](#player-collaboration)). Above the tabs there is no generic page-schema header; what sits there instead depends on the entry and on who is looking. A Session that carries an **image** shows MEJ's own header with that image in it. A Session with **no image** shows anyone who can edit it — you, normally — a single compact row holding the name field and an **Add image** button, so the sheet keeps its rename control and its route to a picture without spending a quarter of the window on an empty header. A player who cannot edit an image-less Session sees neither header: the tab strip is the first thing on the sheet.
 
 ![The Session sheet's Recap tab: the compact header row carrying the session's name and its Add image button sits above the tab strip, with the shared recap text below](images/session-sheet-gm.png)
 
 - **Recap** is the session's one shared recap. Open it for editing with the edit pencil at its right, or with the sheet header's own edit button — either opens the same editor, and clicking it again closes the editor and commits your text. You write it; so does any player who owns the entry (see [Player collaboration](#player-collaboration)) — several people can have it open at once and see each other's typing. If someone else saves while your editor is open, your editor closes too — nothing is lost, it's already in the saved recap; click the pencil again to keep going. A save from any other field on the sheet never touches the recap, and an open session view refreshes when someone else saves it.
-- **Session** holds, in order: **Session Number**; a **Campaign Date** group of **Year**, **Month** (a dropdown: blank, then January through December), **Day**, **Hour**, and **Minute**; the **Attendees** list (drag player-character or NPC Actors onto it); the **Secrets** checklist; and a **GM Notes** block with its own **Edit GM Notes** control.
+- **Session** holds, in order: **Session Number**; a **Campaign Date** group of **Year**, **Month** (a dropdown: blank, then January through December), **Day**, **Hour**, and **Minute**; the **Attendees** list (drag player-character or NPC Actors onto it); the **Secrets** checklist; and a **GM Notes** block with its own **Edit GM notes** control.
 - **Relationships** is MEJ's standard relationships panel — link the session to other campaign entries from here.
 - **Notes** is GM-only free text; the template hides this tab's content entirely from non-GM viewers.
 
-One thing worth knowing before you go looking for it: the Session tab's campaign date and the Hub's **Add Timepoint** dialog are **not** the same layout. The Session tab asks for Year / Month / Day / **Hour** / **Minute** as separate fields; the Add Timepoint dialog asks for Year / Month / Day and a single free-text **Time** — see [The timeline & campaign dates](#the-timeline--campaign-dates) below.
+One thing worth knowing before you go looking for it: the Session tab's campaign date and the Hub's **Add timepoint** dialog are **not** the same layout. The Session tab asks for Year / Month / Day / **Hour** / **Minute** as separate fields; the Add timepoint dialog asks for Year / Month / Day and a single free-text **Time** — see [The timeline & campaign dates](#the-timeline--campaign-dates) below.
 
-The Session tab's **Secrets** block tracks secrets tied to this session specifically — separate from the block-level secrets covered under [Secrets](#secrets) below, though both reveal through the same audience machinery. Two icon-only buttons sit under the heading: **Add Secret** adds a row, and **Prep board** opens the session prep board. Each secret row then carries an eye-slash, an audience control, and a trash:
+The Session tab's **Secrets** block tracks secrets tied to this session specifically — separate from the block-level secrets covered under [Secrets](#secrets) below, though both reveal through the same audience machinery. Two icon-only buttons sit under the heading: **Add secret** adds a row, and **Prep board** opens the session prep board. Each secret row then carries an eye-slash, an audience control, and a trash:
 
-![The Session tab's Secrets block, with the Add Secret and Prep board buttons above two secret rows and their hide, audience, and delete controls](images/session-checklist.png)
+![The Session tab's Secrets block, with the Add secret and Prep board buttons above two secret rows and their hide, audience, and delete controls](images/session-checklist.png)
 
 ## The Campaign Hub
 
@@ -67,29 +67,30 @@ There are three ways into the Hub, and all of them work for players too:
 - the **Campaign Hub** tool in the **Journal Notes** group of Foundry's scene controls;
 - opening a campaign's portal entry from the journal sidebar, which lands you in the Hub already scoped to that campaign (see [The player portal](#the-player-portal)).
 
-A **header bar** runs across the top of the Hub, above the pane tabs. Left to right it holds the campaign picker, a gear, **New Session**, and **Tools**:
+A **header bar** runs across the top of the Hub, above the pane tabs. Left to right it holds the campaign picker, a gear, **New session**, and **Tools**:
 
-![The Hub's header bar in All campaigns scope: the campaign picker, the New Session button, and the Tools button — with no gear, because no single campaign is selected](images/hub-header.png)
+![The Hub's header bar in All campaigns scope: the campaign picker, the New session button, and the Tools button — with no gear, because no single campaign is selected](images/hub-header.png)
 
 - The **campaign picker** scopes every pane. [Campaigns](#campaigns) below covers it in full.
 - The **gear** is **Campaign settings**, and it appears only while the picker is scoped to one campaign — it isn't there in **All campaigns** or **Unfiled**.
-- **New Session** creates a Session entry, as above.
-- **Tools** opens a small menu with four items: **Import Document**, **Export**, **Auto-capture campaign**, and **Open the user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
+- **New session** creates a Session entry, as above.
+- **Tools** opens a small menu with four items: **Import a Word document**, **Export to Word**, **Auto-capture campaign**, and **Open the full user guide** (which opens this document in a new browser tab; a player's Tools menu contains that one item and nothing else). Like the index's Type and Sort menus, it closes when you click anywhere outside it or press Escape.
+- **Help** is not in the Tools menu: the **Help** (?) button beside the tabs opens a short in-Hub panel, and the link to the full guide is inside that panel (and the Tools menu still has **Open the full user guide**).
 
-Below the header bar are **six panes**: **Index**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. A player sees five — the Secrets tab isn't rendered for a non-GM at all. This section covers Index and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
+Below the header bar are **seven panes**: **Entries** (the index), **Sessions**, **Timeline**, **Graph**, **Search**, **Dashboards**, and **Secrets**, in that order. **Sessions** lists every Session page in scope, newest number first, with its in-world date, attendees and recap preview. A player sees Sessions first and no Secrets tab — it isn't rendered for a non-GM at all. This section covers Entries and Search; Timeline, Graph, Dashboards and Secrets each get their own section further down.
 
-The **Index** is a filterable, sortable list of every campaign-relevant entry — every MEJ-typed entry (Person, Place, Quest, Shop, and so on) plus Session pages. Its toolbar holds exactly four things:
+The **Entries** pane (the index) is a filterable, sortable list of every campaign-relevant entry — every MEJ-typed entry (Person, Place, Quest, Shop, and so on) plus Session pages. Its toolbar holds exactly four things:
 
-- a type filter (tooltip **Filter by Type**), whose label reads **All Types** until you check something. The menu it opens is built from the types actually present in the current scope, not a fixed list.
-- a sort button (tooltip **Sort By**) offering **Name** (the default) and **Type**.
-- a name box, placeholder **Filter by name...**, with a filtered count beside it once you type ("3 of 9" in the shot below).
+- a type filter (tooltip **Filter by type**), whose label reads **All types** until you check something. The menu it opens is built from the types actually present in the current scope, not a fixed list.
+- a sort button (tooltip **Sort by**) offering **Name** (the default) and **Type**.
+- a name box, placeholder **Filter by name…**, with a filtered count beside it once you type ("3 of 9" in the shot below).
 - **File all shown into…**, which appears only in **Unfiled** scope, and only for a GM.
 
-Each row shows a type icon — a glyph, not a portrait — the entry's name, an optional mention-count badge for incoming `@UUID` links, the type label, and the name of the campaign it's filed into. A GM's rows also carry an eye button that toggles between **Hide from players** and **Reveal to players**, and, in Unfiled scope, a **File into campaign…** folder button. A player's rows carry neither.
+Each row shows a type icon — a glyph, not a portrait — the entry's name, an optional mention-count badge for incoming `@UUID` links, the type label, and the name of the campaign it's filed into. A GM's rows also carry an eye button that toggles between **Hide entry from players** and **Share entry with players**, and, in Unfiled scope, a **File into campaign…** folder button. A player's rows carry neither.
 
-![The Hub's Index pane, with mention-count badges on two rows and campaign names on the two filed entries](images/hub-index.png)
+![The Hub's Entries pane, with mention-count badges on two rows and campaign names on the two filed entries](images/hub-index.png)
 
-Once you know roughly what you're looking for, the **Search** pane is faster than scrolling the index. Its box is placeholdered **Search everything...**; type at least two characters and results appear as you type. Each result row carries the type icon, the name, the type, and a list of **field label + snippet** pairs showing where the match landed — **Description**, **Name** and **Secrets** in the shot below. Secrets and GM notes match only for a GM; a player's search never surfaces GM-only content. An empty box reads "Type at least 2 characters to search."; a query with no hits reads "No matches."
+Once you know roughly what you're looking for, the **Search** pane is faster than scrolling the index. Its box is placeholdered **Search everything…**; type at least two characters and results appear as you type. Each result row carries the type icon, the name, the type, and a list of **field label + snippet** pairs showing where the match landed — **Description**, **Name** and **Secrets** in the shot below. Secrets and GM notes match only for a GM; a player's search never surfaces GM-only content. An empty box reads "Type at least 2 characters to search."; a query with no hits reads "No matches."
 
 ![The Hub's Search pane, showing results for the query "caravan" across two Persons, a Session, and a Quest, each with its matching field and snippet](images/hub-search.png)
 
@@ -97,11 +98,11 @@ Once you know roughly what you're looking for, the **Search** pane is faster tha
 
 A campaign is three things created together: a folder in Foundry's journal sidebar, a **portal entry** named after it, and a **timeline** journal named `<campaign name> — Timeline`. Everything filed into that folder is what the Hub means by "in this campaign". Campaign folders carry a flag icon in the sidebar so they stand out from ordinary folders.
 
-**Creating one.** The journal sidebar's header has a GM-only **New Campaign** button beside **Create Folder** — it works whether or not MEJ's window is open. It asks for two things: a **Name**, and **Player access** with three options — **GM only**, **Players can view** (selected by default), and **Players can edit**. Click **Confirm** and the folder, its portal entry and its timeline appear together; there's no separate step. The same dialog is reachable from the Hub's campaign picker (**➕ New Campaign…**).
+**Creating one.** The journal sidebar's header has a GM-only **New campaign** button beside **Create Folder** — it works whether or not MEJ's window is open. It asks for two things: a **Name**, and **Player access** with three options — **GM only**, **Players can view** (selected by default), and **Players can edit**. Click **Confirm** and the folder, its portal entry and its timeline appear together; there's no separate step. The same dialog is reachable from the Hub's campaign picker (**➕ New campaign…**).
 
-![The journal sidebar header with Create Entry, Create Folder and the companion's New Campaign button](images/campaign-create-button.png)
+![The journal sidebar header with Create Entry, Create Folder and the companion's New campaign button](images/campaign-create-button.png)
 
-**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level (when a GM creates it — players' own entries keep Foundry's defaults), so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Index (or set its ownership by hand); entries created with an explicit ownership keep it.
+**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level (when a GM creates it — players' own entries keep Foundry's defaults), so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Entries pane (or set its ownership by hand); entries created with an explicit ownership keep it.
 
 **Already have a folder?** Right-click any plain top-level journal folder and choose **Make this folder a campaign**. The same dialog appears with the folder's name filled in; confirming adds the flag, portal and timeline in place — the entries already in the folder stay exactly where they are. Nested folders can't become campaigns (campaigns never nest).
 
@@ -113,13 +114,13 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 **Campaign settings.** The gear opens a dialog whose window title is the campaign's own name. It holds **Player access** (the same three options, showing the campaign's current value) and **Apply to all current members now**, checked by default — leave it checked to push the access level onto every entry already in the folder. **Confirm** saves. If the campaign's portal entry has been deleted, this dialog grows a second button, **Restore campaign entry**, which recreates the portal immediately at the campaign's own access baseline. That button is gone again the next time you open the dialog.
 
-**Unfiled.** Choosing **Unfiled** in the picker shows every campaign-relevant entry that isn't in any campaign folder — campaign members, portal entries and timeline journals are all excluded from it. In this scope, and only for a GM, the Index toolbar gains **File all shown into…** and every row gains a **File into campaign…** button:
+**Unfiled.** Choosing **Unfiled** in the picker shows every campaign-relevant entry that isn't in any campaign folder — campaign members, portal entries and timeline journals are all excluded from it. In this scope, and only for a GM, the Entries toolbar gains **File all shown into…** and every row gains a **File into campaign…** button:
 
 ![The Hub in Unfiled scope, filtered to one entry, with File all shown into… on the toolbar and a per-row folder button](images/campaign-unfiled.png)
 
 **From the sidebar.** Right-click a campaign's folder in Foundry's journal sidebar and the context menu ends with **Open Campaign Hub**, appended after Foundry's own six items (Edit Folder, Configure Ownership, Create Rollable Table, Export to Compendium, Remove Folder, Delete All). Right-clicking a plain top-level folder instead offers **Make this folder a campaign** to promote it in place. One catch: MEJ's shell window covers the sidebar's tab button while it's open, so close the shell first.
 
-**The adoption banner.** If your world already has MEJ-typed content but no campaign, the Index pane shows a GM-only banner reading "This world has campaign content but no campaign. Create one from it?" with a **Create campaign from this world** button and a ✕ to dismiss it. It stops appearing once a campaign exists.
+**The adoption banner.** If your world already has MEJ-typed content but no campaign, the Entries pane shows a GM-only banner reading "This world has campaign content but no campaign. Create one from it?" with a **Create campaign from this world** button and a ✕ to dismiss it. It stops appearing once a campaign exists.
 
 **Auto-capture target.** **Tools → Auto-capture campaign** picks which campaign [auto-capture](#auto-capture) files things into. Be aware that with **zero** campaigns in the world, this control and both Unfiled filing buttons still render and are still clickable, and clicking any of them does nothing at all — no dialog, no message. Create a campaign first.
 
@@ -139,15 +140,15 @@ Selecting a real timeline (rather than "All timelines in scope") brings up the G
 
 Three buttons below the picker switch how the stack orders itself: **Manual** (the default — drag entries into whatever order you want, a fractional-key drag-insert under the hood, so you can drop a new point between any two existing ones), **Date Added** (creation order), and **Campaign Date** (chronological by the in-world date you gave each timepoint, for the ones that have one).
 
-Every new Session also gets a timepoint automatically, named after the session and carrying its campaign date and time (a session with no date yet takes the current world date); renaming or re-dating the session updates it. Click **Add Timepoint** at the bottom — GM only — to create one by hand; it works even before the scope has a timeline, and creates the timeline for you. The dialog asks for a **Label** and, in a **Campaign Date** fieldset, a **Year**, a **Month** dropdown, a **Day**, and a **Time** that is a single free-text field. **Create** saves it:
+Every new Session also gets a timepoint automatically, named after the session and carrying its campaign date and time (a session with no date yet takes the current world date); renaming or re-dating the session updates it. Click **Add timepoint** at the bottom — GM only — to create one by hand; it works even before the scope has a timeline, and creates the timeline for you. The dialog asks for a **Label** and, in a **Campaign Date** fieldset, a **Year**, a **Month** dropdown, a **Day**, and a **Time** that is a single free-text field. **Create** saves it:
 
-![The Add Timepoint dialog with Label, Year, Month, Day, and a free-text Time filled in for "Session 12 Convenes"](images/campaign-date-picker.png)
+![The Add timepoint dialog with Label, Year, Month, Day, and a free-text Time filled in for "Session 12 Convenes"](images/campaign-date-picker.png)
 
 **Attaching things to a timepoint.** Drag a document onto the timepoint's row — a journal entry from the sidebar, or anything else with a UUID — and it attaches as a chip labelled with its name. This is GM-only, and the document has to belong to the same campaign as the timeline, or you get "Entries can only attach to timepoints in their own campaign." Dragging raw files off your desktop isn't supported; upload them to a journal entry first.
 
-Dropping an **image** onto a row asks first, with a **Show Image to Players?** prompt reading `Show "<filename>" to players immediately?` Answer no and the image still attaches, but stays hidden: an attached image is invisible to players unless it's explicitly marked as shown. That's different from a document chip, whose visibility simply follows the document's own permissions. You can flip an image's visibility at any time from the eye / eye-slash toggle on its chip (tooltip **Toggle Player Visibility**), which only image chips have; the ✕ beside it removes the link. "The Caravan Departs" above carries "The Missing Caravan" as a document chip. Each timepoint row also has a pen and a trash of its own.
+Dropping an **image** onto a row asks first, with a **Show Image to Players?** prompt reading `Show "<filename>" to players immediately?` Answer no and the image still attaches, but stays hidden: an attached image is invisible to players unless it's explicitly marked as shown. That's different from a document chip, whose visibility simply follows the document's own permissions. You can flip an image's visibility at any time from the eye / eye-slash toggle on its chip (tooltip **Show or hide for players**), which only image chips have; the ✕ beside it removes the link. "The Caravan Departs" above carries "The Missing Caravan" as a document chip. Each timepoint row also has a pen and a trash of its own.
 
-Two empty states are worth recognising. A timeline that exists but holds nothing reads **"No timepoints yet."** A scope with no timeline at all reads **"No timeline in this scope."** — and in that state the order buttons and **Add Timepoint** disappear entirely, leaving only the picker.
+Two empty states are worth recognising. A timeline that exists but holds nothing reads **"No timepoints yet."** A scope with no timeline at all reads **"No timeline in this scope."** — and in that state the order buttons and **Add timepoint** disappear entirely, leaving only the picker.
 
 ## Building your campaign record
 
@@ -159,19 +160,21 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 
 ![The Tags and Attributes sections on a Person entry, showing two tag chips and two attribute rows, the second marked player-hidden](images/knowledge-tags-attributes.png)
 
-**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Index's mention-count badges come from:
+**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Entries pane's mention-count badges come from:
 
 ![The Mentioned in backlinks section, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
 **How mentions and relationships relate.** They are two different things, on purpose. Mentions are *derived*: prose → auto-link → `@UUID` link → this list and the graph's dashed mention edges. Relationships are *curated*: the rows you add on an entry's Relationships tab, with their own labels and per-row hiding, drawn as the graph's solid edges. The module never turns a mention into a relationship or a relationship into a link — a name appearing in a paragraph says nothing about how two entries are related, and only you can.
 
-**The relationship graph.** The graph is the Hub's own **Graph** pane, sitting between Timeline and Search — there is no graph button on any entry sheet's window header in current MEJ v14 builds, so the Graph tab is the route. Three controls sit above the canvas:
+**The relationship graph.** The graph is the Hub's own **Graph** pane, sitting between Timeline and Search — there is no graph button on any entry sheet's window header in current MEJ v14 builds, so the Graph tab is the route. Five controls sit above the canvas:
 
 - **Whole campaign** lays out everything in the current scope at once. It's the mode you land in.
-- **Focus** centres on one entry and shows only its direct connections. It's greyed out unless you opened the Hub centred on an entity in the first place.
+- **Focus** centres on one entry and shows only its direct connections. Click a node, or pick an entry from the **Focus on…** list beside it, to choose which entry to centre on; it stays unavailable until one is chosen.
+- **Focus on…**, a picker, lists the entries in scope so you can centre the graph on any of them without hunting for its node.
 - **Show mention links**, a checkbox, layers `@UUID` backlinks on top of the relationship edges. It's off by default.
+- **Show party relationships**, a checkbox, draws the party's own relationships as dotted lines.
 
-Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node opens its entry.
+Scroll the mouse wheel over the canvas to zoom, and drag an empty part of the canvas to pan around it. Dragging a node pins it in place; clicking a node focuses the graph on it, and double-clicking it (or Ctrl/Cmd-clicking) opens its entry.
 
 The graph is capped at the **200 most-connected** entries, for performance — additional nodes, and the links to them, are left out of the view. When that happens it says so above the canvas: "Too many entries to draw — filter to reduce (showing the most-connected 200)." Scope the Hub to a single campaign to get back under the cap.
 
@@ -185,7 +188,7 @@ The graph is capped at the **200 most-connected** entries, for performance — a
 
 ![Two graph nodes close up: "Mira Thornwood" drawing her own portrait inside the node circle, beside "The Gilded Flagon" drawing MEJ's Place icon](images/portrait-node.png)
 
-Index rows are the exception: they always show the font-awesome type glyph, never the portrait.
+Entries rows are the exception: they always show the font-awesome type glyph, never the portrait.
 
 Entries without a picture show a per-type placeholder in the Hub, the timeline and the graph; imported sections that contain a picture use their first one as the entry image.
 
@@ -212,7 +215,7 @@ Auto-linking turns plain-text mentions of Enhanced Journal entry names into `@UU
 
 **Scope.** Linking stays inside a campaign: an entry filed in a campaign links with that campaign's pages and with unfiled pages; an unfiled entry links anywhere; two campaigns never link into each other. A name shared by two entries that are both in reach of a page is skipped rather than guessed — you get a notification naming the entry when that is the only reason nothing was linked. On top of that, a mention only becomes a link when everyone who can already read the page can also see the entry being linked to (the GM is exempt). When that is the only reason a new entry was not linked, you get a warning — "*Eldin* is mentioned in 1 page(s) whose readers cannot see it" — with the page names in the console; reveal the entry (or apply the campaign baseline) and run **Link mentions** to catch up. The campaign's portal entry and its timeline are never linked to, so the campaign's own name stays plain text in your prose.
 
-**Catching up an existing campaign.** Prose written before auto-linking was on stays unlinked until you ask. Scope the Hub to the campaign and click **Link mentions** in the Index toolbar: it plans every entry in the campaign against the campaign's pages and any unfiled pages and shows the review dialog — check what you want linked and click **Link Checked**. The pass runs on your client in one go and the review dialog lists every matching page, so on a very large campaign expect a pause of a few seconds and a long list — scope the Hub to one campaign at a time.
+**Catching up an existing campaign.** Prose written before auto-linking was on stays unlinked until you ask. Scope the Hub to the campaign and click **Link mentions** in the Entries toolbar: it plans every entry in the campaign against the campaign's pages and any unfiled pages and shows the review dialog — check what you want linked and click **Link Checked**. The pass runs on your client in one go and the review dialog lists every matching page, so on a very large campaign expect a pause of a few seconds and a long list — scope the Hub to one campaign at a time.
 
 **Opting out.** Set either setting to Off, or flag an individual page with the module's `noAutoLink` flag to keep auto-linking away from it entirely.
 
@@ -220,15 +223,15 @@ One limitation to know about: if the create-time pass rewrites a recap while ano
 
 ## Creating an entity from selected text
 
-Select a run of plain text in an entry's description — up to 80 characters, no line breaks — and right-click it. Alongside MEJ's own context-menu entries (Extract to Journal Entry, and so on) you'll find **Create Entity from Selection**; it isn't there while you're editing the field, or when the selection is too long for a name. Choosing it opens a small dialog: **Type** (a dropdown of MEJ's own entity types, defaulting to whichever one you picked last time), **Name** (prefilled with your selection, editable), and a **Link other mentions** checkbox, checked by default:
+Select a run of plain text in an entry's description — up to 80 characters, no line breaks — and right-click it. Alongside MEJ's own context-menu entries (Extract to Journal Entry, and so on) you'll find **Create entry from selection**; it isn't there while you're editing the field, or when the selection is too long for a name. Choosing it opens a small dialog: **Type** (a dropdown of MEJ's own entity types, defaulting to whichever one you picked last time), **Name** (prefilled with your selection, editable), and a **Link other mentions** checkbox, checked by default:
 
-![The Create Entity from Selection dialog, with Type set to Person, Name prefilled with the selected text, and Link other mentions checked](images/entity-from-selection-dialog.png)
+![The Create entry from selection dialog, with Type set to Person, Name prefilled with the selected text, and Link other mentions checked](images/entity-from-selection-dialog.png)
 
 Click **Create** and the companion makes a new entry of that type in the same folder as the page you selected from, turns the selected occurrence into a link to it, and opens the new entry as a background tab in the shell without pulling you away from the page you were on. A notification confirms it, e.g. "Created Person "Elowen" and linked the selection."
 
 **Link other mentions** hands the new entry straight to your Retroactive Auto-Link setting (see [Auto-linking](#auto-linking) above): Silent links every other plain-text mention of the same name right away, Confirm shows you the usual review dialog first, and Off leaves everything but the selection itself untouched. Uncheck the box to only ever link the exact spot you selected, whatever that setting is.
 
-If what you selected is already the name of one of your entities — ignoring capitals and extra spaces — the menu shows **Link to Entity** instead of Create Entity from Selection. Choosing it turns the selection into a link to that entity straight away; if more than one entity has that name, a small picker asks which one you mean. Only entities that auto-link could use there count: ones in the same campaign (or unfiled), visible to every player who can see the page, and not the page you're on. So a GM-only NPC named in a player-visible page still offers Create.
+If what you selected is already the name of one of your entities — ignoring capitals and extra spaces — the menu shows **Link to entry** instead of Create entry from selection. Choosing it turns the selection into a link to that entity straight away; if more than one entity has that name, a small picker asks which one you mean. Only entities that auto-link could use there count: ones in the same campaign (or unfiled), visible to every player who can see the page, and not the page you're on. So a GM-only NPC named in a player-visible page still offers Create.
 
 **Letting players do this too.** Open **Campaign settings** (the Hub's gear) and use the **Contributors** fieldset there — a **Players** list of checkboxes and, once you've created any player groups, a **Player groups** list beside it — to name who besides you can use this menu item on that campaign's own pages. A contributor only sees the item while a GM is connected: the request goes through your client, so the new entity ends up with exactly the ownership a GM creating it there would give it — the campaign's own baseline. The same dialog's **Apply to all current members now** checkbox is checked by default, so uncheck it before saving if you only want to change Contributors — otherwise saving also re-applies the **Player access** baseline to every entry already in the campaign.
 
@@ -299,7 +302,7 @@ Either way, every player you reveal to gets a private whisper naming the entry t
 
 The docx import wizard turns a `.docx` (from Word or a Google Docs export) into MEJ entries and Session pages.
 
-1. In the Hub's header bar, open **Tools** and click **Import Document**.
+1. In the Hub's header bar, open **Tools** and click **Import a Word document**.
 2. The wizard's first screen is only a file chooser: pick your `.docx` under **Word document (.docx)**. Its hint spells out the Google Docs route — File → Download → Microsoft Word (.docx); from Word, any .docx works. The wizard parses the file and moves to its review screen.
 3. The review screen leads with three settings above the table:
    - **Import into** — which campaign the entries are created in. With no campaigns in the world the only option is **New Campaign…**.
@@ -312,7 +315,7 @@ The docx import wizard turns a `.docx` (from Word or a Google Docs export) into 
 
 Export walks the other direction — selected entries and the timeline out into a round-trippable `.docx`:
 
-1. In the Hub's header bar, open **Tools** and click **Export**.
+1. In the Hub's header bar, open **Tools** and click **Export to Word**.
 2. In the **Export to Word** dialog, check the entries you want included (everything is checked by default).
 3. Leave **Include GM Content** unchecked to produce a document that's safe to hand directly to players — session GM notes and relationships hidden from players are left out. Check it if this export is for your own GM-side backup or reference.
 4. Click **Download**.
@@ -339,9 +342,9 @@ Every campaign gets a **portal entry** created alongside it — an ordinary-look
 
 That makes the portal the thing you hand your players. Give the campaign **Players can view** access and the portal shows up in their sidebar; one click and they're in the Hub, looking at just that campaign, with everything they can't have already stripped out:
 
-![A player's view of a campaign portal: the Hub scoped to "The Vale Chronicles", with only five tabs, no New Session button, no settings gear, and no per-row buttons](images/portal.png)
+![A player's view of a campaign portal: the Hub scoped to "The Vale Chronicles", with only five tabs, no New session button, no settings gear, and no per-row buttons](images/portal.png)
 
-What's missing from that screen compared with your own is the whole of the GM surface: the **Secrets** tab isn't rendered, there's no **New Session** button and no settings gear, the Tools menu holds only **Open the user guide**, index rows have no hide or file buttons, the timeline picker has no **➕ New timeline…** and no management buttons, there's no **Add Timepoint** and no **Add dashboard**, and the knowledge panel is read-only. Players also see fewer entries than you do — ordinary Foundry permissions still filter the index and the graph.
+What's missing from that screen compared with your own is the whole of the GM surface: the **Secrets** tab isn't rendered, there's no **New session** button and no settings gear, the Tools menu holds only **Open the full user guide**, index rows have no hide or file buttons, the timeline picker has no **➕ New timeline…** and no management buttons, there's no **Add timepoint** and no **Add dashboard**, and the knowledge panel is read-only. Players also see fewer entries than you do — ordinary Foundry permissions still filter the index and the graph.
 
 If a portal entry gets deleted, you don't lose the campaign — open **Campaign settings** from the gear and click **Restore campaign entry**, as described under [Campaigns](#campaigns).
 
@@ -349,11 +352,11 @@ If a portal entry gets deleted, you don't lose the campaign — open **Campaign 
 
 Campaign Companion works against a stock Monk's Enhanced Journal install, not just one carrying MEJ's extension API. Mode detection happens automatically and silently at startup — there's no warning, no setting to flip, and native mode is a fully supported configuration, not a degraded fallback. Everything in this guide still applies; only three things differ:
 
-- **Session** appears in MEJ's own "New Entry" dialog in both modes (under "Adventure Book" on stock MEJ, under "Single Sheet" with the extension API), and the **New Session** button in the Hub's header bar works too. (**Campaign** is never a page type in either mode; use the sidebar's **New Campaign** button.)
+- **Session** appears in MEJ's own "New Entry" dialog in both modes (under "Adventure Book" on stock MEJ, under "Single Sheet" with the extension API), and the **New session** button in the Hub's header bar works too. (**Campaign** is never a page type in either mode; use the sidebar's **New campaign** button.)
 - Session pages can't be MEJ *relationship* targets (MEJ's own picker only enumerates its own registry). Companion relationships are unaffected.
 - The Hub and Session sheets normally still open inside MEJ's shell, the same as API mode — the companion adapts MEJ's own functions to make that work. If a future MEJ update ever breaks that adaptation, they fall back to their own standalone window instead; a `shell hosting unavailable` warning in the browser console is the tell.
 
-Header buttons are not one of the differences, because they aren't there in either mode: as of this writing, MEJ v14 builds don't render a companion "open graph" or "prep board" button on an entry sheet's window header at all, due to an upstream MEJ header-injection bug. Both surfaces stay reachable regardless — the graph from the Hub's **Graph** tab, the prep board from its button in the Session tab's Secrets block.
+Header buttons are not one of the differences either: Campaign Companion registers an "open graph" button on every entry sheet and a "prep board" button on Session sheets through MEJ's header-button hook in both modes, but some MEJ v14 builds do not render companion header buttons at all. Neither surface depends on them — the graph is a Hub tab and can be focused on any entry from inside it (click a node to focus on it, or use **Focus on…**; double-click or Ctrl/Cmd-click a node to open its entry), and the prep board opens from the button in the Session tab's Secrets block.
 
 If your world moves between a build with the extension API and a stock build (in either direction), no migration step is needed — a stock MEJ install strips the module's own MEJ type flag from Session pages, and an API-carrying build's GM client silently re-stamps it the next time it loads.
 
@@ -371,7 +374,7 @@ Seven settings are visible in **Configure Settings → Module Settings**, all wo
 - **Warn when Campaign Companion can't work for players** (on by default) — see the **Player access** note under [Installation & first-time setup](#installation--first-time-setup). When a GM logs in while Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off, a dialog offers to turn it on; ticking **Don't show this again** turns this setting off, and you can switch it back on here.
 - **Players can add party relationships** (on by default) — see [Player collaboration](#player-collaboration). Off hides **Add relationship**, the drop target and the empty "Party: add a label" lines, and makes party labels read-only for players; existing party relationships still show.
 
-A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create Entity from Selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
+A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create entry from selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 
 ## Troubleshooting
 
