@@ -202,7 +202,16 @@ describe("resolveSharedMediaShare", () => {
   });
   it("tolerates missing options and appOptions", () => {
     const r = resolveSharedMediaShare({ isGM: true });
-    expect(r).toEqual({ src: undefined, caption: "" });
+    expect(r).toEqual({ src: undefined, caption: "", users: [] });
+  });
+  it("a share to all players has no recipients (ImagePopout#shareImage and Journal.showImage shapes)", () => {
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png" } }).users).toEqual([]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: [] } }).users).toEqual([]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: undefined } }).users).toEqual([]);
+  });
+  it("a share to selected players carries their ids", () => {
+    expect(resolveSharedMediaShare({ isGM: true, options: { users: ["u1", "u2"] }, appOptions: { src: "b.png" } }).users).toEqual(["u1", "u2"]);
+    expect(resolveSharedMediaShare({ isGM: true, options: { image: "a.png", users: ["u1", 7, ""] } }).users).toEqual(["u1"]);
   });
 });
 

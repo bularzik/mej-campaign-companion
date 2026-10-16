@@ -247,11 +247,12 @@ async function captureCombatEnd(combat) {
  * File a GM-shared image/video onto the timeline's newest timepoint
  * (Show Players capture), and a note on the capture campaign's open session.
  */
-function captureSharedImage(src, caption) {
+function captureSharedImage(src, caption, users = []) {
   if (!src) return;
   // Showing players something files a note on the open session whether or
-  // not media capture onto the timeline is on (spec 2026-10-15 §9).
-  fileMediaNote({ campaign: captureTarget().campaign, src, name: caption || mediaDisplayName(src) });
+  // not media capture onto the timeline is on (spec 2026-10-15 §9). A share
+  // to selected players files a note only those players can read.
+  fileMediaNote({ campaign: captureTarget().campaign, src, name: caption || mediaDisplayName(src), users });
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
   queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" })).then((filed) => {
     if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || mediaDisplayName(src) }));
@@ -275,7 +276,7 @@ function installShareCaptureWraps() {
     wrapper: function (wrapped, options = {}) {
       const result = wrapped(options);
       const share = resolveSharedMediaShare({ isGM: game.user.isGM, options, appOptions: this.options });
-      if (share) captureSharedImage(share.src, share.caption);
+      if (share) captureSharedImage(share.src, share.caption, share.users);
       return result;
     },
     registerManual: () => {
@@ -283,7 +284,7 @@ function installShareCaptureWraps() {
       ImagePopout.prototype.shareImage = function (options = {}) {
         const result = original.call(this, options);
         const share = resolveSharedMediaShare({ isGM: game.user.isGM, options, appOptions: this.options });
-        if (share) captureSharedImage(share.src, share.caption);
+        if (share) captureSharedImage(share.src, share.caption, share.users);
         return result;
       };
     },
@@ -310,16 +311,16 @@ function installShareCaptureWraps() {
     target: "foundry.documents.collections.Journal.showImage",
     wrapper: function (wrapped, src, config = {}) {
       const result = wrapped(src, config);
-      const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title } });
-      if (share) captureSharedImage(share.src, share.caption);
+      const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title, users: config.users } });
+      if (share) captureSharedImage(share.src, share.caption, share.users);
       return result;
     },
     registerManual: () => {
       const original = Journal.showImage;
       Journal.showImage = function (src, config = {}) {
         const result = original.call(this, src, config);
-        const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title } });
-        if (share) captureSharedImage(share.src, share.caption);
+        const share = resolveSharedMediaShare({ isGM: game.user.isGM, options: { image: src, caption: config.caption, title: config.title, users: config.users } });
+        if (share) captureSharedImage(share.src, share.caption, share.users);
         return result;
       };
     },

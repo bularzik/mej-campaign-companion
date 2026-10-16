@@ -38,7 +38,12 @@ describe("revealNote", () => {
       audience: { users: ["u1"], groups: [] },
       ref: { pageUuid: "JournalEntry.e1.JournalEntryPage.p1", blockId: "secret-1", kind: "block" }
     });
+  });
+  it("ignores any secret text a caller passes alongside (only the label is note text)", () => {
+    const secret = "The baron staged the ambush";
+    const note = revealNote({ ...base, audience: { users: ["u1"] }, text: secret, secret, html: `<p>${secret}</p>` });
     expect(JSON.stringify(note)).not.toMatch(/staged/);
+    expect(note.text).toBe(base.label);
   });
   it("Everyone -> audience null (readable by every baseline reader)", () => {
     expect(revealNote({ ...base, audience: { users: [], groups: [], all: true } }).audience).toBeNull();

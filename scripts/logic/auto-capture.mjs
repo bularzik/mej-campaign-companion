@@ -126,13 +126,17 @@ export function mergeGalleryImages(existing, entries) {
  * Resolve what a GM's "Show Players" share should file as media, or null when
  * the current user isn't the sharing GM. `options` is the shareImage() call's
  * argument; `appOptions` is the ImagePopout application's options.
- * @returns {{src:string|undefined, caption:string}|null}
+ * `users` are the share's recipients: ImagePopout#shareImage({users}) and
+ * Journal.showImage(src, {users}) both take user ids, and an empty or missing
+ * list means every player (verified in Foundry 13.351 and 14.369 source).
+ * @returns {{src:string|undefined, caption:string, users:string[]}|null}
  */
 export function resolveSharedMediaShare({ isGM, options = {}, appOptions = {} }) {
   if (!isGM) return null;
   return {
     src: options.image ?? appOptions?.src,
-    caption: options.caption || appOptions?.caption || options.title || appOptions?.window?.title || ""
+    caption: options.caption || appOptions?.caption || options.title || appOptions?.window?.title || "",
+    users: Array.isArray(options.users) ? options.users.filter((u) => typeof u === "string" && u) : []
   };
 }
 

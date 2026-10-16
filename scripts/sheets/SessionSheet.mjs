@@ -526,7 +526,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       audience, previousAudience: checklistSeed(item), groups,
       html: `<p>${foundry.utils.escapeHTML(item.text)}</p>`,
       entryUuid: this.document.parent?.uuid ?? this.document.uuid,
-      entryName: this.document.parent?.name ?? this.document.name
+      entryName
     });
     this.render();
   }

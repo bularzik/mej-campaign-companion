@@ -81,9 +81,22 @@ export async function fileRevealChange({ entry, target, kind, id, previous, audi
       return;
     }
 
-    // transition === "reveal"
+    // transition === "reveal". A leftover id means an earlier un-reveal did
+    // not retract its note (a failed write, or a path that never filed the
+    // retract): retract that orphan first so no live note outlasts the
+    // secret it described.
+    if (existing) {
+      try {
+        await store.retractNote(campaign, existing);
+      } catch (err) {
+        if (!isGone(err)) throw err;
+      }
+    }
     const session = loaded.currentSession(campaign);
-    if (!session) return;
+    if (!session) {
+      if (existing) await clearKey(target, key);
+      return;
+    }
     await store.ensureNotesEntry(campaign);
     const note = await store.addNote(campaign, revealNote({
       entryUuid: entry.uuid,
@@ -93,13 +106,18 @@ export async function fileRevealChange({ entry, target, kind, id, previous, audi
     }));
     const noteId = typeof note === "string" ? note : note?.id ?? null;
     if (noteId) await target.update({ [`flags.${MODULE_ID}.${REVEAL_NOTES_FLAG}.${key}`]: noteId });
+    else if (existing) await clearKey(target, key);
   } catch (err) {
     console.error(`${MODULE_ID} | filing a reveal note failed`, err);
   }
 }
 
-/** Show Players: one GM note, readable by everyone, on the current session of the capture campaign. */
-export async function fileMediaNote({ campaign, src, name }) {
+/**
+ * Show Players: one GM note on the current session of the capture campaign.
+ * A share to every player (`users` empty) is readable by everyone; a share to
+ * selected players carries exactly those players as its audience.
+ */
+export async function fileMediaNote({ campaign, src, name, users = [] }) {
   try {
     if (!game.user.isGM || !campaign || !src) return;
     const loaded = await loadStore();
@@ -110,7 +128,9 @@ export async function fileMediaNote({ campaign, src, name }) {
     await loaded.store.addNote(campaign, {
       text: game.i18n.format(`${I18N}.revealNote.media`, { name: safeNoteName(name || src) }),
       authorId: game.user.id, at: Date.now(), worldDate: null, sessionUuid: session.uuid,
-      mentions: [], kind: "reveal", audience: null, ref: { src, kind: "media" }
+      mentions: [], kind: "reveal",
+      audience: users?.length ? { users: [...users], groups: [] } : null,
+      ref: { src, kind: "media" }
     });
   } catch (err) {
     console.error(`${MODULE_ID} | filing a media note failed`, err);
