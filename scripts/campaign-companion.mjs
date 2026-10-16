@@ -300,12 +300,13 @@ Hooks.on("getDocumentSheetHeaderButtons", (subsheet, buttons) => {
   }
 });
 
-// GM-side scene-controls entry point, mirroring how MEJ itself adds a toggle
-// to the notes control group (see monks-enhanced-journal.js's own
-// getSceneControlButtons listener: controls.notes.tools[key] = {...}, the
-// object-keyed shape Foundry 13+ uses - not the pre-v13 array-of-tools shape).
+// Scene-controls entry point for every seat (spec 2026-10-15 item 10),
+// mirroring how MEJ itself adds a toggle to the notes control group
+// (monks-enhanced-journal.js's own getSceneControlButtons listener:
+// controls.notes.tools[key] = {...}, the object-keyed shape Foundry 13+
+// uses). Players reach the Hub from here without first opening an MEJ
+// window; openHub() already scopes and permission-filters per seat.
 Hooks.on("getSceneControlButtons", (controls) => {
-  if (!game.user.isGM) return;
   const noteControls = controls.notes;
   if (!noteControls?.tools) return;
   noteControls.tools[HUB_PAGE_ID] = {
