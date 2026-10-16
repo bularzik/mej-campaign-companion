@@ -1,6 +1,6 @@
 // test/player-groups.test.js
 import { describe, it, expect } from "vitest";
-import { normalizeGroups, upsertGroup, deleteGroup } from "../scripts/logic/player-groups.mjs";
+import { normalizeGroups, upsertGroup, deleteGroup, groupsSummary } from "../scripts/logic/player-groups.mjs";
 
 describe("normalizeGroups", () => {
   it("drops rows without id or name, coerces members", () => {
@@ -33,4 +33,19 @@ describe("upsertGroup / deleteGroup", () => {
     expect(deleteGroup(base, "g1")).toEqual([]);
     expect(deleteGroup(base, "zzz")).toEqual(base);
   });
+});
+
+describe("groupsSummary", () => {
+  const users = [{ id: "u1", name: "Zed" }, { id: "u2", name: "Ann" }];
+  it("joins member names in group-member order and sorts groups by name", () => {
+    const out = groupsSummary(
+      [{ id: "g2", name: "Outer", members: ["u2"] }, { id: "g1", name: "Inner", members: ["u1", "u2", "gone"] }],
+      users
+    );
+    expect(out).toEqual([
+      { id: "g1", name: "Inner", memberNames: "Zed, Ann" },
+      { id: "g2", name: "Outer", memberNames: "Ann" }
+    ]);
+  });
+  it("empty input gives []", () => expect(groupsSummary(undefined, users)).toEqual([]));
 });

@@ -224,7 +224,8 @@
       "applyBaselineNow": "Apply to all current members now",
       "baselineApplied": "Updated default permissions on {count} entries.",
       "contributors": "Contributors",
-      "contributorsHint": "Contributors can add party relationships, and create entries from selected text in this campaign's pages while a GM is connected.",
+      "manageGroups": "Manage player groups…",
+      "contributorsHint": "Contributors can take notes, add party relationships and create entries from selected text in this campaign. Entry creation needs a GM connected.",
       "contributorsUsers": "Players",
       "contributorsGroups": "Player groups",
       "adoptOffer": "This world has campaign content but no campaign. Create one from it?",
@@ -375,7 +376,7 @@
       "players": "Players",
       "groups": "Groups",
       "noPlayers": "No player users in this world.",
-      "noGroups": "No groups defined yet — manage them on the Hub's Secrets tab.",
+      "noGroups": "No groups defined yet — add them from Campaign settings or the Hub's Secrets tab.",
       "apply": "Apply",
       "revealTitle": "Reveal secret",
       "whisperHeader": "A secret from {name} has been revealed to you:",
@@ -396,7 +397,9 @@
       "addGroup": "Add group",
       "editGroup": "Edit group",
       "groupName": "Group name",
-      "groupMembers": "Members"
+      "groupMembers": "Members",
+      "groupsManagerTitle": "Player groups",
+      "noGroupsYet": "No player groups yet."
     },
     "confirmDelete": {
       "dashboard": { "title": "Delete dashboard", "body": "Delete the dashboard \"{name}\"? Its saved query is removed for everyone." },

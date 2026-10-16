@@ -45,6 +45,7 @@ import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
 import { confirmDelete } from "./confirm-delete.mjs";
+import { promptGroup, openGroupsManager } from "./group-dialog.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
@@ -1228,33 +1229,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** Name + member-checkbox dialog; returns {name, members} or null. */
-  static async #promptGroup(initial = {}, { titleKey }) {
-    const esc = foundry.utils.escapeHTML;
-    const players = game.users.filter((u) => !u.isGM);
-    const memberRows = players.map((u) =>
-      `<label class="mej-cc-audience-row"><input type="checkbox" name="member-${u.id}"${(initial.members ?? []).includes(u.id) ? " checked" : ""}> ${esc(u.name)}</label>`
-    ).join("");
-    return foundry.applications.api.DialogV2.prompt({
-      window: { title: titleKey },
-      content: `<div class="form-group"><label>${game.i18n.localize(`${I18N}.secrets.groupName`)}</label>
-          <input type="text" name="name" value="${esc(initial.name ?? "")}" required autofocus></div>
-        <fieldset><legend>${game.i18n.localize(`${I18N}.secrets.groupMembers`)}</legend>${memberRows}</fieldset>`,
-      ok: {
-        label: `${I18N}.hub.save`,
-        callback: (event, button) => {
-          const name = button.form.elements.name.value.trim();
-          if (!name) return null;
-          return { name, members: players.filter((u) => button.form.elements[`member-${u.id}`]?.checked).map((u) => u.id) };
-        }
-      },
-      rejectClose: false
-    });
-  }
-
   static async onAddGroup() {
     if (!game.user.isGM) return;
-    const result = await CampaignHubPage.#promptGroup({}, { titleKey: `${I18N}.secrets.addGroup` });
+    const result = await promptGroup({}, { titleKey: `${I18N}.secrets.addGroup` });
     if (!result) return;
     const groups = upsertGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), { id: foundry.utils.randomID(8), ...result });
     await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, groups);
@@ -1267,7 +1244,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const groups = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING));
     const existing = groups.find((g) => g.id === id);
     if (!existing) return;
-    const result = await CampaignHubPage.#promptGroup(existing, { titleKey: `${I18N}.secrets.editGroup` });
+    const result = await promptGroup(existing, { titleKey: `${I18N}.secrets.editGroup` });
     if (!result) return;
     await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, upsertGroup(groups, { id, ...result }));
     this.render({ parts: ["main"] });
@@ -1424,8 +1401,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         <p class="hint">${esc(game.i18n.localize(`${I18N}.hub.contributorsHint`))}</p>
         <div class="form-group stacked"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsUsers`))}</label>
           ${choices.users.map((c) => box("contributorUser", c)).join("")}</div>
-        ${choices.groups.length ? `<div class="form-group stacked"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsGroups`))}</label>
-          ${choices.groups.map((c) => box("contributorGroup", c)).join("")}</div>` : ""}
+        <div class="form-group stacked mej-cc-contributor-groups"><label>${esc(game.i18n.localize(`${I18N}.hub.contributorsGroups`))}</label>
+          ${choices.groups.map((c) => box("contributorGroup", c)).join("") || `<p class="notes">${esc(game.i18n.localize(`${I18N}.secrets.noGroupsYet`))}</p>`}
+          <button type="button" data-action="manageGroups"><i class="fa-solid fa-users-gear"></i> ${esc(game.i18n.localize(`${I18N}.hub.manageGroups`))}</button></div>
       </fieldset>`;
     const content = `
       <div class="form-group"><label>${esc(game.i18n.localize(`${I18N}.hub.newCampaignBaseline`))}</label>
@@ -1463,6 +1441,21 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         applyNow: button.form.elements.applyNow.checked,
         contributors: readContributors(button.form)
       }) },
+      render: (event, dialog) => {
+        dialog.element.querySelector('[data-action="manageGroups"]')?.addEventListener("click", async (ev) => {
+          ev.preventDefault();
+          await openGroupsManager();
+          // Repaint the group checkboxes from the fresh setting; keep what was ticked.
+          const host = dialog.element.querySelector(".mej-cc-contributor-groups");
+          const ticked = new Set([...host.querySelectorAll('input[name="contributorGroup"]:checked')].map((i) => i.value));
+          const fresh = contributorChoices(game.users.contents, game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), campaignFlagOf(campaign)).groups
+            .map((c) => ({ ...c, checked: ticked.has(c.id) || c.checked }));
+          host.querySelectorAll("label.checkbox, p.notes").forEach((n) => n.remove());
+          const btn = host.querySelector('[data-action="manageGroups"]');
+          const html = fresh.map((c) => box("contributorGroup", c)).join("") || `<p class="notes">${esc(game.i18n.localize(`${I18N}.secrets.noGroupsYet`))}</p>`;
+          btn.insertAdjacentHTML("beforebegin", html);
+        });
+      },
       rejectClose: false
     });
     if (!result) return;

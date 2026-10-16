@@ -24,3 +24,11 @@ export function upsertGroup(groups, { id, name, members }) {
 export function deleteGroup(groups, id) {
   return normalizeGroups(groups).filter((g) => g.id !== id);
 }
+
+/** Display rows for a groups list: name-sorted, members resolved to names (unknown ids dropped). */
+export function groupsSummary(groups, users) {
+  const nameOf = new Map((users ?? []).map((u) => [u.id, u.name]));
+  return normalizeGroups(groups)
+    .map((g) => ({ id: g.id, name: g.name, memberNames: g.members.map((id) => nameOf.get(id)).filter(Boolean).join(", ") }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
