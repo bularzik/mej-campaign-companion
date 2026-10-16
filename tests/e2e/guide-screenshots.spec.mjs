@@ -1412,10 +1412,10 @@ guideDescribe("guide screenshots", () => {
         return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
       }, selection);
       await page.mouse.click(box.x, box.y, { button: "right" });
-      const menuItem = page.locator("#context-menu li", { hasText: "Create Entity from Selection" });
+      const menuItem = page.locator("#context-menu li", { hasText: "Create entry from selection" });
       await expect(menuItem).toHaveCount(1);
       await menuItem.click();
-      const dialog = page.locator("dialog.application", { hasText: "Create Entity from Selection" });
+      const dialog = page.locator("dialog.application", { hasText: "Create entry from selection" });
       await expect(dialog).toBeVisible({ timeout: 10_000 });
       await shot(dialog, "entity-from-selection-dialog");
       // Native <dialog> — closes reliably on Escape (docx-export-dialog.png's

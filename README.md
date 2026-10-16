@@ -16,12 +16,12 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - A Session is its own page type, `mej-campaign-companion.session`, rendered inside MEJ's tabbed journal shell like a built-in MEJ type. It holds a session number, an in-world campaign date, attendees, a checklist of secrets with reveal/hide, one shared recap (`system.recap`) and GM-only notes (`system.gmNotes`).
 - The recap is a single document. Owners edit it through Foundry's collaborative editor, so simultaneous owners see each other's edits; everyone else reads it. A save raised by another field on the sheet (session number, date) leaves the recap and GM notes untouched, and open Session views refresh when another owner saves the recap.
 - Sessions are identified by their native page type, never by MEJ's type flag — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050).
-- The Hub's **New Session** button creates one in both modes. Walkthrough: [GM Guide — Running your first session](docs/gm-guide.md#running-your-first-session).
+- The Hub's **New session** button creates one in both modes. Walkthrough: [GM Guide — Running your first session](docs/gm-guide.md#running-your-first-session).
 
 ### Campaigns
 
-- A campaign is a flagged journal folder, a portal entry named after it, and a `<name> — Timeline` journal, created together by `createCampaign()` from the journal sidebar's GM-only **New Campaign** button or the Hub's campaign picker. **Make this folder a campaign** on a plain top-level folder's context menu promotes it in place; campaigns never nest.
-- Everything filed in the folder is a member, including plain journal entries. The Hub's campaign picker (All campaigns / Unfiled / each campaign) scopes the Index, Timeline, Graph, Search, Dashboards and Secrets panes.
+- A campaign is a flagged journal folder, a portal entry named after it, and a `<name> — Timeline` journal, created together by `createCampaign()` from the journal sidebar's GM-only **New campaign** button or the Hub's campaign picker. **Make this folder a campaign** on a plain top-level folder's context menu promotes it in place; campaigns never nest.
+- Everything filed in the folder is a member, including plain journal entries. The Hub's campaign picker (All campaigns / Unfiled / each campaign) scopes the Entries, Timeline, Graph, Search, Dashboards and Secrets panes.
 - Each campaign has an ownership baseline (**GM only**, **Players can view**, **Players can edit**). Entries a GM creates inside the folder without an explicit ownership start at that baseline; **Apply to all current members now** pushes it onto existing members, skipping entries hidden with the Index's per-entry eye toggle.
 - The portal entry opens the Hub scoped to its campaign. Renaming the folder renames the portal and vice versa; deleting the portal never deletes the campaign (campaign settings offers **Restore campaign entry**).
 - Campaign is not a page type: it is stripped from MEJ's New Entry dialog and Foundry's Create Page dialog, and a loose campaign page created any other way is upgraded into a real campaign or refused with a notification.
@@ -30,9 +30,9 @@ The rest of this README is the technical reference: exact feature semantics, tru
 ### Campaign Hub
 
 - A "Campaign" home tab inside MEJ's shell (through MEJ's `registerShellPage` extension point in `api` mode, through shell hosting in `native` mode), also reachable from the scene controls' Journal Notes group and by opening a campaign's portal entry.
-- A header bar holds the campaign picker, the campaign-settings gear (single-campaign scope only), **New Session**, and a **Tools** menu (Import Document, Export, Auto-capture campaign, Open the user guide; a player's menu holds only the guide).
-- Six panes: Index, Timeline, Graph, Search, Dashboards and Secrets. Players get five; the Secrets pane is not rendered for a non-GM.
-- The Index lists every campaign-relevant entry: MEJ-typed entries, Session pages, plain journal entries (as "Journal" rows), and Foundry pdf/video pages (as "Document"/"Recording" rows). In Unfiled scope a GM can **File into campaign…** per row or **File all shown into…**; in campaign scope a GM's **Link mentions** runs the auto-link catch-up pass through the review dialog.
+- A header bar holds the campaign picker, the campaign-settings gear (single-campaign scope only), **New session**, the **Help** (?) button beside the tabs, and a **Tools** menu (Import a Word document, Export to Word, Auto-capture campaign, Open the full user guide; a player's menu holds only the guide).
+- Seven panes: Entries (the index), Sessions, Timeline, Graph, Search, Dashboards and Secrets. Players get Sessions first and no Secrets; the Secrets pane is not rendered for a non-GM.
+- The Entries pane (the index) lists every campaign-relevant entry: MEJ-typed entries, Session pages, plain journal entries (as "Journal" rows), and Foundry pdf/video pages (as "Document"/"Recording" rows). In Unfiled scope a GM can **File into campaign…** per row or **File all shown into…**; in campaign scope a GM's **Link mentions** runs the auto-link catch-up pass through the review dialog.
 - PDF and video pages open inside the Enhanced Journal with its chrome and the knowledge panel; they stay ordinary Foundry pdf/video pages, and disabling the module restores Foundry's stock sheets for them.
 
 ### Timeline and campaign dates
@@ -52,7 +52,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 ### Knowledge (tags, attributes, backlinks, knowledge bar, relationship graph)
 
 - **Tags and attributes** — custom tags and key/value attributes on MEJ entries, edited in a knowledge panel at the foot of each sheet. An attribute row marked `playerHidden` is kept off player sheets and out of player searches immediately.
-- **Backlinks** — the panel's "Mentioned in" section lists the entries that link to this one through `@UUID` links, updates live, and feeds the mention-count badges on the Hub Index. Plain-text names count only once auto-link has turned them into links.
+- **Backlinks** — the panel's "Mentioned in" section lists the entries that link to this one through `@UUID` links, updates live, and feeds the mention-count badges on the Hub Entries pane. Plain-text names count only once auto-link has turned them into links.
 - **Knowledge bar** — the panel collapses to a one-line bar summarizing what it holds. The collapsed state is per client (`knowledgePanelCollapsed`) and applies to every sheet. The expanded panel is capped at half the pane and scrolls, and paints its own surface under a dark colour scheme.
 - **Relationship graph** — the Hub's Graph pane draws entries connected through MEJ's `relationships` flags, with vendored d3-force layout. It follows the campaign picker; **Whole campaign** and **Focus** (one entry and its direct connections) modes; an optional dashed overlay of `@UUID` mention edges; nodes draw the entry's own picture or a per-type placeholder. It is capped at the 200 most-connected entries and says so when the cap applies. A player's graph shows only relationships revealed to them. Party relationships draw as dotted lines, toggled by **Show party relationships**.
 - Mentions and relationships are separate layers: mentions are derived from links, relationships are curated on MEJ's Relationships tab. The module never turns one into the other.
@@ -76,7 +76,7 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 
 - **As you type** (`autoLink`, on by default) — on save, names newly added to page text, a Session's recap or its GM notes become links.
 - **When an entry is created** (`retroLinkMode`, Silent by default) — the active GM's client links existing plain-text mentions of the new entry's name. Silent writes immediately and shows a notification; Confirm shows a review dialog with a checkbox per page; Off disables it. Entries created while no GM is online are processed at the next GM login.
-- **Catch-up** — the Hub's **Link mentions** (Index toolbar, campaign scope, GM) plans every entry in the campaign and always goes through the review dialog.
+- **Catch-up** — the Hub's **Link mentions** (Entries toolbar, campaign scope, GM) plans every entry in the campaign and always goes through the review dialog.
 - **Docx import** — auto-links imported text at creation (gated on `autoLink`). The import wizard's Audience select sets created-entry ownership and bounds link targets.
 
 **Campaign scope:** an entry filed in a campaign links with that campaign's pages and unfiled pages; an unfiled entry links anywhere; campaigns never link into each other. A campaign's portal entry and timeline journal are never link sources or targets.
@@ -87,10 +87,10 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 
 **Caveat:** links are validated when written; changing permissions afterward does not add or remove existing links. The per-page `noAutoLink` flag opts a page out of every auto-link path.
 
-### Create Entity from Selection and campaign Contributors
+### Create entry from selection and campaign Contributors
 
-- Right-clicking a selection of plain text (up to 80 characters, no line breaks) in a page's displayed description offers **Create Entity from Selection**; it is absent while the field is being edited. The dialog takes a type (MEJ's entity types; the last one used is remembered per client in `entityFromSelectionLastType`), a name, and **Link other mentions**. The companion creates the entity in the same folder, turns the selected occurrence into a link to it, and, when **Link other mentions** is checked, hands the new entry to the `retroLinkMode` setting.
-- When the selection is already the name of an entity (compared ignoring case and extra spaces, among the entities auto-link could link from that field: same campaign scope, visible to everyone who can see the page, not the page's own entry), the menu shows **Link to Entity** instead. With one match it links the selection to that entity at once; with several it asks which. No entity is created and no other mentions are touched.
+- Right-clicking a selection of plain text (up to 80 characters, no line breaks) in a page's displayed description offers **Create entry from selection**; it is absent while the field is being edited. The dialog takes a type (MEJ's entity types; the last one used is remembered per client in `entityFromSelectionLastType`), a name, and **Link other mentions**. The companion creates the entity in the same folder, turns the selected occurrence into a link to it, and, when **Link other mentions** is checked, hands the new entry to the `retroLinkMode` setting.
+- When the selection is already the name of an entity (compared ignoring case and extra spaces, among the entities auto-link could link from that field: same campaign scope, visible to everyone who can see the page, not the page's own entry), the menu shows **Link to entry** instead. With one match it links the selection to that entity at once; with several it asks which. No entity is created and no other mentions are touched.
 - A GM can use it on any page they can edit. A player can use it only on pages of a campaign whose **Contributors** (Hub → campaign settings) list them directly or through a player group, and only while a GM is connected: the request is relayed to the GM's client, which validates the sender and does the work, so the new entity gets the campaign's ownership baseline. Contributor lists are stored on the campaign folder's flag.
 - Walkthrough: [GM Guide — Creating an entity from selected text](docs/gm-guide.md#creating-an-entity-from-selected-text).
 
@@ -148,7 +148,7 @@ not announced with a warning. What differs:
   (the companion adds MEJ's type flag at creation when the dialog leaves it
   off). The **New
   Session** button in the Campaign Hub works too. Campaigns are created with
-  the **New Campaign** button in the journal sidebar in both modes, and never
+  the **New campaign** button in the journal sidebar in both modes, and never
   appear as a page type in that dialog.
 - Session pages cannot be MEJ *relationship* targets (MEJ's picker only
   enumerates its own registry). Companion relationships are unaffected.
@@ -225,7 +225,7 @@ Nineteen settings are registered: seven visible in the module settings menu, all
 | `knowledgePanelCollapsed` | No (internal) | Off | Client-scoped. The knowledge panel is collapsed to its one-line bar on every sheet. |
 | `adoptionPrompted` | No (internal) | Off | The one-time adoption offer has been shown or dismissed. |
 | `hubTimelineSelection` | No (internal) | `""` | Client-scoped. The Hub Timeline pane's selected timeline id; `""` is the scope's default view. |
-| `entityFromSelectionLastType` | No (internal) | `person` | Client-scoped. The type last picked in the Create Entity from Selection dialog. |
+| `entityFromSelectionLastType` | No (internal) | `person` | Client-scoped. The type last picked in the Create entry from selection dialog. |
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
