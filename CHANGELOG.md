@@ -1,8 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.27.0 (2026-10-16)
+
+The session is the unit of play. Players take notes during the game, the Hub opens on tonight's session, and everything a player sees is scoped to their own campaign. This release implements the 2026-10-15 UI review (`docs/superpowers/specs/2026-10-15-companion-ui-review-design.md`).
+
+Notes and the current session
 
 - **Added:** session notes, the current session (Start and End from the Hub's Tonight strip), `/note` in chat, party notes on entries, grouped backlinks, timeline notes and an End-session recap draft (spec 2026-10-15 Plan B). Players write signed notes with no GM online; only notes everyone can read go into the recap draft. Setting **Offer to start a session at login** (off by default). Notes replicate to every player who owns the notes entry and are hidden from out-of-audience players by client-side filtering only, as for secrets.
+- **Added:** revealing is filing. Revealing a block secret, a checklist secret or a relationship, from any reveal path including the prep board, files a note on the current session naming the entry (never the secret text), with the reveal's audience. Widening or narrowing the audience updates that note; un-revealing retracts it, and GMs see a **Retracted** badge in the notes stream, the Tonight strip and the knowledge panel. **Show Players** files a media note readable only by the players it was shown to.
+
+The Hub and the Session sheet for players
+
+- **Changed:** a player who can see exactly one campaign gets its name as the Hub title, with no scope picker; players never see the Unfiled or New campaign options. The scene-control Hub button now shows for every seat, as the guides always said.
+- **Added:** a **Sessions** tab listing every session the viewer can see, newest first, with the in-world date, attendees and a recap preview that strips unrevealed secrets. Player tab order is Sessions · Entries · Timeline · Graph · Search (Dashboards only when one is shared); Secrets is never shown to players. The old index tab is now labelled Entries.
+- **Changed:** the Session sheet's "drag an actor here" hint shows only to editors, and the Secrets block only to the GM or to a player with something revealed.
+- **Added:** Graph **Focus** is reachable from inside the pane: a click focuses the node, double-click or Ctrl/Cmd-click opens it, and a **Focus on…** picker lists every visible entry in scope.
+- **Added:** a (?) help panel beside the Hub tabs with a short description of how the companion works and a link to the guide. Search snippets show link text instead of `@UUID[…]` markup.
+- **Changed:** wording pass: sentence-case labels, "entry" instead of "entity", "Hide entry from players" / "Share entry with players" on the eye icon, and the import wizard's review hint only on its review step.
+
+Campaign scoping
+
+- **Changed:** Word export offers **This campaign** (default, with all of that campaign's timelines) or **Whole world** when the Hub is scoped to a campaign. The party relationship picker and drop, **Mentioned in**, and `@CampaignQuery` results stay inside the campaign (`scope:all` opts out; unfiled pages see everything). The shell's Campaign Hub control opens the Hub scoped to the open entry's campaign.
+
+Sessions and GM consolidation
+
+- **Changed:** sessions created in a campaign whose baseline is **Players can view** or above are owned by the campaign's players, so attendees can edit the recap without a GM online. GM-only campaigns and explicit GM-only imports are unchanged; **Players write sessions** now covers only sessions outside any campaign. Note that Foundry shows native secret blocks in a recap to every owning player, and an owning player could edit checklist secrets or GM Notes through the browser console (see the README).
+- **Changed:** one reveal control per session-checklist secret: the eye toggle is gone and **Everyone** lives in the audience dialog. Legacy revealed items still read as revealed.
+- **Changed:** the prep board shows the session's GM Notes read-only with an "Edit on the session" link; leftover prep-board scratch notes are folded into GM Notes once.
+- **Added:** delete confirmations for dashboards, player groups, checklist secrets, attributes and attendees; **Manage player groups…** in campaign settings; auto-capture targets the only campaign automatically and toasts only after filing succeeded; the recap editor shows "Saving recap…" / "Recap saved.".
 - **Fixed:** on Foundry 14.369 the Campaign Hub would not open (and a saved Hub tab logged "Cannot convert undefined or null to object" when the Enhanced Journal opened). Foundry 14.369 skips sheet registrations for a page type it has no entry for, which dropped the Hub's. The companion now creates that entry before registering, so the Hub registers at ready on 14.369 and behaves as before on earlier builds.
 
 ## 0.26.0 (2026-10-11)
