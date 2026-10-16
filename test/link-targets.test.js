@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { linkableRegions, sameLinkScope } from "../scripts/logic/link-targets.mjs";
+import { linkableRegions, sameLinkScope, scopeBacklinks } from "../scripts/logic/link-targets.mjs";
 
 describe("linkableRegions", () => {
   it("yields text.content for an ordinary page", () => {
@@ -46,5 +46,16 @@ describe("sameLinkScope", () => {
     ["", "A", true]
   ])("(%s, %s) -> %s", (a, b, want) => {
     expect(sameLinkScope(a, b)).toBe(want);
+  });
+});
+
+describe("scopeBacklinks", () => {
+  const rows = [{ uuid: "s1", count: 2 }, { uuid: "s2", count: 1 }, { uuid: "s3", count: 1 }];
+  const cid = (uuid) => ({ s1: "c1", s2: "c2", s3: null })[uuid];
+  it("drops sources from another campaign, keeps same-campaign and unfiled", () => {
+    expect(scopeBacklinks(rows, "c1", cid)).toEqual([{ uuid: "s1", count: 2 }, { uuid: "s3", count: 1 }]);
+  });
+  it("an unfiled target sees everything", () => {
+    expect(scopeBacklinks(rows, null, cid)).toEqual(rows);
   });
 });

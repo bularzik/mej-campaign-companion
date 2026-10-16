@@ -23,6 +23,7 @@ import { createBacklinkIndex, extractRefs, setSourceRefs, removeSourceRefs, back
 import { extractSecretBlocks } from "../logic/secret-blocks.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { campaignIdOf } from "../logic/campaigns.mjs";
+import { scopeBacklinks } from "../logic/link-targets.mjs";
 import { invalidatesSearchIndex } from "../logic/index-invalidation.mjs";
 
 const MEJ_MODULE = "monks-enhanced-journal";
@@ -228,8 +229,10 @@ function userCanSee(uuid) {
  */
 export function backlinksForEntry(targetUuid) {
   const idx = ensureIndex();
-  return backlinksFor(backlinks, targetUuid, { gm: game.user.isGM })
-    .filter(({ uuid }) => userCanSee(uuid))
+  const target = fromUuidSync(targetUuid);
+  const rows = backlinksFor(backlinks, targetUuid, { gm: game.user.isGM })
+    .filter(({ uuid }) => userCanSee(uuid));
+  return scopeBacklinks(rows, target ? campaignIdOf(target) : null, (uuid) => campaignIdOf(fromUuidSync(uuid)))
     .map(({ uuid, count, gmOnly }) => {
       const rec = idx.records.get(uuid);
       return { uuid, count, gmOnly, name: rec?.name ?? fromUuidSync(uuid)?.name ?? uuid, type: rec?.type ?? "" };
