@@ -93,16 +93,26 @@ function captureTarget() {
   return resolveCaptureCampaign(id, getCampaigns());
 }
 
-/** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
+/** A readable file name from a media src: last path segment, without ?query/#hash, URI-decoded. */
+function mediaDisplayName(src) {
+  const last = String(src ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+}
+
+/** File a document/image link onto the timeline's newest timepoint. Resolves true when filed, false when it declined (no target / no timeline). */
 async function fileOntoNewestTimepoint(link) {
   const { campaign, reason } = captureTarget();
-  if (reason === "multi") return; // several campaigns, no target chosen: decline silently for media
+  if (reason === "multi") return false; // several campaigns, no target chosen: decline silently for media
   // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
   // never prompts and never follows the Hub's currently-viewed one.
   const journal = await ensureTimelineJournal(campaign);
   if (!journal) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);
-    return;
+    return false;
   }
   // A timeline with no timepoints used to drop the capture; give it one
   // dated "now" so the capture always lands somewhere.
@@ -113,6 +123,7 @@ async function fileOntoNewestTimepoint(link) {
     tp = await addTimepoint(journal, label, null, now);
   }
   await addLink(journal, tp.id, link);
+  return true;
 }
 
 /**
@@ -169,8 +180,8 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
   } catch {
     // Combat already deleted (create-at-end fallback): nothing left to link.
   }
-  await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
-  ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterCaptured`, { name: page.name }));
+  const filed = await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
+  if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterCaptured`, { name: page.name }));
   return page;
 }
 
@@ -238,8 +249,9 @@ async function captureCombatEnd(combat) {
 function captureSharedImage(src, caption) {
   if (!src) return;
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
-  queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" }));
-  ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || src.split("/").pop() }));
+  queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" })).then((filed) => {
+    if (filed) ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || mediaDisplayName(src) }));
+  });
 }
 
 /** Install both shareImage capture wraps (see registerAutoCapture's comment for why two). */
