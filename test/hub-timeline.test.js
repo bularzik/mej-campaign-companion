@@ -42,3 +42,28 @@ describe("buildOrderOptions", () => {
     expect(items.filter((i) => i.selected).map((i) => i.value)).toEqual(["campaign"]);
   });
 });
+
+describe("buildTimelineRows with notes (spec item 16)", () => {
+  const tps = [
+    { id: "a", label: "A", sort: 1, createdAt: 1, campaignDate: { year: 1490, month: 0, day: 5 } },
+    { id: "b", label: "B", sort: 2, createdAt: 2, campaignDate: { year: 1490, month: 2, day: 1 } }
+  ];
+  const notes = [
+    { id: "n1", text: "between", authorName: "Jo", at: 9, worldDate: { year: 1490, month: 1, day: 1 } },
+    { id: "n2", text: "undated", authorName: "Jo", at: 10, worldDate: null }
+  ];
+  const opts = { canEdit: true, formatDate: () => "d", resolveRowLinks: () => [], notes, formatNoteDate: () => "nd" };
+  it("interleaves dated notes in Campaign Date order and skips undated ones", () => {
+    const rows = buildTimelineRows(tps, "campaign", opts);
+    expect(rows.map((r) => r.id)).toEqual(["a", "n1", "b"]);
+    expect(rows[1]).toMatchObject({ kind: "note", label: "between", dateLabel: "nd", authorName: "Jo", canEdit: false, position: -1 });
+  });
+  it("ignores notes in manual and created order", () => {
+    expect(buildTimelineRows(tps, "manual", opts).map((r) => r.id)).toEqual(["a", "b"]);
+    expect(buildTimelineRows(tps, "created", opts).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+  it("skips partially dated notes (NaN sort key)", () => {
+    const partial = [{ id: "p", text: "x", worldDate: { year: 1490 } }];
+    expect(buildTimelineRows(tps, "campaign", { ...opts, notes: partial }).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+});

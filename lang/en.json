@@ -2,6 +2,8 @@
   "MEJCampaignCompanion": {
     "notes": {
       "entryName": "Notes — {campaign}",
+      "timelineToggle": "Show party notes",
+      "timelineOnlyCampaignOrder": "Party notes appear in Campaign Date order.",
       "noEntry": "A GM must open the world once before notes can be taken in this campaign.",
       "noAccess": "You can't write notes in this campaign.",
       "badText": "A note needs some text (2000 characters at most).",

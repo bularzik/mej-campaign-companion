@@ -77,6 +77,7 @@ const HUB_STATE = {
   sortMenuOpen: false,
   toolsMenuOpen: false,
   timelineOrder: "manual",
+  timelineShowNotes: true,
   restoreIndexFilterFocus: false,
   searchQuery: "",
   restoreSearchFocus: false,
@@ -374,12 +375,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       // Explicit pick outranks scope emptiness (spec D §3): choosing a
       // timeline narrows to it even in Unfiled scope, where the unselected
       // default is an empty pane - checked before the `unfiled` branch below.
-      stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM) }];
+      stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM, campaignOf(selectedTimeline)) }];
     } else if (unfiled) {
       stacks = [];
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
-      stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
+      stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM, campaign) }];
     } else {
       const campaigns = getCampaigns();
       if (!campaigns.length) {
@@ -399,7 +400,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         // #timelineContext itself does NOT filter by visibility (only a
         // null check) - the guard has to happen here, at the render seam,
         // via #visibleTimeline, same as the world bucket below already does.
-        stacks = campaigns.map((c) => ({ name: c.name, campaignId: c.id, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM) }));
+        stacks = campaigns.map((c) => ({ name: c.name, campaignId: c.id, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM, c) }));
         // World bucket only: visibility-filtered for display (no per-campaign
         // "default" concept applies to it), via partitionTimelines.
         const visibleTimelines = game.journal.contents
@@ -422,6 +423,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (isGM && !getCampaigns().length && !game.settings.get(MODULE_ID, ADOPTION_PROMPTED_SETTING)) {
       const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
       context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
+    }
+    // Note rows carry escaped text + @UUID shorthand (ruling R3); enrich here so the
+    // template can render labelHtml with triple-stash. Timepoint rows are untouched.
+    const enrichNote = (html) => foundry.applications.ux.TextEditor.implementation.enrichHTML(html, { async: true });
+    for (const stack of stacks) {
+      for (const row of stack.rows ?? []) {
+        if (row.kind === "note") row.labelHtml = await enrichNote(row.label);
+      }
     }
     const scopeContext = this.#campaignScopeContext();
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
@@ -710,7 +719,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * timepoint label to players in All scope (Foundry ships NONE documents
    * to clients; there's no server-side filtering to fall back on).
    */
-  #timelineContext(journal, isGM) {
+  #timelineContext(journal, isGM, campaign = null) {
     if (!journal) {
       // Players before a GM has ever opened the hub: no timeline journal
       // exists yet (or the resolved journal isn't visible to them - see
@@ -721,6 +730,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const canEdit = isGM;
     const order = this.state.timelineOrder;
     const timepoints = Timepoints.getTimepoints(journal);
+    // listNotes is already audience-filtered for the current user.
+    const notes = campaign && this.state.timelineShowNotes ? listNotes(campaign) : [];
     const rows = buildTimelineRows(timepoints, order, {
       canEdit,
       formatDate: (tp) => (order === "campaign" ? formatCampaignDate(tp.campaignDate) : formatCreateDate(tp.createdAt)),
@@ -734,7 +745,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           broken: entry.kind === "broken",
           thumb: entry.img || null,
           canToggleVisibility: canEdit && entry.kind === "image"
-        }))
+        })),
+      notes,
+      formatNoteDate: (d) => formatCampaignDate(d)
     });
     return {
       hasJournal: true,
@@ -743,7 +756,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       showDateColumn: order !== "manual",
       orderOptions: buildOrderOptions(order, (m) => game.i18n.localize(`${I18N}.hub.order.${m}`)),
       canEdit,
-      journalId: journal.id
+      journalId: journal.id,
+      showNotes: this.state.timelineShowNotes,
+      notesToggleEnabled: order === "campaign" && !!campaign
     };
   }
 
@@ -1988,6 +2003,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           }, 150)
         );
       }
+    }
+
+    for (const notesToggle of html.querySelectorAll('[data-action-change="toggleTimelineNotes"]')) {
+      if (notesToggle.dataset.ccBound) continue;
+      notesToggle.dataset.ccBound = "1";
+      notesToggle.addEventListener("change", () => {
+        this.state.timelineShowNotes = notesToggle.checked;
+        this.render({ parts: ["main"] });
+      });
     }
 
     const backlinksToggle = html.querySelector('[data-action-change="toggleGraphBacklinks"]');

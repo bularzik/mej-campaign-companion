@@ -127,15 +127,19 @@
                                 <button type="button" data-action="setTimelineOrder" data-order="{{this.value}}"
                                         class="{{#if this.selected}}active{{/if}}">{{this.label}}</button>
                                 {{/each}}
+                                <label class="mej-cc-timeline-notes-toggle" {{#unless this.notesToggleEnabled}}data-tooltip="{{localize 'MEJCampaignCompanion.notes.timelineOnlyCampaignOrder'}}"{{/unless}}>
+                                    <input type="checkbox" data-action-change="toggleTimelineNotes" {{#if this.showNotes}}checked{{/if}} {{#unless this.notesToggleEnabled}}disabled{{/unless}}>
+                                    {{localize "MEJCampaignCompanion.notes.timelineToggle"}}
+                                </label>
                             </div>
                             <ol class="mej-cc-timeline-list timepoints{{#unless this.showDateColumn}} manual{{/unless}}">
                                 {{#each this.rows}}
-                                <li class="mej-cc-timepoint" data-timepoint-id="{{this.id}}" data-position="{{this.position}}"
-                                    data-drop-timepoint {{#if this.canEdit}}{{#unless ../showDateColumn}}data-drag-timepoint draggable="true"{{/unless}}{{/if}}>
+                                <li class="mej-cc-timepoint{{#if this.kind}} mej-cc-timepoint-note{{/if}}" data-timepoint-id="{{this.id}}" data-position="{{this.position}}"
+                                    {{#unless this.kind}}data-drop-timepoint{{/unless}} {{#if this.canEdit}}{{#unless ../showDateColumn}}data-drag-timepoint draggable="true"{{/unless}}{{/if}}>
                                     {{#if ../showDateColumn}}<div class="mej-cc-timepoint-date">{{this.dateLabel}}</div>{{/if}}
                                     <div class="mej-cc-timepoint-body">
                                         <div class="mej-cc-timepoint-head">
-                                            <span class="mej-cc-timepoint-label">{{this.label}}</span>
+                                            {{#if this.kind}}<span class="mej-cc-timepoint-label">{{{this.labelHtml}}}</span><span class="mej-cc-note-meta">{{this.authorName}}</span>{{else}}<span class="mej-cc-timepoint-label">{{this.label}}</span>{{/if}}
                                             {{#if this.canEdit}}
                                             <button type="button" data-action="renameTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.editTimepoint'}}"><i class="fas fa-pen"></i></button>
                                             <button type="button" data-action="deleteTimepoint" data-tooltip="{{localize 'MEJCampaignCompanion.hub.deleteTimepoint'}}"><i class="fas fa-trash"></i></button>

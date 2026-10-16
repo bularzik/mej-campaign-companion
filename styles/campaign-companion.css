@@ -369,6 +369,8 @@
   cursor: grab;
 }
 
+.mej-cc-timepoint-note { border-left: 3px solid var(--mej-cc-ink-muted); opacity: .9; }
+
 .mej-cc-timepoint-date {
   flex: 0 0 auto;
   font-size: var(--font-size-11, 11px);
