@@ -766,7 +766,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // whole Hub render (spec §6).
   /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
   #scopeFilterRows(rows) {
-    const id = this.state.campaignId;
+    const id = this.#effectiveScopeId();
     if (!id) return rows;
     return rows.filter((r) => {
       const entry = fromUuidSync(r.uuid);
