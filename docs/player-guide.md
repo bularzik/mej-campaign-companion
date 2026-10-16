@@ -24,6 +24,20 @@ Your GM will let you know how to find a session page — usually by sharing it d
 
 If there's no pencil at all, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
 
+## Taking notes during play
+
+Notes are short lines you jot down while the game runs: a name you heard, a clue, a promise. Each note is signed with your name, stamped with the time and the in-world date, and filed under the session in progress.
+
+- **Where to write:** the capture box on the Hub's Tonight strip, the notes stream on the Session page, or **Note about this** on an entry (the entry is filled in for you). In chat, type `/note your text` (or `/n`) from anywhere.
+- **No session running:** the strip says "No session running". You can still write; your notes wait and join the next session your GM starts.
+- **Your notes are yours:** they are always signed as you. You can edit or delete your own notes (an edited one shows "edited"), and so can your GM; nobody else can.
+- **Plain text:** whatever you type stays as typed. Typed link codes are not turned into links; the Companion may link entry names it recognises, but only to entries everyone who reads the notes can see.
+- **Party notes:** notes that mention an entry show under **Party notes** in its knowledge panel. **Note about this** is missing on entries not everyone can see.
+- **Sessions tab:** each session shows how many notes it holds, and while a session is open, the Hub opens on Sessions if it has no tab remembered for you.
+- **Timeline:** notes with an in-world date appear on the timeline in date order when **Show party notes** is on.
+
+Notes are not canon. They are the table's scratch paper; the GM decides what goes into the recap.
+
 ## If your GM has made you a contributor
 
 Some GMs turn on the **Contributors** setting for a campaign — on their side, from the Hub's campaign settings — and list you there, alone or as part of a player group. If they have, selecting a run of plain text (up to 80 characters, no line breaks) on one of that campaign's pages and right-clicking it shows a **Create entry from selection** item in the context menu, the same one your GM sees, alongside MEJ's own Extract to Journal Entry. Pick a type, adjust the name if you want, and click **Create**: the companion makes the new entry, links the text you selected to it, and — if you leave **Link other mentions** checked — offers up every other plain-text mention of that name to your GM's own Retroactive Auto-Link setting. If the text you selected is already the name of an entry you can see in that campaign, the item reads **Link to entry** instead, and choosing it links your selection to that entry rather than making a new one (a picker asks which, if several share the name).

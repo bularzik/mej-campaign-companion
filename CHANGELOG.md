@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Added:** session notes, the current session (Start and End from the Hub's Tonight strip), `/note` in chat, party notes on entries, grouped backlinks, timeline notes and an End-session recap draft (spec 2026-10-15 Plan B). Players write signed notes with no GM online; only notes everyone can read go into the recap draft. Setting **Offer to start a session at login** (off by default). Notes replicate to every player who owns the notes entry and are hidden from out-of-audience players by client-side filtering only, as for secrets.
 - **Fixed:** on Foundry 14.369 the Campaign Hub would not open (and a saved Hub tab logged "Cannot convert undefined or null to object" when the Enhanced Journal opened). Foundry 14.369 skips sheet registrations for a page type it has no entry for, which dropped the Hub's. The companion now creates that entry before registering, so the Hub registers at ready on 14.369 and behaves as before on earlier builds.
 
 ## 0.26.0 (2026-10-11)

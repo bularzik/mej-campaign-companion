@@ -59,6 +59,16 @@ The Session tab's **Secrets** block tracks secrets tied to this session specific
 
 ![The Session tab's Secrets block, with the Add secret and Prep board buttons above two secret rows and their hide, audience, and delete controls](images/session-checklist.png)
 
+## Running a session: Start, notes, End
+
+1. **Start.** Click **Start session** on the Hub's Tonight strip. The Companion creates `Session N`, marks it as the campaign's open session, gives every connected player recap ownership (players who connect later get it too) and adopts any notes players took while no session was open. If you turn on **Offer to start a session at login**, the Companion asks once when you log in to a campaign with no open session and none started today; it never starts one silently.
+2. **Notes.** Players write notes with the capture box, the Session page's notes stream, **Note about this**, or `/note` in chat; no GM needs to be online. Players' notes are always signed as them and open to everyone who reads the campaign's notes. Only you can create GM or reveal notes or limit a note to an audience. You and the note's author can edit or delete it. The Sessions tab shows each session's note count.
+3. **End.** **End session** closes the open session and offers a **Recap draft** built from the notes everyone can read. Retracted notes and notes limited to an audience are left out. **Append to recap** writes the draft into the recap for you to edit; **Not now** writes nothing.
+
+Notes are not canon. They never mix into your own recap or GM notes unless you append the draft.
+
+Notes replicate to every player at a baseline of **Players can view** or above, and out-of-audience notes are hidden only by client-side filtering. See the README's [trust model for notes](../README.md#secrets).
+
 ## The Campaign Hub
 
 There are three ways into the Hub, and all of them work for players too:
@@ -362,7 +372,7 @@ If your world moves between a build with the extension API and a stock build (in
 
 ## Settings reference
 
-Seven settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
+Eight settings are visible in **Configure Settings → Module Settings**, all world-scoped (they apply to everyone in the world, and only a GM can change them):
 
 ![Campaign Companion's module settings panel](images/settings.png)
 
@@ -373,6 +383,7 @@ Seven settings are visible in **Configure Settings → Module Settings**, all wo
 - **Players Write Sessions** (default: off) — see [Player collaboration](#player-collaboration). Turn this on to let players edit the shared recap; it also offers to open up existing sessions.
 - **Warn when Campaign Companion can't work for players** (on by default) — see the **Player access** note under [Installation & first-time setup](#installation--first-time-setup). When a GM logs in while Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off, a dialog offers to turn it on; ticking **Don't show this again** turns this setting off, and you can switch it back on here.
 - **Players can add party relationships** (on by default) — see [Player collaboration](#player-collaboration). Off hides **Add relationship**, the drop target and the empty "Party: add a label" lines, and makes party labels read-only for players; existing party relationships still show.
+- **Offer to start a session at login** (default: off) — see [Running a session: Start, notes, End](#running-a-session-start-notes-end). When you log in and a campaign has no open session and none started today, asks once whether to start one.
 
 A further set of settings has no UI at all and shouldn't be hand-edited — `timelineJournalId`, `savedQueries`, `playerGroups`, `dataVersion`, `autoCaptureCampaign`, `adoptionPrompted`, and six per-client ones, `forceNativeMode`, `shellHosting`, `hubCampaignScope`, `knowledgePanelCollapsed`, `hubTimelineSelection` and `entityFromSelectionLastType`. The module writes them for you as you use it: your current campaign scope and timeline selection, whether your knowledge panel is collapsed, the type you last picked in Create entry from selection, your saved dashboards and player groups, the auto-capture target, and whether you've dismissed the adoption banner. `forceNativeMode` is an internal testing escape hatch, and `shellHosting` a troubleshooting switch (see the README's [Error handling](../README.md#error-handling-and-troubleshooting)). The README's [Settings table](../README.md#settings) is the authoritative reference for every setting, visible or not, including exact defaults.
 
