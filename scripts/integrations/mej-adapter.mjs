@@ -159,6 +159,11 @@ export async function registerCore() {
     registerPartyNotebook();
   });
 
+  await step("notes entry", async () => {
+    const { registerNotesEntry } = await import("../hooks/notes-entry.mjs");
+    registerNotesEntry();
+  });
+
   await step("party relationships ui", async () => {
     const { registerPartyRelationshipsUi } = await import("../hooks/party-relationships-ui.mjs");
     registerPartyRelationshipsUi();

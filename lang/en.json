@@ -1,5 +1,13 @@
 {
   "MEJCampaignCompanion": {
+    "notes": {
+      "entryName": "Notes — {campaign}",
+      "noEntry": "A GM must open the world once before notes can be taken in this campaign.",
+      "noAccess": "You can't write notes in this campaign.",
+      "badText": "A note needs some text (2000 characters at most).",
+      "notFound": "That note no longer exists.",
+      "writeFailed": "Couldn't save the note."
+    },
     "party": {
       "notebookName": "Party relationships — {campaign}",
       "party": "Party relationship",
