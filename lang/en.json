@@ -6,7 +6,13 @@
       "noAccess": "You can't write notes in this campaign.",
       "badText": "A note needs some text (2000 characters at most).",
       "notFound": "That note no longer exists.",
-      "writeFailed": "Couldn't save the note."
+      "writeFailed": "Couldn't save the note.",
+      "command": {
+        "filed": "Noted in {session}.",
+        "held": "Noted. No session is open yet — it will join the next one your GM starts.",
+        "ambiguous": "More than one campaign could take that note. Open the one you mean and use its capture box.",
+        "none": "You aren't in a campaign that takes notes yet."
+      }
     },
     "party": {
       "notebookName": "Party relationships — {campaign}",
