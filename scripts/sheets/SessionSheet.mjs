@@ -20,6 +20,7 @@ import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
 import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
+import { recapClosePlan } from "../logic/recap-save-state.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
@@ -426,6 +427,19 @@ export class SessionSheet extends EnhancedJournalSheet {
     const editor = this.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap'] prose-mirror")
       ?? $(".editor-parent[data-editor-id='recap'] prose-mirror", this.trueElement).get(0);
     const opening = !(editor?.open ?? false);
+    if (!opening && editor) {
+      const plan = recapClosePlan({ live: editor.value, stored: this.document?.system?.recap });
+      if (plan === "saving") {
+        const uuid = this.document.uuid;
+        ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaving`), { permanent: false });
+        const hookId = Hooks.on("updateJournalEntryPage", (page, changes) => {
+          if (page.uuid !== uuid || changes?.system?.recap === undefined) return;
+          Hooks.off("updateJournalEntryPage", hookId);
+          ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaved`));
+        });
+        setTimeout(() => Hooks.off("updateJournalEntryPage", hookId), 10_000);
+      }
+    }
     $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", opening);
     $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", !opening).toggleClass("fa-save", opening);
     if (editor) editor.open = opening;

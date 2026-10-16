@@ -1,8 +1,11 @@
 /**
  * Pure decision for whether a about-to-be-created JournalEntry should get
- * player-writable default ownership, per the `playersWriteSessions` world
- * setting. No Foundry imports - callers pass in the entry's raw creation
- * data and the setting's current value. Covers BOTH of the companion's
+ * player-writable default ownership. Inside a campaign the campaign's
+ * ownership baseline decides (`campaignBaseline` >= `observerLevel` grants;
+ * a GM-only campaign never does, even with the legacy setting on); outside
+ * any campaign (`campaignBaseline` null) the `playersWriteSessions` world
+ * setting decides. No Foundry imports - callers pass in the entry's raw
+ * creation data, the setting's current value and the numeric baseline. Covers BOTH of the companion's
  * session-creation paths with one predicate:
  *  - MEJ's own "New Entry" UI sets `flags.monks-enhanced-journal.pagetype`
  *    on the JournalEntry itself before create() (see
@@ -28,8 +31,14 @@
  * (campaign-companion.mjs) covers both creation paths without duplicating
  * the ownership-setting logic in the import wizard itself.
  */
-export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions }) {
-  if (!playersWriteSessions) return false;
+export function shouldOwnSessionEntry(entryData, { sessionType, sessionDocumentType, playersWriteSessions, campaignBaseline = null, observerLevel = 2 }) {
+  const inCampaign = campaignBaseline !== null && campaignBaseline !== undefined;
+  // Inside a campaign the baseline decides (spec 2026-10-15 item 8): a
+  // campaign players can at least view makes its sessions theirs to write;
+  // a GM-only campaign never does, whatever the legacy setting says.
+  // Outside a campaign the legacy world setting keeps deciding.
+  const granted = inCampaign ? campaignBaseline >= observerLevel : playersWriteSessions === true;
+  if (!granted) return false;
   const pagetype = entryData?.flags?.["monks-enhanced-journal"]?.pagetype;
   if (pagetype === sessionType) return true;
   return Array.isArray(entryData?.pages)

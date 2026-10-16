@@ -13,7 +13,7 @@ import { offerExistingSessionOwnership } from "./hooks/session-ownership-apply.m
 import { onHandshake, onReady, currentMode, wiringFailed, openHub, mejType, healSessionFlags, registerSheetsEarly, readyWiring } from "./integrations/mej-adapter.mjs";
 import { installReadyGate } from "./integrations/ready-gate.mjs";
 import { MODE_ABSENT, MODE_API } from "./logic/mej-mode.mjs";
-import { getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
+import { baselineOwnership, getCampaigns, campaignPortal, ensureCampaignPortal, upgradeEntryToCampaign } from "./data/campaign-store.mjs";
 import { missingPortalPlan } from "./logic/campaign-portal-data.mjs";
 import { registerFolderContext } from "./hooks/folder-context.mjs";
 import { registerTimelineOpen } from "./hooks/timeline-open.mjs";
@@ -24,7 +24,7 @@ import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
 import { registerRelationshipsTabWrap } from "./hooks/rel-tab-wrap.mjs";
-import { isTimelineJournal, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
+import { isTimelineJournal, campaignOfFolder, campaignOf, hasPortalMarker, isCampaignTypedPage } from "./logic/campaigns.mjs";
 import { campaignTimelines, ensureTimelineJournal } from "./data/timeline-journal.mjs";
 import { planCampaignStructure } from "./logic/campaign-migration.mjs";
 import { planNativeRevealMigration, planPageKeyedMigration } from "./logic/reveal-migration.mjs";
@@ -259,7 +259,17 @@ Hooks.once("setup", () => {
 Hooks.on("preCreateJournalEntry", (entry, data) => {
   if (!game.user.isGM) return;
   const playersWriteSessions = game.settings.get(MODULE_ID, PLAYERS_WRITE_SESSIONS_SETTING);
-  if (!shouldOwnSessionEntry(data, { sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions })) return;
+  // data.folder is an id string at preCreate (or, defensively, a Folder-like
+  // object); campaignOfFolder walks ancestors, so a session nested in a
+  // campaign sub-folder resolves to the campaign.
+  const folderId = typeof data?.folder === "string" ? data.folder : data?.folder?.id;
+  const folder = entry.folder ?? (folderId ? game.folders.get(folderId) : null) ?? null;
+  const campaign = campaignOfFolder(folder);
+  const campaignBaseline = campaign ? baselineOwnership(campaign) : null;
+  if (!shouldOwnSessionEntry(data, {
+    sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions,
+    campaignBaseline, observerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER
+  })) return;
   entry.updateSource({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER } });
 });
 

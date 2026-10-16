@@ -60,3 +60,23 @@ describe("sessionEntriesNeedingOwnership", () => {
     expect(sessionEntriesNeedingOwnership(undefined, sel)).toEqual([]);
   });
 });
+
+describe("shouldOwnSessionEntry with a campaign baseline (spec 2026-10-15 item 8)", () => {
+  const sessionShape = { pages: [{ type: SESSION_DOCUMENT_TYPE }] };
+  const o = (extra) => ({ sessionType: SESSION_TYPE, sessionDocumentType: SESSION_DOCUMENT_TYPE, playersWriteSessions: false, ...extra });
+  it("baseline observer or above grants ownership without the setting", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 2 }))).toBe(true);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 3 }))).toBe(true);
+  });
+  it("Review Focus 5: a GM-only campaign (baseline none) never grants it", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 0 }))).toBe(false);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: 0, playersWriteSessions: true }))).toBe(false);
+  });
+  it("outside a campaign the legacy setting still decides", () => {
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: null }))).toBe(false);
+    expect(shouldOwnSessionEntry(sessionShape, o({ campaignBaseline: null, playersWriteSessions: true }))).toBe(true);
+  });
+  it("a non-session shape is never owned", () => {
+    expect(shouldOwnSessionEntry({ pages: [{ type: "text" }] }, o({ campaignBaseline: 3 }))).toBe(false);
+  });
+});

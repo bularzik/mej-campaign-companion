@@ -129,7 +129,7 @@ Auto-link turns plain-text mentions of MEJ entry names into `@UUID` links. It ne
 
 ### Player collaboration
 
-- `playersWriteSessions` (off by default) gives players ownership of new Session entries so they can edit the shared recap directly; turning it on also offers to grant ownership of existing sessions. Players without file-upload permission get inline images through a GM relay. See [Player collaboration notes](#player-collaboration-notes).
+- Sessions created inside a campaign whose baseline is **Players can view** or **Players can edit** are owned by all players, so they can edit the shared recap directly; `playersWriteSessions` (off by default) now only covers sessions outside any campaign, and turning it on also offers to grant ownership of existing sessions. Closing the recap editor shows "Saving recap…" then "Recap saved." Players without file-upload permission get inline images through a GM relay. See [Player collaboration notes](#player-collaboration-notes).
 - Players can reach the Hub (five panes), search without GM-only content, see the relationships revealed to them, and — as campaign Contributors — create entities from a selection. Walkthrough: [Player Guide](docs/player-guide.md).
 
 ### Party relationships
@@ -225,7 +225,7 @@ Twenty settings are registered: eight visible in the module settings menu, all w
 | `retroLinkMode` | Yes | Silent | Retroactive Auto-Link: creating an MEJ entity links existing plain-text mentions of its name from the active GM's client. Choices: Off, Confirm (review dialog with per-page checkboxes), Silent (write immediately + notification). |
 | `autoCaptureEncounters` | Yes | Off | Turn on automatic Encounter-entry creation when combat ends. |
 | `autoCaptureSharedMedia` | Yes | Off | Turn on automatic filing of GM-shown images/video onto the timeline. |
-| `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
+| `playersWriteSessions` | Yes | Off | Sessions inside a campaign whose Player access is at least "Players can view" are already editable by players. Turn this on only to make sessions outside any campaign player-editable too (created via the docx import wizard or MEJ's own New Entry dialog); it also offers ownership of existing sessions. |
 | `warnPlayerAccess` | Yes | On | Warn a GM at login when Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off (Campaign Companion doesn't work properly for players without it), and offer to turn it on. Ticking "Don't show this again" in the dialog turns this setting off. |
 | `playerConnectionsEnabled` | Yes | On | Players can add party relationships: campaign Contributors get **Add relationship**, the drop target and editable party labels on the Relationships tab. Off makes party relationships read-only for players; existing ones still show. |
 | `autoStartSession` | Yes | Off | Offer to start a session at login: when a GM logs in and a campaign has no open session and none started today, ask once whether to start one. Never starts silently. |

@@ -76,8 +76,8 @@
         "hint": "When enabled, images and videos a GM shows to players are automatically filed onto the campaign timeline's newest timepoint."
       },
       "playersWriteSessions": {
-        "name": "Players Write Sessions",
-        "hint": "New Session entries are owned by all players, so any player can edit the shared recap. Turning this on also offers to grant ownership of existing sessions.",
+        "name": "Players Write Sessions (outside campaigns)",
+        "hint": "Sessions inside a campaign whose Player access is at least \"Players can view\" are already editable by players. Turn this on only to make sessions outside any campaign player-editable too; it also offers ownership of existing sessions.",
         "applyExisting": "Grant all players ownership of {count} existing session entries? Sessions created from now on are already covered.",
         "applied": "Updated ownership on {count} session entries.",
         "applyFailed": "Granting session ownership failed — see the console."
@@ -147,6 +147,8 @@
       "draftSkip": "Not now",
       "draftAppended": "Draft appended to the recap.",
       "editRecap": "Edit recap",
+      "recapSaving": "Saving recap…",
+      "recapSaved": "Recap saved.",
       "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
       "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",
       "recapImageTypeRejected": "That file isn't a supported image type.",
