@@ -75,6 +75,7 @@ const HUB_STATE = {
   typeMenuOpen: false,
   sortMenuOpen: false,
   toolsMenuOpen: false,
+  helpOpen: false,
   timelineOrder: "manual",
   restoreIndexFilterFocus: false,
   searchQuery: "",
@@ -189,6 +190,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       setGraphMode: CampaignHubPage.onSetGraphMode,
       focusOnEntry: CampaignHubPage.onFocusOnEntry,
       openHelp: CampaignHubPage.onOpenHelp,
+      toggleHelp: CampaignHubPage.onToggleHelp,
       addDashboard: CampaignHubPage.onAddDashboard,
       editDashboard: CampaignHubPage.onEditDashboard,
       deleteDashboard: CampaignHubPage.onDeleteDashboard,
@@ -1531,6 +1533,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // user guide matching this seat in a new browser tab.
   static onOpenHelp() {
     window.open(guideUrl(game.user.isGM), "_blank", "noopener");
+  }
+
+  // In-Hub help panel toggle (visible on every tab, every seat).
+  static onToggleHelp() {
+    this.state.helpOpen = !this.state.helpOpen;
+    this.state.toolsMenuOpen = false;
+    this.render({ parts: ["main"] });
   }
 
   static onOpenIndexRow(event, target) {

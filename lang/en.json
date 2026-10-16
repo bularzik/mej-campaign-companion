@@ -241,7 +241,7 @@
       "dropFilesUnsupported": "Dropping files directly isn't supported yet - upload them to a journal entry first.",
       "showImageToPlayers": "Show Image to Players?",
       "showImageToPlayersPrompt": "Show \"{name}\" to players immediately?",
-      "timelineEmptyState": "The campaign timeline hasn't been created yet. It will be set up automatically the next time a GM opens this tab.",
+      "timelineEmptyState": "No timeline yet.",
       "timelineEmptyScope": "No timeline in this scope.",
       "timeline": {
         "pickerLabel": "Timeline",
@@ -412,7 +412,17 @@
       "failed": "Could not generate the Word document. See the console for details."
     },
     "help": {
-      "open": "Open the user guide"
+      "title": "Help",
+      "menu": "Help",
+      "close": "Close help",
+      "open": "Open the full user guide",
+      "lines": {
+        "sessions": "Each game night is a Session. Your GM starts one; it lists who was there, the shared recap, and when it happened in the world.",
+        "notes": "Write what happened in the Session's recap. Mention a person or place by name and it becomes a link when you save.",
+        "entries": "Entries are the people, places, quests and things your GM has written up. Search finds words inside them; Entries lists them all.",
+        "reveals": "When your GM reveals a secret to you, you get a whisper in chat and the text appears on the entry with an orange rule.",
+        "lookBack": "Sessions and Timeline show what happened in order. Graph shows how entries connect; click a node to focus on it."
+      }
     },
     "graph": {
       "title": "Relationship Graph",

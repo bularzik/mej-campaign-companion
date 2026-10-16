@@ -3,6 +3,10 @@
         <div class="sheet-container mej-cc-hub-container flexcol">
             {{> "modules/mej-campaign-companion/templates/hub-header.hbs"}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
+            <button type="button" class="mej-cc-help-toggle" data-action="toggleHelp"
+                    aria-expanded="{{#if header.helpOpen}}true{{else}}false{{/if}}"
+                    data-tooltip="{{localize 'MEJCampaignCompanion.help.menu'}}"><i class="fa-solid fa-circle-question"></i> {{localize 'MEJCampaignCompanion.help.menu'}}</button>
+            {{> "modules/mej-campaign-companion/templates/hub-help.hbs"}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">
                     <div class="tab-inner flexcol mej-cc-index">

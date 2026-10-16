@@ -33,7 +33,8 @@ import { bodyRegion } from "./logic/field-extractors.mjs";
 
 Hooks.once("init", () => {
   foundry.applications.handlebars.loadTemplates([
-    `modules/${MODULE_ID}/templates/hub-header.hbs`
+    `modules/${MODULE_ID}/templates/hub-header.hbs`,
+    `modules/${MODULE_ID}/templates/hub-help.hbs`
   ]);
 
   game.settings.register(MODULE_ID, TIMELINE_JOURNAL_SETTING, {

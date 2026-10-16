@@ -158,6 +158,13 @@
   text-align: left;
 }
 
+/* In-Hub help panel (spec 2026-10-15 item 11). */
+.mej-cc-help { margin: 6px; padding: 8px 10px; border: 1px solid var(--color-border-light-tertiary, #7a7971); border-radius: 4px; background: var(--mej-cc-chip-bg); color: var(--mej-cc-ink); }
+.mej-cc-help header { display: flex; justify-content: space-between; align-items: center; }
+.mej-cc-help ol { margin: 6px 0; padding-left: 18px; }
+.mej-cc-help li { margin: 2px 0; font-size: var(--font-size-12, 12px); }
+.mej-cc-help-toggle { align-self: flex-end; width: auto; margin: 2px 6px; padding: 0 8px; line-height: 22px; font-size: var(--font-size-12, 12px); }
+
 /* Index pane */
 .mej-cc-index {
   gap: 0.5em;
