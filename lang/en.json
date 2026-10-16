@@ -7,6 +7,15 @@
       "badText": "A note needs some text (2000 characters at most).",
       "notFound": "That note no longer exists.",
       "writeFailed": "Couldn't save the note.",
+      "tonight": {
+        "started": "started {time}",
+        "count": "{count} notes",
+        "none": "No session running",
+        "held": "{count} notes waiting for the next session"
+      },
+      "capturePlaceholder": "Note something…",
+      "capture": "Note it",
+      "captured": "Noted.",
       "command": {
         "filed": "Noted in {session}.",
         "held": "Noted. No session is open yet — it will join the next one your GM starts.",

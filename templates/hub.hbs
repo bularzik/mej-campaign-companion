@@ -2,6 +2,7 @@
     <div class="flexcol journal-subsheet" editable="{{editable}}">
         <div class="sheet-container mej-cc-hub-container flexcol">
             {{> "modules/mej-campaign-companion/templates/hub-header.hbs"}}
+            {{> "modules/mej-campaign-companion/templates/hub-tonight.hbs"}}
             {{> "templates/generic/tab-navigation.hbs" tabs=subtabs}}
             <section class="sheet-body">
                 <div class="tab{{#if subtabs.index.active}} active{{/if}}" data-group="primary" data-tab="index">

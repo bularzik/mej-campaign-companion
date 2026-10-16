@@ -48,6 +48,13 @@ import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.m
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
+import { tonightContext } from "../logic/tonight.mjs";
+import { currentSession } from "../logic/current-session.mjs";
+import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
+import { linkNoteText } from "../hooks/note-links.mjs";
+// openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
+import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
+import { validNoteText } from "../logic/notes.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
 
@@ -197,7 +204,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       dismissAdoption: CampaignHubPage.onDismissAdoption,
       fileIntoCampaign: CampaignHubPage.onFileIntoCampaign,
       fileAllShown: CampaignHubPage.onFileAllShown,
-      linkMentions: CampaignHubPage.onLinkMentions
+      linkMentions: CampaignHubPage.onLinkMentions,
+      startSession: CampaignHubPage.onStartSession,
+      endSession: CampaignHubPage.onEndSession,
+      captureTonightNote: CampaignHubPage.onCaptureTonightNote
     }
   };
 
@@ -416,6 +426,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const scopeContext = this.#campaignScopeContext();
     context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
     context.campaignControls = scopeContext.campaignControls;
+    context.tonight = await this.#tonightContext(campaign);
     context.index = this.#indexContext();
     context.timeline = { stacks, canAdd: isGM && !stacks.length && !unfiled, ...this.#timelineSelectionContext(campaign) };
     const graphPrep = prepareGraphContext(this.#scopedEntries(), this.state);
@@ -464,6 +475,35 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       return { campaign: null, unfiled: false };
     }
     return { campaign: folder ?? null, unfiled: false };
+  }
+
+  /**
+   * The strip's campaign: the scope's campaign, else the only campaign this
+   * user can capture into (spec §5.1). Capture-eligible matches /note routing:
+   * the user is GM, or owns the campaign's notes entry.
+   */
+  #tonightCampaign(scopedCampaign) {
+    if (scopedCampaign) return scopedCampaign;
+    const eligible = getCampaigns().filter((c) => game.user.isGM || notesEntryOf(c)?.isOwner);
+    return eligible.length === 1 ? eligible[0] : null;
+  }
+
+  async #tonightContext(scopedCampaign) {
+    const campaign = this.#tonightCampaign(scopedCampaign);
+    if (!campaign) return null;
+    const page = openCampaignSession(campaign);
+    const cs = currentSession(campaign);
+    const session = page && cs ? { uuid: page.uuid, name: page.name, startedAt: cs.startedAt } : null;
+    const ctx = tonightContext({
+      campaign, session, notes: listNotes(campaign), user: game.user,
+      formatTime: (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      canWrite: !!notesEntryOf(campaign)?.isOwner
+    });
+    if (!ctx) return null;
+    // Stored note text is escaped + @UUID shorthand (linkNoteText / normalizeNotes), so enriched output is safe for {{{ }}}.
+    const enrich = (html) => foundry.applications.ux.TextEditor.implementation.enrichHTML(html, { async: true });
+    ctx.recent = await Promise.all(ctx.recent.map(async (n) => ({ ...n, text: await enrich(n.text) })));
+    return ctx;
   }
 
   /** Lazily seeded from the client setting; a stale/invisible id resets to "" (same discipline as #scope). A pending hand-off (openTimelineInHub) wins over both. */
@@ -1137,6 +1177,53 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     }
   }
 
+  static async onStartSession() {
+    if (!game.user.isGM) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign)
+      ?? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.session.start`), { alwaysPrompt: true });
+    if (!campaign) return;
+    try {
+      await startSession(campaign);
+    } catch (err) {
+      console.error(`${MODULE_ID} | start session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
+    }
+    this.render();
+  }
+
+  static async onEndSession() {
+    if (!game.user.isGM) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign);
+    if (!campaign) return;
+    try {
+      await endSession(campaign);
+    } catch (err) {
+      console.error(`${MODULE_ID} | end session failed`, err);
+    }
+    this.render();
+  }
+
+  static async onCaptureTonightNote(event, target) {
+    await this.#captureFromInput(target.closest("[data-cc-tonight]")?.querySelector('input[name="tonight-note"]'));
+  }
+
+  async #captureFromInput(input) {
+    const text = validNoteText(input?.value ?? "");
+    if (!text) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign);
+    if (!campaign) return;
+    const page = openCampaignSession(campaign);
+    try {
+      await addNote(campaign, { text: linkNoteText(campaign, text), sessionUuid: page?.uuid ?? null, worldDate: currentWorldComponents() });
+      input.value = "";
+      ui.notifications.info(game.i18n.localize(page ? `${I18N}.notes.captured` : `${I18N}.notes.command.held`));
+    } catch (err) {
+      const key = err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`;
+      ui.notifications.warn(game.i18n.localize(key));
+    }
+    this.render();
+  }
+
   /**
    * GM-only "Auto-capture campaign" entry point (spec §4): pick which
    * campaign receives auto-captured Encounters and shared media. Stored as
@@ -1773,6 +1860,16 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         if (cb.checked) this.state.types.add(cb.value);
         else this.state.types.delete(cb.value);
         this.render({ parts: ["main"] });
+      });
+    }
+
+    const tonightInput = html.querySelector('input[name="tonight-note"]');
+    if (tonightInput && !tonightInput.dataset.ccBound) {
+      tonightInput.dataset.ccBound = "1";
+      tonightInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        this.#captureFromInput(event.currentTarget);
       });
     }
 
