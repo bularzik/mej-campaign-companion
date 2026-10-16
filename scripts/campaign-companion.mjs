@@ -274,7 +274,31 @@ Hooks.on("activateControls", (ej, ctrls) => {
     icon: "fa-solid fa-timeline",
     type: "button",
     visible: true,
-    callback: () => openHub()
+    callback: async () => {
+      // Scope the Hub to the campaign of the entry the shell is showing
+      // (spec 2026-10-15 item 4). HUB_CAMPAIGN_SCOPE_SETTING is client-scoped,
+      // so players may write it too. Failures never block opening the Hub.
+      try {
+        const [{ hubScopeForOpenDocument }, { campaignIdOf }, { setHubScope }] = await Promise.all([
+          import("./logic/hub-open-scope.mjs"),
+          import("./logic/campaigns.mjs"),
+          import("./apps/CampaignHubPage.mjs")
+        ]);
+        const shell = ej ?? game.MonksEnhancedJournal?.journal;
+        const doc = shell?.rendered ? shell.document : null;
+        const scope = hubScopeForOpenDocument(doc, {
+          campaignIdOf,
+          isHubPlaceholder: (d) => d?.type === HUB_PAGE_ID || d?.id === HUB_PAGE_ID
+        });
+        if (scope) {
+          setHubScope(scope);
+          await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, scope);
+        }
+      } catch (err) {
+        console.error(`${MODULE_ID} | scoping the hub to the open entry failed`, err);
+      }
+      return openHub();
+    }
   });
 });
 
