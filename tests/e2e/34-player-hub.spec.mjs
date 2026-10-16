@@ -43,19 +43,25 @@ test.describe("34 player Hub", () => {
       // A player counts a campaign when they can see any member entry or its
       // portal, so hide every member and the portal of every OTHER campaign
       // (default ownership only) to leave User 1 exactly one; restored in afterAll.
-      ids.hidden = await gm.evaluate(async (keep) => {
+      const hide = await gm.evaluate(async (keep) => {
         const { getCampaigns, campaignPortal, campaignEntries } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
         const out = [];
-        for (const c of getCampaigns()) {
-          if (c.id === keep) continue;
-          const docs = [...campaignEntries(c), campaignPortal(c)].filter(Boolean);
-          for (const d of docs) {
-            out.push({ id: d.id, def: d.ownership?.default ?? 0 });
-            await d.update({ "ownership.default": 0 });
+        let error = null;
+        try {
+          for (const c of getCampaigns()) {
+            if (c.id === keep) continue;
+            const docs = [...campaignEntries(c), campaignPortal(c)].filter(Boolean);
+            for (const d of docs) {
+              out.push({ id: d.id, def: d.ownership?.default ?? 0 });
+              await d.update({ "ownership.default": 0 });
+            }
           }
-        }
-        return out;
+        } catch (e) { error = String(e); }
+        return { out, error };
       }, ids.folderId);
+      // Record before surfacing a failure so afterAll restores a partial hide.
+      ids.hidden = hide.out;
+      if (hide.error) throw new Error(hide.error);
     });
   });
 

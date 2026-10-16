@@ -6,7 +6,7 @@ If you're a player on a table that uses Campaign Companion, read the [player gui
 
 ## What Campaign Companion adds
 
-Campaign Companion adds a campaign-and-session layer on top of MEJ. A **campaign** is a folder of entries plus its own portal entry that opens straight into the Hub. A **Session** page type records what happened at the table. The **Campaign Hub** indexes everything campaign-relevant across six panes. On top of that you get timelines you can bind to in-world dates, tags, attributes and a relationship graph for tracking who's connected to what, automatic linking and capture, GM-managed secrets, and Word document import/export.
+Campaign Companion adds a campaign-and-session layer on top of MEJ. A **campaign** is a folder of entries plus its own portal entry that opens straight into the Hub. A **Session** page type records what happened at the table. The **Campaign Hub** indexes everything campaign-relevant across seven panes. On top of that you get timelines you can bind to in-world dates, tags, attributes and a relationship graph for tracking who's connected to what, automatic linking and capture, GM-managed secrets, and Word document import/export.
 
 Everything it does builds on entries and pages MEJ already knows how to render — nothing here replaces MEJ, it extends it.
 
@@ -102,7 +102,7 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 ![The journal sidebar header with Create Entry, Create Folder and the companion's New campaign button](images/campaign-create-button.png)
 
-**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level (when a GM creates it — players' own entries keep Foundry's defaults), so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Index (or set its ownership by hand); entries created with an explicit ownership keep it.
+**What members start with.** Anything you create inside a campaign folder — through MEJ's New Entry dialog, the Hub, or a macro — starts at the campaign's **Player access** level (when a GM creates it — players' own entries keep Foundry's defaults), so a new NPC is immediately linkable from the recaps players can read. To keep one entry to yourself, hide it with the eye toggle in the Hub's Entries pane (or set its ownership by hand); entries created with an explicit ownership keep it.
 
 **Already have a folder?** Right-click any plain top-level journal folder and choose **Make this folder a campaign**. The same dialog appears with the folder's name filled in; confirming adds the flag, portal and timeline in place — the entries already in the folder stay exactly where they are. Nested folders can't become campaigns (campaigns never nest).
 
@@ -114,7 +114,7 @@ A campaign is three things created together: a folder in Foundry's journal sideb
 
 **Campaign settings.** The gear opens a dialog whose window title is the campaign's own name. It holds **Player access** (the same three options, showing the campaign's current value) and **Apply to all current members now**, checked by default — leave it checked to push the access level onto every entry already in the folder. **Confirm** saves. If the campaign's portal entry has been deleted, this dialog grows a second button, **Restore campaign entry**, which recreates the portal immediately at the campaign's own access baseline. That button is gone again the next time you open the dialog.
 
-**Unfiled.** Choosing **Unfiled** in the picker shows every campaign-relevant entry that isn't in any campaign folder — campaign members, portal entries and timeline journals are all excluded from it. In this scope, and only for a GM, the Index toolbar gains **File all shown into…** and every row gains a **File into campaign…** button:
+**Unfiled.** Choosing **Unfiled** in the picker shows every campaign-relevant entry that isn't in any campaign folder — campaign members, portal entries and timeline journals are all excluded from it. In this scope, and only for a GM, the Entries toolbar gains **File all shown into…** and every row gains a **File into campaign…** button:
 
 ![The Hub in Unfiled scope, filtered to one entry, with File all shown into… on the toolbar and a per-row folder button](images/campaign-unfiled.png)
 
@@ -160,7 +160,7 @@ Tags are free text — type into the **Add tag…** box, and each saved tag beco
 
 ![The Tags and Attributes sections on a Person entry, showing two tag chips and two attribute rows, the second marked player-hidden](images/knowledge-tags-attributes.png)
 
-**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Index's mention-count badges come from:
+**Backlinks.** The same panel's **Mentioned in (N)** section lists every other campaign entry that links to this one via an `@UUID` link, with a ×N count per row and the total in the heading itself. A row whose only mentions come from GM-only content carries an eye-slash titled "Mentioned only in GM-only content". Empty, it reads "No mentions yet". This is also where the Entries's mention-count badges come from:
 
 ![The Mentioned in backlinks section, showing one incoming link from "Mira Thornwood"](images/knowledge-backlinks.png)
 
@@ -186,7 +186,7 @@ The graph is capped at the **200 most-connected** entries, for performance — a
 
 ![Two graph nodes close up: "Mira Thornwood" drawing her own portrait inside the node circle, beside "The Gilded Flagon" drawing MEJ's Place icon](images/portrait-node.png)
 
-Index rows are the exception: they always show the font-awesome type glyph, never the portrait.
+Entries rows are the exception: they always show the font-awesome type glyph, never the portrait.
 
 Entries without a picture show a per-type placeholder in the Hub, the timeline and the graph; imported sections that contain a picture use their first one as the entry image.
 
