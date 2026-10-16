@@ -13,7 +13,7 @@ export const currentSessionUpdate = (uuid, now) => ({ [`flags.${MODULE_ID}.${CAM
 export const clearCurrentSessionUpdate = () => ({ [`flags.${MODULE_ID}.${CAMPAIGN_FLAG}.-=${CURRENT_SESSION_KEY}`]: null });
 
 export function nextSessionNumber(numbers) {
-  const max = Math.max(0, ...(numbers ?? []).filter((n) => typeof n === "number"));
+  const max = Math.max(0, ...(numbers ?? []).filter((n) => Number.isFinite(n)));
   return max + 1;
 }
 

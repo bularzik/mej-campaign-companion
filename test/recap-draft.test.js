@@ -19,4 +19,28 @@ describe("recapDraft", () => {
     const notes = normalizeNotes({ a: { text: "t", authorId: "u", authorName: "<b>", at: 1 } });
     expect(recapDraft(notes, { formatTime })).toBe("<p><strong>T1 &lt;b&gt;</strong> t</p>");
   });
+  it("excludes audience-restricted notes (group or users) and keeps public GM-kind notes", () => {
+    const notes = normalizeNotes({
+      g: { text: "group secret", authorId: "gm", authorName: "GM", at: 1, kind: "reveal", audience: { groups: ["g1"], users: [], all: false } },
+      u: { text: "user secret", authorId: "gm", authorName: "GM", at: 2, kind: "reveal", audience: { users: ["p1"], groups: [], all: false } },
+      p: { text: "public gm", authorId: "gm", authorName: "GM", at: 3, kind: "gm", audience: null },
+      a: { text: "all players", authorId: "gm", authorName: "GM", at: 4, kind: "reveal", audience: { users: [], groups: [], all: true } }
+    });
+    expect(recapDraft(notes, { formatTime })).toBe(
+      "<p><strong>T3 GM</strong> public gm</p><p><strong>T4 GM</strong> all players</p>"
+    );
+  });
+  it("treats a raw note lacking retracted as live, and skips retracted: 5", () => {
+    const raw = [
+      { text: "live", authorId: "u", authorName: "Jo", at: 1, audience: null },
+      { text: "gone", authorId: "u", authorName: "Jo", at: 2, audience: null, retracted: 5 }
+    ];
+    expect(recapDraft(raw, { formatTime })).toBe("<p><strong>T1 Jo</strong> live</p>");
+  });
+  it("end-to-end: a script tag in stored text never reaches the draft as markup", () => {
+    const notes = normalizeNotes({ a: { text: "<script>x</script>", authorId: "u", authorName: "Jo", at: 1 } });
+    const out = recapDraft(notes, { formatTime });
+    expect(out).not.toContain("<script");
+    expect(out).toContain("&lt;script&gt;x&lt;/script&gt;");
+  });
 });

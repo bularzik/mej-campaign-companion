@@ -22,6 +22,7 @@ describe("numbering and day check", () => {
   it("next number is max+1, 1 when none", () => {
     expect(nextSessionNumber([3, null, 7])).toBe(8);
     expect(nextSessionNumber([])).toBe(1);
+    expect(nextSessionNumber([NaN, Infinity, 2])).toBe(3);
   });
   it("startedToday compares local calendar days", () => {
     const now = new Date(2026, 9, 15, 20, 0).getTime();
