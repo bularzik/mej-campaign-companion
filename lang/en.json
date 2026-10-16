@@ -119,7 +119,10 @@
       "injured": "Injured",
       "fled": "Fled",
       "noCasualties": "All combatants unharmed.",
-      "unlinked": "No linked actor: {names}"
+      "unlinked": "No linked actor: {names}",
+      "encounterCaptured": "Encounter \"{name}\" recorded on the campaign timeline.",
+      "encounterUpdated": "Encounter \"{name}\" updated with the outcome.",
+      "mediaCaptured": "\"{name}\" filed on the campaign timeline."
     },
     "placeholder": {
       "session": "New Session"
@@ -256,7 +259,7 @@
       "noEntries": "No journal entries yet.",
       "newSession": "New session",
       "newSessionFailed": "Could not create the session. Check the console for details.",
-      "captureNoCampaign": "No campaign set to receive captures — choose one in the Hub.",
+      "captureNoCampaign": "Several campaigns exist and none is set to receive captures — choose one under Tools → Auto-capture campaign.",
       "captureTarget": "Auto-capture campaign",
       "captureTargetSet": "Captures will file into \"{name}\".",
       "orderBy": "Order by",

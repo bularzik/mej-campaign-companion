@@ -46,11 +46,10 @@ import { getTimepoints, addTimepoint, addLink } from "../data/timepoints.mjs";
 import { currentWorldComponents, formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
-import { isCampaignFolder } from "../logic/campaigns.mjs";
 import { getCampaigns, baselineOwnership } from "../data/campaign-store.mjs";
 import {
   collapseParticipants, mergeParticipants, summarizeOutcome, pickNewestTimepoint,
-  resolveSharedMediaShare, installShareImageWrap
+  resolveSharedMediaShare, installShareImageWrap, resolveCaptureCampaign
 } from "../logic/auto-capture.mjs";
 import {
   buildEncounterActorRows, rowsFromEncounterActors, rekeyByBaseActor, describeUnlinkedParticipants, buildEncounterName,
@@ -88,17 +87,16 @@ async function recordDeparture(combat, combatant) {
 // ending or a Show-Players share firing while a GM is mid-import would
 // otherwise race that write too. See filing-queue.mjs's header comment.
 
-/** The campaign that receives captures (spec §4), or null. Null in a world WITH campaigns means "decline"; null in a zero-campaign world means "legacy loose behavior". */
-function captureCampaign() {
+/** The campaign that receives captures, resolved per logic/auto-capture.mjs#resolveCaptureCampaign. Reason "none" (no campaigns) keeps the legacy loose behavior. */
+function captureTarget() {
   const id = game.settings.get(MODULE_ID, AUTO_CAPTURE_CAMPAIGN_SETTING);
-  const folder = id ? game.folders.get(id) : null;
-  return folder && isCampaignFolder(folder) ? folder : null;
+  return resolveCaptureCampaign(id, getCampaigns());
 }
 
 /** File a document/image link onto the timeline's newest timepoint. Silent no-op with no timeline/timepoints yet. */
 async function fileOntoNewestTimepoint(link) {
-  const campaign = captureCampaign();
-  if (!campaign && getCampaigns().length) return; // campaigns exist but no target: decline silently for media
+  const { campaign, reason } = captureTarget();
+  if (reason === "multi") return; // several campaigns, no target chosen: decline silently for media
   // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
   // never prompts and never follows the Hub's currently-viewed one.
   const journal = await ensureTimelineJournal(campaign);
@@ -155,8 +153,8 @@ function buildDescriptionHtml(outcome, unlinkedNames) {
  * this way.
  */
 async function createEncounter(combat, participants, outcome, unlinkedNames, sceneName) {
-  const campaign = captureCampaign();
-  if (!campaign && getCampaigns().length) {
+  const { campaign, reason } = captureTarget();
+  if (reason === "multi") {
     ui.notifications.warn(game.i18n.localize(`${I18N}.hub.captureNoCampaign`));
     return null;
   }
@@ -172,6 +170,7 @@ async function createEncounter(combat, participants, outcome, unlinkedNames, sce
     // Combat already deleted (create-at-end fallback): nothing left to link.
   }
   await queueFiling(() => fileOntoNewestTimepoint({ uuid: page.uuid, name: page.name, type: "JournalEntryPage" }));
+  ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterCaptured`, { name: page.name }));
   return page;
 }
 
@@ -226,8 +225,10 @@ async function captureCombatEnd(combat) {
 
   const existingUuid = combat.getFlag(MODULE_ID, ENCOUNTER_PAGE_FLAG);
   const existingPage = existingUuid ? await fromUuid(existingUuid) : null;
-  if (existingPage) await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
-  else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
+  if (existingPage) {
+    await mergeEncounter(existingPage, participants, outcome, unlinkedNames);
+    ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.encounterUpdated`, { name: existingPage.name }));
+  } else await createEncounter(combat, participants, outcome, unlinkedNames, scene?.name ?? null);
 }
 
 /**
@@ -238,6 +239,7 @@ function captureSharedImage(src, caption) {
   if (!src) return;
   if (!game.settings.get(MODULE_ID, MEDIA_CAPTURE_SETTING)) return;
   queueFiling(() => fileOntoNewestTimepoint({ src, showPlayers: true, name: caption || "" }));
+  ui.notifications.info(game.i18n.format(`${I18N}.autoCapture.mediaCaptured`, { name: caption || src.split("/").pop() }));
 }
 
 /** Install both shareImage capture wraps (see registerAutoCapture's comment for why two). */

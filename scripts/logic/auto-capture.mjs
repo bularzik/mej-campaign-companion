@@ -154,3 +154,16 @@ export function installShareImageWrap({ libWrapperModule, libWrapper, moduleId, 
   registerManual();
   return "manual";
 }
+
+/**
+ * Which campaign receives captures (spec 2026-10-15 §5.7): the explicit
+ * setting when it names an existing campaign; otherwise the only campaign
+ * when there is exactly one; otherwise null with the reason.
+ */
+export function resolveCaptureCampaign(settingId, campaigns) {
+  const list = campaigns ?? [];
+  const set = settingId ? list.find((c) => c.id === settingId) ?? null : null;
+  if (set) return { campaign: set, reason: "set" };
+  if (list.length === 1) return { campaign: list[0], reason: "single" };
+  return { campaign: null, reason: list.length ? "multi" : "none" };
+}
