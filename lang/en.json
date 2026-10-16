@@ -336,7 +336,7 @@
         "delete": "Delete dashboard",
         "name": "Name",
         "query": "Query",
-        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>; anything else is full-text search.",
+        "queryHint": "Tokens: type:<key>, tag:<tag>, attr:<key>=<value>, scope:all (inline queries only); anything else is full-text search.",
         "showPlayers": "Visible to players",
         "visibleToPlayers": "Visible to players",
         "badQuery": "That query can't be parsed ({reason}).",

@@ -5,7 +5,8 @@
 // push-live mid-view). Failures render an inert placeholder, never break
 // the page (spec §6).
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { runQueryAll } from "../search/live-index.mjs";
+import { runQueryScoped } from "../search/live-index.mjs";
+import { campaignIdOf } from "../logic/campaigns.mjs";
 
 function resultAnchor(hit) {
   // Standard content-link anchor: Foundry's global click handler resolves
@@ -25,12 +26,12 @@ function resultAnchor(hit) {
   return a;
 }
 
-async function enrichCampaignQuery(match) {
+async function enrichCampaignQuery(match, options) {
   const container = document.createElement("div");
   container.classList.add("mej-cc-query-embed");
   const query = match[1].trim();
   try {
-    const hits = runQueryAll(query);
+    const hits = runQueryScoped(query, campaignIdOf(options?.relativeTo ?? null));
     const header = document.createElement("div");
     header.classList.add("mej-cc-query-embed-header");
     header.textContent = query;

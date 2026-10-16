@@ -8,16 +8,19 @@
  *   tag:<tag>             companion tag (case-insensitive match)
  *   attr:<key>            has an attribute with this key
  *   attr:<key>=<value>    ...whose value contains <value> (case-insensitive)
+ *   scope:all|campaign    inline queries only: all opts out of the page-campaign
+ *                         filter (default campaign); see scopeHits
  *   anything else         free text, forwarded to search-index.mjs's search()
  * All conditions AND together.
  */
 import { search } from "./search-index.mjs";
+import { sameLinkScope } from "./link-targets.mjs";
 
 export function parseQuery(str) {
-  const parsed = { types: [], tags: [], attrs: [], text: "" };
+  const parsed = { types: [], tags: [], attrs: [], text: "", scope: "campaign" };
   const free = [];
   for (const token of String(str ?? "").trim().split(/\s+/).filter(Boolean)) {
-    const m = /^(type|tag|attr):(.+)$/i.exec(token);
+    const m = /^(type|tag|attr|scope):(.+)$/i.exec(token);
     if (!m) {
       free.push(token);
       continue;
@@ -36,6 +39,10 @@ export function parseQuery(str) {
       // is meaningful, and `tag:` with no value never reaches here (the regex
       // above needs at least one character) - it is free text, by contract.
       parsed.tags.push(rest);
+    } else if (prefix === "scope") {
+      const v = rest.toLowerCase();
+      if (v !== "all" && v !== "campaign") throw new Error("bad-scope");
+      parsed.scope = v;
     } else {
       const eq = rest.indexOf("=");
       const key = eq === -1 ? rest : rest.slice(0, eq);
@@ -87,4 +94,10 @@ export function runQuery(index, queryString, { gm = false } = {}) {
     hits.push({ uuid: rec.uuid, name: rec.name, type: rec.type, matches: [] });
   }
   return hits.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Drop hits outside the rendering page's campaign unless the query says scope:all (spec 2026-10-15 §5.6). */
+export function scopeHits(hits, parsed, pageCampaignId, campaignIdOfUuid) {
+  if (parsed?.scope === "all" || !pageCampaignId) return [...(hits ?? [])];
+  return (hits ?? []).filter((h) => sameLinkScope(pageCampaignId, campaignIdOfUuid(h.uuid) ?? null));
 }
