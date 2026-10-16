@@ -54,7 +54,8 @@
         "not-journal": "Only journal entries in this world can be related.",
         "self": "An entry can't be related to itself.",
         "no-access": "You can't see that entry.",
-        "type-not-allowed": "This kind of entry can't be related here."
+        "type-not-allowed": "This kind of entry can't be related here.",
+        "other-campaign": "That entry belongs to another campaign."
       }
     },
     "errors": {

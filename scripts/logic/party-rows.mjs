@@ -5,6 +5,7 @@
 // Identity is the stored a/b pair, never the key: an Omnipresence sync
 // rewrites uuids inside flags but leaves flag keys alone.
 import { MODULE_ID, PARTY_ROWS_FLAG } from "../constants.mjs";
+import { sameLinkScope } from "./link-targets.mjs";
 
 export const LABEL_MAX = 200;
 const ROOT = `flags.${MODULE_ID}.${PARTY_ROWS_FLAG}`;
@@ -54,10 +55,11 @@ export function findPair(rows, uuidA, uuidB) {
   return (rows ?? []).find((r) => (r.a === uuidA && r.b === uuidB) || (r.a === uuidB && r.b === uuidA)) ?? null;
 }
 
-export function targetProblem(target, { sourceUuid, allowed, typeOf, canLimited }) {
+export function targetProblem(target, { sourceUuid, allowed, typeOf, canLimited, sourceCampaignId, campaignIdOf }) {
   if (!target || !entryIdOf(target.uuid)) return "not-journal";
   if (target.uuid === sourceUuid) return "self";
   if (!canLimited(target)) return "no-access";
+  if (campaignIdOf && !sameLinkScope(sourceCampaignId ?? null, campaignIdOf(target) ?? null)) return "other-campaign";
   const type = typeOf(target);
   if (!type || !(allowed ?? []).includes(type)) return "type-not-allowed";
   return null;
