@@ -93,11 +93,16 @@
                                     {{/if}}
                                 </li>
                                 {{else}}
+                                {{#if @root.editable}}
                                 <li class="instruction">{{localize 'MEJCampaignCompanion.session.dragActorHint'}}</li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.session.noAttendees'}}</li>
+                                {{/if}}
                                 {{/each}}
                             </ol>
                         </div>
 
+                        {{#if (or @root.isGM secrets.length)}}
                         <div class="secrets-section">
                             <h3>
                                 {{localize 'MEJCampaignCompanion.session.secrets'}}
@@ -123,6 +128,7 @@
                                 {{/each}}
                             </ol>
                         </div>
+                        {{/if}}
 
                         {{#if @root.isGM}}
                         <div class="flexcol editor-parent gm-notes" data-editor-id="gmNotes">
