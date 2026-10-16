@@ -9,3 +9,13 @@ export function attendeePlayerName(actor, users) {
   const owner = players.find((u) => actor.testUserPermission(u, "OWNER"));
   return owner?.name ?? "";
 }
+
+/** `current` attendee uuids plus every non-GM user's assigned character, once each (spec 2026-10-15 item 9). */
+export function attendeeUuidsFor(users, current) {
+  const out = [...(current ?? [])];
+  for (const u of users ?? []) {
+    const uuid = !u.isGM ? u.character?.uuid : null;
+    if (uuid && !out.includes(uuid)) out.push(uuid);
+  }
+  return out;
+}

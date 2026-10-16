@@ -4,6 +4,20 @@
         <span class="mej-cc-knowledge-title">{{localize "MEJCampaignCompanion.knowledge.title"}}</span>
         <span class="mej-cc-knowledge-summary">{{#if summary}}{{summary}}{{else}}{{localize "MEJCampaignCompanion.knowledge.summary.empty"}}{{/if}}</span>
     </header>
+    <details class="mej-cc-knowledge-notes" open>
+        <summary><i class="fa-solid fa-comment-dots"></i> {{localize "MEJCampaignCompanion.notes.partyNotes"}} ({{partyNotes.rows.length}})
+            {{#if partyNotes.canWrite}}<a class="mej-cc-note-about" data-action="noteAbout" title="{{localize 'MEJCampaignCompanion.notes.about'}}"><i class="fa-solid fa-plus"></i> {{localize "MEJCampaignCompanion.notes.about"}}</a>{{/if}}
+        </summary>
+        <ol class="mej-cc-notes-list">
+            {{#each partyNotes.rows}}
+            <li class="mej-cc-note" data-note-id="{{this.id}}">
+                <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}</span>
+                <span class="mej-cc-note-text">{{{this.text}}}</span>
+            </li>
+            {{/each}}
+        </ol>
+        {{#unless partyNotes.rows}}<span class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.notes.noPartyNotes"}}</span>{{/unless}}
+    </details>
     <details class="mej-cc-knowledge-tags" open>
         <summary><i class="fa-solid fa-tags"></i> {{localize "MEJCampaignCompanion.knowledge.tags"}}</summary>
         <div class="mej-cc-tag-chips">
@@ -37,16 +51,21 @@
     </details>
     <details class="mej-cc-knowledge-backlinks" open>
         <summary><i class="fa-solid fa-link"></i> {{localize "MEJCampaignCompanion.knowledge.mentionedIn"}} ({{backlinks.length}})</summary>
-        <ol class="mej-cc-backlink-list">
-            {{#each backlinks}}
-            <li class="mej-cc-backlink-row" data-uuid="{{this.uuid}}">
-                <i class="{{this.icon}}"></i>
-                <span class="mej-cc-backlink-name">{{this.name}}</span>
-                {{#if this.gmOnly}}<i class="fa-solid fa-eye-slash mej-cc-backlink-gm" title="{{localize 'MEJCampaignCompanion.knowledge.gmOnlyMention'}}"></i>{{/if}}
-                <span class="mej-cc-backlink-count">×{{this.count}}</span>
-            </li>
-            {{/each}}
-        </ol>
+        {{#each history}}
+        <div class="mej-cc-history-group">
+            {{#if this.session}}<h4 class="mej-cc-history-session">{{this.session.name}}</h4>{{else}}{{#if @root.history.[1]}}<h4 class="mej-cc-history-session">{{localize "MEJCampaignCompanion.notes.elsewhere"}}</h4>{{/if}}{{/if}}
+            <ol class="mej-cc-backlink-list">
+                {{#each this.rows}}
+                <li class="mej-cc-backlink-row" data-uuid="{{this.uuid}}">
+                    <i class="{{this.icon}}"></i>
+                    <span class="mej-cc-backlink-name">{{this.name}}</span>
+                    {{#if this.gmOnly}}<i class="fa-solid fa-eye-slash mej-cc-backlink-gm" title="{{localize 'MEJCampaignCompanion.knowledge.gmOnlyMention'}}"></i>{{/if}}
+                    <span class="mej-cc-backlink-count">×{{this.count}}</span>
+                </li>
+                {{/each}}
+            </ol>
+        </div>
+        {{/each}}
         {{#unless backlinks}}<span class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.knowledge.noMentions"}}</span>{{/unless}}
     </details>
 </section>

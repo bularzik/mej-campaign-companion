@@ -18,6 +18,18 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - Sessions are identified by their native page type, never by MEJ's type flag — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050).
 - The Hub's **New session** button creates one in both modes. Walkthrough: [GM Guide — Running your first session](docs/gm-guide.md#running-your-first-session).
 
+### Session notes and the current session
+
+- A **note** is short text (2000 characters at most) with its author, the time, the in-world date, the session it belongs to and the entries it mentions. Notes live on a hidden per-campaign entry (`Notes — <campaign>`, flag `notesEntry`) owned by every player at a campaign baseline of **Players can view** or above, so players write with no GM online. Each note is its own flag key, so simultaneous authors never overwrite each other.
+- A GM **starts a session** from the Hub's Tonight strip (or the Companion offers to at login with **Offer to start a session at login**, off by default). Starting creates `Session N`, flags the campaign's open session, grants recap ownership to every connected player (and to players who connect later), and adopts notes taken while no session was open.
+- Players write with the Tonight strip's capture box, the Session page's notes stream, **Note about this** on an entry, or `/note <text>` (`/n`) in chat. **Note about this** is offered only to users who can write notes, and only on an entry visible to everyone who reads the campaign's notes, so a note never reveals the name of a restricted entry.
+- A player's notes are always signed as themselves, with no audience. Only a GM can create GM or reveal notes, or limit a note to an audience.
+- Note text is stored as escaped HTML plus the Companion's own `@UUID[...]{name}` auto-link shorthand, and escaped again every time it is shown. A typed `@UUID`, `@Embed`, `[[...]]` or any other `@Word[...]` enricher is neutralised (an invisible word joiner is inserted after its `@` and between its brackets), so it shows as plain text and never becomes a link, embed or roll, including in a recap draft appended to the recap; other modules' enrichers do not run on note text. Only the Companion's auto-link adds links, under the same campaign-scope and audience rules as elsewhere, and never to an entry some of the note's readers cannot see.
+- Only a note's author or a GM can edit or delete it; an edited note is stamped **edited**. Notes mentioning an entry show under **Party notes** in its knowledge panel; **Mentioned in** groups backlinks by session in order.
+- The Sessions tab shows each session's note count. A player with no remembered Hub tab lands on Sessions while a session is open.
+- **End session** clears the open session and offers a recap draft assembled from the session's notes that everyone can read: retracted notes and notes with a restricted audience are never copied in. **Append to recap** writes it; nothing is written otherwise.
+- Dated notes appear on the Hub Timeline in Campaign Date order only, in a second colour, when **Show party notes** is on.
+
 ### Campaigns
 
 - A campaign is a flagged journal folder, a portal entry named after it, and a `<name> — Timeline` journal, created together by `createCampaign()` from the journal sidebar's GM-only **New campaign** button or the Hub's campaign picker. **Make this folder a campaign** on a plain top-level folder's context menu promotes it in place; campaigns never nest.
@@ -67,6 +79,8 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - **Reveal whispers** — a player added to a secret's reveal audience gets a private whisper with the secret text and session context.
 
 **Trust model:** like Foundry's own secret blocks and MEJ's GM notes, secret text is hidden by client-side filtering — the data still replicates to any client that can see the journal entry. A technically savvy player could read it from the raw document data. Do not use this module to protect genuinely sensitive information. A player granted OWNER permission on a journal entry sees all its native secret blocks via Foundry's own rendering, outside the companion's audience gate — inherent to the soft-hidden model.
+
+**Trust model for notes:** session notes, including the labels and audiences of reveal notes, replicate to every client that owns the campaign's notes entry, which is every player at a campaign baseline of **Players can view** or above. Notes outside a player's audience are hidden by client-side filtering only, so a technically savvy player could read or alter them from the raw document data, exactly as for secrets above. Do not put anything in a note that a player at the table must not be able to find.
 
 **"Everyone" is Foundry's own reveal (0.13.3):** choosing "Everyone" in a secret's reveal dialog writes the same native `revealed` class Foundry's own per-block Reveal control toggles, straight into the page's stored text. An "Everyone" reveal is therefore honored everywhere the native one is — core sheets, viewers who don't run this module, and player-safe docx exports — and the two controls no longer disagree about the same secret. Per-player and per-group audiences stay companion-side re-enrichment, since Foundry has no native equivalent for them. Secrets in a Session's **recap** can be revealed this way too, from the sheet or the Hub Secrets tab.
 
@@ -203,7 +217,7 @@ Or install manually:
 
 ## Settings
 
-Nineteen settings are registered: seven visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
+Twenty settings are registered: eight visible in the module settings menu, all world-scoped, and twelve internal settings with no UI (`config: false`) — six world-scoped and six client-scoped. World-scoped settings are GM-only and apply to everyone in the world; client-scoped settings belong to one browser.
 
 | Setting | Config visible? | Default | Purpose |
 |---|---|---|---|
@@ -214,6 +228,7 @@ Nineteen settings are registered: seven visible in the module settings menu, all
 | `playersWriteSessions` | Yes | Off | Grant players default ownership of Session entries created via the docx import wizard or MEJ's own New Entry dialog, so players can edit the shared session recap directly; turning it on also offers ownership of existing sessions. |
 | `warnPlayerAccess` | Yes | On | Warn a GM at login when Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off (Campaign Companion doesn't work properly for players without it), and offer to turn it on. Ticking "Don't show this again" in the dialog turns this setting off. |
 | `playerConnectionsEnabled` | Yes | On | Players can add party relationships: campaign Contributors get **Add relationship**, the drop target and editable party labels on the Relationships tab. Off makes party relationships read-only for players; existing ones still show. |
+| `autoStartSession` | Yes | Off | Offer to start a session at login: when a GM logs in and a campaign has no open session and none started today, ask once whether to start one. Never starts silently. |
 | `timelineJournalId` | No (internal) | `""` | Legacy: the id of the world-singleton "Campaign Timeline" JournalEntry used by a world with no campaigns. Adopting the world into a campaign moves that journal into the campaign and clears the setting. Don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |

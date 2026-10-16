@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { recapPreview, sessionRows, visibleAttendeeNames } from "../scripts/logic/hub-sessions.mjs";
+import { noteCountsBySession, normalizeNotes } from "../scripts/logic/notes.mjs";
 
 const P = "mej-campaign-companion";
 const page = (uuid, name, session, recap = "") => ({
@@ -93,5 +94,17 @@ describe("sessionRows recapText option", () => {
   it("default reads system.recap unchanged", () => {
     const [row] = sessionRows([page("U1", "S", {}, recap)]);
     expect(row.recapPreview).toContain("Hidden twist");
+  });
+});
+
+describe("sessionRows with notes-store counts", () => {
+  it("shows the per-page count noteCountsBySession builds across campaigns", () => {
+    const n = (sessionUuid) => ({ text: "x", authorId: "u1", at: 1, sessionUuid, mentions: [] });
+    // Two campaigns' notes concatenated (multi-campaign scope); a held note (no session) never counts.
+    const notes = [...normalizeNotes({ a: n("s1"), b: n("s1"), c: n(null) }), ...normalizeNotes({ d: n("s2") })];
+    const rows = sessionRows([page("s1", "One", { sessionNumber: 1 }), page("s2", "Two", { sessionNumber: 2 })],
+      { noteCounts: noteCountsBySession(notes) });
+    expect(rows.find((r) => r.uuid === "s1").noteCount).toBe(2);
+    expect(rows.find((r) => r.uuid === "s2").noteCount).toBe(1);
   });
 });

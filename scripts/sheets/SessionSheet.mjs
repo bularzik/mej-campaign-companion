@@ -21,7 +21,17 @@ import { fieldsToStrip } from "../logic/session-submit.mjs";
 import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
-import { getCalendarMonths, sessionMonthOptions } from "../logic/campaign-calendar.mjs";
+import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
+import { campaignOf } from "../logic/campaigns.mjs";
+import { listNotes, notesEntryOf, addNote, updateNote, deleteNote } from "../data/notes-store.mjs";
+import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
+import { noteToPlainText } from "../logic/note-text.mjs";
+import { currentSession } from "../logic/current-session.mjs";
+// The hooks module's openSessionPage (the campaign's open Session page); a different openSessionPage lives in integrations/mej-adapter.mjs.
+import { openSessionPage as openCampaignSession, startSession, endSession } from "../hooks/current-session.mjs";
+import { tonightContext, streamRows } from "../logic/tonight.mjs";
+import { validNoteText } from "../logic/notes.mjs";
+import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
@@ -67,7 +77,12 @@ export class SessionSheet extends EnhancedJournalSheet {
       updateSecretText: SessionSheet.onUpdateSecretText,
       secretAudience: SessionSheet.onSecretAudience,
       removeAttendee: SessionSheet.onRemoveAttendee,
-      openPrepBoard: SessionSheet.onOpenPrepBoard
+      openPrepBoard: SessionSheet.onOpenPrepBoard,
+      captureSessionNote: SessionSheet.onCaptureSessionNote,
+      editNote: SessionSheet.onEditNote,
+      deleteNote: SessionSheet.onDeleteNote,
+      startSession: SessionSheet.onStartSession,
+      endSession: SessionSheet.onEndSession
     }
   };
 
@@ -79,13 +94,15 @@ export class SessionSheet extends EnhancedJournalSheet {
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs",
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-relationships.hbs",
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-notes.hbs",
-        "templates/generic/tab-navigation.hbs"
+        "templates/generic/tab-navigation.hbs",
+        `modules/${MODULE_ID}/templates/hub-tonight.hbs`
       ],
       scrollable: [
         ".editor-display",
         ".editor-content",
         ".attendees-list",
-        ".secrets-list"
+        ".secrets-list",
+        ".mej-cc-notes-list"
       ]
     }
   };
@@ -206,6 +223,30 @@ export class SessionSheet extends EnhancedJournalSheet {
       // layer, not real access control - but the context must stay
       // consistent with the stated exclusion principle.
       delete context.data.system.gmNotes;
+    }
+
+    // Notes stream + Tonight strip (Plan B). Stored note text is escaped plus
+    // @UUID shorthand only (linkNoteText), so enriched output is safe for {{{ }}}.
+    const campaign = campaignOf(this.document);
+    if (campaign) {
+      const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const rows = streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime });
+      context.notesStream = {
+        canWrite: !!notesEntryOf(campaign)?.isOwner,
+        rows: await Promise.all(rows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
+      };
+      const open = openCampaignSession(campaign);
+      const cs = currentSession(campaign);
+      // The strip only reports state here (canWrite false: no capture box of its own); the stream's box is the capture.
+      const tonight = tonightContext({
+        campaign, session: open && cs ? { uuid: open.uuid, name: open.name, startedAt: cs.startedAt } : null,
+        notes: listNotes(campaign), user: game.user, formatTime, canWrite: false
+      });
+      if (tonight) tonight.recent = await Promise.all(tonight.recent.map(async (n) => ({ ...n, text: await enrichNoteText(n.text) })));
+      context.tonight = tonight;
+    } else {
+      context.notesStream = { canWrite: false, rows: [] };
+      context.tonight = null;
     }
 
     return context;
@@ -534,6 +575,8 @@ export class SessionSheet extends EnhancedJournalSheet {
       .filter((el) => el.open === true && el.classList.contains("active"))
       .map((el) => el.getAttribute("name"));
     for (const field of fieldsToStrip(targetName, activeFields)) foundry.utils.deleteProperty(submitData, field);
+    // The notes capture box lives inside this form but is not a document field.
+    delete submitData["session-note"];
     return submitData;
   }
 
@@ -551,6 +594,13 @@ export class SessionSheet extends EnhancedJournalSheet {
   _disableFields(form) {
     super._disableFields(form);
     $(".editor-parent[data-editor-id='recap'] prose-mirror", form).prop("disabled", true);
+    // MEJ's sweep disables every input/button on a page this user cannot edit.
+    // The notes capture box is gated by the notes entry's ownership instead
+    // (the box only renders when notesStream.canWrite, and the store enforces
+    // it), so a player who merely observes this page can still note. The
+    // strip's GM Start/End buttons are re-enabled for a GM for the same reason.
+    $('input[name="session-note"], [data-action="captureSessionNote"]', form).prop("disabled", false);
+    if (game.user.isGM) $('[data-cc-tonight] [data-action="startSession"], [data-cc-tonight] [data-action="endSession"]', form).prop("disabled", false);
   }
 
   // Header comment at the top of this file: any DOM listener beyond the
@@ -577,5 +627,113 @@ export class SessionSheet extends EnhancedJournalSheet {
       $(".editor-parent[data-editor-id='recap']", html).removeClass("editing");
       $(".nav-button.edit i", this.enhancedjournal?.element || this.element).removeClass("fa-save").addClass("fa-pencil-alt");
     });
+
+    // Notes capture box: Enter files the note; its change events must not
+    // reach the sheet's submit-on-change form.
+    $('input[name="session-note"]', html)
+      .on("change", (event) => event.stopPropagation())
+      .on("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        this._captureNote(event.currentTarget);
+      });
+    // Every other author's note re-renders this view; keep the typed text, focus and caret.
+    const noteInput = $('input[name="session-note"]', html).get(0);
+    if (noteInput && !noteInput.dataset.ccDraft) {
+      noteInput.dataset.ccDraft = "1";
+      const key = sessionDraftKey(this.document.uuid);
+      trackDraft(noteInput, NOTE_DRAFTS, key);
+      restoreDraft(noteInput, NOTE_DRAFTS, key);
+    }
+  }
+
+  // --- Notes stream (Plan B) ------------------------------------------------
+
+  static async onCaptureSessionNote() {
+    await this._captureNote($('input[name="session-note"]', this.trueElement).get(0));
+  }
+
+  async _captureNote(input) {
+    const raw = input?.value ?? "";
+    const text = validNoteText(raw);
+    const campaign = campaignOf(this.document);
+    if (!text || !campaign) return;
+    // Clear before awaiting so a double Enter cannot file the note twice; the
+    // kept draft goes too, or the re-render this note triggers would restore it.
+    const draftKey = sessionDraftKey(this.document.uuid);
+    input.value = "";
+    clearDraft(NOTE_DRAFTS, draftKey);
+    try {
+      await addNote(campaign, { text: linkNoteText(campaign, text), sessionUuid: this.document.uuid, worldDate: currentWorldComponents() });
+    } catch (err) {
+      input.value = raw;
+      keepDraft(NOTE_DRAFTS, draftKey, raw);
+      ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
+    }
+    this.render();
+  }
+
+  static async onEditNote(event, target) {
+    const id = target.closest("[data-note-id]")?.dataset.noteId;
+    const campaign = campaignOf(this.document);
+    const note = campaign ? listNotes(campaign, { sessionUuid: this.document.uuid }).find((n) => n.id === id) : null;
+    if (!note) return;
+    // Stored text is escaped + @UUID shorthand: show plain text, escape once for the textarea.
+    const prefill = noteToPlainText(note.text);
+    const plain = foundry.utils.escapeHTML(prefill);
+    const text = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize(`${I18N}.notes.edit`) },
+      content: `<textarea name="text" rows="4" maxlength="2000" style="width:100%">${plain}</textarea>`,
+      ok: { label: game.i18n.localize(`${I18N}.hub.save`), callback: (ev, button) => button.form.elements.text.value },
+      rejectClose: false
+    });
+    // Unchanged text must not stamp the note as edited.
+    if (typeof text !== "string" || text === prefill) return;
+    try {
+      await updateNote(campaign, id, { text: linkNoteText(campaign, text) });
+    } catch (err) {
+      ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
+    }
+    this.render();
+  }
+
+  static async onDeleteNote(event, target) {
+    const id = target.closest("[data-note-id]")?.dataset.noteId;
+    const campaign = campaignOf(this.document);
+    if (!id || !campaign) return;
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize(`${I18N}.notes.delete`) },
+      content: `<p>${game.i18n.localize(`${I18N}.notes.deleteConfirm`)}</p>`,
+      rejectClose: false
+    });
+    if (!ok) return;
+    try {
+      await deleteNote(campaign, id);
+    } catch (err) {
+      ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
+    }
+    this.render();
+  }
+
+  static async onStartSession() {
+    // This sheet's own page becomes the open session (startSession validates it belongs to the campaign).
+    await SessionSheet.#runSessionAction(this, startSession, "startFailed", { sessionUuid: this.document.uuid });
+  }
+
+  static async onEndSession() {
+    await SessionSheet.#runSessionAction(this, endSession, "endFailed");
+  }
+
+  static async #runSessionAction(sheet, action, failKey, options) {
+    if (!game.user.isGM) return;
+    const campaign = campaignOf(sheet.document);
+    if (!campaign) return;
+    try {
+      await action(campaign, options);
+    } catch (err) {
+      console.error(`${MODULE_ID} | ${action.name} failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.${failKey}`));
+    }
+    sheet.render();
   }
 }

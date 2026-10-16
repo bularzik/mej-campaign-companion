@@ -3,7 +3,7 @@
 // the sidebar's first render happens before setup/ready, so hooks added from
 // registerCore() missed it and the notebook stayed listed until the next
 // re-render. Pure-logic import only, so it is safe that early.
-import { isPartyNotebook } from "../logic/campaigns.mjs";
+import { isPartyNotebook, isNotesEntry } from "../logic/campaigns.mjs";
 
 const rootOf = (html) => (html instanceof HTMLElement ? html : html?.[0] ?? null);
 
@@ -11,7 +11,8 @@ const rootOf = (html) => (html instanceof HTMLElement ? html : html?.[0] ?? null
 export function hidePartyNotebookRows(root) {
   if (!root?.querySelectorAll || !globalThis.game?.journal) return;
   for (const li of root.querySelectorAll("[data-entry-id]")) {
-    if (isPartyNotebook(game.journal.get(li.dataset.entryId))) li.remove();
+    const entry = game.journal.get(li.dataset.entryId);
+    if (isPartyNotebook(entry) || isNotesEntry(entry)) li.remove();
   }
 }
 

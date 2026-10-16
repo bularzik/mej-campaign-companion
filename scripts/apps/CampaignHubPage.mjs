@@ -15,7 +15,7 @@
 // _syncPartState.
 import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/EnhancedJournalSheet.js";
 import { renderAwaitable } from "../sheets/awaitable-render.mjs";
-import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, SESSION_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING } from "../constants.mjs";
+import { MODULE_ID, HUB_PAGE_ID, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING, HUB_CAMPAIGN_SCOPE_SETTING, HUB_TIMELINE_SELECTION_SETTING, CAMPAIGN_FLAG, CAMPAIGN_TYPE, CAMPAIGN_DOCUMENT_TYPE, SESSION_DOCUMENT_TYPE, I18N, guideUrl, AUTO_CAPTURE_CAMPAIGN_SETTING, ADOPTION_PROMPTED_SETTING, TIMELINE_JOURNAL_SETTING, RETRO_LINK_MODE_SETTING, MEJ_MODULE_ID } from "../constants.mjs";
 import { getTimelineJournal, ensureTimelineJournal, resolveTimelineJournal, campaignTimelines, worldTimelines, defaultTimeline, createTimeline, setDefaultTimeline } from "../data/timeline-journal.mjs";
 import { getCampaigns, campaignEntries, unfiledEntries, createCampaign, baselineOwnership, applyBaselineToMembers, setEntryHidden, campaignPortal, ensureCampaignPortal } from "../data/campaign-store.mjs";
 import { campaignOf, campaignIdOf, isCampaignFolder, canAttachToTimeline, campaignFlagOf, adoptionPlan, isTimelineJournal, campaignChoicePlan, campaignControls, contributorChoices, readContributors } from "../logic/campaigns.mjs";
@@ -30,7 +30,7 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId } from "../logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
@@ -53,6 +53,14 @@ import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.m
 import { runRetroPass } from "../hooks/retro-link.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
+import { tonightContext } from "../logic/tonight.mjs";
+import { currentSession } from "../logic/current-session.mjs";
+import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
+import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
+// openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
+import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
+import { NOTE_DRAFTS, tonightDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
+import { validNoteText, noteCountsBySession } from "../logic/notes.mjs";
 import { focusTransition, focusPickerRows } from "../logic/graph-focus.mjs";
 
 const REORDER_KIND = `${MODULE_ID}.timepoint`;
@@ -77,6 +85,7 @@ const HUB_STATE = {
   toolsMenuOpen: false,
   helpOpen: false,
   timelineOrder: "manual",
+  timelineShowNotes: true,
   restoreIndexFilterFocus: false,
   searchQuery: "",
   restoreSearchFocus: false,
@@ -207,7 +216,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       dismissAdoption: CampaignHubPage.onDismissAdoption,
       fileIntoCampaign: CampaignHubPage.onFileIntoCampaign,
       fileAllShown: CampaignHubPage.onFileAllShown,
-      linkMentions: CampaignHubPage.onLinkMentions
+      linkMentions: CampaignHubPage.onLinkMentions,
+      startSession: CampaignHubPage.onStartSession,
+      endSession: CampaignHubPage.onEndSession,
+      captureTonightNote: CampaignHubPage.onCaptureTonightNote
     }
   };
 
@@ -246,6 +258,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // "compute once, draw from the cached graph" pattern the popup used for
   // its truncated-notice/drawn-graph sync - see hub-graph-pane.mjs).
   #graphData = null;
+
+  // The opening-tab decision (defaultHubTab) runs once per instance, so a tab
+  // the viewer picks afterwards is never pulled back to Sessions on re-render.
+  #openingTabDecided = false;
 
   static get type() {
     return HUB_PAGE_ID;
@@ -319,6 +335,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (group === "primary" && this.state.pendingTab) {
       this.tabGroups.primary = this.state.pendingTab;
       this.state.pendingTab = null;
+      this.#openingTabDecided = true;
+    }
+    if (group === "primary" && !this.#openingTabDecided) {
+      this.#openingTabDecided = true;
+      // MEJ stores the viewer's last shell tab per document (pagestate.<id>.tabId) and seeds tabGroups from it.
+      const storedTab = game.user.getFlag(MEJ_MODULE_ID, `pagestate.${this.document?.id}.tabId`) ?? null;
+      const campaign = game.user.isGM ? null : this.#tonightCampaign(this.#scope().campaign);
+      this.tabGroups.primary = defaultHubTab({
+        isGM: game.user.isGM, storedTab,
+        hasOpenSession: !!(campaign && openCampaignSession(campaign)),
+        fallback: this.tabGroups.primary
+      });
     }
     const tabs = super._prepareTabs(group);
     if (group !== "primary") return tabs;
@@ -391,12 +419,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       // Explicit pick outranks scope emptiness (spec D §3): choosing a
       // timeline narrows to it even in Unfiled scope, where the unselected
       // default is an empty pane - checked before the `unfiled` branch below.
-      stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM) }];
+      stacks = [{ name: null, ...this.#timelineContext(selectedTimeline, isGM, campaignOf(selectedTimeline)) }];
     } else if (unfiled) {
       stacks = [];
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
-      stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
+      stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM, campaign) }];
     } else {
       // GM-only campaign names must never reach a player's stack headings.
       const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
@@ -417,7 +445,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         // #timelineContext itself does NOT filter by visibility (only a
         // null check) - the guard has to happen here, at the render seam,
         // via #visibleTimeline, same as the world bucket below already does.
-        stacks = campaigns.map((c) => ({ name: c.name, campaignId: c.id, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM) }));
+        stacks = campaigns.map((c) => ({ name: c.name, campaignId: c.id, ...this.#timelineContext(this.#visibleTimeline(defaultTimeline(c)), isGM, c) }));
         // World bucket only: visibility-filtered for display (no per-campaign
         // "default" concept applies to it), via partitionTimelines.
         const visibleTimelines = game.journal.contents
@@ -441,6 +469,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       const legacyId = game.settings.get(MODULE_ID, TIMELINE_JOURNAL_SETTING) || null;
       context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
     }
+    // Note rows carry escaped text + @UUID shorthand (ruling R3); enrich here so the
+    // template can render labelHtml with triple-stash. Timepoint rows are untouched.
+    for (const stack of stacks) {
+      for (const row of stack.rows ?? []) {
+        if (row.kind === "note") row.labelHtml = await enrichNoteText(row.label);
+      }
+    }
     const scopeContext = this.#campaignScopeContext();
     context.header = {
       mode: scopeContext.mode, title: scopeContext.title,
@@ -448,6 +483,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       toolsMenuOpen: this.state.toolsMenuOpen, helpOpen: this.state.helpOpen === true
     };
     context.campaignControls = scopeContext.campaignControls;
+    context.tonight = await this.#tonightContext(campaign);
     context.index = this.#indexContext();
     context.sessions = this.#sessionsContext();
     context.timeline = { stacks, canAdd: isGM && !stacks.length && !unfiled, ...this.#timelineSelectionContext(campaign) };
@@ -518,6 +554,34 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       return { campaign: null, unfiled: false };
     }
     return { campaign: folder ?? null, unfiled: false };
+  }
+
+  /**
+   * The strip's campaign: the scope's campaign, else the only campaign this
+   * user can capture into (spec §5.1). Capture-eligible matches /note routing:
+   * the user is GM, or owns the campaign's notes entry.
+   */
+  #tonightCampaign(scopedCampaign) {
+    if (scopedCampaign) return scopedCampaign;
+    const eligible = getCampaigns().filter((c) => game.user.isGM || notesEntryOf(c)?.isOwner);
+    return eligible.length === 1 ? eligible[0] : null;
+  }
+
+  async #tonightContext(scopedCampaign) {
+    const campaign = this.#tonightCampaign(scopedCampaign);
+    if (!campaign) return null;
+    const page = openCampaignSession(campaign);
+    const cs = currentSession(campaign);
+    const session = page && cs ? { uuid: page.uuid, name: page.name, startedAt: cs.startedAt } : null;
+    const ctx = tonightContext({
+      campaign, session, notes: listNotes(campaign), user: game.user,
+      formatTime: (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      canWrite: !!notesEntryOf(campaign)?.isOwner
+    });
+    if (!ctx) return null;
+    // Stored note text is escaped + @UUID shorthand (linkNoteText / normalizeNotes), so enriched output is safe for {{{ }}}.
+    ctx.recent = await Promise.all(ctx.recent.map(async (n) => ({ ...n, text: await enrichNoteText(n.text) })));
+    return ctx;
   }
 
   /** Lazily seeded from the client setting; a stale/invisible id resets to "" (same discipline as #scope). A pending hand-off (openTimelineInHub) wins over both. */
@@ -660,7 +724,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const pages = this.#scopedEntries().flatMap((entry) =>
       entry.pages.contents.filter((p) => isSession(p) && canSee(p))
     );
+    // Per-page note counts keyed by Session page uuid; listNotes is audience-filtered, so a player counts only what they can see.
+    const { campaign, unfiled } = this.#scope();
+    const campaigns = unfiled ? [] : (campaign ? [campaign] : getCampaigns());
+    const noteCounts = noteCountsBySession(campaigns.flatMap((c) => listNotes(c)));
     const rows = sessionRows(pages, {
+      noteCounts,
       formatDate: (d) => formatCampaignDate(d),
       // Unrevealed secrets stay out of the preview unless the viewer sees them on the sheet (GM / owner).
       recapText: (p) => {
@@ -769,7 +838,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * timepoint label to players in All scope (Foundry ships NONE documents
    * to clients; there's no server-side filtering to fall back on).
    */
-  #timelineContext(journal, isGM) {
+  #timelineContext(journal, isGM, campaign = null) {
     if (!journal) {
       // Players before a GM has ever opened the hub: no timeline journal
       // exists yet (or the resolved journal isn't visible to them - see
@@ -780,6 +849,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const canEdit = isGM;
     const order = this.state.timelineOrder;
     const timepoints = Timepoints.getTimepoints(journal);
+    // listNotes is already audience-filtered for the current user.
+    const notes = campaign && this.state.timelineShowNotes ? listNotes(campaign) : [];
     const rows = buildTimelineRows(timepoints, order, {
       canEdit,
       formatDate: (tp) => (order === "campaign" ? formatCampaignDate(tp.campaignDate) : formatCreateDate(tp.createdAt)),
@@ -793,7 +864,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           broken: entry.kind === "broken",
           thumb: entry.img || null,
           canToggleVisibility: canEdit && entry.kind === "image"
-        }))
+        })),
+      notes,
+      formatNoteDate: (d) => formatCampaignDate(d)
     });
     return {
       hasJournal: true,
@@ -802,7 +875,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       showDateColumn: order !== "manual",
       orderOptions: buildOrderOptions(order, (m) => game.i18n.localize(`${I18N}.hub.order.${m}`)),
       canEdit,
-      journalId: journal.id
+      journalId: journal.id,
+      showNotes: this.state.timelineShowNotes,
+      notesToggleEnabled: order === "campaign" && !!campaign
     };
   }
 
@@ -1234,6 +1309,60 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       console.error(`${MODULE_ID} | creating a session failed`, err);
       ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
     }
+  }
+
+  static async onStartSession() {
+    if (!game.user.isGM) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign)
+      ?? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.session.start`), { alwaysPrompt: true });
+    if (!campaign) return;
+    try {
+      await startSession(campaign);
+    } catch (err) {
+      console.error(`${MODULE_ID} | start session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.startFailed`));
+    }
+    this.render();
+  }
+
+  static async onEndSession() {
+    if (!game.user.isGM) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign);
+    if (!campaign) return;
+    try {
+      await endSession(campaign);
+    } catch (err) {
+      console.error(`${MODULE_ID} | end session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.endFailed`));
+    }
+    this.render();
+  }
+
+  static async onCaptureTonightNote(event, target) {
+    await this.#captureFromInput(target.closest("[data-cc-tonight]")?.querySelector('input[name="tonight-note"]'));
+  }
+
+  async #captureFromInput(input) {
+    const raw = input?.value ?? "";
+    const text = validNoteText(raw);
+    if (!text) return;
+    const campaign = this.#tonightCampaign(this.#scope().campaign);
+    if (!campaign) return;
+    const page = openCampaignSession(campaign);
+    // Clear before awaiting (as SessionSheet#_captureNote) so a double Enter cannot
+    // file the note twice; the kept draft goes too, or the re-render would restore it.
+    input.value = "";
+    clearDraft(NOTE_DRAFTS, tonightDraftKey());
+    try {
+      await addNote(campaign, { text: linkNoteText(campaign, text), sessionUuid: page?.uuid ?? null, worldDate: currentWorldComponents() });
+      ui.notifications.info(game.i18n.localize(page ? `${I18N}.notes.captured` : `${I18N}.notes.command.held`));
+    } catch (err) {
+      input.value = raw;
+      keepDraft(NOTE_DRAFTS, tonightDraftKey(), raw);
+      const key = err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`;
+      ui.notifications.warn(game.i18n.localize(key));
+    }
+    this.render();
   }
 
   /**
@@ -1907,6 +2036,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       });
     }
 
+    const tonightInput = html.querySelector('input[name="tonight-note"]');
+    if (tonightInput && !tonightInput.dataset.ccBound) {
+      tonightInput.dataset.ccBound = "1";
+      tonightInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        this.#captureFromInput(event.currentTarget);
+      });
+      // Every other author's note re-renders the Hub; keep the typed text, focus and
+      // caret (same intent as restoreIndexFilterFocus, but the render is not ours).
+      trackDraft(tonightInput, NOTE_DRAFTS, tonightDraftKey());
+      restoreDraft(tonightInput, NOTE_DRAFTS, tonightDraftKey());
+    }
+
     const sortMenu = html.querySelector(".mej-cc-sort-menu");
     if (sortMenu && !sortMenu.dataset.ccBound) {
       sortMenu.dataset.ccBound = "1";
@@ -2028,6 +2171,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           }, 150)
         );
       }
+    }
+
+    for (const notesToggle of html.querySelectorAll('[data-action-change="toggleTimelineNotes"]')) {
+      if (notesToggle.dataset.ccBound) continue;
+      notesToggle.dataset.ccBound = "1";
+      notesToggle.addEventListener("change", () => {
+        this.state.timelineShowNotes = notesToggle.checked;
+        this.render({ parts: ["main"] });
+      });
     }
 
     const backlinksToggle = html.querySelector('[data-action-change="toggleGraphBacklinks"]');

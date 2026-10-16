@@ -159,6 +159,21 @@ export async function registerCore() {
     registerPartyNotebook();
   });
 
+  await step("notes entry", async () => {
+    const { registerNotesEntry } = await import("../hooks/notes-entry.mjs");
+    registerNotesEntry();
+  });
+
+  await step("current session", async () => {
+    const { registerCurrentSession } = await import("../hooks/current-session.mjs");
+    registerCurrentSession();
+  });
+
+  await step("note command", async () => {
+    const { registerNoteCommand } = await import("../hooks/note-command.mjs");
+    registerNoteCommand();
+  });
+
   await step("party relationships ui", async () => {
     const { registerPartyRelationshipsUi } = await import("../hooks/party-relationships-ui.mjs");
     registerPartyRelationshipsUi();

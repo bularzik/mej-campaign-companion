@@ -43,6 +43,17 @@ export function playerTabOrder(tabs, { isGM, hasVisibleDashboard }) {
   return ordered;
 }
 
+/**
+ * The Hub's opening tab. A stored tab (MEJ's per-user pagestate) always
+ * wins; otherwise a player lands on Sessions while a session is open in the
+ * campaign the Hub shows. A GM keeps the fallback.
+ */
+export function defaultHubTab({ isGM, storedTab, hasOpenSession, fallback }) {
+  if (storedTab) return storedTab;
+  if (!isGM && hasOpenSession) return SESSIONS_TAB.id;
+  return fallback;
+}
+
 /** The scope the Hub must use: a title locks it, a picker defers to state. */
 export function lockedScopeId(headerMode, stateCampaignId) {
   return headerMode?.mode === "title" ? headerMode.campaignId : (stateCampaignId ?? "");
