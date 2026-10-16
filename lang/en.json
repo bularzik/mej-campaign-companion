@@ -139,7 +139,8 @@
       "title": "Campaign Hub",
       "openCampaignHub": "Open Campaign Hub",
       "tabs": {
-        "index": "Index",
+        "index": "Entries",
+        "sessions": "Sessions",
         "timeline": "Timeline",
         "graph": "Graph",
         "search": "Search",

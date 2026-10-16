@@ -29,6 +29,7 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
 import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
@@ -219,6 +220,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     primary: {
       tabs: [
         { id: "index", icon: "fa-solid fa-list" },
+        { id: "sessions", icon: "fa-solid fa-dice-d20" },
         { id: "timeline", icon: "fa-solid fa-timeline" },
         { id: "graph", icon: "fa-solid fa-circle-nodes" },
         { id: "search", icon: "fa-solid fa-magnifying-glass" },
@@ -310,8 +312,24 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.state.pendingTab = null;
     }
     const tabs = super._prepareTabs(group);
-    if (group === "primary" && !game.user.isGM) delete tabs.secrets;
-    return tabs;
+    if (group !== "primary") return tabs;
+    const isGM = game.user.isGM;
+    if (!isGM) delete tabs.secrets;
+    // Player order: Sessions, Entries, Timeline, Graph, Search, and
+    // Dashboards only when one is visible to them (spec 2026-10-15 5.1).
+    // super returns an object keyed by id; rebuild it in the seat's order.
+    const hasVisibleDashboard = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).some((q) => q.showPlayers === true);
+    const ordered = playerTabOrder(Object.values(tabs), { isGM, hasVisibleDashboard });
+    const out = {};
+    for (const t of ordered) if (tabs[t.id]) out[t.id] = tabs[t.id];
+    // A player whose stored active tab was dropped lands on their first tab.
+    if (!out[this.tabGroups.primary]) {
+      const first = Object.keys(out)[0];
+      this.tabGroups.primary = first;
+      for (const t of Object.values(out)) t.active = t.id === first;
+      if (out[first]) out[first].cssClass = "active";
+    }
+    return out;
   }
 
   async _prepareBodyContext(context, options) {
@@ -414,7 +432,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       context.adoption = adoptionPlan(game.journal.contents, mejType, legacyId).length > 0;
     }
     const scopeContext = this.#campaignScopeContext();
-    context.header = { scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope, toolsMenuOpen: this.state.toolsMenuOpen };
+    context.header = {
+      mode: scopeContext.mode, title: scopeContext.title,
+      scopeOptions: scopeContext.options, isCampaignScope: scopeContext.isCampaignScope,
+      toolsMenuOpen: this.state.toolsMenuOpen, helpOpen: this.state.helpOpen === true
+    };
     context.campaignControls = scopeContext.campaignControls;
     context.index = this.#indexContext();
     context.timeline = { stacks, canAdd: isGM && !stacks.length && !unfiled, ...this.#timelineSelectionContext(campaign) };
@@ -451,12 +473,28 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     return `fas ${game.MonksEnhancedJournal.getIcon(type)}`;
   }
 
+  /** Campaigns this user can see (a GM sees all). A player counts a campaign only if they can see an entry or its portal. */
+  #visibleCampaigns() {
+    return getCampaigns().filter((c) => game.user.isGM || campaignEntries(c, { user: game.user }).length > 0 || (campaignPortal(c) && isVisibleToUser(campaignPortal(c), game.user)));
+  }
+
+  /** Header mode for this seat (title or picker). */
+  #headerMode() {
+    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), { isGM: game.user.isGM });
+  }
+
+  /** The effective scope id: a single-campaign player is locked to it; players never hold "unfiled" (the option is GM-only). */
+  #effectiveScopeId() {
+    const id = lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
+    return !game.user.isGM && id === "unfiled" ? "" : id;
+  }
+
   /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
   #scope() {
     if (this.state.campaignId === null) {
       this.state.campaignId = game.settings.get(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING);
     }
-    const id = this.state.campaignId;
+    const id = this.#effectiveScopeId();
     if (id === "unfiled") return { campaign: null, unfiled: true };
     const folder = id ? game.folders.get(id) : null;
     if (id && (!folder || !isCampaignFolder(folder))) {
@@ -574,18 +612,28 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   #campaignScopeContext() {
     const campaigns = getCampaigns();
-    const current = this.state.campaignId ?? "";
-    const options = [
-      { value: "", label: game.i18n.localize(`${I18N}.hub.scope.all`), selected: current === "" },
-      ...campaigns.map((c) => ({ value: c.id, label: c.name, selected: current === c.id }))
-    ];
-    if (unfiledEntries({ user: game.user }).length) {
-      options.push({ value: "unfiled", label: game.i18n.localize(`${I18N}.hub.scope.unfiled`), selected: current === "unfiled" });
-    }
-    if (game.user.isGM) {
-      options.push({ value: "__new", label: game.i18n.localize(`${I18N}.hub.scope.newCampaign`), selected: false });
-    }
-    return { campaignControls: campaignControls(campaigns), options, isCampaignScope: !!current && current !== "unfiled" };
+    const headerMode = this.#headerMode();
+    const current = this.#effectiveScopeId();
+    const options = scopeOptionsForUser(
+      this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })),
+      current,
+      {
+        isGM: game.user.isGM,
+        hasUnfiled: unfiledEntries({ user: game.user }).length > 0,
+        labels: {
+          all: game.i18n.localize(`${I18N}.hub.scope.all`),
+          unfiled: game.i18n.localize(`${I18N}.hub.scope.unfiled`),
+          newCampaign: game.i18n.localize(`${I18N}.hub.scope.newCampaign`)
+        }
+      }
+    );
+    return {
+      campaignControls: campaignControls(campaigns),
+      options,
+      mode: headerMode.mode,
+      title: headerMode.title,
+      isCampaignScope: !!current && current !== "unfiled"
+    };
   }
 
   #indexContext() {
@@ -629,7 +677,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // (testUserPermission LIMITED on the resolved entry) - this just shapes
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
-    const scopeId = this.state.campaignId || null;
+    const scopeId = this.#effectiveScopeId() || null;
     const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
     const results = hits.map((hit) => ({
       uuid: hit.uuid,
@@ -642,7 +690,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       query: this.state.searchQuery,
       hasQuery: this.state.searchQuery.trim().length > 0,
       results,
-      spillover
+      spillover: this.#headerMode().mode === "picker" ? spillover : 0
     };
   }
 

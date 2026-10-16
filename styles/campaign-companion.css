@@ -133,6 +133,18 @@
   position: relative;
 }
 
+.mej-cc-hub-header .mej-cc-campaign-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-16, 16px);
+  line-height: 28px;
+  color: var(--mej-cc-ink);
+  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mej-cc-hub-header .mej-cc-tools-menu {
   right: 0;
   left: auto;
