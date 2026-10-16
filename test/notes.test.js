@@ -141,3 +141,18 @@ describe("selectors", () => {
     expect(m.has(null)).toBe(false);
   });
 });
+
+describe("reveal note payload stores only model fields (R8)", () => {
+  it("noteCreateUpdate drops extra secret-bearing fields", () => {
+    const { update } = noteCreateUpdate({
+      id: "n1", text: "A secret was revealed", authorId: "gm", at: 1, kind: "reveal",
+      audience: { users: ["u1"] }, ref: { pageUuid: "JournalEntry.a.JournalEntryPage.b", blockId: "s1" },
+      body: "SECRET", secret: "SECRET", content: "SECRET"
+    });
+    const [value] = Object.values(update);
+    expect(Object.keys(value).sort()).toEqual([
+      "at", "audience", "authorId", "authorName", "editedAt", "kind", "mentions", "ref", "retracted", "sessionUuid", "text", "worldDate"
+    ]);
+    expect(JSON.stringify(update)).not.toContain("SECRET");
+  });
+});

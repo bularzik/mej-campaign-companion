@@ -97,6 +97,13 @@ function writable(campaign) {
 export async function addNote(campaign, { text, authorId = game.user.id, authorName = game.user.name, at = Date.now(), worldDate = null, sessionUuid = null, mentions, audience = null, kind = "player", ref = null }) {
   const entry = writable(campaign);
   if (!validNoteText(text)) throw new NotesStoreError("badText");
+  // Only a GM may attribute a note to someone else, write a gm/reveal note, or set an audience.
+  if (!game.user.isGM) {
+    authorId = game.user.id;
+    authorName = game.user.name;
+    kind = "player";
+    audience = null;
+  }
   const { id, update } = noteCreateUpdate({
     id: foundry.utils.randomID(10), text, authorId, authorName, at, worldDate, sessionUuid, mentions, audience, kind, ref
   });

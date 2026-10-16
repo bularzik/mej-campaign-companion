@@ -34,12 +34,15 @@ export function refreshForNoteChange(entry, noteChanges) {
     if (n.sessionUuid) uuids.add(n.sessionUuid.split(".JournalEntryPage.")[0]);
     for (const m of n.mentions) uuids.add(m);
   }
+  // A delete arrives with the note already gone from the flag, so its session
+  // and mentions are unknown: refresh every view of the campaign instead.
+  const deleted = !!ids && Object.keys(noteChanges).some((k) => k.startsWith("-="));
   const campaignId = campaignOf(entry)?.id ?? null;
   refreshViewsMatching((uuid) => {
     if (!uuid || uuids.has(uuid)) return true; // the shell's synthetic hub page has no uuid: always refresh it
+    if (!deleted || !campaignId) return false;
     try {
-      const doc = fromUuidSync(uuid);
-      return !!campaignId && campaignOf(doc)?.id === campaignId && (doc?.documentName === "JournalEntryPage" ? false : uuids.has(doc?.uuid));
+      return campaignOf(fromUuidSync(uuid))?.id === campaignId;
     } catch {
       return false;
     }

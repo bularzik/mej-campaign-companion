@@ -4,8 +4,9 @@
 // logic/auto-link*.mjs; this file only gathers Foundry inputs.
 //
 // Output is HTML-escaped text plus `@UUID[...]{name}` shorthand only (autoLinkAdded
-// emits shorthand, never anchors); enrichment happens at render time.
-import { autoLinkAdded } from "../logic/auto-link.mjs";
+// emits shorthand, never anchors); enrichment happens at render time. Escaping
+// and typed-enricher neutralization live in logic/note-text.mjs.
+import { linkNoteHtml } from "../logic/note-text.mjs";
 import { selectCandidates, dropAmbiguousNames } from "../logic/auto-link-candidates.mjs";
 import { viewerIds, audienceContains } from "../logic/link-audience.mjs";
 import { sameLinkScope } from "../logic/link-targets.mjs";
@@ -14,12 +15,9 @@ import { isVisibleToUser } from "../logic/hub-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
 import { notesEntryOf } from "../data/notes-store.mjs";
 
-const escape = (s) => foundry.utils.escapeHTML(s);
-
 export function linkNoteText(campaign, text) {
-  const html = escape(text);
   const notesEntry = notesEntryOf(campaign);
-  if (!notesEntry) return html;
+  if (!notesEntry) return linkNoteHtml(text, []);
   const users = game.users.contents;
   const readers = viewerIds(notesEntry, users, isVisibleToUser);
   const campaignId = campaignIdOf(notesEntry);
@@ -30,5 +28,5 @@ export function linkNoteText(campaign, text) {
       visible: audienceContains(readers, viewerIds(entry, users, isVisibleToUser))
     }));
   const candidates = dropAmbiguousNames(selectCandidates({ pages, selfId: null })).kept;
-  return autoLinkAdded("", html, candidates);
+  return linkNoteHtml(text, candidates);
 }
