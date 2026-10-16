@@ -126,6 +126,8 @@
       "autoName": "Session {n}",
       "start": "Start session",
       "end": "End session",
+      "startFailed": "Couldn't start the session.",
+      "endFailed": "Couldn't end the session.",
       "startOffer": "Start a session in {campaign} now?",
       "draftTitle": "Recap draft",
       "draftHint": "Assembled from tonight's notes. Append it to the recap to edit it there, or skip.",

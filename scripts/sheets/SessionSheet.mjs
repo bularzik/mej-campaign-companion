@@ -594,6 +594,13 @@ export class SessionSheet extends EnhancedJournalSheet {
   _disableFields(form) {
     super._disableFields(form);
     $(".editor-parent[data-editor-id='recap'] prose-mirror", form).prop("disabled", true);
+    // MEJ's sweep disables every input/button on a page this user cannot edit.
+    // The notes capture box is gated by the notes entry's ownership instead
+    // (the box only renders when notesStream.canWrite, and the store enforces
+    // it), so a player who merely observes this page can still note. The
+    // strip's GM Start/End buttons are re-enabled for a GM for the same reason.
+    $('input[name="session-note"], [data-action="captureSessionNote"]', form).prop("disabled", false);
+    if (game.user.isGM) $('[data-cc-tonight] [data-action="startSession"], [data-cc-tonight] [data-action="endSession"]', form).prop("disabled", false);
   }
 
   // Header comment at the top of this file: any DOM listener beyond the
@@ -660,14 +667,16 @@ export class SessionSheet extends EnhancedJournalSheet {
     const note = campaign ? listNotes(campaign, { sessionUuid: this.document.uuid }).find((n) => n.id === id) : null;
     if (!note) return;
     // Stored text is escaped + @UUID shorthand: show plain text, escape once for the textarea.
-    const plain = foundry.utils.escapeHTML(noteToPlainText(note.text));
+    const prefill = noteToPlainText(note.text);
+    const plain = foundry.utils.escapeHTML(prefill);
     const text = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize(`${I18N}.notes.edit`) },
       content: `<textarea name="text" rows="4" maxlength="2000" style="width:100%">${plain}</textarea>`,
       ok: { label: game.i18n.localize(`${I18N}.hub.save`), callback: (ev, button) => button.form.elements.text.value },
       rejectClose: false
     });
-    if (typeof text !== "string") return;
+    // Unchanged text must not stamp the note as edited.
+    if (typeof text !== "string" || text === prefill) return;
     try {
       await updateNote(campaign, id, { text: linkNoteText(campaign, text) });
     } catch (err) {
@@ -695,14 +704,14 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   static async onStartSession() {
-    await SessionSheet.#runSessionAction(this, startSession);
+    await SessionSheet.#runSessionAction(this, startSession, "startFailed");
   }
 
   static async onEndSession() {
-    await SessionSheet.#runSessionAction(this, endSession);
+    await SessionSheet.#runSessionAction(this, endSession, "endFailed");
   }
 
-  static async #runSessionAction(sheet, action) {
+  static async #runSessionAction(sheet, action, failKey) {
     if (!game.user.isGM) return;
     const campaign = campaignOf(sheet.document);
     if (!campaign) return;
@@ -710,7 +719,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       await action(campaign);
     } catch (err) {
       console.error(`${MODULE_ID} | ${action.name} failed`, err);
-      ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.${failKey}`));
     }
     sheet.render();
   }
