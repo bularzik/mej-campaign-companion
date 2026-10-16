@@ -170,3 +170,12 @@ export const PLAYER_CONNECTIONS_SETTING = "playerConnectionsEnabled";
 /** Party relationships (spec 2026-10-10): notebook marker and row map on the notebook JournalEntry. */
 export const PARTY_NOTEBOOK_FLAG = "partyNotebook";
 export const PARTY_ROWS_FLAG = "partyRows";
+
+/** Session notes (spec 2026-10-15 items 1-3): the hidden per-campaign notes entry and its note map. */
+export const NOTES_ENTRY_FLAG = "notesEntry";
+export const NOTES_FLAG = "notes";
+/** Key on the campaign flag holding { uuid, startedAt } of the open session. */
+export const CURRENT_SESSION_KEY = "currentSession";
+/** World setting: offer to start a session when the active GM logs in on a new day. */
+export const AUTO_START_SESSION_SETTING = "autoStartSession";
+export const NOTE_TEXT_MAX = 2000;
