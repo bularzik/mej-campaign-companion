@@ -21,5 +21,9 @@ export function applyChecklistAudience(item, audience, now = Date.now()) {
 
 /** Seed for promptAudience: users/groups from the record, Everyone from the flag. */
 export function checklistSeed(item) {
-  return { ...normalizeAudience(item?.audience), all: item?.revealed === true };
+  // Older saves could store Everyone as audience.all with revealed:false
+  // (players still saw them via canSee); keep that reading as Everyone so
+  // re-saving the dialog does not silently un-reveal the item.
+  const a = normalizeAudience(item?.audience);
+  return { ...a, all: item?.revealed === true || a.all === true };
 }

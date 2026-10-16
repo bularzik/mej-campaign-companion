@@ -46,4 +46,15 @@ describe("checklistSeed (Review Focus 1: legacy revealed:true with no audience)"
     expect(seed.all).toBe(false);
     expect(seed.users).toEqual(["u1"]);
   });
+  it("legacy revealed:false with audience.all:true still seeds Everyone", () => {
+    const legacy = { id: "c1", text: "x", revealed: false, revealedAt: null, audience: { users: [], groups: [], all: true } };
+    expect(checklistSeed(legacy).all).toBe(true);
+  });
+  it("re-saving a legacy audience.all item as Everyone yields revealed:true", () => {
+    const legacy = { id: "c1", text: "x", revealed: false, revealedAt: null, audience: { users: [], groups: [], all: true } };
+    const next = applyChecklistAudience(legacy, checklistSeed(legacy), 2000);
+    expect(next.revealed).toBe(true);
+    expect(next.revealedAt).toBe(2000);
+    expect(next.audience.all).toBe(false);
+  });
 });
