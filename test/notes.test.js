@@ -177,3 +177,71 @@ describe("noteHtmlSource", () => {
     for (const v of [undefined, null, 5, {}, []]) expect(noteHtmlSource(v)).toBe("");
   });
 });
+
+// Foundry's enrichHTML sets innerHTML and matches enricher patterns against the
+// DECODED text, so an entity-encoded "@" or "[[" must not decode back into a trigger.
+const NAMED_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", commat: "@", lsqb: "[", lbrack: "[" };
+const decodeEntities = (html) => html.replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (m, hex, dec, name) => {
+  if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? m;
+  return String.fromCodePoint(hex ? parseInt(hex, 16) : parseInt(dec, 10));
+});
+const ENRICHER_TRIGGER = /@(UUID|Embed|\w+)\[/i;
+
+describe("noteHtmlSource neutralises typed enrichers (whole-branch finding 1)", () => {
+  const typed = [
+    ["entity @UUID", "&#64;UUID[JournalEntry.gm]"],
+    ["hex entity @UUID", "&#x40;UUID[JournalEntry.gm]{x}"],
+    ["padded entity @UUID", "&#0064;UUID[JournalEntry.gm]"],
+    ["named entity @UUID", "&commat;UUID[JournalEntry.gm]"],
+    ["entity @Embed secrets", "&#64;Embed[JournalEntry.gm.JournalEntryPage.p secrets=true]"],
+    ["raw @Embed secrets", "@Embed[JournalEntry.gm.JournalEntryPage.p secrets=true]"],
+    ["raw lowercase @embed", "@embed[JournalEntry.gm]"],
+    ["raw @Compendium", "@Compendium[world.pack.x]"],
+    ["raw @Actor", "@Actor[abc]{Bob}"],
+    ["raw @Item", "@Item[abc]"],
+    ["raw @Check (custom word)", "@Check[dex]"],
+    ["raw @uuid lowercase", "@uuid[JournalEntry.gm]"]
+  ];
+  for (const [label, input] of typed) {
+    it(`${label}: decoded text holds no @Word[ trigger`, () => {
+      const out = noteHtmlSource(input);
+      expect(decodeEntities(out)).not.toMatch(ENRICHER_TRIGGER);
+      expect(noteHtmlSource(out)).toBe(out);
+    });
+  }
+
+  const rolls = [
+    ["entity [[", "&#91;&#91;/r 1d20]]"],
+    ["raw [[", "[[/r 1d20]]"],
+    ["mixed &#91;[", "&#91;[/r 1d20]]"],
+    ["mixed [&#91;", "[&#91;/r 1d20]]"],
+    ["hex &#x5b;&#x5B;", "&#x5b;&#x5B;/r 1d20]]"],
+    ["named &lsqb;&lbrack;", "&lsqb;&lbrack;/r 1d20]]"],
+    ["triple [[[", "[[[/r 1d20]]]"]
+  ];
+  for (const [label, input] of rolls) {
+    it(`${label}: decoded text holds no [[`, () => {
+      const out = noteHtmlSource(input);
+      expect(decodeEntities(out)).not.toMatch(/\[\[/);
+      expect(noteHtmlSource(out)).toBe(out);
+    });
+  }
+
+  it("the canonical neutralised forms", () => {
+    expect(noteHtmlSource("&#64;UUID[JournalEntry.x]")).toBe("&#64;&#8288;UUID[JournalEntry.x]");
+    expect(noteHtmlSource("mail me@x")).toBe("mail me&#64;&#8288;x");
+    expect(noteHtmlSource("&#91;&#91;/r 1d20]]")).toBe("&#91;&#8288;&#91;/r 1d20]]");
+  });
+
+  it("a code-generated @UUID auto-link survives intact next to a neutralised one", () => {
+    const out = noteHtmlSource("met @UUID[JournalEntry.e1]{Duke} and &#64;UUID[JournalEntry.gm]");
+    expect(out).toContain("@UUID[JournalEntry.e1]{Duke}");
+    expect([...decodeEntities(out).matchAll(/@UUID\[/g)].length).toBe(1);
+  });
+
+  it("a label holding a typed @ cannot smuggle a second enricher", () => {
+    const out = noteHtmlSource("@UUID[JournalEntry.e1]{&#64;Embed[JournalEntry.gm]}");
+    expect(out.startsWith("@UUID[JournalEntry.e1]{")).toBe(true);
+    expect(decodeEntities(out)).not.toMatch(/@Embed\[/);
+  });
+});

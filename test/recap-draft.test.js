@@ -37,6 +37,24 @@ describe("recapDraft", () => {
     ];
     expect(recapDraft(raw, { formatTime })).toBe("<p><strong>T1 Jo</strong> live</p>");
   });
+  it("typed enrichers (entity and raw forms) never reach the persisted draft live; code auto-links do", () => {
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', commat: "@", lsqb: "[", lbrack: "[" };
+    const decode = (html) => html.replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (m, hex, dec, name) =>
+      name ? (named[name.toLowerCase()] ?? m) : String.fromCodePoint(hex ? parseInt(hex, 16) : parseInt(dec, 10)));
+    const notes = normalizeNotes({
+      a: { text: "&#64;UUID[JournalEntry.gm]", authorId: "u", authorName: "Jo", at: 1 },
+      b: { text: "&#64;Embed[JournalEntry.gm.JournalEntryPage.p secrets=true]", authorId: "u", authorName: "Jo", at: 2 },
+      c: { text: "@Embed[JournalEntry.gm.JournalEntryPage.p secrets=true]", authorId: "u", authorName: "Jo", at: 3 },
+      d: { text: "&#91;&#91;/r 1d20]] and [[/r 1d20]]", authorId: "u", authorName: "Jo", at: 4 },
+      e: { text: "met @UUID[JournalEntry.e1]{Duke}", authorId: "u", authorName: "@Embed[JournalEntry.gm]", at: 5 }
+    });
+    const out = recapDraft(notes, { formatTime });
+    const decoded = decode(out);
+    expect(out).toContain("@UUID[JournalEntry.e1]{Duke}");
+    // The only enricher trigger left in the decoded draft is the code-generated link.
+    expect([...decoded.matchAll(/@\w+\[/gi)].map((m) => m.index)).toEqual([decoded.indexOf("@UUID[JournalEntry.e1]")]);
+    expect(decoded).not.toMatch(/\[\[/);
+  });
   it("end-to-end: a script tag in stored text never reaches the draft as markup", () => {
     const notes = normalizeNotes({ a: { text: "<script>x</script>", authorId: "u", authorName: "Jo", at: 1 } });
     const out = recapDraft(notes, { formatTime });

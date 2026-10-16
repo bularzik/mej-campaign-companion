@@ -65,14 +65,42 @@ function normalizeOne(id, raw) {
 
 const ENTITY_AMP = /&(?![A-Za-z][A-Za-z0-9]*;|#[0-9]+;|#x[0-9A-Fa-f]+;)/g;
 
+// Foundry's enrichHTML assigns innerHTML and matches every enricher against the
+// DECODED text of each text node, so "&#64;UUID[..]" is as live as "@UUID[..]".
+// A word joiner (U+2060, invisible) after every "@" and between the two
+// brackets of "[[" keeps the text readable while no enricher pattern can match.
+const WORD_JOINER = "&#8288;";
+const SAFE_AT = `&#64;${WORD_JOINER}`;
+const SAFE_BRACKET = `&#91;${WORD_JOINER}`;
+const AT_ENTITY = /(?:&#0*64;|&#x0*40;|&commat;)(?!&#8288;)/gi;
+const BRACKET = String.raw`(?:\[|&#0*91;|&#x0*5b;|&lsqb;|&lbrack;)`;
+const DOUBLE_BRACKET = new RegExp(`${BRACKET}(?=${BRACKET})`, "gi");
+
+/**
+ * Break every enricher trigger in already-escaped HTML: every encoded "@", every
+ * literal "@" (except, when `keepUuidLinks`, one that starts a raw `@UUID[`), and
+ * every "[[" in any literal or entity spelling. Idempotent.
+ */
+export function neutralizeEnrichers(html, { keepUuidLinks = true } = {}) {
+  if (typeof html !== "string") return "";
+  return html
+    .replace(AT_ENTITY, SAFE_AT)
+    .replace(keepUuidLinks ? /@(?!UUID\[)/g : /@/g, SAFE_AT)
+    .replace(DOUBLE_BRACKET, SAFE_BRACKET);
+}
+
 /**
  * Render-time source for a note's text (defence in depth, ruling R12). Stored text is already
  * escaped, so an `&` that starts a valid character reference is kept (entities decode to text,
- * never markup); everything else HTML-significant is escaped. Idempotent.
+ * never markup); everything else HTML-significant is escaped. Typed enrichers are then
+ * neutralised: linkNoteHtml stores a typed "@" as "&#64;" and "[[" as "&#91;&#91;", which
+ * enrichHTML would otherwise decode back into live triggers. Only a raw `@UUID[` survives, and
+ * that comes from code (auto-link, the Note-about prefix) or a raw flag write. Idempotent.
  */
 export function noteHtmlSource(text) {
   if (typeof text !== "string") return "";
-  return text.replace(ENTITY_AMP, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const escaped = text.replace(ENTITY_AMP, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return neutralizeEnrichers(escaped);
 }
 
 export function normalizeNotes(flagValue) {

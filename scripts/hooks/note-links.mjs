@@ -41,8 +41,11 @@ export function linkNoteText(campaign, text) {
   return linkNoteHtml(text, candidates);
 }
 
-/** Enrichers notes never need, switched off on every note render. */
-export const NOTE_ENRICH_OPTIONS = { secrets: false, rolls: false, embeds: false };
+/**
+ * Enrichers notes never need, switched off on every note render. `custom: false` keeps other
+ * modules' enrichers off note text; `documents` stays on for the code-built @UUID auto-links.
+ */
+export const NOTE_ENRICH_OPTIONS = { secrets: false, rolls: false, embeds: false, custom: false };
 
 /**
  * The one render path for note text: escape again (idempotent), then enrich with the
