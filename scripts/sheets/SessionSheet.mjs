@@ -31,6 +31,7 @@ import { currentSession } from "../logic/current-session.mjs";
 import { openSessionPage as openCampaignSession, startSession, endSession } from "../hooks/current-session.mjs";
 import { tonightContext, streamRows } from "../logic/tonight.mjs";
 import { validNoteText } from "../logic/notes.mjs";
+import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
@@ -636,6 +637,14 @@ export class SessionSheet extends EnhancedJournalSheet {
         event.preventDefault();
         this._captureNote(event.currentTarget);
       });
+    // Every other author's note re-renders this view; keep the typed text, focus and caret.
+    const noteInput = $('input[name="session-note"]', html).get(0);
+    if (noteInput && !noteInput.dataset.ccDraft) {
+      noteInput.dataset.ccDraft = "1";
+      const key = sessionDraftKey(this.document.uuid);
+      trackDraft(noteInput, NOTE_DRAFTS, key);
+      restoreDraft(noteInput, NOTE_DRAFTS, key);
+    }
   }
 
   // --- Notes stream (Plan B) ------------------------------------------------
@@ -649,12 +658,16 @@ export class SessionSheet extends EnhancedJournalSheet {
     const text = validNoteText(raw);
     const campaign = campaignOf(this.document);
     if (!text || !campaign) return;
-    // Clear before awaiting so a double Enter cannot file the note twice.
+    // Clear before awaiting so a double Enter cannot file the note twice; the
+    // kept draft goes too, or the re-render this note triggers would restore it.
+    const draftKey = sessionDraftKey(this.document.uuid);
     input.value = "";
+    clearDraft(NOTE_DRAFTS, draftKey);
     try {
       await addNote(campaign, { text: linkNoteText(campaign, text), sessionUuid: this.document.uuid, worldDate: currentWorldComponents() });
     } catch (err) {
       input.value = raw;
+      keepDraft(NOTE_DRAFTS, draftKey, raw);
       ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
     }
     this.render();

@@ -59,6 +59,7 @@ import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
 import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 // openSessionPage(campaign) -> the open Session page; distinct from the mej-adapter import of the same name above.
 import { startSession, endSession, openSessionPage as openCampaignSession } from "../hooks/current-session.mjs";
+import { NOTE_DRAFTS, tonightDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { validNoteText, noteCountsBySession } from "../logic/notes.mjs";
 import { focusTransition, focusPickerRows } from "../logic/graph-focus.mjs";
 
@@ -1319,7 +1320,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       await startSession(campaign);
     } catch (err) {
       console.error(`${MODULE_ID} | start session failed`, err);
-      ui.notifications.error(game.i18n.localize(`${I18N}.hub.newSessionFailed`));
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.startFailed`));
     }
     this.render();
   }
@@ -1332,6 +1333,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       await endSession(campaign);
     } catch (err) {
       console.error(`${MODULE_ID} | end session failed`, err);
+      ui.notifications.error(game.i18n.localize(`${I18N}.session.endFailed`));
     }
     this.render();
   }
@@ -1341,16 +1343,22 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   }
 
   async #captureFromInput(input) {
-    const text = validNoteText(input?.value ?? "");
+    const raw = input?.value ?? "";
+    const text = validNoteText(raw);
     if (!text) return;
     const campaign = this.#tonightCampaign(this.#scope().campaign);
     if (!campaign) return;
     const page = openCampaignSession(campaign);
+    // Clear before awaiting (as SessionSheet#_captureNote) so a double Enter cannot
+    // file the note twice; the kept draft goes too, or the re-render would restore it.
+    input.value = "";
+    clearDraft(NOTE_DRAFTS, tonightDraftKey());
     try {
       await addNote(campaign, { text: linkNoteText(campaign, text), sessionUuid: page?.uuid ?? null, worldDate: currentWorldComponents() });
-      input.value = "";
       ui.notifications.info(game.i18n.localize(page ? `${I18N}.notes.captured` : `${I18N}.notes.command.held`));
     } catch (err) {
+      input.value = raw;
+      keepDraft(NOTE_DRAFTS, tonightDraftKey(), raw);
       const key = err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`;
       ui.notifications.warn(game.i18n.localize(key));
     }
@@ -2036,6 +2044,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
         event.preventDefault();
         this.#captureFromInput(event.currentTarget);
       });
+      // Every other author's note re-renders the Hub; keep the typed text, focus and
+      // caret (same intent as restoreIndexFilterFocus, but the render is not ours).
+      trackDraft(tonightInput, NOTE_DRAFTS, tonightDraftKey());
+      restoreDraft(tonightInput, NOTE_DRAFTS, tonightDraftKey());
     }
 
     const sortMenu = html.querySelector(".mej-cc-sort-menu");
