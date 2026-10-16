@@ -28,3 +28,21 @@ export function linkNoteHtml(text, candidates) {
   for (const [, sentinel, entity] of SENTINELS) out = out.split(sentinel).join(entity);
   return out;
 }
+
+const NAMED = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+/**
+ * Inverse of linkNoteHtml for the edit prompt: @UUID shorthand becomes its
+ * label and entities become characters, in one pass (so "&amp;lt;" decodes to
+ * "&lt;", never "<"). The caller escapes once for its textarea; saving goes
+ * back through linkNoteHtml, so an unedited round trip never double-escapes.
+ */
+export function noteToPlainText(stored) {
+  return String(stored ?? "")
+    .replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")
+    .replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (m, hex, dec, name) => {
+      if (name) return NAMED[name.toLowerCase()] ?? m;
+      const cp = hex ? parseInt(hex, 16) : parseInt(dec, 10);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
+    });
+}

@@ -16,6 +16,12 @@
       "capturePlaceholder": "Note something…",
       "capture": "Note it",
       "captured": "Noted.",
+      "streamTitle": "Notes",
+      "none": "No notes yet. Type one above, or use /note in chat.",
+      "edited": "edited",
+      "edit": "Edit note",
+      "delete": "Delete note",
+      "deleteConfirm": "Delete this note? This cannot be undone.",
       "command": {
         "filed": "Noted in {session}.",
         "held": "Noted. No session is open yet — it will join the next one your GM starts.",

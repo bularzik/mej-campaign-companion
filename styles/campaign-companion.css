@@ -1629,3 +1629,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-tonight-recent li { padding: 1px 0; }
 .mej-cc-note-meta { color: var(--mej-cc-ink-muted); margin-right: 6px; }
 .mej-cc-draft-preview { max-height: 40vh; overflow: auto; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); padding: 6px; }
+.mej-cc-notes-stream { margin-top: 10px; }
+.mej-cc-notes-stream h3 { margin: 0 0 4px; }
+.mej-cc-notes-list { list-style: none; margin: 0; padding: 0; }
+.mej-cc-note { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px dotted var(--mej-cc-chip-bg, rgba(255,255,255,.12)); }
+.mej-cc-note .mej-cc-note-text { flex: 1; }
+.mej-cc-note-edit, .mej-cc-note-delete { opacity: .6; cursor: pointer; }
+.mej-cc-note-edit:hover, .mej-cc-note-delete:hover { opacity: 1; }

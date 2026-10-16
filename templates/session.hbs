@@ -53,6 +53,31 @@
                                 <prose-mirror name="system.recap" value="{{ data.system.recap }}" data-document-uuid="{{ document.uuid }}" toggled{{#if owner}} collaborate{{/if}}></prose-mirror>
                             </div>
                         </div>
+                        {{> "modules/mej-campaign-companion/templates/hub-tonight.hbs"}}
+                        <section class="mej-cc-notes-stream">
+                            <h3>{{localize 'MEJCampaignCompanion.notes.streamTitle'}}</h3>
+                            {{#if notesStream.canWrite}}
+                            <div class="mej-cc-tonight-capture">
+                                <input type="text" name="session-note" autocomplete="off" maxlength="2000"
+                                       placeholder="{{localize 'MEJCampaignCompanion.notes.capturePlaceholder'}}" />
+                                <button type="button" data-action="captureSessionNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.capture'}}"><i class="fa-solid fa-paper-plane"></i></button>
+                            </div>
+                            {{/if}}
+                            <ol class="mej-cc-notes-list">
+                                {{#each notesStream.rows}}
+                                <li class="mej-cc-note" data-note-id="{{this.id}}">
+                                    <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.edited}} · {{localize 'MEJCampaignCompanion.notes.edited'}}{{/if}}</span>
+                                    <span class="mej-cc-note-text">{{{this.text}}}</span>
+                                    {{#if this.canEdit}}
+                                    <a class="mej-cc-note-edit" data-action="editNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.edit'}}"><i class="fa-solid fa-pen"></i></a>
+                                    <a class="mej-cc-note-delete" data-action="deleteNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.delete'}}"><i class="fa-solid fa-trash"></i></a>
+                                    {{/if}}
+                                </li>
+                                {{else}}
+                                <li class="instruction">{{localize 'MEJCampaignCompanion.notes.none'}}</li>
+                                {{/each}}
+                            </ol>
+                        </section>
                     </div>
                 </div>
                 <div class="tab{{#if subtabs.session.active}} active{{/if}}" data-group="primary" data-tab="session">

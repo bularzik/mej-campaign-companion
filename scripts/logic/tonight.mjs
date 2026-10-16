@@ -1,5 +1,5 @@
 // View model for the Tonight strip (spec 2026-10-15 §5.1). Pure.
-import { notesForSession, heldNotes } from "./notes.mjs";
+import { notesForSession, heldNotes, canEditNote } from "./notes.mjs";
 
 export function tonightContext({ campaign, session, notes, user, formatTime, canWrite }) {
   if (!campaign) return null;
@@ -20,4 +20,12 @@ export function tonightContext({ campaign, session, notes, user, formatTime, can
     canStart: user.isGM === true && !open,
     canEnd: user.isGM === true && open
   };
+}
+
+/** Rows for the Session page's notes stream: oldest first. */
+export function streamRows(notes, user, { formatTime }) {
+  return [...(notes ?? [])].sort((a, b) => a.at - b.at).map((n) => ({
+    id: n.id, authorName: n.authorName || n.authorId, timeLabel: formatTime(n.at), text: n.text,
+    edited: n.editedAt !== null, canEdit: canEditNote(n, user)
+  }));
 }
