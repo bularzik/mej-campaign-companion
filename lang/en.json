@@ -398,6 +398,13 @@
       "groupName": "Group name",
       "groupMembers": "Members"
     },
+    "confirmDelete": {
+      "dashboard": { "title": "Delete dashboard", "body": "Delete the dashboard \"{name}\"? Its saved query is removed for everyone." },
+      "group": { "title": "Delete player group", "body": "Delete the group \"{name}\"? Secrets revealed to it stay revealed to its members until you change their audience." },
+      "secret": { "title": "Delete secret", "body": "Delete the secret \"{name}\" from this session's checklist?" },
+      "attribute": { "title": "Delete attribute", "body": "Delete the attribute \"{name}\"?" },
+      "attendee": { "title": "Remove attendee", "body": "Remove {name} from this session's attendees?" }
+    },
     "import": {
       "title": "Import Document",
       "button": "Import a Word document",

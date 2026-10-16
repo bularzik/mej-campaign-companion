@@ -14,6 +14,7 @@ import { EnhancedJournalSheet } from "/modules/monks-enhanced-journal/sheets/Enh
 import { renderAwaitable } from "./awaitable-render.mjs";
 import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { sessionData } from "./session-data.mjs";
+import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
@@ -469,6 +470,8 @@ export class SessionSheet extends EnhancedJournalSheet {
     if (!game.user.isGM) return;
     const id = target.closest("[data-id]")?.dataset.id;
     const session = sessionData(this.document);
+    const item = session.secrets.find((s) => s.id === id);
+    if (!(await confirmDelete({ kind: "secret", name: item?.text ?? "" }))) return;
     const secrets = session.secrets.filter((s) => s.id !== id);
     await this.document.update({ [`${FLAG_SESSION}.secrets`]: secrets });
     this.render();
@@ -524,6 +527,11 @@ export class SessionSheet extends EnhancedJournalSheet {
 
   static async onRemoveAttendee(event, target) {
     const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    // Name comes from the clicked row itself (the sheet's own markup), which
+    // is element-agnostic; fall back to the actor name when it is missing.
+    const name = target.closest("[data-uuid]")?.querySelector?.(".mej-cc-attendee-name")?.textContent?.trim()
+      || fromUuidSync(uuid)?.name || "";
+    if (!(await confirmDelete({ kind: "attendee", name }))) return;
     const session = sessionData(this.document);
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });

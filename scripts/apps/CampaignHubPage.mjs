@@ -44,6 +44,7 @@ import { normalizeGroups, upsertGroup, deleteGroup } from "../logic/player-group
 import { visibleRelRows } from "../logic/rel-reveals.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
 import { promptAudience, sendRevealWhisper } from "./audience-dialog.mjs";
+import { confirmDelete } from "./confirm-delete.mjs";
 import { ImportWizard } from "./import-wizard.mjs";
 import { openExportDialog } from "./export-dialog.mjs";
 import { promptNewCampaign } from "./new-campaign-dialog.mjs";
@@ -1112,6 +1113,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onDeleteDashboard(event, target) {
     if (!game.user.isGM) return;
     const id = target.closest("[data-dashboard-id]")?.dataset.dashboardId;
+    const row = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).find((q) => q.id === id);
+    if (!(await confirmDelete({ kind: "dashboard", name: row?.name ?? "" }))) return;
     const saved = (game.settings.get(MODULE_ID, SAVED_QUERIES_SETTING) ?? []).filter((q) => q.id !== id);
     await game.settings.set(MODULE_ID, SAVED_QUERIES_SETTING, saved);
     this.render({ parts: ["main"] });
@@ -1273,6 +1276,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   static async onDeleteGroup(event, target) {
     if (!game.user.isGM) return;
     const id = target.closest("[data-group-id]")?.dataset.groupId;
+    const group = normalizeGroups(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING)).find((g) => g.id === id);
+    if (!(await confirmDelete({ kind: "group", name: group?.name ?? "" }))) return;
     await game.settings.set(MODULE_ID, PLAYER_GROUPS_SETTING, deleteGroup(game.settings.get(MODULE_ID, PLAYER_GROUPS_SETTING), id));
     this.render({ parts: ["main"] });
   }
