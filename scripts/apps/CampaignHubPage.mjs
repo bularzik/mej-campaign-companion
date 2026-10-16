@@ -1659,7 +1659,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // rendered for a GM (context.isGM), and openExportDialog() itself
   // re-checks game.user.isGM as a second guard.
   static onOpenExportDialog() {
-    openExportDialog();
+    const { campaign } = this.#scope();
+    return openExportDialog({ campaign });
   }
 
   // Help button (Index toolbar, outside the isGM guard): opens the published

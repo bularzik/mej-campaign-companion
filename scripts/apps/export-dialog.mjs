@@ -17,11 +17,12 @@ import { MODULE_ID, I18N } from "../constants.mjs";
 import { snapshotToDocModel, replaceUuidTags } from "../logic/doc-export.mjs";
 import {
   eligibleEntries, orderEligibleEntries, recordSnapshot, pageRelationships,
-  buildGroupSnapshot, SESSION_KIND
+  buildGroupSnapshot, SESSION_KIND, scopeExportRows, campaignTimepoints
 } from "../logic/doc-export-snapshot.mjs";
 import { segmentRunText, subtitleRuns } from "../logic/docx-runs.mjs";
 import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
-import { getTimelineJournal } from "../data/timeline-journal.mjs";
+import { getTimelineJournal, campaignTimelines } from "../data/timeline-journal.mjs";
+import { campaignIdOf } from "../logic/campaigns.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
@@ -62,16 +63,22 @@ function typeLabel(kind) {
 }
 
 /** Checkbox-list + GM-content-toggle prompt. Returns null on cancel. */
-async function promptExport(rows) {
+async function promptExport(rows, { campaign = null } = {}) {
   const esc = foundry.utils.escapeHTML;
   const items = rows.map((row, i) => `
-    <label class="mej-cc-export-row">
+    <label class="mej-cc-export-row" data-campaign="${esc(campaignIdOf(row.page?.parent) ?? "")}">
       <input type="checkbox" name="entry-${i}" checked>
       <i class="mej-cc-export-icon ${typeIcon(row.kind)}"></i>
       <span class="mej-cc-export-name">${esc(row.name)}</span>
       <span class="mej-cc-export-type">${esc(typeLabel(row.kind))}</span>
     </label>`).join("");
-  const content = `
+  const scopeSelect = campaign ? `
+    <div class="form-group"><label>${game.i18n.localize(`${I18N}.export.scope`)}</label>
+      <select name="scope">
+        <option value="campaign" selected>${esc(game.i18n.format(`${I18N}.export.scopeCampaign`, { name: campaign.name }))}</option>
+        <option value="world">${game.i18n.localize(`${I18N}.export.scopeWorld`)}</option>
+      </select></div>` : "";
+  const content = `${scopeSelect}
     <div class="mej-cc-export-list scrollable">${items}</div>
     <div class="form-group">
       <label>
@@ -84,13 +91,29 @@ async function promptExport(rows) {
   return foundry.applications.api.DialogV2.prompt({
     window: { title: `${I18N}.export.title` },
     content,
+    render: (event, dialog) => {
+      const select = dialog.element.querySelector('select[name="scope"]');
+      if (!select || !campaign) return;
+      const apply = () => {
+        for (const label of dialog.element.querySelectorAll(".mej-cc-export-row")) {
+          const inCampaign = label.dataset.campaign === campaign.id;
+          label.hidden = select.value === "campaign" && !inCampaign;
+          const box = label.querySelector("input");
+          if (label.hidden) box.checked = false; else if (!box.dataset.touched) box.checked = true;
+        }
+      };
+      dialog.element.querySelectorAll(".mej-cc-export-row input").forEach((i) => i.addEventListener("change", () => { i.dataset.touched = "1"; }));
+      select.addEventListener("change", apply);
+      apply();
+    },
     ok: {
       label: `${I18N}.export.download`,
       callback: (event, button) => {
         const form = button.form.elements;
         return {
           selected: rows.filter((_row, i) => form[`entry-${i}`]?.checked === true),
-          includeGM: form.includeGM?.checked === true
+          includeGM: form.includeGM?.checked === true,
+          scope: form.scope?.value ?? "world"
         };
       }
     },
@@ -99,20 +122,34 @@ async function promptExport(rows) {
 }
 
 /** GM-only entry point (see CampaignHubPage.mjs / templates/hub.hbs). */
-export async function openExportDialog() {
+export async function openExportDialog({ campaign = null } = {}) {
   if (!game.user.isGM) return;
   const rows = eligibleEntries(game.journal.contents, (entry) => mejType(entry));
   if (!rows.length) {
     return void ui.notifications.warn(game.i18n.localize(`${I18N}.export.nothingToExport`));
   }
-  const journal = getTimelineJournal();
-  const timepoints = journal ? Timepoints.getTimepoints(journal) : [];
-  const ordered = orderEligibleEntries(rows, timepoints);
-
-  const result = await promptExport(ordered);
+  const result = await promptExport(orderEligibleEntries(rows, worldTimepoints()), { campaign });
   if (!result || !result.selected.length) return;
 
-  await runExport(result.selected, result.includeGM, timepoints);
+  const inCampaign = !!campaign && result.scope === "campaign";
+  const scoped = scopeExportRows(result.selected, {
+    scope: inCampaign ? "campaign" : "world", campaignId: campaign?.id ?? null,
+    campaignIdOf: (row) => campaignIdOf(row.page?.parent)
+  });
+  if (!scoped.length) {
+    return void ui.notifications.warn(game.i18n.localize(`${I18N}.export.nothingToExport`));
+  }
+  const timepoints = inCampaign
+    ? campaignTimepoints(campaignTimelines(campaign), (t) => Timepoints.getTimepoints(t))
+    : worldTimepoints();
+  const title = inCampaign ? campaign.name : (game.world.title || game.i18n.localize(`${I18N}.export.defaultTitle`));
+  await runExport(scoped, result.includeGM, timepoints, title);
+}
+
+/** Legacy singleton timeline's points (world scope), [] when the world has none. */
+function worldTimepoints() {
+  const journal = getTimelineJournal();
+  return journal ? Timepoints.getTimepoints(journal) : [];
 }
 
 /** Relationship targets for a page, name-resolved via fromUuidSync. */
@@ -163,7 +200,7 @@ function partyLines(row, notebooks, includeGM) {
   return exportLines(lines, { edited: (name) => game.i18n.format(`${I18N}.party.edited`, { name }) });
 }
 
-async function runExport(selectedRows, includeGM, timepoints) {
+async function runExport(selectedRows, includeGM, timepoints, title) {
   try {
     const labels = {
       relationships: game.i18n.localize(`${I18N}.export.relationships`),
@@ -179,7 +216,6 @@ async function runExport(selectedRows, includeGM, timepoints) {
       labels,
       formatCampaignDate
     });
-    const title = game.world.title || game.i18n.localize(`${I18N}.export.defaultTitle`);
     const snapshot = buildGroupSnapshot(title, timepoints, selectedRows, buildRecord, { includeGM, isVisible: isDefaultPlayerVisible });
 
     const nodes = snapshotToDocModel(snapshot, {
