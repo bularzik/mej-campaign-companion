@@ -3,7 +3,7 @@
 // Pure helpers at the top keep this file importable by vitest: everything
 // Foundry-served is imported lazily inside the functions that run in-game.
 import { MODULE_ID, CAMPAIGN_FLAG, I18N, AUTO_START_SESSION_SETTING } from "../constants.mjs";
-import { currentSession, currentSessionUpdate, clearCurrentSessionUpdate, nextSessionNumber, startedToday, recapOwnershipUpdate, adoptHeldUpdate } from "../logic/current-session.mjs";
+import { currentSession, currentSessionUpdate, clearCurrentSessionUpdate, nextSessionNumber, startedToday, recapOwnershipUpdate, adoptHeldUpdate, promotableSessionPage, sessionPagesOf } from "../logic/current-session.mjs";
 import { recapDraft } from "../logic/recap-draft.mjs";
 import { notesForSession } from "../logic/notes.mjs";
 import { attendeeUuidsFor } from "../logic/attendee-player.mjs";
@@ -54,13 +54,11 @@ const connectedPlayerIds = () => connectedPlayers().map((u) => u.id);
 
 async function createSessionFor(campaign) {
   const { buildSessionPageData } = await import("../logic/session-page-data.mjs");
-  const { baselineOwnership } = await import("../data/campaign-store.mjs");
+  const { baselineOwnership, campaignEntries } = await import("../data/campaign-store.mjs");
   const { currentWorldComponents } = await import("../logic/campaign-calendar.mjs");
   const { sessionData } = await import("../sheets/session-data.mjs");
-  const { SESSION_DOCUMENT_TYPE } = await import("../constants.mjs");
-  const numbers = campaign.contents.flatMap((e) => e.pages.contents)
-    .filter((p) => p.type === SESSION_DOCUMENT_TYPE)
-    .map((p) => sessionData(p).sessionNumber);
+  // Every member entry at any subfolder depth (campaignEntries excludes the portal, timelines and notes entry).
+  const numbers = sessionPagesOf(campaignEntries(campaign)).map((p) => sessionData(p).sessionNumber);
   const n = nextSessionNumber(numbers);
   const name = game.i18n.format(`${I18N}.session.autoName`, { n });
   const entry = await JournalEntry.create({
@@ -76,7 +74,12 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   const { baselineOwnership } = await import("../data/campaign-store.mjs");
   const { notesEntryOf, readNotes } = await import("../data/notes-store.mjs");
   const { openSessionPage: open } = await import("../integrations/mej-adapter.mjs");
-  let page = sessionUuid ? await fromUuid(sessionUuid) : null;
+  // A prepared Session page is promoted only when it is a Session page of this campaign; anything else falls back to a new session.
+  let page = null;
+  if (sessionUuid) {
+    page = promotableSessionPage(await fromUuid(sessionUuid).catch(() => null), campaign);
+    if (!page) console.warn(`${MODULE_ID} | ${sessionUuid} is not a Session page of campaign ${campaign.id}; starting a new session instead`);
+  }
   if (!page) page = await createSessionFor(campaign);
   if (!page) return null;
   await campaign.update(currentSessionUpdate(page.uuid, Date.now()));
@@ -162,7 +165,8 @@ export function registerCurrentSession() {
   Hooks.on("updateFolder", (folder, changes) => {
     const cs = changes?.flags?.[MODULE_ID]?.[CAMPAIGN_FLAG]?.currentSession;
     if (!writerSeat() || !cs?.startedAt) return;
-    folder.update({ [`flags.${MODULE_ID}.${CAMPAIGN_FLAG}.lastSessionStartedAt`]: cs.startedAt }).catch(() => {});
+    folder.update({ [`flags.${MODULE_ID}.${CAMPAIGN_FLAG}.lastSessionStartedAt`]: cs.startedAt })
+      .catch((err) => console.error(`${MODULE_ID} | lastSessionStartedAt write failed`, err));
   });
   const readyPass = () => {
     if (!writerSeat()) return;

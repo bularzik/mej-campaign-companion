@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   currentSession, currentSessionUpdate, clearCurrentSessionUpdate, nextSessionNumber, startedToday,
-  recapOwnershipUpdate, routeNote, adoptHeldUpdate
+  recapOwnershipUpdate, routeNote, adoptHeldUpdate, promotableSessionPage, sessionPagesOf
 } from "../scripts/logic/current-session.mjs";
 import { normalizeNotes } from "../scripts/logic/notes.mjs";
 
@@ -64,5 +64,47 @@ describe("adoptHeldUpdate (Review Focus 5)", () => {
     const notes = normalizeNotes({ a: { text: "a", authorId: "u", at: 1 }, b: { text: "b", authorId: "u", at: 2, sessionUuid: "x" } });
     expect(adoptHeldUpdate(notes, S)).toEqual({ [`flags.${P}.notes.a.sessionUuid`]: S });
     expect(adoptHeldUpdate(notes.filter((n) => n.id === "b"), S)).toBeNull();
+  });
+});
+
+describe("promotableSessionPage (whole-branch finding 3)", () => {
+  const TYPE = `${P}.session`;
+  const campaign = { id: "c1", flags: { [P]: { campaign: { ownershipDefault: "observer" } } } };
+  const other = { id: "c2", flags: { [P]: { campaign: {} } } };
+  const sub = { id: "sub", flags: {}, folder: campaign };
+  const pageIn = (folder, type = TYPE) => {
+    const entry = { documentName: "JournalEntry", folder };
+    const page = { documentName: "JournalEntryPage", type, parent: entry, uuid: "JournalEntry.e.JournalEntryPage.p" };
+    entry.pages = { contents: [page] };
+    return page;
+  };
+  it("accepts a Session page in the campaign, including one in a subfolder", () => {
+    const p = pageIn(campaign);
+    expect(promotableSessionPage(p, campaign)).toBe(p);
+    const q = pageIn(sub);
+    expect(promotableSessionPage(q, campaign)).toBe(q);
+  });
+  it("rejects another campaign's session, a non-session page, an entry, and missing input", () => {
+    expect(promotableSessionPage(pageIn(other), campaign)).toBeNull();
+    expect(promotableSessionPage(pageIn(campaign, "text"), campaign)).toBeNull();
+    expect(promotableSessionPage(pageIn(campaign).parent, campaign)).toBeNull();
+    expect(promotableSessionPage(null, campaign)).toBeNull();
+    expect(promotableSessionPage(pageIn(campaign), null)).toBeNull();
+  });
+});
+
+describe("sessionPagesOf (whole-branch finding 4)", () => {
+  const TYPE = `${P}.session`;
+  it("collects Session pages across every given entry, skipping other page types", () => {
+    const s1 = { type: TYPE, id: "s1" };
+    const s2 = { type: TYPE, id: "s2" };
+    const entries = [
+      { pages: { contents: [s1] } },
+      { pages: { contents: [{ type: "text" }] } },
+      { pages: { contents: [s2, { type: "text" }] } },
+      { pages: undefined }
+    ];
+    expect(sessionPagesOf(entries)).toEqual([s1, s2]);
+    expect(sessionPagesOf(null)).toEqual([]);
   });
 });

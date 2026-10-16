@@ -15,6 +15,7 @@ import { mejType } from "../integrations/mej-adapter.mjs";
 import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
+import { campaignEntries } from "../data/campaign-store.mjs";
 import { linkNoteText, canMentionInNotes, enrichNoteText } from "./note-links.mjs";
 import { openSessionPage as openCampaignSession } from "./current-session.mjs";
 import { streamRows } from "../logic/tonight.mjs";
@@ -175,7 +176,8 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
     canWrite: !!campaign && !!notesEntryOf(campaign)?.isOwner && canMentionInNotes(campaign, page.parent ?? page),
     rows: await Promise.all(noteRows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
   };
-  const sessions = campaign ? campaign.contents.filter((e) => isSessionDoc(e) && e.pages.contents[0]).map((e) => ({
+  // Every session in the campaign at any subfolder depth, as this user can see it (campaignEntries).
+  const sessions = campaign ? campaignEntries(campaign).filter((e) => isSessionDoc(e) && e.pages.contents[0]).map((e) => ({
     uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER
   })) : [];
   const history = historyGroups(backlinks, sessions);

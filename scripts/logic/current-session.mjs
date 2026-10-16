@@ -1,8 +1,20 @@
 // Pure rules for the one open session per campaign (spec 2026-10-15 item 2,
 // §9 calls). Foundry wiring: hooks/current-session.mjs.
 import { MODULE_ID, CAMPAIGN_FLAG, CURRENT_SESSION_KEY, NOTES_FLAG } from "../constants.mjs";
-import { campaignFlagOf } from "./campaigns.mjs";
+import { campaignFlagOf, campaignOf } from "./campaigns.mjs";
 import { heldNotes } from "./notes.mjs";
+import { isSessionDoc } from "./mej-type.mjs";
+
+/** `page` when it is a Session page inside `campaign` (any subfolder depth), else null: only such a page may become the open session. */
+export function promotableSessionPage(page, campaign) {
+  if (!page || !campaign || page.documentName !== "JournalEntryPage" || !isSessionDoc(page)) return null;
+  return campaignOf(page)?.id === campaign.id ? page : null;
+}
+
+/** Every Session page across `entries` (pass the campaign's recursive membership, not its direct children). */
+export function sessionPagesOf(entries) {
+  return (entries ?? []).flatMap((e) => e?.pages?.contents ?? []).filter((p) => isSessionDoc(p));
+}
 
 export function currentSession(campaign) {
   const cs = campaignFlagOf(campaign)?.[CURRENT_SESSION_KEY];

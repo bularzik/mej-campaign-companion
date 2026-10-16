@@ -703,19 +703,20 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   static async onStartSession() {
-    await SessionSheet.#runSessionAction(this, startSession, "startFailed");
+    // This sheet's own page becomes the open session (startSession validates it belongs to the campaign).
+    await SessionSheet.#runSessionAction(this, startSession, "startFailed", { sessionUuid: this.document.uuid });
   }
 
   static async onEndSession() {
     await SessionSheet.#runSessionAction(this, endSession, "endFailed");
   }
 
-  static async #runSessionAction(sheet, action, failKey) {
+  static async #runSessionAction(sheet, action, failKey, options) {
     if (!game.user.isGM) return;
     const campaign = campaignOf(sheet.document);
     if (!campaign) return;
     try {
-      await action(campaign);
+      await action(campaign, options);
     } catch (err) {
       console.error(`${MODULE_ID} | ${action.name} failed`, err);
       ui.notifications.error(game.i18n.localize(`${I18N}.session.${failKey}`));
