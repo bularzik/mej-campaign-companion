@@ -67,6 +67,10 @@
         "name": "Warn when Campaign Companion can't work for players",
         "hint": "When a GM logs in and Monk's Enhanced Journal's \"Allow players to use Enhanced Journal\" setting is off, explain that Campaign Companion won't work properly for players and offer to turn it on."
       },
+      "autoStartSession": {
+        "name": "Offer to start a session at login",
+        "hint": "When a GM logs in and no session is open in a campaign that hasn't had one today, ask whether to start one."
+      },
       "playerConnectionsEnabled": {
         "name": "Players can add party relationships",
         "hint": "Campaign Contributors can add, label and remove the party's relationships between entries. Off: existing party relationships still show, read-only for players."
@@ -98,6 +102,15 @@
       "notes": "Notes"
     },
     "session": {
+      "autoName": "Session {n}",
+      "start": "Start session",
+      "end": "End session",
+      "startOffer": "Start a session in {campaign} now?",
+      "draftTitle": "Recap draft",
+      "draftHint": "Assembled from tonight's notes. Append it to the recap to edit it there, or skip.",
+      "draftAppend": "Append to recap",
+      "draftSkip": "Not now",
+      "draftAppended": "Draft appended to the recap.",
       "editRecap": "Edit Recap",
       "recapImageWhileEditing": "Close the recap editor first, then drop the image.",
       "recapImageNoGM": "No GM is online to relay the upload — try again when one is.",

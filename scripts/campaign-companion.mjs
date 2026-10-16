@@ -3,7 +3,8 @@ import {
   AUTO_CAPTURE_SETTING, MEDIA_CAPTURE_SETTING, PLAYERS_WRITE_SESSIONS_SETTING, SAVED_QUERIES_SETTING, PLAYER_GROUPS_SETTING,
   RETRO_LINK_MODE_SETTING, FORCE_NATIVE_MODE_SETTING, SHELL_HOSTING_SETTING, I18N, DATA_VERSION_SETTING, CURRENT_DATA_VERSION, AUTO_CAPTURE_CAMPAIGN_SETTING,
   HUB_CAMPAIGN_SCOPE_SETTING, ADOPTION_PROMPTED_SETTING, HUB_TIMELINE_SELECTION_SETTING, TIMELINE_SHEET_CLASS,
-  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING, PLAYER_CONNECTIONS_SETTING
+  KNOWLEDGE_COLLAPSED_SETTING, ENTITY_FROM_SELECTION_LAST_TYPE_SETTING, WARN_PLAYER_ACCESS_SETTING, PLAYER_CONNECTIONS_SETTING,
+  AUTO_START_SESSION_SETTING
 } from "./constants.mjs";
 import { registerSocketDispatcher } from "./hooks/socket.mjs";
 import { checkPlayerAccessOnLogin, registerPlayerAccessReloadPrompt } from "./hooks/player-access.mjs";
@@ -125,6 +126,16 @@ Hooks.once("init", () => {
       if (value !== true) return;
       offerExistingSessionOwnership().catch((err) => console.error(`${MODULE_ID} | offering session ownership failed`, err));
     }
+  });
+
+  // Spec 2026-10-15 §5.1: offer to start a session when the GM logs in on a new day. Off by default.
+  game.settings.register(MODULE_ID, AUTO_START_SESSION_SETTING, {
+    name: `${I18N}.settings.autoStartSession.name`,
+    hint: `${I18N}.settings.autoStartSession.hint`,
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
   });
 
   game.settings.register(MODULE_ID, SAVED_QUERIES_SETTING, {
