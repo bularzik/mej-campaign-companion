@@ -504,8 +504,10 @@
       "noSecrets": "No secrets on this session.",
       "linked": "Linked entries",
       "noLinked": "No linked entries.",
-      "notes": "Scratch notes",
-      "notesPlaceholder": "GM-only notes for running this session…"
+      "gmNotes": "GM Notes",
+      "editGmNotes": "Edit on the session",
+      "noGmNotes": "No GM notes yet — add them on the session's Session tab.",
+      "scratchHeading": "Scratch notes"
     },
     "retroLink": {
       "title": "Auto-Link New Entry",

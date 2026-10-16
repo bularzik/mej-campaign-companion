@@ -33,7 +33,9 @@
         </ol>
     </section>
     <section class="mej-cc-prep-notes flexcol">
-        <header>{{localize 'MEJCampaignCompanion.prep.notes'}}</header>
-        <textarea name="notes" placeholder="{{localize 'MEJCampaignCompanion.prep.notesPlaceholder'}}">{{notes}}</textarea>
+        <header>{{localize 'MEJCampaignCompanion.prep.gmNotes'}}
+            <a data-action="editGmNotes" data-tooltip="{{localize 'MEJCampaignCompanion.prep.editGmNotes'}}"><i class="fa-solid fa-pen-to-square"></i> {{localize 'MEJCampaignCompanion.prep.editGmNotes'}}</a>
+        </header>
+        <div class="mej-cc-prep-gm-notes">{{#if gmNotes}}{{{gmNotes}}}{{else}}<p class="instruction">{{localize 'MEJCampaignCompanion.prep.noGmNotes'}}</p>{{/if}}</div>
     </section>
 </div>

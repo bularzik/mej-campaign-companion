@@ -1,8 +1,8 @@
 // scripts/apps/prep-board-app.mjs
 // Session prep board (spec §8): GM-only floating window bound to one
 // Session page. Four zones — attendees, secrets/clues with one-click
-// reveal, linked entries (outbound refs + mention badges), scratch notes
-// (prepNotes flag, 300ms trailing-debounced like the Phase B attributes).
+// reveal, linked entries (outbound refs + mention badges), and the session's
+// GM Notes (read-only here; edited on the Session sheet).
 import { MODULE_ID, I18N, PLAYER_GROUPS_SETTING } from "../constants.mjs";
 import { normalizeAudience, isRevealed } from "../logic/reveal-state.mjs";
 import { normalizeGroups } from "../logic/player-groups.mjs";
@@ -22,7 +22,8 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
     position: { width: 560, height: 640 },
     actions: {
       revealSecret: PrepBoardApp.onRevealSecret,
-      openLinked: PrepBoardApp.onOpenLinked
+      openLinked: PrepBoardApp.onOpenLinked,
+      editGmNotes: PrepBoardApp.onEditGmNotes
     }
   };
 
@@ -30,14 +31,6 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   #page;
   #hookId = null;
-  // Pending, not-yet-committed notes text captured immediately before a
-  // hook-triggered re-render (see the updateJournalEntryPage listener in
-  // _onRender), so a concurrent unrelated page update (co-GM, another
-  // window toggling a secret) can't blow away keystrokes the GM has typed
-  // into the scratch-notes textarea but not yet blurred/debounce-committed.
-  // Null when there's nothing to restore; consumed (reset to null) by the
-  // very next _onRender.
-  #pendingNotes = null;
 
   // Per-page unique id: DEFAULT_OPTIONS carries no `id`, so it falls back to
   // ApplicationV2's own default id template ("app-{id}") until this
@@ -81,53 +74,20 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
         audienceCount: normalizeAudience(s.audience).users.length + normalizeAudience(s.audience).groups.length
       })),
       linked,
-      notes: page.getFlag(MODULE_ID, "prepNotes") ?? ""
+      // GM-only app (openPrepBoard returns for non-GMs), so the GM Notes HTML
+      // is safe to render; enrichHTML sanitizes it.
+      gmNotes: await foundry.applications.ux.TextEditor.implementation.enrichHTML(
+        page.system?.gmNotes ?? "", { relativeTo: page, secrets: true, async: true })
     };
   }
 
   _onRender(context, options) {
     super._onRender?.(context, options);
-    const notes = this.element.querySelector(".mej-cc-prep-notes textarea");
-    // Restore any text captured just before this render by the
-    // updateJournalEntryPage listener below - Handlebars just repainted the
-    // textarea from the last-*committed* flag value, which would otherwise
-    // discard whatever the GM had typed but not yet blurred/debounced.
-    if (notes && this.#pendingNotes) {
-      const pending = this.#pendingNotes;
-      this.#pendingNotes = null;
-      notes.value = pending.value;
-      if (pending.focused) {
-        notes.focus();
-        const end = notes.value.length;
-        notes.setSelectionRange(end, end);
-      }
-    }
-    const commit = foundry.utils.debounce(async () => {
-      if (!game.user.isGM) return;
-      try {
-        await this.#page.update({ [`flags.${MODULE_ID}.prepNotes`]: notes.value });
-      } catch (err) {
-        console.error(`${MODULE_ID} | prep board notes save failed`, err);
-      }
-    }, 300);
-    notes?.addEventListener("input", commit);
-    // Live refresh on session-page updates (secrets toggled elsewhere, etc.).
+    // Live refresh on session-page updates (secrets toggled elsewhere, GM
+    // Notes edited on the session, etc.).
     if (this.#hookId === null) {
-      this.#hookId = Hooks.on("updateJournalEntryPage", (page, changes) => {
+      this.#hookId = Hooks.on("updateJournalEntryPage", (page) => {
         if (page.uuid !== this.#page.uuid || !this.rendered) return;
-        if (changes?.flags?.[MODULE_ID]?.prepNotes !== undefined) return; // our own debounced write
-        // Capture the live textarea's un-committed state before the render
-        // below replaces it, so _onRender can restore it. Only worth
-        // stashing when there's actually something to lose: the textarea is
-        // focused (mid-edit, even if unchanged), or its value has already
-        // diverged from the last-committed flag (typed but blurred away
-        // before the 300ms debounce fired).
-        const live = this.element?.querySelector(".mej-cc-prep-notes textarea");
-        if (live) {
-          const committed = this.#page.getFlag(MODULE_ID, "prepNotes") ?? "";
-          const focused = document.activeElement === live;
-          if (focused || live.value !== committed) this.#pendingNotes = { value: live.value, focused };
-        }
         this.render().catch((err) => console.error(`${MODULE_ID} | prep board refresh failed`, err));
       });
     }
@@ -169,6 +129,22 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
       await this.render();
     } catch (err) {
       console.error(`${MODULE_ID} | prep board reveal secret failed`, err);
+    }
+  }
+
+  static async onEditGmNotes() {
+    if (!game.user.isGM) return;
+    try {
+      const page = this.page;
+      await game.MonksEnhancedJournal.openJournalEntry(page.parent);
+      // The Session sheet's own editGmNotes action opens the editor; find it
+      // once the shell has mounted the page.
+      setTimeout(() => {
+        const btn = game.MonksEnhancedJournal?.journal?.element?.querySelector?.('[data-action="editGmNotes"]');
+        btn?.click();
+      }, 400);
+    } catch (err) {
+      console.error(`${MODULE_ID} | prep board edit GM notes failed`, err);
     }
   }
 

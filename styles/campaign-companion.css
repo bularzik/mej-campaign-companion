@@ -1215,9 +1215,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   text-decoration: line-through;
 }
 
-.mej-cc-prep-notes textarea {
+.mej-cc-prep-notes .mej-cc-prep-gm-notes {
   min-height: 90px;
-  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 /* Retroactive auto-link confirm dialog */

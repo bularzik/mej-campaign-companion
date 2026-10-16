@@ -550,4 +550,8 @@ Hooks.once("ready", async () => {
 
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
+
+  import("./hooks/prep-notes-migrate.mjs")
+    .then((m) => m.migratePrepNotes())
+    .catch((err) => console.error(`${MODULE_ID} | prep-notes fold failed`, err));
 });
