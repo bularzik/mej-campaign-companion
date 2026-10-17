@@ -26,7 +26,7 @@ The owner's answers, verbatim where they were short:
 
 ## Non-goals
 
-- Retroactively moving sessions that are already unfiled in existing worlds (see Decisions, item 1e).
+- Moving sessions that sit in a plain, non-campaign folder (only folderless ones are filed; see 1b).
 - Changing what the knowledge panel contains or how its sections collapse.
 - Any change to GM scoping of the Hub (GMs keep All / Unfiled / New Campaign).
 - Any MEJ change. The companion never patches MEJ.
@@ -53,21 +53,35 @@ The owner's answers, verbatim where they were short:
 
 **1a. Hub "New Session" with no campaign resolved.** Today `CampaignHubPage.onNewSession` (`scripts/apps/CampaignHubPage.mjs:1274-1299`) prompts for a campaign when the scope is Unfiled/All and, when the prompt is cancelled or there are zero campaigns, creates the session unfiled. New behaviour: when no campaign is resolved, call the fallback (1c) and create the session inside it. The prompt itself stays (it lets the GM pick an existing campaign); cancelling it means "make me one", not "leave it loose". The same applies to `onStartSession` (`:1301`) when its prompt yields nothing.
 
-**1b. Every other creation path.** Session pages can also be created unfiled from the core sidebar's New Entry dialog, MEJ's New Entry dialog, the API, or imports. A GM-side post-create hook (active GM only, like `session-timepoint.mjs`) on `createJournalEntry` / `createJournalEntryPage` detects a session page whose entry has no campaign (`campaignOf(entry)` null) and files the entry into the fallback campaign (1c) by `entry.update({ folder, "ownership.default": baselineOwnership(folder) })` — the same move idiom `upgradeEntryToCampaign` uses (`scripts/data/campaign-store.mjs:126`). Players cannot create campaigns, so a player-created unfiled session (possible only where JOURNAL_CREATE is granted) waits for the active GM's client to file it; if no GM is online it is filed the next time a GM's client sees it created — builder's choice whether to also sweep on `ready`, with the owner's "sessions only exist within campaigns" as the goal. Session detection uses `storedPageType()` (MEJ rewrites the in-memory type).
+**1b. Every other creation path.** Session pages can also be created unfiled from the core sidebar's New Entry dialog, MEJ's New Entry dialog, the API, or imports. A GM-side post-create hook (active GM only, like `session-timepoint.mjs`) on `createJournalEntry` / `createJournalEntryPage` detects a session page whose entry is **folderless** (`entry.folder` null) and files the entry into the fallback campaign (1c) with `entry.update({ folder, "ownership.default": <level> })` — the same move idiom `upgradeEntryToCampaign` uses (`scripts/data/campaign-store.mjs:126`). Session detection uses `storedPageType()` (MEJ rewrites the in-memory type).
+
+- **Which entries (my call):** only folderless ones. A session the GM deliberately placed in a plain, non-campaign folder ("Archive", "One-shots") is left alone; the hook never pulls an entry out of a folder the GM chose. Multi-page entries holding a session page are filed whole.
+- **Ownership level (my call, from the existing rule):** the level is the companion's session-aware level for that campaign (`campaignSessionTargetLevel` / `sessionAwareLevel`, `scripts/data/campaign-store.mjs:190`, `scripts/logic/session-ownership.mjs:77`), not the plain folder baseline — so players keep owning campaign sessions and Decision 4 holds. Explicit per-user ownership already on the entry is preserved.
+- **Who files:** the active GM's client. A player-created folderless session waits until a GM client is present (see 1g).
 
 **1c. The fallback campaign.** Name: **"New Campaign"** (localized key; English "New Campaign", matching the sidebar button). Created with `createCampaign(name, { ownershipDefault: "observer" })`, which already makes the folder, the portal entry and the campaign timeline. **Reuse rule (my call):** if a campaign folder named exactly "New Campaign" already exists at the root, reuse it instead of creating another — this is what stops the pile-up. The GM renames it later like any folder; after a rename the next fallback creates a fresh "New Campaign".
 
 **1d. Timepoints follow the campaign.** `createSessionTimepoint` (`scripts/hooks/session-timepoint.mjs:13-15`) runs on create and resolves the timeline from `campaignOf(page)`. The filing hook must run first or re-trigger it, so that a session filed by the fallback ends with its timepoint on the fallback campaign's timeline, not on a world timeline. Builder's choice of mechanism; the requirement is the end state.
 
-**1e. No world-level timeline.** `ensureTimelineJournal(null)` (`scripts/data/timeline-journal.mjs:83-100`) stops creating a root "Campaign Timeline"; with no campaign it returns `getTimelineJournal()` (which still reads the legacy `timelineJournalId` setting so worlds that already have one keep showing it) or null. `createSessionTimepoint` already tolerates null. The Hub's pre-adoption path (`CampaignHubPage.mjs:437`, zero campaigns) shows its empty state instead of creating a timeline. **Existing unfiled sessions in a world are not moved (my call):** a silent mass move of real data is a surprise; the GM's Unfiled scope still lists them and they can be dragged into a campaign. State this in the changelog.
+**1e. No world-level timeline.** `ensureTimelineJournal(null)` (`scripts/data/timeline-journal.mjs:83-100`) stops creating a root "Campaign Timeline"; with no campaign it returns `getTimelineJournal()` (which still reads the legacy `timelineJournalId` setting so worlds that already have one keep showing it) or null. `createSessionTimepoint` already tolerates null. The Hub's pre-adoption path (`CampaignHubPage.mjs:437`, zero campaigns) shows its empty state instead of creating a timeline.
 
-**1f. Campaign guard.** `hooks/campaign-guard.mjs` handles Campaign-typed pages only and needs no change.
+The three other features that today call `ensureTimelineJournal(null)` and would otherwise silently do nothing in a world with no campaign — auto-capture with no target campaign (`scripts/hooks/auto-capture.mjs:113`), the Hub's "Add Timepoint" with no campaign in scope (`CampaignHubPage.mjs:1859`), and the import wizard importing with no campaign (`scripts/apps/import-wizard.mjs:684`) — use the fallback campaign (1c) instead **(my call, extending the owner's rule that a campaign is the container)**.
+
+**1f. Existing unfiled sessions are filed too (owner's decision).** Once per GM client load, the active GM's client sweeps the world for folderless session entries and files each into the fallback campaign exactly as 1b does (same level rule, same reuse rule), so players do not lose sight of sessions when "All" disappears (Decision 2). Idempotent: a world with nothing folderless does nothing. No schema change, so this is not a dataVersion migration; it is a ready-time sweep. The changelog says so plainly: "unfiled sessions are moved into a 'New Campaign' campaign the first time a GM loads the world".
+
+**1g. Campaign guard.** `hooks/campaign-guard.mjs` handles Campaign-typed pages only and needs no change.
+
+**1h. Start Session is different (owner's decision).** `onStartSession` (`CampaignHubPage.mjs:1301`) keeps today's behaviour: closing its campaign prompt aborts and starts nothing. Only New Session (1a) falls back to a created campaign.
+
+**1i. Zero-campaign warning (my call).** When the fallback runs, the existing "no campaign folder" warning from `promptCampaignChoice` is not shown; the fallback is silent as the owner asked.
 
 ### 2. Players see only their campaigns
 
 `scopeOptionsForUser` (`scripts/logic/hub-player-view.mjs:22-25`) today always prepends `{ value: "", label: All }`. New rule for a non-GM: options are exactly the campaigns visible to them (`#visibleCampaigns()`), in the Hub's existing campaign order; no All, no Unfiled, no New Campaign. GM options are unchanged.
 
 Default scope for a non-GM: the remembered client setting (`HUB_CAMPAIGN_SCOPE_SETTING`) if it names a campaign still visible to them, otherwise the first option; never "". The existing single-campaign "title" header mode stays. Zero visible campaigns: the header shows a short "No campaigns yet" title (my call; localized) and the Hub body shows nothing scoped. `#effectiveScopeId` maps "" and stale ids to the first visible campaign for players, not to "".
+
+The Search tab's "search all campaigns" control (`onSearchAllCampaigns`, `CampaignHubPage.mjs:1644`) today works by setting the scope to "". For players it must instead widen only that search across their visible campaigns without changing the scope **(my call)**; for GMs it is unchanged. Unfiled content is never shown to players (there should be none after 1f; anything a GM leaves unfiled on purpose is GM-only).
 
 ### 3. Knowledge side rail
 
@@ -98,10 +112,10 @@ After this lands: `module.json` version 0.28.0, CHANGELOG moves the "Unreleased"
 
 ## Testing
 
-Unit (vitest, `test/*.test.js`): `scopeOptionsForUser` (player: campaigns only, no All/Unfiled/__new; GM unchanged), player default-scope resolution (remembered → first → none), fallback-campaign name/reuse rule as a pure function, filing decision (`shouldFileSession(entry)` or equivalent), `ensureTimelineJournal(null)` returns the legacy world timeline or null and never creates, `chatMessageText` start-of-message rule.
+Unit (vitest, `test/*.test.js`): `scopeOptionsForUser` (player: campaigns only, no All/Unfiled/__new; GM unchanged), player default-scope resolution (remembered → first → none), fallback-campaign name/reuse rule as a pure function, filing decision (`shouldFileSession(entry)`: folderless session entries only; plain-folder sessions untouched), the filed entry's ownership level (session-aware, explicit users preserved), `ensureTimelineJournal(null)` returns the legacy world timeline or null and never creates, Start Session abort on cancel, `chatMessageText` start-of-message rule.
 
 E2E (Foundry 14 World A unless noted):
-- New spec: sessions in campaigns — Hub New Session with the prompt cancelled creates/reuses "New Campaign" and files the session there with a timepoint on that campaign's timeline; a session created via `JournalEntry.create` with no folder is filed by the GM client; no root "Campaign Timeline" appears and `timelineJournalId` stays unset. Sweeps the TT- session; deletes the "New Campaign" folder it created (only if the spec created it).
+- New spec: sessions in campaigns — Hub New Session with the prompt cancelled creates/reuses "New Campaign" and files the session there with a timepoint on that campaign's timeline; a session created via `JournalEntry.create` with no folder is filed by the GM client with the session-aware ownership level; a session created inside a plain TT- folder is NOT moved; the ready-time sweep files a pre-existing folderless TT- session on GM reload; Start Session with its prompt closed starts nothing; no root "Campaign Timeline" appears and `timelineJournalId` stays unset. Sweeps the TT- sessions and folders; deletes the "New Campaign" folder it created (only if the spec created it — World A may legitimately hold one afterwards).
 - New spec: player campaign picker — a player with two visible TT- campaigns sees exactly those two options and opens on the first (or the remembered one); no All/Unfiled/New Campaign.
 - New spec: knowledge rail — on a TT- person page the rail opens/closes from the tab, the text column is wider when closed, the state persists across a page reopen, the rail renders on the popped-out sheet; edit mode leaves the rail available.
 - Updated: 02-hub-timeline (its world-timeline tests become campaign-timeline tests inside a TT- campaign, or are retired if 16-multi-timeline already covers them — builder's call, documented in the spec header), 14-campaigns (test 6: cancel creates "New Campaign"; tests that read `timelineJournalId`), 34 test 3, 07-knowledge and 29-readability selectors, `global-setup.mjs`'s stranded-timeline sweep (now also reclaims a `TT-`-created "New Campaign").
@@ -109,5 +123,5 @@ E2E (Foundry 14 World A unless noted):
 
 ## Out of scope / follow-ups
 
-- Whether the fallback should also catch sessions created by players when no GM is online beyond a `ready` sweep.
-- A one-time "file my unfiled sessions" command for existing worlds.
+- Renaming "New Campaign" automatically from its first session's name.
+- Letting a GM opt a plain folder out of being considered "unfiled" explicitly (today: any non-campaign folder already counts as deliberate).
