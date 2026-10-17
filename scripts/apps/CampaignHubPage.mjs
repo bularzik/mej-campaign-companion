@@ -30,10 +30,10 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab, playerScopeId, restrictHits } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
+import { searchAll, searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
@@ -93,6 +93,8 @@ const HUB_STATE = {
   timelineShowNotes: true,
   restoreIndexFilterFocus: false,
   searchQuery: "",
+  // Player-only: this search widened to every visible campaign (spec 2026-10-16 §2); reset on scope or query change.
+  searchAllVisible: false,
   restoreSearchFocus: false,
   secretsType: "",
   secretsState: "all",
@@ -430,6 +432,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM, campaign) }];
+    } else if (!isGM) {
+      // Players never hold All scope (spec 2026-10-16 §2): nothing to stack.
+      stacks = [];
     } else {
       // GM-only campaign names must never reach a player's stack headings.
       const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
@@ -537,15 +542,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   /** Header mode for this seat (title or picker). */
   #headerMode() {
-    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), { isGM: game.user.isGM });
+    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), {
+      isGM: game.user.isGM, emptyTitle: game.i18n.localize(`${I18N}.hub.scope.none`)
+    });
   }
 
-  /** The effective scope id: a single-campaign player is locked to it; players never hold "unfiled" (the option is GM-only). */
+  /** The effective scope id. GM: the picker's choice (All/Unfiled/campaign). Player: the remembered campaign while visible, else the first visible, else "" — never All or Unfiled (spec 2026-10-16 §2). */
   #effectiveScopeId() {
-    const id = lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
-    if (game.user.isGM) return id;
-    if (id === "unfiled") return "";
-    return id && !this.#visibleCampaigns().some((c) => c.id === id) ? "" : id;
+    if (game.user.isGM) return lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
+    return playerScopeId(this.#visibleCampaigns(), this.state.campaignId ?? "");
   }
 
   /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
@@ -693,6 +698,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const { campaign, unfiled } = this.#scope();
     if (unfiled) return unfiledEntries({ user: game.user });
     if (campaign) return campaignEntries(campaign, { user: game.user });
+    // A player with no visible campaign sees nothing; unfiled content is
+    // never shown to players (spec 2026-10-16 §2).
+    if (!game.user.isGM) return [];
     const campaigns = getCampaigns();
     if (!campaigns.length) return unfiledEntries({ user: game.user });
     return [...campaigns.flatMap((c) => campaignEntries(c, { user: game.user })), ...unfiledEntries({ user: game.user })];
@@ -796,7 +804,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
     const scopeId = this.#effectiveScopeId() || null;
-    const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
+    const { hits, spillover } = game.user.isGM
+      ? searchScoped(this.state.searchQuery, scopeId)
+      : restrictHits(searchAll(this.state.searchQuery), {
+        scopeId: this.state.searchAllVisible ? null : scopeId,
+        within: new Set(this.#visibleCampaigns().map((c) => c.id)),
+        campaignIdOf: (hit) => campaignIdOf(fromUuidSync(hit.uuid))
+      });
     const results = hits.map((hit) => ({
       uuid: hit.uuid,
       name: hit.name,
@@ -900,7 +914,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
   #scopeFilterRows(rows) {
     const id = this.#effectiveScopeId();
-    if (!id) return rows;
+    if (!id) return game.user.isGM ? rows : [];
     return rows.filter((r) => {
       const entry = fromUuidSync(r.uuid);
       const cid = campaignIdOf(entry);
@@ -1654,6 +1668,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // visible too. Available to any seat - search scoping applies to
   // players and GMs alike.
   static async onSearchAllCampaigns() {
+    if (!game.user.isGM) {
+      // Players never leave their campaign scope (spec 2026-10-16 §2): widen
+      // only this search across the campaigns they can see.
+      this.state.searchAllVisible = true;
+      this.render({ parts: ["main"] });
+      return;
+    }
     this.state.campaignId = "";
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, "");
     this.render({ parts: ["main"] });
@@ -2099,6 +2120,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           event.target.value = this.state.campaignId ?? "";
           return CampaignHubPage.onNewCampaign.call(this);
         }
+        this.state.searchAllVisible = false;
         this.state.campaignId = event.target.value;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
@@ -2188,6 +2210,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           "input",
           foundry.utils.debounce((event) => {
             HUB_STATE.searchQuery = event.target.value;
+            HUB_STATE.searchAllVisible = false;
             HUB_STATE.restoreSearchFocus = true;
             this.render({ parts: ["main"] });
           }, 150)

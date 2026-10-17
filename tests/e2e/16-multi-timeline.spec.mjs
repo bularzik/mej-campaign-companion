@@ -21,7 +21,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
-  trackConsoleErrors, assertNoConsoleErrors, settle,
+  trackConsoleErrors, assertNoConsoleErrors, settle, scopeHubToCampaign,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -613,7 +613,9 @@ test.describe.serial("16 multi-timeline", () => {
       try {
         await login(playerPage, "User 1");
         const shell = await openHub(playerPage);
-        await scopeHub(shell, playerPage, playerCampaignId);
+        // Players have no All scope (spec 2026-10-16 §2): scope to the
+        // campaign (a no-op when the player is locked to it).
+        await scopeHubToCampaign(playerPage, playerCampaignId);
         await gotoTab(shell, playerPage, "timeline");
 
         await expect(shell.locator(`select[name="timeline-select"] option[value="${visibleId}"]`)).toHaveCount(1);
@@ -623,16 +625,14 @@ test.describe.serial("16 multi-timeline", () => {
         await expect(shell.locator("button.mej-cc-timeline-delete")).toHaveCount(0);
 
         // Extra assertion (b): the picker's "★"-marked default and the
-        // campaign's stack shown in All scope must agree - the Hub never
+        // campaign's stack shown in campaign scope must agree - the Hub never
         // shows a player a different default than auto-filing targets.
         const starredOption = shell.locator('select[name="timeline-select"] option', { hasText: "★" });
         await expect(starredOption).toHaveCount(1);
         const starredValue = await starredOption.getAttribute("value");
         expect(starredValue).toBe(visibleId);
 
-        await scopeHub(shell, playerPage, "");
-        await gotoTab(shell, playerPage, "timeline");
-        const campStack = shell.locator(".mej-cc-timeline-stack", { hasText: `${TT_PREFIX}PlayerCamp` });
+        const campStack = shell.locator(".mej-cc-timeline-stack");
         await expect(campStack).toHaveCount(1);
         await expect(campStack).toHaveAttribute("data-journal-id", visibleId);
 
@@ -646,7 +646,7 @@ test.describe.serial("16 multi-timeline", () => {
     }
   });
 
-  test("8. Finding 2: a GM-only default timeline never renders its timepoint labels to a player in All scope", async ({ browser }) => {
+  test("8. Finding 2: a GM-only default timeline never renders its timepoint labels to a player", async ({ browser }) => {
     // #timelineContext has no visibility check of its own (defaultTimeline()
     // resolves unfiltered by design - it's the single source of truth
     // auto-filing and the picker's ★ share) - the guard has to be applied
@@ -680,12 +680,13 @@ test.describe.serial("16 multi-timeline", () => {
       try {
         await login(playerPage, "User 1");
         const shell = await openHub(playerPage);
-        await scopeHub(shell, playerPage, ""); // All scope
+        // Players have no All scope (spec 2026-10-16 §2): campaign scope.
+        await scopeHubToCampaign(playerPage, playerCampaignId);
         await gotoTab(shell, playerPage, "timeline");
 
         // The campaign's stack still renders (no crash), but the
         // now-invisible default resolves to an empty pane, not a leak.
-        const campStack = shell.locator(".mej-cc-timeline-stack", { hasText: `${TT_PREFIX}PlayerCamp` });
+        const campStack = shell.locator(".mej-cc-timeline-stack");
         await expect(campStack).toHaveCount(1);
         await expect(shell.locator("li.mej-cc-timepoint", { hasText: `${TT_PREFIX}SecretPoint` })).toHaveCount(0);
         await expect(shell.locator(`text=${TT_PREFIX}SecretPoint`)).toHaveCount(0);
