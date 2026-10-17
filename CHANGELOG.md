@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Tonight strip: "Start session"/"End session" buttons take the companion's field tokens and the idle "No session running" title takes the muted ink token (no opacity), so they clear 4.5:1 on every MEJ background in both colour schemes.
+- Session tab: players no longer see the "Drag an Actor here" coaching hint (it shows only to GMs who can edit); the empty attendee list reads "No attendees recorded yet." Owners can still drop Actors.
+- Session tab: the tab body scrolls and the GM Notes block keeps a 12em flex basis, so the GM Notes pencil stays reachable while the recap editor is open.
+- Image relay for players without upload rights works again: the GM-side receiver compared the page's in-memory type, which MEJ rewrites to `session` after 0.27.0's post-create timepoint update. It now compares the stored subtype.
+- Knowledge panel hides while an editor on the same sheet is open; the taller 0.27.0 panel squeezed the sheet body so edit-mode selections could not be clicked.
+
+### Tests
+- The e2e suite (specs 03, 08, 14) bootstraps the MEJ shell from an unfiled plain entry so the 0.27.0 open-from-entry Hub scoping leaves its fixtures visible.
+- Specs 03, 08 and 14 are aligned with 0.27.0: player-seat fixtures live in a TT- campaign the player can observe, the Dashboards tab is asserted absent for players until a dashboard is shown to them, graph double-click opens the entry (single click focuses), New Session cancel in Unfiled scope still files the session loose as "New session", and the timeline empty state reads "No timeline yet." with a GM Add-timepoint button.
+- `/note` in spec 35 is sent through `ChatLog#processMessage` on Foundry 14; the readability edit pass (spec 29) reaches the GM Notes pencil; spec 24's `selectAndOpenMenu` fails loudly naming the element covering the click point.
+
 ## 0.27.0 (2026-10-16)
 
 The session is the unit of play. Players take notes during the game, the Hub opens on tonight's session, and everything a player sees is scoped to their own campaign. This release implements the 2026-10-15 UI review (`docs/superpowers/specs/2026-10-15-companion-ui-review-design.md`).
