@@ -32,21 +32,21 @@ async function openImportWizard(page) {
 }
 
 // Imported entries aren't TT_PREFIX-ed (the wizard names each entry after its
-// docx section heading verbatim, not after anything this suite controls), so
-// cleanup can't rely on that convention the way every other spec's cleanup
-// does. `exactNames` is the real list of section titles the test itself saw
-// the wizard about to create (captured from the review table before
-// `createImport` runs) - deleting by that exact set, rather than only a
-// best-guess prefix regex, means cleanup actually removes what this run
-// created even if a title doesn't happen to match the regex below. The regex
-// is kept as a secondary safety net for any pre-existing leaked docs from an
-// earlier failed run (e.g. before this exact-name list existed).
+// docx section heading verbatim), so cleanup cannot go by name. It used to
+// also delete, world-wide, every journal named like a section title
+// ("Introduction", "Session Zero", "Arc N", ...) - with no folder or TT-
+// filter, on pass and fail. That sweep is GONE on purpose: World A's real
+// Radiant Citadel campaign was imported from this same docx, so its entries
+// carry exactly those names, and since every import here lands inside this
+// file's own TT- campaign (deleted by id below) the sweep could only ever hit
+// data that is not ours.
 //
 // `campaignFolderIds` is the TT- campaign this file creates in beforeAll and
 // imports into (0.28.0: the import no longer runs through the "__new"
 // fallback, which would have named a campaign "Radiant Citadel" after the
-// docx - the name of a real campaign in World A). Deleted by id, never by
-// name, with its subfolders and contents.
+// docx). Deleted by id, never by name, with its subfolders and contents. A
+// campaign stranded by a crashed run is TT- named, so the global-setup TT-
+// folder sweep reclaims it.
 // Ids of every flagged timeline journal that existed BEFORE this file ran,
 // snapshotted as a GM before the first import: cleanup deletes only what this
 // file itself induced.
@@ -56,24 +56,15 @@ async function openImportWizard(page) {
 // real snapshot - see its doc comment.
 let preexistingTimelines = null;
 
-async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
-  await page.evaluate(async ({ names, campaignFolderIds }) => {
-    const byName = new Set(names);
-    // Delete strictly the campaign folder(s) THIS run's diff identified -
-    // cascades to every entry, the subfolder, and any per-campaign timeline
-    // journal the import auto-created inside it.
-    for (const id of campaignFolderIds) {
+async function cleanupImported(page, campaignFolderIds = []) {
+  await page.evaluate(async (ids) => {
+    // Delete strictly this file's TT- campaign folder - cascades to every
+    // imported entry, the import's subfolder, and the campaign's timeline.
+    for (const id of ids) {
       const f = game.folders.get(id);
       if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
     }
-
-    // Fallback for anything left outside those folders (older
-    // pre-campaign-feature builds, or a doc whose title differs).
-    const ids = game.journal.filter((j) =>
-      byName.has(j.name) || /^(Introduction|Session Zero|Arc \d|Epilogue|Appendix)/.test(j.name ?? "")
-    ).map((j) => j.id);
-    if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-  }, { names: exactNames, campaignFolderIds });
+  }, campaignFolderIds);
   // Legacy-singleton fallback (older pre-campaign-feature builds, or a
   // world where the import somehow still fell to the legacy path): never
   // unconditionally delete-by-name - World A's own real, pre-existing
@@ -84,9 +75,6 @@ async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
 }
 
 test.describe("05 docx import", () => {
-  // The real titles/campaign-folder-ids created by the test that just ran -
-  // see cleanupImported's doc comment.
-  let createdTitles = [];
   // The TT- campaign every import in this file targets: { folderId, timelineId, portalId }.
   let campaign = null;
 
@@ -114,12 +102,10 @@ test.describe("05 docx import", () => {
     // for), but routing through it keeps this spec consistent with 02/06's
     // cleanup pattern and safe if that ever changes.
     try {
-      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, createdTitles, [campaign?.folderId].filter(Boolean)));
+      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, [campaign?.folderId].filter(Boolean)));
     } catch (error) {
       console.error("05-docx-import cleanup failed:", error);
       throw error;
-    } finally {
-      createdTitles = [];
     }
   });
 
@@ -148,11 +134,6 @@ test.describe("05 docx import", () => {
         timepoint: tr.querySelector("input[name^='timepoint-']")?.checked
       }))
     );
-    // Record the exact section titles the wizard is about to create from, for
-    // afterEach's cleanup to delete by exact name (see cleanupImported's doc
-    // comment) - captured regardless of each row's chosen type, since a
-    // "skip" row creates nothing and simply won't match anything at cleanup.
-    createdTitles = rows.map((r) => r.title).filter(Boolean);
     const sessionZeroIndex = rows.findIndex((r) => r.title?.startsWith("Session Zero"));
     expect(sessionZeroIndex).toBeGreaterThanOrEqual(0);
     // Session-shaped sections arrive SUGGESTED as session (spec A §1) — the
