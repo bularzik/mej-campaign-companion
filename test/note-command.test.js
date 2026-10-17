@@ -21,6 +21,9 @@ describe("parseNoteCommand", () => {
     expect(parseNoteCommand("<p>/note a</p><p>b</p>")).toEqual({ text: "a\nb" });
     expect(parseNoteCommand("<p>/note Tom &amp; Jerry &lt;3&nbsp;x</p>")).toEqual({ text: "Tom & Jerry <3 x" });
   });
+  it("keeps literal tag text in a plain-text note (Foundry 13)", () => {
+    expect(parseNoteCommand("/note the <div> tag")).toEqual({ text: "the <div> tag" });
+  });
   it("still parses plain text and still rejects HTML-wrapped non-commands", () => {
     expect(parseNoteCommand("/note x")).toEqual({ text: "x" });
     expect(parseNoteCommand("<p>hello</p>")).toBeNull();
@@ -30,6 +33,16 @@ describe("parseNoteCommand", () => {
 });
 
 describe("chatMessageText", () => {
+  // Foundry 13's textarea sends plain text; a player typing a literal tag-like
+  // word must keep it (spec 2026-10-16 §5). Foundry 14's prose-mirror box
+  // always wraps the message in a block element, which is the only HTML cue.
+  it("treats a message as HTML only when it starts with a block wrapper", () => {
+    expect(chatMessageText("/note the <div> tag")).toBe("/note the <div> tag");
+    expect(chatMessageText("/note <b>bold</b> stays")).toBe("/note <b>bold</b> stays");
+    expect(chatMessageText("  <p>/note a</p>")).toBe("/note a");
+    expect(chatMessageText("<div>/note a<br>b</div>")).toBe("/note a\nb");
+    expect(chatMessageText("<P>/note caps</P>")).toBe("/note caps");
+  });
   it("leaves plain text alone apart from trimming and converts markup to text", () => {
     expect(chatMessageText("  /note a < b  ")).toBe("/note a < b");
     expect(chatMessageText("<p>a<br/>b</p>")).toBe("a\nb");
