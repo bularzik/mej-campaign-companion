@@ -37,6 +37,18 @@ export function pickFallbackCampaign(campaigns, name) {
   return (campaigns ?? []).find((c) => c?.name === name && !c?.folder) ?? null;
 }
 
+/**
+ * The default ownership a filed session takes. A session that is hidden now
+ * (`currentDefault` NONE, or unset, which Foundry treats as NONE) stays
+ * hidden: GM-private sessions, sessions hidden with the eye toggle, and a
+ * player's own private session are never silently revealed. Any other
+ * default takes the campaign's session-aware `targetLevel`.
+ */
+export function filingLevel(currentDefault, targetLevel, noneLevel = 0) {
+  if (currentDefault === undefined || currentDefault === null || currentDefault === noneLevel) return noneLevel;
+  return targetLevel;
+}
+
 /** The single update that files an entry: folder plus default ownership only; explicit per-user ownership is untouched (§1b). */
 export function filingUpdate(campaignId, level) {
   return { folder: campaignId, "ownership.default": level };

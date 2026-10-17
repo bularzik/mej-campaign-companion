@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { shouldFileSession, holdsSessionPage, pickFallbackCampaign, filingUpdate } from "../scripts/logic/session-filing.mjs";
+import { shouldFileSession, holdsSessionPage, pickFallbackCampaign, filingUpdate, filingLevel } from "../scripts/logic/session-filing.mjs";
 import { campaignSessionTargetLevel } from "../scripts/logic/session-ownership.mjs";
 
 const SESSION = "mej-campaign-companion.session";
@@ -62,5 +62,25 @@ describe("filing ownership (spec §1b)", () => {
   it("the filing update touches folder and default ownership only — explicit per-user ownership is untouched", () => {
     expect(filingUpdate("c1", 3)).toEqual({ folder: "c1", "ownership.default": 3 });
     expect(Object.keys(filingUpdate("c1", 3))).toHaveLength(2);
+  });
+});
+
+describe("filingLevel (hidden sessions stay hidden)", () => {
+  it("a session hidden now (default NONE) stays NONE when filed", () => {
+    expect(filingLevel(0, 3, 0)).toBe(0);
+  });
+  it("an OBSERVER session filed into an observer campaign becomes OWNER", () => {
+    const target = campaignSessionTargetLevel(entry(), 2, { sessionType: "session", sessionDocumentType: SESSION, observerLevel: 2, ownerLevel: 3 });
+    expect(filingLevel(2, target, 0)).toBe(3);
+  });
+  it("a LIMITED session takes the campaign's level (OWNER)", () => {
+    expect(filingLevel(1, 3, 0)).toBe(3);
+  });
+  it("an unset default is treated as NONE, matching Foundry", () => {
+    expect(filingLevel(undefined, 3, 0)).toBe(0);
+    expect(filingLevel(undefined, 3)).toBe(0);
+  });
+  it("a GM-only campaign's baseline still applies to a visible session", () => {
+    expect(filingLevel(2, 0, 0)).toBe(0);
   });
 });

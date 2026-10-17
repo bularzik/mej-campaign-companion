@@ -150,6 +150,16 @@ test.describe("37 sessions in campaigns", () => {
     assertNoConsoleErrors(errors);
   });
 
+  test("2b. a hidden folderless session is filed but stays hidden", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    const id = await createSession(page, `${TT_PREFIX}SIC Hidden ${RUN}`, { ownership: { default: 0 } });
+    await expect.poll(() => folderOf(page, id), { timeout: 10_000 }).not.toBeNull();
+    expect(await folderOf(page, id)).toBe(await fallbackCampaignId(page));
+    const own = await page.evaluate((i) => game.journal.get(i).ownership, id);
+    expect(own.default).toBe(0);      // NONE stays NONE: filing never un-hides
+    assertNoConsoleErrors(errors);
+  });
+
   test("3. two folderless sessions created together share one fallback campaign", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     const ids = await page.evaluate(async ({ prefix, run, mod }) => {

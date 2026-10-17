@@ -6,7 +6,7 @@
 // this file reads Foundry state and writes through the store. Silent by
 // design: no dialog, no warning (§1i).
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { shouldFileSession, pickFallbackCampaign, filingUpdate } from "../logic/session-filing.mjs";
+import { shouldFileSession, pickFallbackCampaign, filingUpdate, filingLevel } from "../logic/session-filing.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { getCampaigns, createCampaign, sessionTargetLevel } from "../data/campaign-store.mjs";
 
@@ -40,8 +40,9 @@ const inflight = new Map();
 /**
  * Active-GM only. Resolve the campaign this entry ends up in. A folderless
  * session entry is filed into the fallback campaign - default ownership set
- * to that campaign's session-aware level, explicit per-user ownership left
- * alone (§1b) - and anything else stays where it is. Resolves to the entry's
+ * to that campaign's session-aware level unless the session is hidden now
+ * (default NONE stays NONE), explicit per-user ownership left alone (§1b) -
+ * and anything else stays where it is. Resolves to the entry's
  * campaign afterwards (null for a session the GM keeps in a plain folder, or
  * on any other client). hooks/session-timepoint.mjs awaits this before it
  * picks a timeline, so a filed session's timepoint lands on the fallback
@@ -57,7 +58,8 @@ export function ensureSessionFiled(entry) {
     if (!campaign) return null;
     // Re-check: a second arrival may find the move already landed.
     if (!shouldFileSession(entry)) return campaignOf(entry);
-    await entry.update(filingUpdate(campaign.id, sessionTargetLevel(entry, campaign)));
+    const NONE = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    await entry.update(filingUpdate(campaign.id, filingLevel(entry.ownership?.default, sessionTargetLevel(entry, campaign), NONE)));
     return campaign;
   })().catch((err) => {
     console.error(`${MODULE_ID} | filing session ${entry.uuid} failed`, err);
