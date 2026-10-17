@@ -22,6 +22,9 @@ describe("shouldFileSession (spec 2026-10-16 §1b)", () => {
     expect(shouldFileSession({ documentName: "JournalEntryPage", parent: entry() })).toBe(false);
     expect(shouldFileSession(null)).toBe(false);
   });
+  it("leaves a compendium (pack) entry alone", () => {
+    expect(shouldFileSession({ documentName: "JournalEntry", folder: null, pack: "world.sessions", pages: { contents: [sessionPage()] } })).toBe(false);
+  });
   it("files a multi-page entry whole when one page is a session", () => {
     expect(shouldFileSession(entry({ pages: [textPage(), sessionPage()] }))).toBe(true);
   });

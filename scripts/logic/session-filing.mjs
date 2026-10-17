@@ -18,10 +18,12 @@ export function holdsSessionPage(entry) {
  * Whether the filing hook moves this entry: a FOLDERLESS JournalEntry holding
  * a session page. An entry in any folder - campaign or plain ("Archive",
  * "One-shots") - is left where the GM put it (§1b). Multi-page entries are
- * filed whole.
+ * filed whole. World documents only: a compendium entry (truthy `pack`) is
+ * never filed.
  */
 export function shouldFileSession(entry) {
   if (!entry || entry.documentName !== "JournalEntry") return false;
+  if (entry.pack) return false;
   if (entry.folder) return false;
   return holdsSessionPage(entry);
 }
