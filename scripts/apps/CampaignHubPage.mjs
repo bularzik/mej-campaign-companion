@@ -54,6 +54,7 @@ import { sessionRows, visibleAttendeeNames } from "../logic/hub-sessions.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
+import { ensureFallbackCampaign } from "../hooks/session-filing.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
@@ -1278,17 +1279,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
       const { campaign: scoped } = this.#scope();
-      // RULING: onNewSession must always prompt when the scope doesn't
-      // already imply a campaign (Unfiled/All) - see promptCampaignChoice's
-      // doc comment for why the sole-campaign short-circuit is wrong here.
-      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true });
-      // Zero-campaign world: campaign stays null -> legacy loose creation, unchanged.
-      const destination = campaign
-        ? { folder: campaign.id, ownership: { default: baselineOwnership(campaign) } }
-        : {};
+      // RULING (kept): always prompt when the scope doesn't imply a campaign
+      // (Unfiled/All) - the GM may want an existing one. Dismissing the
+      // prompt, or a world with no campaigns, means "make me one": the
+      // session is created inside the fallback campaign, never loose
+      // (spec 2026-10-16 §1a/§1c). The zero-campaign warning is skipped
+      // because the fallback answers it (§1i).
+      const campaign = scoped
+        ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true, silent: true })
+        ?? await ensureFallbackCampaign();
+      if (!campaign) throw new Error("no campaign available for the new session");
       const entry = await JournalEntry.create({
         name,
-        ...destination,
+        folder: campaign.id,
+        ownership: { default: baselineOwnership(campaign) },
         pages: [buildSessionPageData(name, "", null, null)]
       });
       const page = entry?.pages?.contents?.[0];
@@ -1302,6 +1306,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onStartSession() {
     if (!game.user.isGM) return;
+    // Owner's decision (spec 2026-10-16 §1h): dismissing the prompt aborts.
+    // Only New Session falls back to a created campaign.
     const campaign = this.#tonightCampaign(this.#scope().campaign)
       ?? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.session.start`), { alwaysPrompt: true });
     if (!campaign) return;
@@ -1608,16 +1614,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * session's destination is a real decision even with one campaign in the
    * world, since the alternative is staying unfiled, and skipping the
    * dialog would mean skipping the cancel-to-stay-unfiled path too.
+   * `silent` suppresses the zero-campaign warning for a caller that falls
+   * back instead.
    */
-  static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
+  static async promptCampaignChoice(title, { alwaysPrompt = false, silent = false } = {}) {
     const campaigns = getCampaigns();
     // Two different outcomes used to share one silent `null`: "the GM
     // cancelled" and "there was no dialog to show". Every caller returns on
     // null, so filing/capture controls did nothing at all in a world with no
-    // campaigns yet. Say so. (campaignChoicePlan, tested in test/campaigns.test.js.)
+    // campaigns yet. Say so - unless the caller has its own answer for a
+    // campaign-less world (`silent`: onNewSession's fallback campaign, §1i).
+    // (campaignChoicePlan, tested in test/campaigns.test.js.)
     const plan = campaignChoicePlan(campaigns, { alwaysPrompt });
     if (plan.kind === "none") {
-      ui.notifications.warn(game.i18n.localize(plan.warnKey));
+      if (!silent) ui.notifications.warn(game.i18n.localize(plan.warnKey));
       return null;
     }
     if (plan.kind === "single") return plan.campaign;
@@ -1856,9 +1866,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // In All scope the stack names the campaign it belongs to.
     const stackCampaignId = target.closest("[data-campaign-id]")?.dataset.campaignId;
     const stackCampaign = stackCampaignId ? game.folders.get(stackCampaignId) : null;
+    // No campaign in scope (All in a zero-campaign world, or the legacy
+    // pre-adoption pane): the fallback campaign holds the timepoint, since a
+    // world timeline is never created (spec 2026-10-16 §1e).
     const journal = journalId
       ? game.journal.get(journalId)
-      : await ensureTimelineJournal(stackCampaign ?? this.#scope().campaign ?? null);
+      : await ensureTimelineJournal(stackCampaign ?? this.#scope().campaign ?? await ensureFallbackCampaign());
     if (!journal) return;
     // C14: guard on a NON-EMPTY attribute. Number("") is 0 and "" != null, so
     // an empty data-position used to mean "insert at the head" when it means
