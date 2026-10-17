@@ -433,8 +433,10 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       // GM-only campaign names must never reach a player's stack headings.
       const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
       if (!getCampaigns().length) {
-        // Pre-adoption world: legacy singleton behavior, unchanged.
-        const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
+        // Pre-adoption world: the legacy singleton if the world has one, else
+        // the empty state. Never created here (spec 2026-10-16 §1e): the empty
+        // state's Add Timepoint files into the fallback campaign instead.
+        const journal = getTimelineJournal();
         stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
       } else {
         // Spec D §3: All mode stacks each campaign's DEFAULT timeline plus
