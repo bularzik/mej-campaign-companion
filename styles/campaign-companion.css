@@ -1496,6 +1496,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    takes the image's colour underneath, so give them the field surface. */
 .monks-enhanced-journal .mej-cc-hub-container button,
 .monks-enhanced-journal .session-container .mej-cc-session-header-compact button,
+.monks-enhanced-journal .session-container .mej-cc-tonight button,
 .monks-enhanced-journal .session-container section.secret > button.reveal,
 .monks-enhanced-journal .mej-cc-secret-audience {
   color: var(--mej-cc-field-ink);
@@ -1678,7 +1679,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-tonight { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; margin: 0 0 6px; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); border-radius: 4px; color: var(--mej-cc-ink); }
 .mej-cc-tonight-head { display: flex; align-items: center; gap: 10px; }
 .mej-cc-tonight-title { font-weight: 700; }
-.mej-cc-tonight-none { opacity: .8; font-weight: 400; }
+.mej-cc-tonight-none { color: var(--mej-cc-ink-muted); font-weight: 400; }
 .mej-cc-tonight-meta { color: var(--mej-cc-ink-muted); font-size: .9em; flex: 1; }
 .mej-cc-tonight-capture { display: flex; gap: 4px; }
 .mej-cc-tonight-capture input { flex: 1; }
