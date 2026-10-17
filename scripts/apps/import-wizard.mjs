@@ -681,6 +681,7 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
           if (page.timepoint) {
             // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
             // never prompts and never follows the Hub's currently-viewed one.
+            // `campaign` is always set here: the wizard creates its own when none is chosen.
             timeline ??= await ensureTimelineJournal(campaign);
             if (timeline) {
               let filingError = null;

@@ -1,6 +1,9 @@
 // `/note <text>` and `/n <text>` (spec item 3). Pure; the chat hook is in hooks/note-command.mjs.
 const RE = /^\/(?:note|n)\s+(\S[\s\S]*)$/i;
-const TAG = /<\/?[a-z][^>]*>/i;
+// Foundry 14's prose-mirror chat box wraps every message in a block element
+// (`<p>…</p>`); Foundry 13's textarea never does. That wrapper is the only
+// reliable HTML cue - a tag-like word inside plain text is the player's text.
+const BLOCK_START = /^\s*<(?:p|div)\b/i;
 const NAMED = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
 
 function decodeEntities(s) {
@@ -15,14 +18,15 @@ function decodeEntities(s) {
 }
 
 /**
- * The text of a chat message as Foundry's ChatLog.parse reads it. Foundry 14's
- * prose-mirror chat box sends serialized HTML (`<p>/note …</p>`); Foundry 13's
- * textarea sends plain text, which passes through (trimmed) untouched.
- * `<br>` and paragraph boundaries become newlines; other tags are dropped.
+ * The text of a chat message as Foundry's ChatLog.parse reads it. A message
+ * that starts with a block wrapper (`<p`, `<div`) is Foundry 14's serialized
+ * HTML: `<br>` and paragraph boundaries become newlines, other tags are
+ * dropped, entities decoded. Anything else is plain text, returned trimmed
+ * with any literal `<…>` kept (spec 2026-10-16 §5).
  */
 export function chatMessageText(message) {
   if (typeof message !== "string") return "";
-  if (!TAG.test(message)) return message.trim();
+  if (!BLOCK_START.test(message)) return message.trim();
   let previous;
   let text = message;
   do {

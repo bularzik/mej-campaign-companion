@@ -4,23 +4,36 @@
 import { test, expect } from "@playwright/test";
 import {
   login, settle, TT_PREFIX, deleteJournalsByPrefix, cleanupStrandedTestFolders, withGmPage,
-  trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404
+  trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404,
+  hideOtherCampaignsFrom, restoreHidden
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const RUN = Date.now().toString(36);
 const CAMPAIGN = `${TT_PREFIX}PH Campaign ${RUN}`;
 const SESSION = `${TT_PREFIX}PH Session ${RUN}`;
+const SESSION_RO = `${TT_PREFIX}PH View-only Session ${RUN}`;
 
 async function seed(page) {
-  return page.evaluate(async ({ campaignName, sessionName }) => {
+  return page.evaluate(async ({ campaignName, sessionName, roName }) => {
     const { createCampaign, campaignPortal } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
     const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
     const folder = await createCampaign(campaignName, { ownershipDefault: "observer" });
     const pageData = buildSessionPageData(sessionName, "<p>We met the duke.</p>", { year: 1497, month: 5, day: 14 }, 12);
+    // Explicit default 2 inside an observer campaign: the preCreate ownership
+    // hook raises the default to OWNER, so User 1 OWNS this session (that is
+    // the product rule for campaign sessions; spec 2026-10-15 item 8).
     const session = await JournalEntry.create({ name: sessionName, folder: folder.id, ownership: { default: 2 }, pages: [pageData] });
-    return { folderId: folder.id, portalId: campaignPortal(folder)?.id ?? null, sessionId: session.id };
-  }, { campaignName: CAMPAIGN, sessionName: SESSION });
+    // A view-only session: default NONE (below observer, so the hook does not
+    // raise it) with an explicit OBSERVER grant for User 1 alone.
+    const user1 = game.users.getName("User 1");
+    const ro = await JournalEntry.create({
+      name: roName, folder: folder.id,
+      ownership: { default: 0, [user1.id]: 2 },
+      pages: [buildSessionPageData(roName, "<p>Read only.</p>", null, 11)]
+    });
+    return { folderId: folder.id, portalId: campaignPortal(folder)?.id ?? null, sessionId: session.id, roSessionId: ro.id };
+  }, { campaignName: CAMPAIGN, sessionName: SESSION, roName: SESSION_RO });
 }
 
 /** Open a campaign portal entry directly (its page type routes MEJ to the Hub sheet). */
@@ -42,34 +55,15 @@ test.describe("34 player Hub", () => {
       ids = await seed(gm);
       // A player counts a campaign when they can see any member entry or its
       // portal, so hide every member and the portal of every OTHER campaign
-      // (default ownership only) to leave User 1 exactly one; restored in afterAll.
-      const hide = await gm.evaluate(async (keep) => {
-        const { getCampaigns, campaignPortal, campaignEntries } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
-        const out = [];
-        let error = null;
-        try {
-          for (const c of getCampaigns()) {
-            if (c.id === keep) continue;
-            const docs = [...campaignEntries(c), campaignPortal(c)].filter(Boolean);
-            for (const d of docs) {
-              out.push({ id: d.id, def: d.ownership?.default ?? 0 });
-              await d.update({ "ownership.default": 0 });
-            }
-          }
-        } catch (e) { error = String(e); }
-        return { out, error };
-      }, ids.folderId);
-      // Record before surfacing a failure so afterAll restores a partial hide.
-      ids.hidden = hide.out;
-      if (hide.error) throw new Error(hide.error);
+      // (default ownership only) to leave User 1 exactly one; restored in
+      // afterAll (a partial hide is restored by the helper before it throws).
+      ids.hidden = await hideOtherCampaignsFrom(gm, [ids.folderId]);
     });
   });
 
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (gm) => {
-      await gm.evaluate(async (hidden) => {
-        for (const h of hidden ?? []) await game.journal.get(h.id)?.update({ "ownership.default": h.def });
-      }, ids?.hidden);
+      await restoreHidden(gm, ids?.hidden);
       await deleteJournalsByPrefix(gm);
       await cleanupStrandedTestFolders(gm);
     });
@@ -99,15 +93,27 @@ test.describe("34 player Hub", () => {
     await expect(row.locator(".mej-cc-session-preview")).toHaveText("We met the duke.");
   });
 
-  test("3. a player's Session tab has no Secrets block and no drag hint", async ({ page }) => {
+  async function openSessionTab(page, sessionId) {
     await login(page, "User 1");
     await page.locator('[data-tab="journal"][data-action="tab"]').click();
     await settle(page, 200);
-    await page.evaluate(async (id) => { await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)); }, ids.sessionId);
+    await page.evaluate(async (id) => { await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)); }, sessionId);
     await settle(page, 600);
     const shell = page.locator("#MonksEnhancedJournal");
     await shell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(page, 300);
+    return shell;
+  }
+
+  test("3a. an owning player sees the attendee drag hint and no Secrets block", async ({ page }) => {
+    const shell = await openSessionTab(page, ids.sessionId);
+    await expect(shell.locator(".secrets-section")).toHaveCount(0);
+    const hint = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.session.dragActorHint"));
+    await expect(shell.locator(".attendees-list .instruction")).toHaveText(hint);
+  });
+
+  test("3b. a view-only player sees 'No attendees recorded yet.' and no Secrets block", async ({ page }) => {
+    const shell = await openSessionTab(page, ids.roSessionId);
     await expect(shell.locator(".secrets-section")).toHaveCount(0);
     await expect(shell.locator(".attendees-list .instruction")).toHaveText("No attendees recorded yet.");
   });

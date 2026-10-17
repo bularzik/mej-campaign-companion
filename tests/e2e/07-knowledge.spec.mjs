@@ -453,7 +453,7 @@ test.describe("07 knowledge panel", () => {
       const { panel } = await openEntry(page, personId);
       await expect(panel).not.toHaveClass(/collapsed/);
       await expect(panel.locator(".mej-cc-knowledge-summary")).toHaveText("1 tag");
-      await panel.locator(".mej-cc-knowledge-bar").click();
+      await panel.locator(".mej-cc-knowledge-tab").click();
       await expect(panel).toHaveClass(/collapsed/);
       await expect(panel.locator("details").first()).toBeHidden();
       expect(await page.evaluate(() => game.settings.get("mej-campaign-companion", "knowledgePanelCollapsed"))).toBe(true);
@@ -465,7 +465,7 @@ test.describe("07 knowledge panel", () => {
       await reloadGame(page);
       const { panel: afterReload } = await openEntry(page, placeId);
       await expect(afterReload).toHaveClass(/collapsed/);
-      await afterReload.locator(".mej-cc-knowledge-bar").click();
+      await afterReload.locator(".mej-cc-knowledge-tab").click();
       await expect(afterReload).not.toHaveClass(/collapsed/);
       await expect(afterReload.locator("details").first()).toBeVisible();
       expect(await page.evaluate(() => game.settings.get("mej-campaign-companion", "knowledgePanelCollapsed"))).toBe(false);

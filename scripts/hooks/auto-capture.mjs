@@ -42,6 +42,7 @@ import {
   AUTO_CAPTURE_CAMPAIGN_SETTING
 } from "../constants.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { ensureFallbackCampaign } from "./session-filing.mjs";
 import { getTimepoints, addTimepoint, addLink } from "../data/timepoints.mjs";
 import { currentWorldComponents, formatCampaignDate } from "../logic/campaign-calendar.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
@@ -110,7 +111,9 @@ async function fileOntoNewestTimepoint(link) {
   if (reason === "multi") return false; // several campaigns, no target chosen: decline silently for media
   // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
   // never prompts and never follows the Hub's currently-viewed one.
-  const journal = await ensureTimelineJournal(campaign);
+  // No target campaign (a world with none yet): the fallback campaign holds
+  // the capture - a world timeline is never created (spec 2026-10-16 §1e).
+  const journal = await ensureTimelineJournal(campaign ?? await ensureFallbackCampaign());
   if (!journal) {
     console.debug(`${MODULE_ID} | auto-capture: no timeline journal yet, skipping filing`);
     return false;

@@ -30,10 +30,10 @@ import { buildDoctypeFilter } from "../logic/doctype-filter.mjs";
 import { buildSessionPageData } from "../logic/session-page-data.mjs";
 import { buildSortMenu } from "../logic/sort-menu.mjs";
 import { MENU_FLAGS, dismissPatch } from "../logic/menu-dismiss.mjs";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab, playerScopeId, restrictHits } from "../logic/hub-player-view.mjs";
 import { buildIndexSource, filterIndexRows, isVisibleToUser, SYNTHETIC_ICONS } from "../logic/hub-index.mjs";
 import { buildTimelineRows, buildOrderOptions } from "../logic/hub-timeline.mjs";
-import { searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
+import { searchAll, searchScoped, mentionBadgeCounts, runQueryAll, gmSecretRecords } from "../search/live-index.mjs";
 import { parseQuery } from "../logic/query-grammar.mjs";
 import { filterTrackerRows } from "../logic/secrets-tracker.mjs";
 import { normalizeAudience } from "../logic/reveal-state.mjs";
@@ -54,6 +54,7 @@ import { sessionRows, visibleAttendeeNames } from "../logic/hub-sessions.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { mejType, openHub, openSessionPage } from "../integrations/mej-adapter.mjs";
 import { runRetroPass } from "../hooks/retro-link.mjs";
+import { ensureFallbackCampaign } from "../hooks/session-filing.mjs";
 import { applyBlockReveal } from "../hooks/secrets-ui.mjs";
 import { fileRevealChange, revealLabel } from "../hooks/reveal-filing.mjs";
 import { prepareGraphContext, drawGraphPane } from "./hub-graph-pane.mjs";
@@ -92,6 +93,8 @@ const HUB_STATE = {
   timelineShowNotes: true,
   restoreIndexFilterFocus: false,
   searchQuery: "",
+  // Player-only: this search widened to every visible campaign (spec 2026-10-16 §2); reset on scope or query change.
+  searchAllVisible: false,
   restoreSearchFocus: false,
   secretsType: "",
   secretsState: "all",
@@ -407,6 +410,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.state.portalScopedFor = this.document.uuid;
       const portalCampaign = campaignOf(this.document);
       if (portalCampaign) {
+        this.state.searchAllVisible = false;
         this.state.campaignId = portalCampaign.id;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, portalCampaign.id);
       } else {
@@ -429,12 +433,17 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     } else if (campaign) {
       const journal = isGM ? await ensureTimelineJournal(campaign) : resolveTimelineJournal(campaign);
       stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM, campaign) }];
+    } else if (!isGM) {
+      // Players never hold All scope (spec 2026-10-16 §2): nothing to stack.
+      stacks = [];
     } else {
       // GM-only campaign names must never reach a player's stack headings.
       const campaigns = isGM ? getCampaigns() : this.#visibleCampaigns();
       if (!getCampaigns().length) {
-        // Pre-adoption world: legacy singleton behavior, unchanged.
-        const journal = isGM ? await ensureTimelineJournal() : getTimelineJournal();
+        // Pre-adoption world: the legacy singleton if the world has one, else
+        // the empty state. Never created here (spec 2026-10-16 §1e): the empty
+        // state's Add Timepoint files into the fallback campaign instead.
+        const journal = getTimelineJournal();
         stacks = [{ name: null, ...this.#timelineContext(this.#visibleTimeline(journal), isGM) }];
       } else {
         // Spec D §3: All mode stacks each campaign's DEFAULT timeline plus
@@ -534,15 +543,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   /** Header mode for this seat (title or picker). */
   #headerMode() {
-    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), { isGM: game.user.isGM });
+    return playerHeaderMode(this.#visibleCampaigns().map((c) => ({ id: c.id, name: c.name })), {
+      isGM: game.user.isGM, emptyTitle: game.i18n.localize(`${I18N}.hub.scope.none`)
+    });
   }
 
-  /** The effective scope id: a single-campaign player is locked to it; players never hold "unfiled" (the option is GM-only). */
+  /** The effective scope id. GM: the picker's choice (All/Unfiled/campaign). Player: the remembered campaign while visible, else the first visible, else "" — never All or Unfiled (spec 2026-10-16 §2). */
   #effectiveScopeId() {
-    const id = lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
-    if (game.user.isGM) return id;
-    if (id === "unfiled") return "";
-    return id && !this.#visibleCampaigns().some((c) => c.id === id) ? "" : id;
+    if (game.user.isGM) return lockedScopeId(this.#headerMode(), this.state.campaignId ?? "");
+    return playerScopeId(this.#visibleCampaigns(), this.state.campaignId ?? "");
   }
 
   /** Resolve HUB_STATE.campaignId to a scope. Lazily seeded from the client setting; stale folder ids reset to All. */
@@ -690,6 +699,9 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     const { campaign, unfiled } = this.#scope();
     if (unfiled) return unfiledEntries({ user: game.user });
     if (campaign) return campaignEntries(campaign, { user: game.user });
+    // A player with no visible campaign sees nothing; unfiled content is
+    // never shown to players (spec 2026-10-16 §2).
+    if (!game.user.isGM) return [];
     const campaigns = getCampaigns();
     if (!campaigns.length) return unfiledEntries({ user: game.user });
     return [...campaigns.flatMap((c) => campaignEntries(c, { user: game.user })), ...unfiledEntries({ user: game.user })];
@@ -793,7 +805,13 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // the hits for the template (type icon/label, localized field names).
   #searchContext() {
     const scopeId = this.#effectiveScopeId() || null;
-    const { hits, spillover } = searchScoped(this.state.searchQuery, scopeId);
+    const { hits, spillover } = game.user.isGM
+      ? searchScoped(this.state.searchQuery, scopeId)
+      : restrictHits(searchAll(this.state.searchQuery), {
+        scopeId: this.state.searchAllVisible ? null : scopeId,
+        within: new Set(this.#visibleCampaigns().map((c) => c.id)),
+        campaignIdOf: (hit) => campaignIdOf(fromUuidSync(hit.uuid))
+      });
     const results = hits.map((hit) => ({
       uuid: hit.uuid,
       name: hit.name,
@@ -897,7 +915,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   /** Spec §2: post-filter dashboard/query rows to the current campaign scope, same rule as searchScoped(). */
   #scopeFilterRows(rows) {
     const id = this.#effectiveScopeId();
-    if (!id) return rows;
+    if (!id) return game.user.isGM ? rows : [];
     return rows.filter((r) => {
       const entry = fromUuidSync(r.uuid);
       const cid = campaignIdOf(entry);
@@ -1276,17 +1294,20 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     try {
       const name = game.i18n.localize(`${I18N}.hub.newSession`);
       const { campaign: scoped } = this.#scope();
-      // RULING: onNewSession must always prompt when the scope doesn't
-      // already imply a campaign (Unfiled/All) - see promptCampaignChoice's
-      // doc comment for why the sole-campaign short-circuit is wrong here.
-      const campaign = scoped ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true });
-      // Zero-campaign world: campaign stays null -> legacy loose creation, unchanged.
-      const destination = campaign
-        ? { folder: campaign.id, ownership: { default: baselineOwnership(campaign) } }
-        : {};
+      // RULING (kept): always prompt when the scope doesn't imply a campaign
+      // (Unfiled/All) - the GM may want an existing one. Dismissing the
+      // prompt, or a world with no campaigns, means "make me one": the
+      // session is created inside the fallback campaign, never loose
+      // (spec 2026-10-16 §1a/§1c). The zero-campaign warning is skipped
+      // because the fallback answers it (§1i).
+      const campaign = scoped
+        ?? await CampaignHubPage.promptCampaignChoice(name, { alwaysPrompt: true, silent: true })
+        ?? await ensureFallbackCampaign();
+      if (!campaign) throw new Error("no campaign available for the new session");
       const entry = await JournalEntry.create({
         name,
-        ...destination,
+        folder: campaign.id,
+        ownership: { default: baselineOwnership(campaign) },
         pages: [buildSessionPageData(name, "", null, null)]
       });
       const page = entry?.pages?.contents?.[0];
@@ -1300,6 +1321,8 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
   static async onStartSession() {
     if (!game.user.isGM) return;
+    // Owner's decision (spec 2026-10-16 §1h): dismissing the prompt aborts.
+    // Only New Session falls back to a created campaign.
     const campaign = this.#tonightCampaign(this.#scope().campaign)
       ?? await CampaignHubPage.promptCampaignChoice(game.i18n.localize(`${I18N}.session.start`), { alwaysPrompt: true });
     if (!campaign) return;
@@ -1379,6 +1402,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!result) return;
     const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
     if (campaign) {
+      this.state.searchAllVisible = false;
       this.state.campaignId = campaign.id;
       await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
       this.render({ parts: ["main"] });
@@ -1500,6 +1524,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (ids.length) await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
     if (legacyId) await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, "");
     await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.state.searchAllVisible = false;
     this.state.campaignId = campaign.id;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
     ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
@@ -1602,20 +1627,24 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * By default short-circuits to the sole campaign when exactly one exists
    * (fileIntoCampaign/fileAllShown/capture-target: there's nothing to
    * choose between, so no dialog is the right call). `alwaysPrompt: true`
-   * (onNewSession only) disables that short-circuit - RULING: a new
-   * session's destination is a real decision even with one campaign in the
-   * world, since the alternative is staying unfiled, and skipping the
-   * dialog would mean skipping the cancel-to-stay-unfiled path too.
+   * (passed by onNewSession and onStartSession) disables that short-circuit
+   * - RULING: a session's destination is a real decision even with one
+   * campaign in the world. Cancelling New Session's prompt files the new
+   * session into the fallback campaign ("New Campaign", §1c); cancelling
+   * Start Session's prompt starts nothing (§1h). `silent` suppresses the zero-campaign warning for a caller that falls
+   * back instead.
    */
-  static async promptCampaignChoice(title, { alwaysPrompt = false } = {}) {
+  static async promptCampaignChoice(title, { alwaysPrompt = false, silent = false } = {}) {
     const campaigns = getCampaigns();
     // Two different outcomes used to share one silent `null`: "the GM
     // cancelled" and "there was no dialog to show". Every caller returns on
     // null, so filing/capture controls did nothing at all in a world with no
-    // campaigns yet. Say so. (campaignChoicePlan, tested in test/campaigns.test.js.)
+    // campaigns yet. Say so - unless the caller has its own answer for a
+    // campaign-less world (`silent`: onNewSession's fallback campaign, §1i).
+    // (campaignChoicePlan, tested in test/campaigns.test.js.)
     const plan = campaignChoicePlan(campaigns, { alwaysPrompt });
     if (plan.kind === "none") {
-      ui.notifications.warn(game.i18n.localize(plan.warnKey));
+      if (!silent) ui.notifications.warn(game.i18n.localize(plan.warnKey));
       return null;
     }
     if (plan.kind === "single") return plan.campaign;
@@ -1642,6 +1671,14 @@ export class CampaignHubPage extends EnhancedJournalSheet {
   // visible too. Available to any seat - search scoping applies to
   // players and GMs alike.
   static async onSearchAllCampaigns() {
+    if (!game.user.isGM) {
+      // Players never leave their campaign scope (spec 2026-10-16 §2): widen
+      // only this search across the campaigns they can see.
+      this.state.searchAllVisible = true;
+      this.render({ parts: ["main"] });
+      return;
+    }
+    this.state.searchAllVisible = false;
     this.state.campaignId = "";
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, "");
     this.render({ parts: ["main"] });
@@ -1854,9 +1891,12 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     // In All scope the stack names the campaign it belongs to.
     const stackCampaignId = target.closest("[data-campaign-id]")?.dataset.campaignId;
     const stackCampaign = stackCampaignId ? game.folders.get(stackCampaignId) : null;
+    // No campaign in scope (All in a zero-campaign world, or the legacy
+    // pre-adoption pane): the fallback campaign holds the timepoint, since a
+    // world timeline is never created (spec 2026-10-16 §1e).
     const journal = journalId
       ? game.journal.get(journalId)
-      : await ensureTimelineJournal(stackCampaign ?? this.#scope().campaign ?? null);
+      : await ensureTimelineJournal(stackCampaign ?? this.#scope().campaign ?? await ensureFallbackCampaign());
     if (!journal) return;
     // C14: guard on a NON-EMPTY attribute. Number("") is 0 and "" != null, so
     // an empty data-position used to mean "insert at the head" when it means
@@ -2084,6 +2124,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           event.target.value = this.state.campaignId ?? "";
           return CampaignHubPage.onNewCampaign.call(this);
         }
+        this.state.searchAllVisible = false;
         this.state.campaignId = event.target.value;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, event.target.value);
         this.render({ parts: ["main"] });
@@ -2173,6 +2214,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           "input",
           foundry.utils.debounce((event) => {
             HUB_STATE.searchQuery = event.target.value;
+            HUB_STATE.searchAllVisible = false;
             HUB_STATE.restoreSearchFocus = true;
             this.render({ parts: ["main"] });
           }, 150)
@@ -2257,6 +2299,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
 /** Set the Hub's campaign scope without opening it (folder context menu, spec C §2). */
 export function setHubScope(campaignId) {
+  HUB_STATE.searchAllVisible = false;
   HUB_STATE.campaignId = campaignId;
 }
 
@@ -2270,6 +2313,7 @@ export async function showGraphFor(uuid) {
   const entry = doc?.documentName === "JournalEntryPage" ? doc.parent : doc;
   const cid = entry ? campaignIdOf(entry) : null;
   if (cid) {
+    HUB_STATE.searchAllVisible = false;
     HUB_STATE.campaignId = cid;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
   }
@@ -2289,6 +2333,7 @@ export async function openTimelineInHub(journal) {
   if (!journal || !isTimelineJournal(journal)) return;
   const cid = campaignIdOf(journal);
   if (cid) {
+    HUB_STATE.searchAllVisible = false;
     HUB_STATE.campaignId = cid;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
   }

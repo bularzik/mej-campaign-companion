@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, TT_PREFIX, trackConsoleErrors, assertNoConsoleErrors, settle, KNOWN_MEJ_SESSION_ICON_404 } from "./helpers/foundry.mjs";
+import { login, TT_PREFIX, createTtPlainFolder, trackConsoleErrors, assertNoConsoleErrors, settle, KNOWN_MEJ_SESSION_ICON_404 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const APPLY = "/modules/mej-campaign-companion/scripts/hooks/session-ownership-apply.mjs";
@@ -13,20 +13,28 @@ test.describe("21 players write sessions", () => {
       await game.settings.set("mej-campaign-companion", "playersWriteSessions", false);
       const ids = game.journal.filter((j) => j.name?.startsWith("TT-")).map((j) => j.id);
       if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
+      for (const f of game.folders.filter((f) => f.type === "JournalEntry" && f.name?.startsWith("TT-"))) {
+        await f.delete({ deleteSubfolders: true, deleteContents: true });
+      }
     });
   });
 
   test("turning the setting on offers ownership of existing sessions; No leaves them alone; the grant opens one up", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
-    const entryId = await page.evaluate(async (n) => {
+    // A plain TT- folder: since 0.28.0 a folderless session is filed into the
+    // "New Campaign" fallback and raised to OWNER, which would empty the
+    // candidate list this test asserts on. The afterEach removes the folder.
+    const folder = await createTtPlainFolder(page, `${TT_PREFIX}21 Sessions ${Date.now().toString(36)}`);
+    const entryId = await page.evaluate(async ({ n, folder }) => {
       const entry = await JournalEntry.create({
         name: n,
+        folder,
         pages: [{ name: n, type: "mej-campaign-companion.session", flags: { "monks-enhanced-journal": { type: "session" } } }],
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
       });
       return entry.id;
-    }, `${TT_PREFIX}Existing Session`);
+    }, { n: `${TT_PREFIX}Existing Session`, folder });
 
     const listed = await page.evaluate(async ({ id, mod }) => {
       const { sessionsNeedingOwnership } = await import(mod);

@@ -1,10 +1,17 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
-  settle, deleteActorsByPrefix, KNOWN_MEJ_SESSION_ICON_404
+  settle, deleteActorsByPrefix, withGmPage, createTtPlainFolder, deleteFoldersById,
+  KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
+// Since 0.28.0 the GM client files a FOLDERLESS session into the "New
+// Campaign" fallback (and raises its ownership); a session in a plain folder
+// is left alone. The sessions here live in a plain TT- folder so the Hub and
+// prep board see them exactly where and as they were created.
+const RUN = Date.now().toString(36);
+let plainFolderId = null;
 
 // Load-bearing render guard (same rationale as 09-secrets.spec.mjs's
 // openEntry()): this file's flow eventually asserts things are ABSENT (a
@@ -24,6 +31,13 @@ async function openEntry(page, entryId, anchorText) {
 }
 
 test.describe("10 secrets hub + prep board", () => {
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { plainFolderId = await createTtPlainFolder(gm, `${TT_PREFIX}10 Sessions ${RUN}`); });
+  });
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { await deleteFoldersById(gm, [plainFolderId]); });
+  });
+
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
       await gmPage.evaluate(async () => {
@@ -41,13 +55,14 @@ test.describe("10 secrets hub + prep board", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
-    const { placeId, sessionId } = await page.evaluate(async ({ prefix }) => {
+    const { placeId, sessionId } = await page.evaluate(async ({ prefix, folder }) => {
       const place = await JournalEntry.create({
         name: `${prefix}Tracker-Place`,
         pages: [{ name: "p", type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: '<section class="secret" id="secret-t1"><p>tracker-block-secret</p></section>' } }]
       });
       const session = await JournalEntry.create({
         name: `${prefix}Tracker-Session`,
+        folder,
         pages: [{
           name: "s",
           type: "mej-campaign-companion.session",
@@ -60,7 +75,7 @@ test.describe("10 secrets hub + prep board", () => {
       const u1 = game.users.getName("User 1").id;
       await place.pages.contents[0].update({ "flags.mej-campaign-companion.secretReveals.secret-t1": { users: [u1], groups: [], all: false, revealedAt: 1 } });
       return { placeId: place.id, sessionId: session.id };
-    }, { prefix: TT_PREFIX });
+    }, { prefix: TT_PREFIX, folder: plainFolderId });
 
     // Open Hub -> Secrets tab. (GM always sees the block secret's own text,
     // so it doubles as this entry's render anchor.)
@@ -137,10 +152,11 @@ test.describe("10 secrets hub + prep board", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const actorName = `${TT_PREFIX}Attendee Ilva`;
-    const sessionId = await page.evaluate(async ({ prefix, actorName }) => {
+    const sessionId = await page.evaluate(async ({ prefix, actorName, folder }) => {
       const actor = await Actor.create({ name: actorName, type: "npc" });
       const session = await JournalEntry.create({
         name: `${prefix}Prep-Session`,
+        folder,
         pages: [{
           name: "s",
           type: "mej-campaign-companion.session",
@@ -151,7 +167,7 @@ test.describe("10 secrets hub + prep board", () => {
         }]
       });
       return session.id;
-    }, { prefix: TT_PREFIX, actorName });
+    }, { prefix: TT_PREFIX, actorName, folder: plainFolderId });
 
     // openPrepBoard() called directly - MEJ's own header-button injection for
     // it is broken on v14 (see this file's other test).

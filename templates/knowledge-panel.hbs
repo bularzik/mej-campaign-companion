@@ -1,9 +1,5 @@
-<section class="mej-cc-knowledge{{#if collapsed}} collapsed{{/if}}" data-page-uuid="{{pageUuid}}">
-    <header class="mej-cc-knowledge-bar" role="button" tabindex="0" aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}">
-        <i class="fa-solid fa-chevron-down mej-cc-knowledge-chevron"></i>
-        <span class="mej-cc-knowledge-title">{{localize "MEJCampaignCompanion.knowledge.title"}}</span>
-        <span class="mej-cc-knowledge-summary">{{#if summary}}{{summary}}{{else}}{{localize "MEJCampaignCompanion.knowledge.summary.empty"}}{{/if}}</span>
-    </header>
+<aside class="mej-cc-knowledge{{#if collapsed}} collapsed{{/if}}" data-page-uuid="{{pageUuid}}" aria-label="{{localize "MEJCampaignCompanion.knowledge.title"}}">
+    <div class="mej-cc-knowledge-body">
     <details class="mej-cc-knowledge-notes" open>
         <summary><i class="fa-solid fa-comment-dots"></i> {{localize "MEJCampaignCompanion.notes.partyNotes"}} ({{partyNotes.rows.length}})
             {{#if partyNotes.canWrite}}<a class="mej-cc-note-about" data-action="noteAbout" title="{{localize 'MEJCampaignCompanion.notes.about'}}"><i class="fa-solid fa-plus"></i> {{localize "MEJCampaignCompanion.notes.about"}}</a>{{/if}}
@@ -68,4 +64,10 @@
         {{/each}}
         {{#unless backlinks}}<span class="mej-cc-knowledge-empty">{{localize "MEJCampaignCompanion.knowledge.noMentions"}}</span>{{/unless}}
     </details>
-</section>
+    </div>
+    <button type="button" class="mej-cc-knowledge-tab" aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}" title="{{localize "MEJCampaignCompanion.knowledge.title"}}">
+        <i class="fa-solid fa-chevron-right mej-cc-knowledge-chevron" aria-hidden="true"></i>
+        <span class="mej-cc-knowledge-title">{{localize "MEJCampaignCompanion.knowledge.title"}}</span>
+        <span class="mej-cc-knowledge-summary">{{#if summary}}{{summary}}{{else}}{{localize "MEJCampaignCompanion.knowledge.summary.empty"}}{{/if}}</span>
+    </button>
+</aside>

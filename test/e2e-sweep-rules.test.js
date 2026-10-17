@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { strandedTestFolderIds, autoCaptureNeedsReset } from "../tests/e2e/helpers/sweep-rules.mjs";
+import { strandedTestFolderIds, autoCaptureNeedsReset, fallbackCampaignReclaimable } from "../tests/e2e/helpers/sweep-rules.mjs";
 
 describe("strandedTestFolderIds", () => {
   const folders = [
@@ -38,5 +38,28 @@ describe("autoCaptureNeedsReset", () => {
 
   it("is true when the setting names a folder that is gone", () => {
     expect(autoCaptureNeedsReset("f1", existing)).toBe(true);
+  });
+});
+
+describe("fallbackCampaignReclaimable", () => {
+  const portal = { name: "New Campaign", portal: true, timeline: false, timepointLabels: [] };
+  const tl = (labels) => ({ name: "New Campaign — Timeline", portal: false, timeline: true, timepointLabels: labels });
+  it("reclaims a fallback that holds only TT- sessions and TT- timepoints, or nothing at all", () => {
+    expect(fallbackCampaignReclaimable([portal, tl(["TT-S1"]), { name: "TT-S1", portal: false, timeline: false }])).toBe(true);
+    expect(fallbackCampaignReclaimable([portal, tl([])])).toBe(true);
+    expect(fallbackCampaignReclaimable([])).toBe(true);
+  });
+  it("keeps a fallback with any real member or any real timepoint", () => {
+    expect(fallbackCampaignReclaimable([portal, tl([]), { name: "Session 12", portal: false, timeline: false }])).toBe(false);
+    expect(fallbackCampaignReclaimable([portal, tl(["TT-S1", "The Vault"])])).toBe(false);
+  });
+  it("keeps a fallback whose timeline holds an unlabelled timepoint (empty-string label)", () => {
+    expect(fallbackCampaignReclaimable([portal, tl([""])])).toBe(false);
+    expect(fallbackCampaignReclaimable([portal, tl(["TT-S1", ""])])).toBe(false);
+  });
+  it("treats an empty notes entry as structure and a notes entry holding notes as real content", () => {
+    const notes = (count) => ({ name: "Notes — New Campaign", portal: false, timeline: false, notes: true, noteCount: count });
+    expect(fallbackCampaignReclaimable([portal, tl([]), notes(0)])).toBe(true);
+    expect(fallbackCampaignReclaimable([portal, tl([]), notes(1)])).toBe(false);
   });
 });

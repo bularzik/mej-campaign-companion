@@ -194,6 +194,11 @@ export async function registerCore() {
     registerActorLinkUi();
   });
 
+  await step("session filing", async () => {
+    const { registerSessionFiling } = await import("../hooks/session-filing.mjs");
+    registerSessionFiling();
+  });
+
   await step("session timepoint", async () => {
     const { registerSessionTimepoint } = await import("../hooks/session-timepoint.mjs");
     registerSessionTimepoint();

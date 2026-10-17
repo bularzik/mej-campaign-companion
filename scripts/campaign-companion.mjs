@@ -586,6 +586,17 @@ Hooks.once("ready", async () => {
     await game.settings.set(MODULE_ID, DATA_VERSION_SETTING, CURRENT_DATA_VERSION);
   }
 
+  // Spec 2026-10-16 §1f: sessions always live in a campaign. Once per GM load
+  // the active GM files the folderless sessions that already exist (into the
+  // "New Campaign" fallback, same rule as the create hook). Idempotent; not a
+  // dataVersion migration - no schema changes, so no version gate. Runs after
+  // the migrations so a legacy world gets its campaigns before the fallback
+  // could become its first one.
+  if (game.user === game.users.activeGM) {
+    const { sweepUnfiledSessions } = await import("./hooks/session-filing.mjs");
+    await sweepUnfiledSessions().catch((err) => console.error(`${MODULE_ID} | unfiled session sweep failed`, err));
+  }
+
   import("./hooks/prep-notes-migrate.mjs")
     .then((m) => m.migratePrepNotes())
     .catch((err) => console.error(`${MODULE_ID} | prep-notes fold failed`, err));

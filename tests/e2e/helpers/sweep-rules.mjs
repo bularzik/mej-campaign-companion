@@ -35,3 +35,21 @@ export function autoCaptureNeedsReset(value, existingFolderIds) {
   if (!value) return false;
   return !existingFolderIds.includes(value);
 }
+
+/**
+ * Whether a fallback "New Campaign" is the suite's own leftover: every member
+ * that is not its portal or a timeline is TT- named (or there are none), and
+ * every timepoint on its timelines is TT- labelled (or there are none). Its
+ * notes entry ("Notes — New Campaign", made by createCampaign) is structure
+ * too while it holds no notes; a single note is player content and keeps the
+ * folder. Any real content keeps the folder.
+ * `members` rows: { name, portal, timeline, timepointLabels, notes, noteCount }.
+ */
+export function fallbackCampaignReclaimable(members, prefix = TT_PREFIX) {
+  return (members ?? []).every((m) => {
+    if (m.portal) return true;
+    if (m.notes) return (m.noteCount ?? 0) === 0;
+    if (m.timeline) return (m.timepointLabels ?? []).every((l) => typeof l === "string" && l.startsWith(prefix));
+    return typeof m.name === "string" && m.name.startsWith(prefix);
+  });
+}

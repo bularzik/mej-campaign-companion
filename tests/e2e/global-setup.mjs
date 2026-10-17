@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   ensureTestWorld, login, ensureModuleEnabled, ensureMejPlayerAccess, serverStatus,
   deleteJournalsByPrefix, deleteActorsByPrefix, deleteScenesByPrefix, deleteAllCombats,
-  cleanupStrandedTestTimelines, cleanupStrandedTestFolders,
+  cleanupStrandedTestTimelines, cleanupStrandedTestFolders, cleanupFallbackCampaign,
   BASE_URL, MODULE_ID, MEJ_MODULE_ID
 } from "./helpers/foundry.mjs";
 import { acquireLock, releaseLock } from "./helpers/env-lock.mjs";
@@ -84,6 +84,13 @@ export default async function globalSetup() {
       // empty) TT- campaign folder and an autoCaptureCampaign setting that
       // names it. Same guard, same reason as the journal sweep.
       if (process.env.STOCK_PHASE !== "return") await cleanupStrandedTestFolders(page);
+      // 0.28.0: specs that create folderless TT- sessions make the GM client
+      // file them into a "New Campaign" fallback campaign. Reclaim it when it
+      // holds nothing but the suite's leftovers (fallbackCampaignReclaimable).
+      if (process.env.STOCK_PHASE !== "return") {
+        const reclaimed = await cleanupFallbackCampaign(page);
+        if (reclaimed) console.log(`[global-setup] reclaimed fallback campaign "${reclaimed}" (TT- leftovers only)`);
+      }
       await deleteActorsByPrefix(page);
       await deleteScenesByPrefix(page);
       await deleteAllCombats(page);

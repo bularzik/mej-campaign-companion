@@ -3,6 +3,7 @@
 // session-timepoint-encounter-start §2). Pure rules: logic/session-timepoint.mjs.
 import { MODULE_ID, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
+import { ensureSessionFiled } from "./session-filing.mjs";
 import { getTimepoints, addTimepoint, addLink, editTimepoint } from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
@@ -12,7 +13,12 @@ import { wantsSessionTimepoint, sessionTimepointDraft, timepointSyncPatch } from
 
 async function createSessionTimepoint(page) {
   if (!wantsSessionTimepoint(page._source, MODULE_ID)) return;
-  const journal = await ensureTimelineJournal(campaignOf(page));
+  // A folderless session is filed into the fallback campaign first, so its
+  // timepoint lands on that campaign's timeline, never on a world timeline
+  // (spec 2026-10-16 §1d). A session the GM keeps in a plain folder resolves
+  // to no campaign: no world timeline is created for it (§1e).
+  const campaign = (await ensureSessionFiled(page.parent)) ?? campaignOf(page);
+  const journal = await ensureTimelineJournal(campaign);
   if (!journal) {
     console.warn(`${MODULE_ID} | session timepoint: no timeline available for`, page.name);
     return;

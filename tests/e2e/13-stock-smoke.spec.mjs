@@ -854,12 +854,13 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
 
   test("session and Hub text stay readable under both colour schemes", async ({ page }) => {
     await bootAsRealUser(page);
-    // 0.20.1: the knowledge panel is appended below every MEJ-typed sheet and
+    // 0.20.1: the knowledge panel is mounted on every MEJ-typed sheet and
     // used to inherit the dark theme's light text over MEJ 13.06's parchment
     // (white-on-grey, reported 2026-09-22). Measured on a real MEJ person page
     // opened through MEJ's own entry point, under both schemes, plus the
-    // structural half of that fix: the expanded panel is capped at half its
-    // pane and scrolls itself.
+    // structural half of that fix, in its 0.28.0 rail form (spec 2026-10-16
+    // §3): the expanded panel sits in a flex row beside the sheet body and its
+    // own body scrolls, so it never takes height from the sheet.
     const personId = await page.evaluate(async (name) => {
       const entry = await JournalEntry.implementation.create({
         name, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
@@ -876,11 +877,15 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
         const panelShape = await page.evaluate(() => {
           const panel = document.querySelector("#MonksEnhancedJournal .mej-cc-knowledge");
           panel.classList.remove("collapsed");
-          const cs = getComputedStyle(panel);
-          return { maxHeight: cs.maxHeight, overflowY: cs.overflowY };
+          const row = panel.parentElement;
+          return {
+            inRailRow: row.classList.contains("mej-cc-rail-row") && !!row.querySelector(":scope > .sheet-container"),
+            rowDirection: getComputedStyle(row).flexDirection,
+            bodyOverflowY: getComputedStyle(panel.querySelector(".mej-cc-knowledge-body")).overflowY
+          };
         });
         const knowledge = await textContrast(page, "#MonksEnhancedJournal .mej-cc-knowledge-title");
-        expect(panelShape, `expanded knowledge panel is capped and scrolls, ${scheme}`).toEqual({ maxHeight: "50%", overflowY: "auto" });
+        expect(panelShape, `expanded knowledge rail sits beside the body and scrolls, ${scheme}`).toEqual({ inRailRow: true, rowDirection: "row", bodyOverflowY: "auto" });
         expect(Number.isNaN(knowledge.ratio), `knowledge panel unmeasurable, ${scheme}: ${knowledge.surface}`).toBe(false);
         expect(knowledge.ratio, `knowledge panel text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
         test.info().annotations.push({ type: `contrast-knowledge-${scheme}`, description: JSON.stringify(knowledge) });
@@ -916,8 +921,10 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
         // found); reject it explicitly rather than leaning on NaN comparisons.
         expect(Number.isNaN(session.ratio), `session text unmeasurable, ${scheme}: ${session.surface}`).toBe(false);
         expect(Number.isNaN(hub.ratio), `hub row unmeasurable, ${scheme}: ${hub.surface}`).toBe(false);
-        expect(session.ratio, `session text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
-        expect(hub.ratio, `hub row text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+        // The messages carry the measured surface: the list reporter does not
+        // print annotations, and the painter is what a failure needs.
+        expect(session.ratio, `session text, ${scheme}: ${session.fg} on ${session.bg} (${session.surface})`).toBeGreaterThanOrEqual(4.5);
+        expect(hub.ratio, `hub row text, ${scheme}: ${hub.fg} on ${hub.bg} (${hub.surface})`).toBeGreaterThanOrEqual(4.5);
       }
     } finally {
       await setColorScheme(page, "");

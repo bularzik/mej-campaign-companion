@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, cleanupAsGm, withGmPage, timelineJournalIds, cleanupTimelineJournals,
+  TT_PREFIX, createTtCampaign, deleteFoldersById,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -31,25 +32,21 @@ async function openImportWizard(page) {
 }
 
 // Imported entries aren't TT_PREFIX-ed (the wizard names each entry after its
-// docx section heading verbatim, not after anything this suite controls), so
-// cleanup can't rely on that convention the way every other spec's cleanup
-// does. `exactNames` is the real list of section titles the test itself saw
-// the wizard about to create (captured from the review table before
-// `createImport` runs) - deleting by that exact set, rather than only a
-// best-guess prefix regex, means cleanup actually removes what this run
-// created even if a title doesn't happen to match the regex below. The regex
-// is kept as a secondary safety net for any pre-existing leaked docs from an
-// earlier failed run (e.g. before this exact-name list existed).
+// docx section heading verbatim), so cleanup cannot go by name. It used to
+// also delete, world-wide, every journal named like a section title
+// ("Introduction", "Session Zero", "Arc N", ...) - with no folder or TT-
+// filter, on pass and fail. That sweep is GONE on purpose: World A's real
+// Radiant Citadel campaign was imported from this same docx, so its entries
+// carry exactly those names, and since every import here lands inside this
+// file's own TT- campaign (deleted by id below) the sweep could only ever hit
+// data that is not ours.
 //
-// `campaignFolderIds` is the id (or ids) of whatever campaign Folder(s) the
-// import wizard's "__new" destination fallback actually created THIS run -
-// captured via a before/after diff around createImport (same id-tracking
-// pattern as 14-campaigns.spec.mjs's "New Session" test), never matched by
-// name. A real GM could legitimately own a real campaign literally named
-// "Radiant Citadel" (the docx's own title, which is exactly what the "__new"
-// fallback names its campaign after) - deleting by that name match would
-// destroy that real content, the same bug class commit 9750e0d eliminated
-// for the legacy singleton timeline journal.
+// `campaignFolderIds` is the TT- campaign this file creates in beforeAll and
+// imports into (0.28.0: the import no longer runs through the "__new"
+// fallback, which would have named a campaign "Radiant Citadel" after the
+// docx). Deleted by id, never by name, with its subfolders and contents. A
+// campaign stranded by a crashed run is TT- named, so the global-setup TT-
+// folder sweep reclaims it.
 // Ids of every flagged timeline journal that existed BEFORE this file ran,
 // snapshotted as a GM before the first import: cleanup deletes only what this
 // file itself induced.
@@ -59,24 +56,15 @@ async function openImportWizard(page) {
 // real snapshot - see its doc comment.
 let preexistingTimelines = null;
 
-async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
-  await page.evaluate(async ({ names, campaignFolderIds }) => {
-    const byName = new Set(names);
-    // Delete strictly the campaign folder(s) THIS run's diff identified -
-    // cascades to every entry, the subfolder, and any per-campaign timeline
-    // journal the import auto-created inside it.
-    for (const id of campaignFolderIds) {
+async function cleanupImported(page, campaignFolderIds = []) {
+  await page.evaluate(async (ids) => {
+    // Delete strictly this file's TT- campaign folder - cascades to every
+    // imported entry, the import's subfolder, and the campaign's timeline.
+    for (const id of ids) {
       const f = game.folders.get(id);
       if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
     }
-
-    // Fallback for anything left outside those folders (older
-    // pre-campaign-feature builds, or a doc whose title differs).
-    const ids = game.journal.filter((j) =>
-      byName.has(j.name) || /^(Introduction|Session Zero|Arc \d|Epilogue|Appendix)/.test(j.name ?? "")
-    ).map((j) => j.id);
-    if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
-  }, { names: exactNames, campaignFolderIds });
+  }, campaignFolderIds);
   // Legacy-singleton fallback (older pre-campaign-feature builds, or a
   // world where the import somehow still fell to the legacy path): never
   // unconditionally delete-by-name - World A's own real, pre-existing
@@ -87,13 +75,19 @@ async function cleanupImported(page, exactNames = [], campaignFolderIds = []) {
 }
 
 test.describe("05 docx import", () => {
-  // The real titles/campaign-folder-ids created by the test that just ran -
-  // see cleanupImported's doc comment.
-  let createdTitles = [];
-  let createdCampaignFolderIds = [];
+  // The TT- campaign every import in this file targets: { folderId, timelineId, portalId }.
+  let campaign = null;
 
   test.beforeAll(async ({ browser }) => {
-    await withGmPage(browser, async (p) => { preexistingTimelines = await timelineJournalIds(p); });
+    await withGmPage(browser, async (p) => {
+      // Snapshot first, so the ledger protects only what existed before this file ran.
+      preexistingTimelines = await timelineJournalIds(p);
+      campaign = await createTtCampaign(p, `${TT_PREFIX}05 Import ${Date.now().toString(36)}`);
+    });
+  });
+
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (p) => { await deleteFoldersById(p, [campaign?.folderId]); });
   });
 
   test.afterEach(async ({ page, browser }) => {
@@ -108,13 +102,10 @@ test.describe("05 docx import", () => {
     // for), but routing through it keeps this spec consistent with 02/06's
     // cleanup pattern and safe if that ever changes.
     try {
-      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, createdTitles, createdCampaignFolderIds));
+      await cleanupAsGm(page, browser, (gmPage) => cleanupImported(gmPage, [campaign?.folderId].filter(Boolean)));
     } catch (error) {
       console.error("05-docx-import cleanup failed:", error);
       throw error;
-    } finally {
-      createdTitles = [];
-      createdCampaignFolderIds = [];
     }
   });
 
@@ -123,13 +114,8 @@ test.describe("05 docx import", () => {
     const errors = trackConsoleErrors(page, { ignore: [KNOWN_MEJ_SESSION_ICON_404] });
     await login(page, "Gamemaster");
 
-    // Before/after id diff (same pattern as 14-campaigns.spec.mjs's "New
-    // Session" test) - identifies exactly which campaign Folder(s) this
-    // run's import wizard creates via its "__new" destination fallback,
-    // for cleanup and for scoping the timeline lookup below. Never matched
-    // by name - see cleanupImported's doc comment.
-    const beforeCampaignFolderIds = await page.evaluate(() =>
-      game.folders.filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign).map((f) => f.id));
+    expect(campaign?.folderId, "beforeAll must have created the TT- import campaign").toBeTruthy();
+    expect(campaign.timelineId).toBeTruthy();
 
     const { wizard } = await openImportWizard(page);
     await wizard.locator("input[type=file][name=file]").setInputFiles(DOCX_PATH);
@@ -148,11 +134,6 @@ test.describe("05 docx import", () => {
         timepoint: tr.querySelector("input[name^='timepoint-']")?.checked
       }))
     );
-    // Record the exact section titles the wizard is about to create from, for
-    // afterEach's cleanup to delete by exact name (see cleanupImported's doc
-    // comment) - captured regardless of each row's chosen type, since a
-    // "skip" row creates nothing and simply won't match anything at cleanup.
-    createdTitles = rows.map((r) => r.title).filter(Boolean);
     const sessionZeroIndex = rows.findIndex((r) => r.title?.startsWith("Session Zero"));
     expect(sessionZeroIndex).toBeGreaterThanOrEqual(0);
     // Session-shaped sections arrive SUGGESTED as session (spec A §1) — the
@@ -175,29 +156,18 @@ test.describe("05 docx import", () => {
     const sessionsDetected = rows.filter((r) => r.timepoint).length;
     await expect(wizard.locator(".mej-cc-import-sessions-detected")).toContainText(String(sessionsDetected));
 
-    // Must be campaign-agnostic: the wizard's destination select defaults to
-    // the Hub's active campaign (or the first existing one) whenever World A
-    // already has campaigns, so a real world is not the "zero-campaign"
-    // world this test used to assume - state the destination explicitly
-    // rather than relying on an empty world to fall through to "__new".
-    await wizard.locator('select[name="destination"]').selectOption("__new");
-
+    // State the destination explicitly: the wizard's select defaults to the
+    // Hub's active campaign (or the first existing one). The import goes into
+    // this file's own TT- campaign (the way 14-campaigns.spec.mjs test 5 does
+    // it), never "__new", which would name a campaign "Radiant Citadel".
+    const destination = wizard.locator('select[name="destination"]');
     // Spec 2026-09-03 A: the subfolder option is inapplicable for a new
     // campaign (its folder is already named after the document) - greyed
-    // out here, re-enabled the moment an existing folder is picked.
+    // out there, re-enabled the moment an existing folder is picked.
+    await destination.selectOption("__new");
     await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
-    // count() first: getAttribute() on a zero-match locator auto-waits out
-    // the full timeout instead of resolving empty - a real risk here since a
-    // freshly-reset world (this run's actual state) has no existing campaign
-    // to offer.
-    const existingOptions = wizard.locator('select[name="destination"] option:not([value="__new"])');
-    const existingOption = (await existingOptions.count()) > 0 ? await existingOptions.first().getAttribute("value") : null;
-    if (existingOption) {
-      await wizard.locator('select[name="destination"]').selectOption(existingOption);
-      await expect(wizard.locator('input[name="subfolder"]')).toBeEnabled();
-      await wizard.locator('select[name="destination"]').selectOption("__new");
-      await expect(wizard.locator('input[name="subfolder"]')).toBeDisabled();
-    }
+    await destination.selectOption({ value: campaign.folderId });
+    await expect(wizard.locator('input[name="subfolder"]')).toBeEnabled();
 
     await wizard.locator('button[data-action="createImport"]').click();
     // Result is a toast (ui.notifications.info), not a dialog. Assert only
@@ -212,71 +182,50 @@ test.describe("05 docx import", () => {
     await expect(page.locator("dialog.application", { hasText: /Import Results/ })).toHaveCount(0);
     await settle(page, 500);
 
-    createdCampaignFolderIds = await page.evaluate((beforeIds) =>
-      game.folders
-        .filter((f) => f.type === "JournalEntry" && f.flags?.["mej-campaign-companion"]?.campaign && !beforeIds.includes(f.id))
-        .map((f) => f.id),
-      beforeCampaignFolderIds);
+    // Every folder in the TT- campaign's tree (the campaign folder plus the
+    // import's subfolder): the import's entries are exactly the non-TT- named
+    // journals in it (the campaign's own portal and timeline are TT- named).
+    const treeFolderIds = await page.evaluate((rootId) => {
+      const ids = [rootId];
+      for (let i = 0; i < ids.length; i++) ids.push(...game.folders.filter((f) => f.folder?.id === ids[i]).map((f) => f.id));
+      return ids;
+    }, campaign.folderId);
+    const importedInTree = await page.evaluate(({ ids, prefix }) =>
+      game.journal.filter((j) => ids.includes(j.folder?.id) && !j.name?.startsWith(prefix)).length,
+    { ids: treeFolderIds, prefix: TT_PREFIX });
+    expect(importedInTree).toBeGreaterThan(10);
 
-    // No nested subfolder for a "__new" import: the campaign folder IS the
-    // document folder, so it has no child folders and the imported entries
-    // sit directly inside it.
-    const folderShape = await page.evaluate((ids) => ({
-      childFolders: game.folders.filter((f) => ids.includes(f.folder?.id)).length,
-      directEntries: game.journal.filter((j) => ids.includes(j.folder?.id)).length
-    }), createdCampaignFolderIds);
-    expect(createdCampaignFolderIds).toHaveLength(1);
-    expect(folderShape.childFolders).toBe(0);
-    expect(folderShape.directEntries).toBeGreaterThan(10);
-
-    // Spec 2026-09-06 §1: the campaign the import creates is never a link
-    // candidate for its own sections - "Radiant Citadel" in the prose stays
-    // plain rather than pointing at the portal.
-    const portalLinks = await page.evaluate((ids) => {
-      const folder = game.folders.get(ids[0]);
-      const portal = folder.contents.find((e) => e.pages.contents.some((p) => p.getFlag("mej-campaign-companion", "campaignPortal")));
-      const needle = `@UUID[${portal.uuid}]`;
-      return folder.contents.flatMap((e) => e.pages.contents)
+    // Spec 2026-09-06 §1: the campaign the import lands in is never a link
+    // candidate for its own sections - its name in the prose stays plain
+    // rather than pointing at the portal.
+    const portalLinks = await page.evaluate(({ ids, portalId }) => {
+      const needle = `@UUID[${game.journal.get(portalId).uuid}]`;
+      return game.journal.filter((j) => ids.includes(j.folder?.id)).flatMap((e) => e.pages.contents)
         .filter((p) => (p.text?.content ?? "").includes(needle) || (p.system?.recap ?? "").includes(needle))
         .map((p) => p.name);
-    }, createdCampaignFolderIds);
+    }, { ids: treeFolderIds, portalId: campaign.portalId });
     expect(portalLinks).toEqual([]);
 
-    const summary = await page.evaluate((campaignFolderIds) => {
-      const sessionZero = game.journal.find((j) => j.name?.startsWith("Session Zero"));
+    const summary = await page.evaluate(({ campaignFolderIds, timelineId }) => {
+      // Scoped to the TT- campaign's tree: World A's real content (the
+      // Radiant Citadel campaign was imported from this same docx) carries
+      // entries with the same section titles.
+      const inTree = (j) => campaignFolderIds.includes(j.folder?.id);
+      const sessionZero = game.journal.find((j) => inTree(j) && j.name?.startsWith("Session Zero"));
       const sessionPage = sessionZero?.pages?.contents?.[0];
-      // Spec-mandated behavior change from the campaign-container feature
-      // (tasks 1-11): the import wizard always resolves a real campaign
-      // destination now - in a zero-campaign world (this spec's expected
-      // environment) that's the "__new" fallback, which creates a campaign
-      // named after the docx's title ("Radiant Citadel") with its OWN
-      // timeline journal ("Radiant Citadel — Timeline"), not the legacy
-      // singleton "Campaign Timeline". Find whichever timeline journal
-      // actually received this import's timepoints, SCOPED to the campaign
-      // folder(s) this run's own before/after diff identified (same
-      // alphaFolder.contents pattern as 14-campaigns.spec.mjs's scenario
-      // 5) - a global game.journal.find() risks a real journal elsewhere
-      // in the world that happens to carry a similarly-labeled "Session
-      // Zero..." timepoint hijacking this assertion.
-      const timeline = campaignFolderIds
-        .map((id) => game.folders.get(id))
-        .filter(Boolean)
-        .flatMap((f) => f.contents)
-        .find((j) => {
-          const tps = j.getFlag("mej-campaign-companion", "timeline")?.timepoints;
-          return Array.isArray(tps) && tps.some((t) => t.label?.startsWith("Session Zero"));
-        });
+      // The import's timepoints land on the destination campaign's own
+      // timeline journal - the one createTtCampaign returned.
+      const timeline = game.journal.get(timelineId);
       const timepoints = timeline?.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
       // "Introduction" is a plain prose section (suggestType defaults it to
       // the "text" plan-row type) - since the import-followups change, text
       // rows are created as MEJ "Text and Image" (journalentry) entries, not
       // unflagged text pages, so they're indexed/searchable/linkable.
-      const intro = game.journal.find((j) =>
-        j.name === "Introduction" &&
-        (campaignFolderIds.includes(j.folder?.id) || campaignFolderIds.includes(j.folder?.folder?.id)));
+      const intro = game.journal.find((j) => j.name === "Introduction" && inTree(j));
       const introPage = intro?.pages?.contents?.[0];
       return {
-        importedCount: game.journal.filter((j) => /^(Introduction|Session Zero|Arc \d)/.test(j.name ?? "")).length,
+        sessionZeroId: sessionZero?.id ?? null,
+        importedCount: game.journal.filter((j) => inTree(j) && /^(Introduction|Session Zero|Arc \d)/.test(j.name ?? "")).length,
         sessionZeroFound: !!sessionZero,
         sessionZeroSourceType: sessionPage?._source?.type,
         sessionZeroFlagType: sessionPage?.getFlag("monks-enhanced-journal", "type"),
@@ -324,7 +273,7 @@ test.describe("05 docx import", () => {
           };
         })()
       };
-    }, createdCampaignFolderIds);
+    }, { campaignFolderIds: treeFolderIds, timelineId: campaign.timelineId });
     expect(summary.importedCount).toBeGreaterThan(10);
     expect(summary.sessionZeroFound).toBe(true);
     // Task 13's fix: an imported session page carries both the prefixed
@@ -367,7 +316,7 @@ test.describe("05 docx import", () => {
     }
 
     // Opens correctly in MEJ.
-    const sessionZeroId = await page.evaluate(() => game.journal.find((j) => j.name?.startsWith("Session Zero"))?.id);
+    const sessionZeroId = summary.sessionZeroId;
     await page.evaluate(async (id) => {
       await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
     }, sessionZeroId);

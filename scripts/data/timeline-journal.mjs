@@ -79,20 +79,16 @@ export async function setDefaultTimeline(campaign, timelineId) {
   await campaign.setFlag(MODULE_ID, CAMPAIGN_FLAG, { ...flag, [DEFAULT_TIMELINE_KEY]: timelineId });
 }
 
-/** Find or create the scope's default timeline journal. Creation requires GM privileges. */
+/**
+ * Find or create the scope's default timeline journal. Creation needs a GM
+ * AND a campaign: with no campaign this returns the legacy world singleton
+ * (`timelineJournalId`, kept so worlds that already have one keep showing it)
+ * or null. The companion never creates a root "Campaign Timeline" any more -
+ * campaign-less sessions were the only reason it existed, and sessions now
+ * always live in a campaign (spec 2026-10-16 §1e).
+ */
 export async function ensureTimelineJournal(campaign = null) {
   const journal = resolveTimelineJournal(campaign);
-  if (journal) return journal;
-  if (!game.user.isGM) return null;
-  if (campaign) return createTimeline({ campaign, name: `${campaign.name} — Timeline` });
-  const created = await JournalEntry.create({
-    name: "Campaign Timeline",
-    flags: {
-      [MODULE_ID]: { timeline: { timepoints: [] } },
-      core: { sheetClass: TIMELINE_SHEET_CLASS }
-    },
-    ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
-  });
-  await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, created.id);
-  return created;
+  if (journal || !campaign || !game.user.isGM) return journal;
+  return createTimeline({ campaign, name: `${campaign.name} — Timeline` });
 }

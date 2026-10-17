@@ -169,3 +169,12 @@ regressions.
 
 The Foundry 14 server on port 30000 must not be touched while running a v13
 sweep.
+
+## Fallback campaign
+
+Sessions always live in a campaign, so specs that create folderless sessions
+cause the GM client to create a "New Campaign". `cleanupFallbackCampaign`
+(global setup) deletes it only when it holds nothing but TT- leftovers.
+Specs that need a session's own ownership or location use
+`createTtPlainFolder` (a plain folder the GM client leaves alone) or
+`createTtCampaign`.

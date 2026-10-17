@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm,
+  login, TT_PREFIX, cleanupAsGm, withGmPage, createTtPlainFolder, deleteFoldersById,
   trackConsoleErrors, assertNoConsoleErrors, settle, reloadGame,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -8,12 +8,20 @@ import {
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const VIEWPORT = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } };
 const RECAP_EDITOR = ".editor-parent[data-editor-id='recap']";
+const RUN = Date.now().toString(36);
+
+// Since 0.28.0 the GM client files a FOLDERLESS session into the "New
+// Campaign" fallback and raises its default ownership to OWNER. These tests
+// depend on the ownership they create with (OBSERVER vs OWNER), so every
+// session lives in a plain TT- folder, which the filing hook leaves alone.
+let plainFolderId = null;
 
 /** Create a session directly with the given default ownership level, independent of the playersWriteSessions setting. */
 async function createSession(page, name, level) {
-  return page.evaluate(async ({ n, level }) => {
+  return page.evaluate(async ({ n, level, folder }) => {
     const entry = await JournalEntry.create({
       name: n,
+      folder,
       pages: [{
         name: n,
         type: "mej-campaign-companion.session",
@@ -23,7 +31,7 @@ async function createSession(page, name, level) {
       ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS[level] }
     });
     return entry.id;
-  }, { n: name, level });
+  }, { n: name, level, folder: plainFolderId });
 }
 
 async function openSession(page, entryId) {
@@ -135,6 +143,13 @@ async function newSeat(browser, userName) {
 }
 
 test.describe("06 player collaboration", () => {
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { plainFolderId = await createTtPlainFolder(gm, `${TT_PREFIX}06 Sessions ${RUN}`); });
+  });
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { await deleteFoldersById(gm, [plainFolderId]); });
+  });
+
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
       await gmPage.evaluate(async () => {

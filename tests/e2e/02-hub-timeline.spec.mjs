@@ -1,68 +1,35 @@
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, withGmPage, timelineJournalIds, cleanupTimelineJournals,
-  worldTimelineJournalId, gotoGame,
+  gotoGame, createTtCampaign, deleteFoldersById, scopeHubToCampaign,
   trackConsoleErrors, assertNoConsoleErrors, settle
 } from "./helpers/foundry.mjs";
+import { openHubViaToolbar } from "./helpers/hub.mjs";
 
-/** Open any journal entry (so the MEJ shell + its toolbar exist), then click
- * the Campaign Hub toolbar button. Returns the shell locator. */
-async function openHubViaToolbar(page) {
-  await page.locator('[data-tab="journal"][data-action="tab"]').click();
-  await settle(page, 200);
-  // Not contents[0]: a timeline journal refuses to open in the MEJ shell
-  // (hooks/timeline-open.mjs, spec 2026-09-03 §C), so picking one bootstraps
-  // nothing and every later shell locator times out. See 16-multi-timeline's
-  // openHub() for the full account.
-  const anyEntryId = await page.evaluate(
-    () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
-  );
-  await page.evaluate(async (id) => {
-    await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
-  }, anyEntryId);
-  await settle(page, 400);
-  const shell = page.locator("#MonksEnhancedJournal");
-  await shell.locator(".nav-button.campaign-hub").click();
-  await settle(page, 500);
-  return shell;
-}
+const RUN = Date.now().toString(36);
+let createdFolders = [];
 
 /**
- * Create (or return) the WORLD timeline through the module's own production
- * path - data/timeline-journal.mjs's ensureTimelineJournal() with no campaign,
- * which is also what writes the timelineJournalId world setting.
- *
- * This file used to rely on a GM Hub render creating it as a side effect. That
- * only ever happens in a ZERO-campaign world: CampaignHubPage's
- * _prepareBodyContext takes its "pre-adoption world: legacy singleton
- * behavior" branch only when getCampaigns() is empty, and the All-mode branch
- * for a world WITH campaigns deliberately creates nothing ("creating N
- * journals on a render would be a side-effect storm"). World A holds real
- * campaigns now, so the singleton was never created, timelineJournalId stayed
- * "", and the Hub's timeline pane rendered a CAMPAIGN's timeline instead -
- * which is how this suite came to write its TT- fixtures into real user data.
+ * The pane this spec writes to: a TT- campaign's own timeline, created
+ * through the module's createCampaign (folder + portal + timeline). Since
+ * 0.28.0 the companion never creates a world timeline (spec 2026-10-16 §1e),
+ * so the former "ensure the world singleton" bootstrap cannot exist; and the
+ * campaign timeline is the only pane the Hub can scope to deterministically.
+ * Refuses a timeline that existed before this run (never someone's own data).
  */
-async function ensureWorldTimeline(page) {
-  const seen = await page.evaluate(async () => {
-    const { ensureTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
-    const journal = await ensureTimelineJournal();
-    const tps = journal.getFlag("mej-campaign-companion", "timeline")?.timepoints ?? [];
-    return { id: journal.id, timepointCount: tps.length };
-  });
-
-  // ensureTimelineJournal() RESOLVES before it creates: if timelineJournalId
-  // already points at a world timeline, it hands that one back. In a world
-  // where a GM had ever used the pre-campaign singleton that is the user's own
-  // populated timeline - and openOwnTimelineTab() below would then happily
-  // confirm the pane, after which this file adds, renames, deletes and (in the
-  // player-visibility test) OVERWRITES a timepoint's links. So refuse anything
-  // this run did not create: it must be absent from the pre-run id ledger, and
-  // it must still be empty. Together those two make "somebody else's timeline"
-  // unreachable rather than merely unlikely.
+async function ensureTtTimeline(page) {
+  const { folderId, timelineId } = await createTtCampaign(page, `${TT_PREFIX}02 Hub ${RUN}`);
+  createdFolders.push(folderId);
+  expect(timelineId).toBeTruthy();
   expect(Array.isArray(preexistingTimelines)).toBe(true);
-  expect(preexistingTimelines).not.toContain(seen.id);
-  expect(seen.timepointCount).toBe(0);
-  return seen.id;
+  expect(preexistingTimelines).not.toContain(timelineId);
+  return { folderId, timelineId };
+}
+
+/** Scope the Hub to the TT- campaign so its single stack is that campaign's timeline. */
+async function scopeHubTo(shell, page, folderId) {
+  await shell.locator('select[name="campaign-scope"]').selectOption(folderId);
+  await settle(page, 400);
 }
 
 /**
@@ -79,23 +46,22 @@ async function ensureWorldTimeline(page) {
 async function openOwnTimelineTab(shell, page, timelineId) {
   await shell.locator('nav.sheet-tabs a[data-tab="timeline"]').click();
   await settle(page, 200);
-  await shell.locator('select[name="timeline-select"]').selectOption(timelineId);
-  await settle(page, 300);
+  // A campaign with one timeline may render no picker.
+  const picker = shell.locator('select[name="timeline-select"]');
+  if (await picker.count()) { await picker.selectOption(timelineId); await settle(page, 300); }
   const stack = shell.locator(".mej-cc-timeline-stack");
   await expect(stack).toHaveCount(1);
   await expect(stack).toHaveAttribute("data-journal-id", timelineId);
 }
 
-// The world's singleton timeline journal (Task 6) is tracked by a world
-// setting storing its id (data/timeline-journal.mjs), named "Campaign
-// Timeline" by ensureTimelineJournal() — CampaignHubPage.mjs's
-// _prepareBodyContext preps the timeline tab's context (calling
-// ensureTimelineJournal()) on every render regardless of which tab is
-// active, so simply opening the Hub as GM can create/touch this journal as
-// a side effect even in tests that never touch a timepoint. This used to
-// delete *every* matching doc by name unconditionally - unsafe against
-// World A's real, pre-existing legacy timeline (which shares this exact
-// fixed name); see cleanupTimelineJournals's doc comment in helpers/foundry.mjs.
+// The timepoint tests write to a TT- campaign's own timeline
+// (ensureTtTimeline): created through createCampaign, scoped to by id
+// (scopeHubTo), and pinned by journal id (openOwnTimelineTab), never found by
+// name. The campaign folder - portal and timeline included - is deleted in
+// afterEach (createdFolders). cleanupTimelineJournals still runs against the
+// pre-run ledger below as a backstop: it never touches a timeline that
+// existed before this file ran, such as World A's real legacy "Campaign
+// Timeline" or Radiant Citadel's; see its doc comment in helpers/foundry.mjs.
 
 // Ids of every flagged timeline journal that existed BEFORE this file ran.
 // Snapshotted as a GM before any Hub opens, so cleanup can delete only what
@@ -124,7 +90,11 @@ test.describe("02 hub + timeline", () => {
   });
 
   test.afterEach(async ({ page, browser }) => {
-    await cleanupAsGm(page, browser, (gmPage) => cleanupTimelineJournals(gmPage, preexistingTimelines));
+    await cleanupAsGm(page, browser, async (gmPage) => {
+      await cleanupTimelineJournals(gmPage, preexistingTimelines);
+      await deleteFoldersById(gmPage, createdFolders);
+      createdFolders = [];
+    });
   });
 
   test("opens from the toolbar; reopens cleanly after a reload", async ({ page }) => {
@@ -155,9 +125,10 @@ test.describe("02 hub + timeline", () => {
   test("timepoint CRUD and drag-reorder", async ({ page }) => {
     const errors = trackConsoleErrors(page);
     await login(page, "Gamemaster");
-    const worldTimelineId = await ensureWorldTimeline(page);
+    const { folderId, timelineId } = await ensureTtTimeline(page);
     const shell = await openHubViaToolbar(page);
-    await openOwnTimelineTab(shell, page, worldTimelineId);
+    await scopeHubTo(shell, page, folderId);
+    await openOwnTimelineTab(shell, page, timelineId);
 
     // Create two timepoints.
     for (const label of [`${TT_PREFIX}Point A`, `${TT_PREFIX}Point B`]) {
@@ -216,18 +187,22 @@ test.describe("02 hub + timeline", () => {
     const errors = trackConsoleErrors(page);
     await login(page, "Gamemaster");
 
-    const personId = await page.evaluate(async (prefix) => {
+    // The person lives in the same TT- campaign as the timeline: an entry
+    // from outside the campaign (unfiled included) is refused by the
+    // timeline-attach discipline (14-campaigns test 4).
+    const { folderId, timelineId } = await ensureTtTimeline(page);
+    const personId = await page.evaluate(async ({ prefix, folder }) => {
       const entry = await JournalEntry.create({
-        name: `${prefix}Hub Drop Person`,
+        name: `${prefix}Hub Drop Person`, folder,
         pages: [{ name: `${prefix}Hub Drop Person`, type: "monks-enhanced-journal.person", flags: { "monks-enhanced-journal": { type: "person" } } }]
       });
       return entry.id;
-    }, TT_PREFIX);
+    }, { prefix: TT_PREFIX, folder: folderId });
     const personUuid = await page.evaluate((id) => game.journal.get(id).uuid, personId);
 
-    const worldTimelineId = await ensureWorldTimeline(page);
     const shell = await openHubViaToolbar(page);
-    await openOwnTimelineTab(shell, page, worldTimelineId);
+    await scopeHubTo(shell, page, folderId);
+    await openOwnTimelineTab(shell, page, timelineId);
     await shell.locator("button.mej-cc-add-timepoint").click();
     const dialog = page.locator("dialog.application").last();
     await dialog.locator('input[name="label"]').fill(`${TT_PREFIX}Drop Target`);
@@ -266,11 +241,7 @@ test.describe("02 hub + timeline", () => {
     if (await confirmBtn.count()) await confirmBtn.click();
     await settle(page, 400);
 
-    // By id (the timelineJournalId setting), never by the "Campaign
-    // Timeline" name - see worldTimelineJournalId's doc comment.
-    const timelineId = await worldTimelineJournalId(page);
-    // The setting must still resolve to the very journal this test created.
-    expect(timelineId).toBe(worldTimelineId);
+    // By id (the TT- campaign's own timeline), never by name.
     const links = await page.evaluate((id) => {
       const j = game.journal.get(id);
       const tp = j?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.[0];
@@ -289,20 +260,24 @@ test.describe("02 hub + timeline", () => {
     const gmContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const gmPage = await gmContext.newPage();
     await login(gmPage, "Gamemaster");
-    const worldTimelineId = await ensureWorldTimeline(gmPage);
+    const { folderId, timelineId } = await ensureTtTimeline(gmPage);
 
-    const personId = await gmPage.evaluate(async (prefix) => {
+    // Filed in the TT- campaign and the Hub scoped to it: openHubViaToolbar
+    // bootstraps from whatever entry comes first, and since 0.27.0 the Hub
+    // scopes to that entry's campaign, so an unfiled row may not be listed.
+    const personId = await gmPage.evaluate(async ({ prefix, folder }) => {
       const entry = await JournalEntry.create({
-        name: `${prefix}Index Row Person`,
+        name: `${prefix}Index Row Person`, folder,
         pages: [{ name: `${prefix}Index Row Person`, type: "monks-enhanced-journal.person", flags: { "monks-enhanced-journal": { type: "person" } } }],
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
       });
       return entry.id;
-    }, TT_PREFIX);
+    }, { prefix: TT_PREFIX, folder: folderId });
     const personUuid = await gmPage.evaluate((id) => game.journal.get(id).uuid, personId);
 
     const gmShell = await openHubViaToolbar(gmPage);
     await settle(gmPage, 300);
+    await scopeHubTo(gmShell, gmPage, folderId);
     // Help lives in the header's Tools menu now (no click-through — we
     // don't want the test opening GitHub).
     await gmShell.locator(".mej-cc-tools-summary").click();
@@ -325,21 +300,20 @@ test.describe("02 hub + timeline", () => {
     // it to correctly *omit* the hidden one and the CRUD controls.
     await gmShell.locator(".nav-button.campaign-hub").click();
     await settle(gmPage, 300);
-    await openOwnTimelineTab(gmShell, gmPage, worldTimelineId);
+    await scopeHubTo(gmShell, gmPage, folderId);
+    await openOwnTimelineTab(gmShell, gmPage, timelineId);
     await gmShell.locator("button.mej-cc-add-timepoint").click();
     const dialog = gmPage.locator("dialog.application").last();
     await dialog.locator('input[name="label"]').fill(`${TT_PREFIX}Player View Point`);
     await dialog.locator('button[data-action="ok"]').click();
     await settle(gmPage, 400);
-    // By id, never by name (see worldTimelineJournalId), AND only once the
-    // dialog's own write has actually landed: the settle() above just waits
-    // out a fixed window, and this evaluate throws "Cannot set properties of
-    // undefined (setting 'links')" if it runs while timepoints is still empty.
-    const gmTimelineId = await worldTimelineJournalId(gmPage);
-    // Must still be the journal this test created - the links written just
-    // below REPLACE a timepoint's links outright, so a wrong id here would
-    // destroy whatever that other timeline's timepoint was carrying.
-    expect(gmTimelineId).toBe(worldTimelineId);
+    // By id (the TT- campaign's own timeline, which this test created - the
+    // links written just below REPLACE a timepoint's links outright), never by
+    // name, AND only once the dialog's own write has actually landed: the
+    // settle() above just waits out a fixed window, and this evaluate throws
+    // "Cannot set properties of undefined (setting 'links')" if it runs while
+    // timepoints is still empty.
+    const gmTimelineId = timelineId;
     await gmPage.waitForFunction(
       (id) => (game.journal.get(id)?.getFlag("mej-campaign-companion", "timeline")?.timepoints?.length ?? 0) > 0,
       gmTimelineId, { timeout: 15_000 }
@@ -380,7 +354,10 @@ test.describe("02 hub + timeline", () => {
     await expect(playerShell.locator('.mej-cc-tools-menu button[data-action="openHelp"]')).toHaveCount(1);
     await playerShell.locator(".mej-cc-tools-summary").click();
     await expect(playerShell.locator(".mej-cc-tools-menu")).toHaveCount(0);
-    await openOwnTimelineTab(playerShell, playerPage, worldTimelineId);
+    // The player sees World A's own campaign too, so pick the TT- one when a
+    // picker is offered (no-op when the player is locked to one campaign).
+    await scopeHubToCampaign(playerPage, folderId);
+    await openOwnTimelineTab(playerShell, playerPage, timelineId);
     // Positive control first.
     await expect(playerShell.locator('.mej-cc-link-chip[data-src="icons/svg/mystery-man.svg"]')).toHaveCount(1);
     await expect(playerShell.locator('button.mej-cc-add-timepoint')).toHaveCount(0);
