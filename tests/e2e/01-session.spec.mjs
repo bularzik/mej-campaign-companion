@@ -1,11 +1,18 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, gotoGame,
+  login, TT_PREFIX, gotoGame, withGmPage, createTtPlainFolder, deleteFoldersById, fallbackCampaignId,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
+// Since 0.28.0 the GM client files a FOLDERLESS session into the "New
+// Campaign" fallback and raises its default ownership; a session in a plain
+// folder is left alone. Every session here except the New Entry dialog test's
+// (which asserts that filing) is created inside a plain TT- folder.
+const RUN = Date.now().toString(36);
+let plainFolderId = null;
+const folderOf = (page, id) => page.evaluate((i) => game.journal.get(i)?.folder?.id ?? null, id);
 
 /**
  * True when this world's MEJ carries the extension API. Stock MEJ builds
@@ -29,8 +36,9 @@ async function mejApiPresent(page) {
 
 /** Open the journal sidebar and MEJ's "Create Entry" dialog, choose type
  * "Session", submit, and return the created entry's id once MEJ has
- * finished opening it. */
-async function createSessionViaDialog(page, name) {
+ * finished opening it. With `folderId`, the dialog's own folder select puts
+ * the entry there. */
+async function createSessionViaDialog(page, name, folderId = null) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
   // Scoped to the directory header: every FOLDER row in the journal sidebar
@@ -45,6 +53,7 @@ async function createSessionViaDialog(page, name) {
   // exact assertion the brief calls out ("type Session appears").
   await expect(typeSelect.locator('option[value="session"]')).toHaveText("Session");
   await typeSelect.selectOption("session");
+  if (folderId) await dialog.locator('select[name="folder"]').selectOption(folderId);
   await dialog.locator('button[data-action="ok"]').click();
   await settle(page, 800);
   return page.evaluate((n) => game.journal.find((j) => j.name === n)?.id, name);
@@ -60,13 +69,18 @@ async function createSessionViaDialog(page, name) {
  * is identical either way; only the affordance differs.
  */
 async function createSessionEntry(page, name) {
-  if (await mejApiPresent(page)) return createSessionViaDialog(page, name);
-  const id = await page.evaluate(async (n) => {
+  if (await mejApiPresent(page)) {
+    const viaDialog = await createSessionViaDialog(page, name, plainFolderId);
+    // The fixture must really sit in the plain folder, not the fallback campaign.
+    expect(await folderOf(page, viaDialog)).toBe(plainFolderId);
+    return viaDialog;
+  }
+  const id = await page.evaluate(async ({ n, folder }) => {
     const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
-    const entry = await JournalEntry.create({ name: n, pages: [buildSessionPageData(n, "", null, null)] });
+    const entry = await JournalEntry.create({ name: n, folder, pages: [buildSessionPageData(n, "", null, null)] });
     await game.MonksEnhancedJournal.openJournalEntry(entry);
     return entry.id;
-  }, name);
+  }, { n: name, folder: plainFolderId });
   await settle(page, 800);
   return id;
 }
@@ -95,6 +109,13 @@ async function cleanupEntries(page, ids) {
 }
 
 test.describe("01 session entries", () => {
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { plainFolderId = await createTtPlainFolder(gm, `${TT_PREFIX}01 Sessions ${RUN}`); });
+  });
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { await deleteFoldersById(gm, [plainFolderId]); });
+  });
+
   test("create via New Entry dialog gets the prefixed subtype + MEJ flag (fix 1437846)", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
@@ -124,6 +145,13 @@ test.describe("01 session entries", () => {
       flagType: "session",
       subsheet: "SessionSheet"
     });
+
+    // Left folderless on purpose: the dialog is one of "every other creation
+    // path", so the GM client files it into the "New Campaign" fallback. The
+    // global-setup reclaim removes that campaign on the next run.
+    await expect.poll(() => folderOf(page, entryId), { timeout: 10_000 }).not.toBeNull();
+    expect(await folderOf(page, entryId)).toBe(await fallbackCampaignId(page));
+    expect(await page.evaluate((id) => game.journal.get(id).folder.name, entryId)).toBe("New Campaign");
 
     await cleanupEntries(page, [entryId]);
     assertNoConsoleErrors(errors);
@@ -241,13 +269,14 @@ test.describe("01 session entries", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
-    const personId = await page.evaluate(async (prefix) => {
+    const personId = await page.evaluate(async ({ prefix, folder }) => {
       const entry = await JournalEntry.create({
         name: `${prefix}Relationship Person`,
+        folder,
         pages: [{ name: `${prefix}Relationship Person`, type: "monks-enhanced-journal.person", flags: { "monks-enhanced-journal": { type: "person" } } }]
       });
       return entry.id;
-    }, TT_PREFIX);
+    }, { prefix: TT_PREFIX, folder: plainFolderId });
     const personUuid = await page.evaluate((id) => game.journal.get(id).uuid, personId);
 
     const sessionName = `${TT_PREFIX}Relationship Session`;

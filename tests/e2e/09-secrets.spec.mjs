@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
+  login, TT_PREFIX, cleanupAsGm, withGmPage, createTtPlainFolder, deleteFoldersById,
+  trackConsoleErrors, assertNoConsoleErrors,
   settle, reloadGame, clickWithHitDiagnostics, KNOWN_MEJ_SESSION_ICON_404,
   KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
@@ -18,15 +19,24 @@ const VIEW = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, he
 const SECRET_TEXT = `TT-secret-${Date.now()}`;
 const SECRET_HTML = `<p>Public intro.</p><section class="secret" id="secret-e2e1"><p>${SECRET_TEXT}</p></section>`;
 
+// Since 0.28.0 the GM client files a FOLDERLESS session into the "New
+// Campaign" fallback and raises its default ownership to OWNER. These tests
+// depend on the ownership they create with (a player who OWNS a session sees
+// every secret), so every fixture lives in a plain TT- folder, which the
+// filing hook leaves alone. Created in beforeAll, deleted in afterAll.
+const RUN = Date.now().toString(36);
+let plainFolderId = null;
+
 async function createPlaceWithSecret(page, name) {
-  return page.evaluate(async ({ n, html }) => {
+  return page.evaluate(async ({ n, html, folder }) => {
     const entry = await JournalEntry.create({
       name: n,
+      folder,
       ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
       pages: [{ name: n, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
     });
     return { id: entry.id, uuid: entry.uuid };
-  }, { n: name, html: SECRET_HTML });
+  }, { n: name, html: SECRET_HTML, folder: plainFolderId });
 }
 
 // Scope to the enriched, read-only preview container. The MEJ/Foundry
@@ -67,10 +77,10 @@ const DUP_HTML_1 = `<p>Page one intro.</p><section class="secret" id="secret-dup
 const DUP_HTML_2 = `<p>Page two intro.</p><section class="secret" id="secret-dup"><p>${SECRET_TEXT}-two</p></section>`;
 
 async function createTwoPagePlace(page, name) {
-  return page.evaluate(async ({ n, h1, h2 }) => {
+  return page.evaluate(async ({ n, h1, h2, folder }) => {
     const mej = { "monks-enhanced-journal": { type: "place" } };
     const entry = await JournalEntry.create({
-      name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+      name: n, folder, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
       pages: [
         { name: `${n} p1`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h1 } },
         { name: `${n} p2`, type: "monks-enhanced-journal.place", flags: mej, text: { content: h2 } }
@@ -78,7 +88,7 @@ async function createTwoPagePlace(page, name) {
     });
     const [p1, p2] = entry.pages.contents;
     return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
-  }, { n: name, h1: DUP_HTML_1, h2: DUP_HTML_2 });
+  }, { n: name, h1: DUP_HTML_1, h2: DUP_HTML_2, folder: plainFolderId });
 }
 
 // MEJ's shell (openJournalEntry / #MonksEnhancedJournal) only ever routes to a
@@ -104,6 +114,13 @@ async function openPoppedPage(page, entryId, pageId, anchor) {
 }
 
 test.describe("09 secrets", () => {
+  test.beforeAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { plainFolderId = await createTtPlainFolder(gm, `${TT_PREFIX}09 Sessions ${RUN}`); });
+  });
+  test.afterAll(async ({ browser }) => {
+    await withGmPage(browser, async (gm) => { await deleteFoldersById(gm, [plainFolderId]); });
+  });
+
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
       await gmPage.evaluate(async () => {
@@ -326,8 +343,9 @@ test.describe("09 secrets", () => {
 
     let entryId = null;
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}NativeReveal`,
           pages: [{
             name: `${prefix}NativeReveal`,
@@ -338,7 +356,7 @@ test.describe("09 secrets", () => {
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       const applied = await page.evaluate(async (id) => {
         const { applyBlockReveal } = await import("/modules/mej-campaign-companion/scripts/hooks/secrets-ui.mjs");
@@ -392,8 +410,9 @@ test.describe("09 secrets", () => {
 
     let entryId = null;
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}NestedSecret`,
           pages: [{
             name: `${prefix}Nested`,
@@ -405,7 +424,7 @@ test.describe("09 secrets", () => {
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       const result = await page.evaluate(async (id) => {
         const { applyBlockReveal } = await import("/modules/mej-campaign-companion/scripts/hooks/secrets-ui.mjs");
@@ -454,8 +473,9 @@ test.describe("09 secrets", () => {
 
     let entryId = null;
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}RoundTrip`,
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
           pages: [{
@@ -466,7 +486,7 @@ test.describe("09 secrets", () => {
           }]
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       const shell = await openEntry(page, entryId);
       const btn = shell.locator(".mej-cc-secret-audience");
@@ -531,8 +551,9 @@ test.describe("09 secrets", () => {
 
     let entryId = null;
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}RecapControl`,
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
           pages: [{
@@ -543,7 +564,7 @@ test.describe("09 secrets", () => {
           }]
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       await page.evaluate(async (id) => {
         await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
@@ -593,8 +614,9 @@ test.describe("09 secrets", () => {
 
     let entryId = null;
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}RecapTracker`,
           pages: [{
             name: `${prefix}RecapTracker`,
@@ -604,7 +626,7 @@ test.describe("09 secrets", () => {
           }]
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       await page.evaluate(async (id) => {
         await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
@@ -640,8 +662,9 @@ test.describe("09 secrets", () => {
     let entryId = null;
     const versionBefore = await page.evaluate(() => game.settings.get("mej-campaign-companion", "dataVersion"));
     try {
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}LegacyReveal`,
           pages: [{
             name: `${prefix}LegacyReveal`,
@@ -655,7 +678,7 @@ test.describe("09 secrets", () => {
           } } }
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       // Re-run the migration by rewinding dataVersion and reloading.
       await page.evaluate(async () => {
@@ -712,8 +735,9 @@ test.describe("09 secrets", () => {
     let entryId = null;
     let playerContext = null;
     try {
-      const seeded = await gmPage.evaluate(async (prefix) => {
+      const seeded = await gmPage.evaluate(async ({ prefix, folder }) => {
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}RecapSecret`,
           pages: [{
             name: `${prefix}RecapSecret`,
@@ -724,7 +748,7 @@ test.describe("09 secrets", () => {
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
         });
         return { entryId: entry.id, userId: game.users.find((u) => !u.isGM && u.name === "User 1")?.id };
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
       entryId = seeded.entryId;
 
       // Reveal it to User 1 through the shared write path.
@@ -779,9 +803,10 @@ test.describe("09 secrets", () => {
     const NATIVE_HTML = `<p>Public intro.</p>`
       + `<section class="secret revealed" id="secret-native1"><p>${SECRET_TEXT}</p></section>`
       + `<section class="secret" id="secret-cc1"><p>${SECRET_TEXT}-granted</p></section>`;
-    const id = await page.evaluate(async ({ n, html }) => {
+    const id = await page.evaluate(async ({ n, html, folder }) => {
       const entry = await JournalEntry.create({
         name: n,
+        folder,
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
         pages: [{ name: n, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
       });
@@ -790,7 +815,7 @@ test.describe("09 secrets", () => {
           { users: [game.users.getName("User 1").id], groups: [], all: false, revealedAt: 1 }
       });
       return entry.id;
-    }, { n: `${TT_PREFIX}Native-Reveal`, html: NATIVE_HTML });
+    }, { n: `${TT_PREFIX}Native-Reveal`, html: NATIVE_HTML, folder: plainFolderId });
 
     const gmShell = await openEntry(page, id);
     // The GM owns the entry and keeps the control.
@@ -852,7 +877,7 @@ test.describe("09 secrets", () => {
     let entryId = null;
     try {
       await login(page, "Gamemaster");
-      entryId = await page.evaluate(async (prefix) => {
+      entryId = await page.evaluate(async ({ prefix, folder }) => {
         // 45 paragraphs puts the secret and the final marker far below any
         // plausible pane height at this viewport (the pane measures ~155px on a
         // place sheet), so "below the fold" is a property of the fixture rather
@@ -862,12 +887,13 @@ test.describe("09 secrets", () => {
           + `<section class="secret" id="secret-longbody"><p>TT-longbody-secret</p></section>`
           + `<p>TT-longbody final paragraph</p>`;
         const entry = await JournalEntry.create({
+          folder,
           name: `${prefix}LongBody`,
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
           pages: [{ name: `${prefix}LongBody`, type: "monks-enhanced-journal.place", flags: { "monks-enhanced-journal": { type: "place" } }, text: { content: html } }]
         });
         return entry.id;
-      }, TT_PREFIX);
+      }, { prefix: TT_PREFIX, folder: plainFolderId });
 
       const shell = await openEntry(page, entryId);
       const wrapper = contentPreview(shell);
@@ -1051,9 +1077,9 @@ test.describe("09 secrets", () => {
   test("opening page 1 (a Session page) prunes only page 1's stale reveal records, leaving page 2 untouched", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
-    const { id, p1Id, p2Id } = await page.evaluate(async ({ n, h2 }) => {
+    const { id, p1Id, p2Id } = await page.evaluate(async ({ n, h2, folder }) => {
       const entry = await JournalEntry.create({
-        name: n, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+        name: n, folder, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
         pages: [
           {
             name: `${n} p1`, type: "mej-campaign-companion.session",
@@ -1065,7 +1091,7 @@ test.describe("09 secrets", () => {
       });
       const [p1, p2] = entry.pages.contents;
       return { id: entry.id, p1Id: p1.id, p2Id: p2.id };
-    }, { n: `${TT_PREFIX}Prune-Place`, h2: DUP_HTML_2 });
+    }, { n: `${TT_PREFIX}Prune-Place`, h2: DUP_HTML_2, folder: plainFolderId });
 
     await page.evaluate(async ({ e, a, b }) => {
       const entry = game.journal.get(e);
