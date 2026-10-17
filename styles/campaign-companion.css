@@ -706,6 +706,18 @@
   overflow-y: auto;
 }
 
+/* An open editor needs the sheet's height more than the knowledge panel
+   does. The panel shares the sheet's flex column with .sheet-body, and MEJ
+   clips .sheet-body (overflow: hidden): with the panel expanded on a 900px
+   window the place sheet's body shrank to 58px, the ProseMirror toolbar took
+   ~50px of it, and the editor's first text line sat below the clipped body -
+   a right-click there hit the sheet itself, outside .editor-parent, so
+   MEJ's context menu never opened (spec 24 edit mode, 2026-10-16). The panel
+   comes back as soon as the editor is saved or closed. */
+.monks-journal-sheet.sheet:has(.editor-parent.editing) .mej-cc-knowledge {
+  display: none;
+}
+
 /* Collapsed state: only the bar stays (spec 2026-09-04 §D). */
 .mej-cc-knowledge-bar {
   display: flex;
