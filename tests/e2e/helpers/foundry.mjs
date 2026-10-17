@@ -469,6 +469,38 @@ export async function ensureMejPlayerAccess(page) {
   }, MEJ_MODULE_ID);
 }
 
+/**
+ * A journal entry that bootstraps the MEJ shell WITHOUT scoping the Hub.
+ * Since 0.27.0 the shell's Hub button scopes the Hub to the campaign of the
+ * entry the shell is showing (spec 2026-10-15 item 4; hub-open-scope.mjs) and
+ * only leaves the persisted scope alone when that entry is unfiled. World A's
+ * first entry lives in the owner's Radiant Citadel campaign, so bootstrapping
+ * from `contents[0]` hid every unfiled TT- fixture from search/graph/index.
+ * Timeline journals are skipped too: they refuse to open in the shell
+ * (hooks/timeline-open.mjs). Creates a TT- text entry when none qualifies;
+ * the TT- sweep reclaims it.
+ */
+export async function unfiledBootstrapEntryId(page) {
+  return page.evaluate(async () => {
+    const M = "mej-campaign-companion";
+    const MEJ = "monks-enhanced-journal";
+    // Plain entries only: a spec's own TT- fixtures (usually MEJ-typed people,
+    // sessions, ...) render a typed sheet in the shell that lacks the generic
+    // page markup the specs wait on, and they exist before the shell opens.
+    const ok = (e) => !e.folder && !e.getFlag(M, "timeline") && !e.getFlag(M, "campaign")
+      && (!e.name.startsWith("TT-") || e.name === "TT-Hub Bootstrap")
+      && e.pages.size > 0
+      && !e.pages.some((p) => p.type?.startsWith(`${M}.`) || p.type?.startsWith(`${MEJ}.`) || p.getFlag(MEJ, "type"));
+    const existing = game.journal.contents.find(ok);
+    if (existing) return existing.id;
+    const created = await JournalEntry.create({
+      name: "TT-Hub Bootstrap",
+      pages: [{ name: "TT-Hub Bootstrap", type: "text", text: { content: "<p>Shell bootstrap for the e2e suite.</p>" } }]
+    });
+    return created.id;
+  });
+}
+
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */
 export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
   await page.evaluate(async (p) => {
