@@ -222,7 +222,8 @@
         "label": "Campaign",
         "all": "All campaigns",
         "unfiled": "Unfiled",
-        "newCampaign": "➕ New campaign…"
+        "newCampaign": "➕ New campaign…",
+        "none": "No campaigns yet"
       },
       "tools": "Tools",
       "newCampaign": "New campaign",

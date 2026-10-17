@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab } from "../scripts/logic/hub-player-view.mjs";
+import { playerHeaderMode, scopeOptionsForUser, playerTabOrder, lockedScopeId, defaultHubTab, playerScopeId, restrictHits } from "../scripts/logic/hub-player-view.mjs";
 
 const one = [{ id: "c1", name: "Radiant Citadel" }];
 const two = [{ id: "c1", name: "Radiant Citadel" }, { id: "c2", name: "Vale" }];
@@ -15,8 +15,8 @@ describe("playerHeaderMode", () => {
   it("non-GM with two visible campaigns keeps the picker (Review Focus 2)", () => {
     expect(playerHeaderMode(two, { isGM: false })).toEqual({ mode: "picker", title: null, campaignId: null });
   });
-  it("non-GM with no visible campaign keeps the picker (Review Focus 1)", () => {
-    expect(playerHeaderMode([], { isGM: false })).toEqual({ mode: "picker", title: null, campaignId: null });
+  it("non-GM with no visible campaign gets the empty title (spec 2026-10-16 §2)", () => {
+    expect(playerHeaderMode([], { isGM: false, emptyTitle: "No campaigns yet" })).toEqual({ mode: "title", title: "No campaigns yet", campaignId: null });
   });
   it("a GM always gets the picker, even with one campaign", () => {
     expect(playerHeaderMode(one, { isGM: true }).mode).toBe("picker");
@@ -29,13 +29,46 @@ describe("scopeOptionsForUser", () => {
     expect(out.map((o) => o.value)).toEqual(["", "c1", "c2", "unfiled", "__new"]);
     expect(out.find((o) => o.value === "c2").selected).toBe(true);
   });
-  it("player: all and campaigns only, never unfiled or new (Review Focus 2)", () => {
-    const out = scopeOptionsForUser(two, "", { isGM: false, hasUnfiled: true, labels });
-    expect(out.map((o) => o.value)).toEqual(["", "c1", "c2"]);
-    expect(out[0].label).toBe("All campaigns");
+  it("player: exactly their visible campaigns, in order — no All, Unfiled or New Campaign (spec 2026-10-16 §2)", () => {
+    const out = scopeOptionsForUser(two, "c2", { isGM: false, hasUnfiled: true, labels });
+    expect(out.map((o) => o.value)).toEqual(["c1", "c2"]);
+    expect(out.find((o) => o.value === "c2").selected).toBe(true);
   });
-  it("player with no campaigns: just All (Review Focus 1)", () => {
-    expect(scopeOptionsForUser([], "", { isGM: false, hasUnfiled: true, labels }).map((o) => o.value)).toEqual([""]);
+  it("player with no campaigns: no options at all", () => {
+    expect(scopeOptionsForUser([], "", { isGM: false, hasUnfiled: true, labels })).toEqual([]);
+  });
+});
+
+describe("playerScopeId", () => {
+  it("keeps the remembered campaign while it is still visible", () => {
+    expect(playerScopeId(two, "c2")).toBe("c2");
+  });
+  it("falls back to the first visible campaign for a stale, empty or unfiled remembered scope", () => {
+    expect(playerScopeId(two, "gone")).toBe("c1");
+    expect(playerScopeId(two, "")).toBe("c1");
+    expect(playerScopeId(two, "unfiled")).toBe("c1");
+    expect(playerScopeId(two, null)).toBe("c1");
+  });
+  it("is empty only when nothing is visible", () => {
+    expect(playerScopeId([], "c1")).toBe("");
+  });
+});
+
+describe("restrictHits", () => {
+  const hit = (uuid, cid) => ({ uuid, cid });
+  const hits = [hit("a1", "c1"), hit("a2", "c1"), hit("b1", "c2"), hit("x1", "c9"), hit("u1", null)];
+  const campaignIdOf = (h) => h.cid;
+  it("GM (no universe): the scope filter and spillover count every hit, as before", () => {
+    expect(restrictHits(hits, { scopeId: "c1", campaignIdOf })).toEqual({ hits: hits.slice(0, 2), spillover: 3 });
+    expect(restrictHits(hits, { scopeId: null, campaignIdOf })).toEqual({ hits, spillover: 0 });
+  });
+  it("player: spillover counts only hits inside campaigns they can see; unfiled and hidden campaigns never count", () => {
+    const within = new Set(["c1", "c2"]);
+    expect(restrictHits(hits, { scopeId: "c1", within, campaignIdOf })).toEqual({ hits: hits.slice(0, 2), spillover: 1 });
+  });
+  it("player search-all (scopeId null) widens to every visible campaign and nothing else", () => {
+    const within = new Set(["c1", "c2"]);
+    expect(restrictHits(hits, { scopeId: null, within, campaignIdOf })).toEqual({ hits: hits.slice(0, 3), spillover: 0 });
   });
 });
 
