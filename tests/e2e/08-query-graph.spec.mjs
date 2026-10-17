@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById,
+  login, TT_PREFIX, cleanupAsGm, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById, scopeHubToCampaign,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -14,8 +14,9 @@ const createdFolders = [];
  * A TT- campaign the player can observe, for fixtures a player-seat half
  * must see. Since 0.27.0 a player who sees exactly one campaign (Radiant
  * Citadel on World A) is locked to it and never sees unfiled entries
- * (UI-review spec 2026-10-15 §5.1/§5.6); a second visible campaign puts the
- * player's Hub on All with these fixtures in scope.
+ * (UI-review spec 2026-10-15 §5.1/§5.6). The player half scopes its Hub to
+ * this campaign with scopeHubToCampaign() rather than relying on All, which
+ * players are not meant to get.
  */
 async function playerCampaign(page, name) {
   const id = await createTtCampaignFolder(page, name);
@@ -409,6 +410,7 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     const errors = trackConsoleErrors(playerPage, { ignore: IGNORE });
     await login(playerPage, "User 1");
     const playerShell = await openHub(playerPage);
+    await scopeHubToCampaign(playerPage, folder);
     await playerShell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
     await settle(playerPage, 600);
     const playerGraph = playerShell.locator(".mej-cc-graph-pane");

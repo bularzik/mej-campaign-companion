@@ -666,25 +666,33 @@ test.describe.serial("14 campaigns", () => {
     const sessionName = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.newSession"));
     const beforeIds = await page.evaluate((n) => game.journal.filter((j) => j.name === n).map((j) => j.id), sessionName);
 
-    const shell = await openHub(page);
-    await scopeHub(shell, page, "unfiled");
-    await shell.locator("button.mej-cc-new-session").click();
-    // Two (or more) campaigns exist by now (Alpha + Beta) - promptCampaignChoice()
-    // only short-circuits without a dialog when zero or exactly one exists.
-    const dialog = page.locator("dialog.application").last();
-    await expect(dialog).toBeVisible();
-    await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
-    await page.keyboard.press("Escape");
-    await settle(page, 500);
+    try {
+      const shell = await openHub(page);
+      await scopeHub(shell, page, "unfiled");
+      await shell.locator("button.mej-cc-new-session").click();
+      // Two (or more) campaigns exist by now (Alpha + Beta) - promptCampaignChoice()
+      // only short-circuits without a dialog when zero or exactly one exists.
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await settle(page, 500);
 
-    const afterList = await page.evaluate((n) =>
-      game.journal.filter((j) => j.name === n).map((j) => ({ id: j.id, folder: j.folder?.id ?? null })), sessionName);
-    const created = afterList.find((e) => !beforeIds.includes(e.id));
-    expect(created).toBeTruthy();
-    expect(created.folder).toBeNull();
-
-    await page.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, created.id);
-    assertNoConsoleErrors(errors);
+      const afterList = await page.evaluate((n) =>
+        game.journal.filter((j) => j.name === n).map((j) => ({ id: j.id, folder: j.folder?.id ?? null })), sessionName);
+      const created = afterList.find((e) => !beforeIds.includes(e.id));
+      expect(created).toBeTruthy();
+      expect(created.folder).toBeNull();
+      assertNoConsoleErrors(errors);
+    } finally {
+      // The loose "New session" has no TT- name, so no sweep would reclaim it:
+      // delete every same-named journal that was not in the pre-test snapshot,
+      // even when an assertion above failed.
+      await page.evaluate(async ({ n, beforeIds }) => {
+        const ids = game.journal.filter((j) => j.name === n && !beforeIds.includes(j.id)).map((j) => j.id);
+        if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
+      }, { n: sessionName, beforeIds }).catch(() => {});
+    }
   });
 
   test("7. All-mode timeline stacks never lazily create a journal for a campaign no GM has scoped yet", async ({ page }) => {

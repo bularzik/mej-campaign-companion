@@ -506,15 +506,30 @@ export async function unfiledBootstrapEntryId(page) {
  * observe its members. Since 0.27.0 a player who can see exactly one campaign
  * is locked to it and never sees unfiled entries (UI-review spec 2026-10-15
  * §5.1/§5.6); on World A that one campaign is Radiant Citadel. Filing a
- * spec's player-visible fixtures here gives the player a second campaign, so
- * their Hub shows the picker on All and the fixtures are in scope. Delete it
- * with deleteFoldersById.
+ * spec's player-visible fixtures here gives the player a campaign that holds
+ * them; scope the player's Hub to it with scopeHubToCampaign (never rely on
+ * "All", which players are not meant to get). Delete it with deleteFoldersById.
  */
 export async function createTtCampaignFolder(page, name) {
   return page.evaluate(async (n) => (await Folder.create({
     name: n, type: "JournalEntry",
     flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
   })).id, name);
+}
+
+/**
+ * On a player seat with the Hub open: scope it to one campaign (a folder from
+ * createTtCampaignFolder) rather than relying on "All". The UI-review spec
+ * (2026-10-15, design doc ~lines 109/168) says players should not get All, so
+ * the player halves must not depend on it. When the player is locked to one
+ * campaign there is no picker and this is a no-op.
+ */
+export async function scopeHubToCampaign(page, folderId) {
+  const picker = page.locator('#MonksEnhancedJournal select[name="campaign-scope"]').first();
+  if (await picker.count() === 0) return false;
+  await picker.selectOption(folderId);
+  await settle(page, 500);
+  return true;
 }
 
 /** As a GM page: delete folders by id, with their subfolders and contents. Missing ids are skipped. */

@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById,
+  login, TT_PREFIX, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById, scopeHubToCampaign,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 
-async function openHubSearch(page) {
+/** `scope`: a campaign folder id to scope a player's Hub to before searching (see scopeHubToCampaign). */
+async function openHubSearch(page, { scope = null } = {}) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
   // Unfiled on purpose: since 0.27.0 the Hub button scopes the Hub to the
@@ -29,6 +30,7 @@ async function openHubSearch(page) {
   await expect(hubButton).toBeVisible({ timeout: 30_000 });
   await hubButton.click({ timeout: 30_000 });
   await settle(page, 500);
+  if (scope) await scopeHubToCampaign(page, scope);
   await shell.locator('nav.sheet-tabs a[data-tab="search"]').click();
   await settle(page, 200);
   // Two distinct MEJ-side non-GM render bugs used to live on this path (see
@@ -88,9 +90,9 @@ test.describe("03 search", () => {
     const name = `${TT_PREFIX}Search Session GM`;
     // Filed in a TT- campaign the player can observe: since 0.27.0 a player
     // who sees exactly one campaign (Radiant Citadel on World A) is locked to
-    // it and never sees unfiled entries (UI-review spec §5.1/§5.6). A second
-    // visible campaign puts the player's Hub on All, with this entry in
-    // scope. See createTtCampaignFolder().
+    // it and never sees unfiled entries (UI-review spec §5.1/§5.6). The
+    // player's Hub is scoped to this campaign explicitly rather than relying
+    // on All (players are not meant to get All). See scopeHubToCampaign().
     const folderId = await createTtCampaignFolder(gmPage, `${TT_PREFIX}Search Campaign GM`);
     await gmPage.evaluate(async ({ n, folderId }) => {
       await JournalEntry.create({
@@ -123,7 +125,7 @@ test.describe("03 search", () => {
       const playerPage = await playerContext.newPage();
       const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
       await login(playerPage, "User 1");
-      const playerShell = await openHubSearch(playerPage);
+      const playerShell = await openHubSearch(playerPage, { scope: folderId });
       // Positive control: the player's search must find the public recap word.
       await search(playerShell, playerPage, "cartographerslodge");
       await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
@@ -227,7 +229,7 @@ test.describe("03 search", () => {
       const playerPage = await playerContext.newPage();
       const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
       await login(playerPage, "User 1");
-      const playerShell = await openHubSearch(playerPage);
+      const playerShell = await openHubSearch(playerPage, { scope: folderId });
 
       // Baseline: not hidden yet, so the player CAN find it. This also builds
       // the player's index, which the rebuild below depends on already existing.
