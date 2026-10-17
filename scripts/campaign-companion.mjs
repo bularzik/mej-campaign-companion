@@ -415,6 +415,15 @@ Hooks.once("ready", async () => {
   // native mode with the shim) and for non-active-GM clients.
   await healSessionFlags();
 
+  // Spec 2026-10-16 §1f: sessions always live in a campaign. Once per GM load
+  // the active GM files the folderless sessions that already exist (into the
+  // "New Campaign" fallback, same rule as the create hook). Idempotent; not a
+  // dataVersion migration - no schema changes, so no version gate.
+  if (game.user === game.users.activeGM) {
+    const { sweepUnfiledSessions } = await import("./hooks/session-filing.mjs");
+    await sweepUnfiledSessions().catch((err) => console.error(`${MODULE_ID} | unfiled session sweep failed`, err));
+  }
+
   // Spec §6 (campaign-container) + spec C §1: versioned migrations. Gated on
   // the elected activeGM (not just isGM) - two connected GMs would otherwise
   // both pass the version check and race the v2 backfill below, each

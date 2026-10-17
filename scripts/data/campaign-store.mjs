@@ -196,6 +196,11 @@ function sessionAwareLevel(entry, baseline) {
   });
 }
 
+/** Public form of sessionAwareLevel for callers holding the campaign: the default ownership a member of `campaign` should carry. */
+export function sessionTargetLevel(entry, campaign) {
+  return sessionAwareLevel(entry, baselineOwnership(campaign));
+}
+
 /**
  * Spec §5 bulk apply: set every member's ownership.default to the baseline.
  * Skips entries currently hidden (NONE) via the eye toggle - a bulk apply
