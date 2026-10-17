@@ -13,42 +13,19 @@
 // comment for why real content is never mutated there).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals, unfiledBootstrapEntryId,
-  trackConsoleErrors, assertNoConsoleErrors, settle,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
+  trackConsoleErrors, assertNoConsoleErrors, settle, fallbackCampaignId, cleanupFallbackCampaign,
   gotoGame, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
+import { openHub, scopeHub } from "./helpers/hub.mjs";
 
 const MODULE_ID = "mej-campaign-companion";
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const DOCX_PATH = "/Users/danbularzik/Claude/Projects/campaign-record/examples/Radiant Citadel.docx";
 
-/** Open any journal entry (bootstraps the MEJ shell), then open the Campaign Hub. Lands on the Index tab. */
-async function openHub(page) {
-  await page.locator('[data-tab="journal"][data-action="tab"]').click();
-  await settle(page, 200);
-  // Unfiled on purpose: since 0.27.0 the Hub button scopes the Hub to the
-  // campaign of the entry the shell shows, which would hide this spec's
-  // unfiled TT- fixtures. See unfiledBootstrapEntryId().
-  const anyEntryId = await unfiledBootstrapEntryId(page);
-  await page.evaluate(async (id) => {
-    await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
-  }, anyEntryId);
-  await settle(page, 400);
-  const shell = page.locator("#MonksEnhancedJournal");
-  await shell.locator(".nav-button.campaign-hub").click();
-  await settle(page, 500);
-  return shell;
-}
-
 async function gotoTab(shell, page, tab) {
   await shell.locator(`nav.sheet-tabs a[data-tab="${tab}"]`).click();
   await settle(page, 200);
-}
-
-/** Select the Hub's campaign-scope <select> ("" = All, "unfiled", or a campaign Folder id). */
-async function scopeHub(shell, page, value) {
-  await shell.locator('select[name="campaign-scope"]').selectOption(value);
-  await settle(page, 300);
 }
 
 // ---------------------------------------------------------------------------
@@ -656,42 +633,39 @@ test.describe.serial("14 campaigns", () => {
     assertNoConsoleErrors(errors);
   });
 
-  test("6. New Session in Unfiled scope prompts for a campaign; cancelling keeps it loose", async ({ page }) => {
+  test("6. New Session in Unfiled scope prompts for a campaign; dismissing the prompt files the session into \"New Campaign\"", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
-
-    // The default name is the localized label, not a literal: 0.27.0's
-    // wording pass (UI-review spec 2026-10-15 §5.7, item 17) recased it to
-    // "New session" (lang/en.json hub.newSession).
     const sessionName = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.newSession"));
     const beforeIds = await page.evaluate((n) => game.journal.filter((j) => j.name === n).map((j) => j.id), sessionName);
-
+    const fallbackBefore = await fallbackCampaignId(page);
     try {
       const shell = await openHub(page);
       await scopeHub(shell, page, "unfiled");
       await shell.locator("button.mej-cc-new-session").click();
       // Two (or more) campaigns exist by now (Alpha + Beta) - promptCampaignChoice()
-      // only short-circuits without a dialog when zero or exactly one exists.
+      // only skips the dialog when zero campaigns exist.
       const dialog = page.locator("dialog.application").last();
       await expect(dialog).toBeVisible();
       await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
       await page.keyboard.press("Escape");
-      await settle(page, 500);
+      await settle(page, 1200);
 
-      const afterList = await page.evaluate((n) =>
-        game.journal.filter((j) => j.name === n).map((j) => ({ id: j.id, folder: j.folder?.id ?? null })), sessionName);
-      const created = afterList.find((e) => !beforeIds.includes(e.id));
+      const created = await page.evaluate(({ n, beforeIds }) => {
+        const e = game.journal.find((j) => j.name === n && !beforeIds.includes(j.id));
+        return e ? { id: e.id, folder: e.folder?.id ?? null, folderName: e.folder?.name ?? null } : null;
+      }, { n: sessionName, beforeIds });
       expect(created).toBeTruthy();
-      expect(created.folder).toBeNull();
+      // Spec 2026-10-16 §1a/§1c: never loose; the fallback campaign holds it.
+      expect(created.folderName).toBe("New Campaign");
+      expect(created.folder).toBe(await fallbackCampaignId(page));
       assertNoConsoleErrors(errors);
     } finally {
-      // The loose "New session" has no TT- name, so no sweep would reclaim it:
-      // delete every same-named journal that was not in the pre-test snapshot,
-      // even when an assertion above failed.
       await page.evaluate(async ({ n, beforeIds }) => {
         const ids = game.journal.filter((j) => j.name === n && !beforeIds.includes(j.id)).map((j) => j.id);
         if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
       }, { n: sessionName, beforeIds }).catch(() => {});
+      if (!fallbackBefore) await cleanupFallbackCampaign(page).catch(() => {});
     }
   });
 

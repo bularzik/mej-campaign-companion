@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import { lockStatus, UNLOCK_HINT } from "./env-lock.mjs";
 import { TARGET } from "./target.mjs";
-import { strandedTestFolderIds, autoCaptureNeedsReset } from "./sweep-rules.mjs";
+import { strandedTestFolderIds, autoCaptureNeedsReset, fallbackCampaignReclaimable } from "./sweep-rules.mjs";
 import { formatConsoleError, appendStack } from "./console-format.mjs";
 
 export const BASE_URL = TARGET.url;
@@ -540,6 +540,115 @@ export async function deleteFoldersById(page, ids) {
       if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
     }
   }, ids.filter(Boolean));
+}
+
+/**
+ * As a GM page: a whole TT- campaign (folder + portal + timeline, all TT-
+ * named) through the module's own createCampaign, so a spec that needs a
+ * session INSIDE a campaign gets the structure production code expects.
+ * Delete with deleteFoldersById; the TT- sweeps reclaim a stranded one.
+ */
+export async function createTtCampaign(page, name, { ownershipDefault = "observer" } = {}) {
+  return page.evaluate(async ({ n, own }) => {
+    const { createCampaign, campaignPortal } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+    const { campaignTimelineJournal } = await import("/modules/mej-campaign-companion/scripts/data/timeline-journal.mjs");
+    const folder = await createCampaign(n, { ownershipDefault: own });
+    return { folderId: folder.id, timelineId: campaignTimelineJournal(folder)?.id ?? null, portalId: campaignPortal(folder)?.id ?? null };
+  }, { n: name, own: ownershipDefault });
+}
+
+/**
+ * As a GM page: a plain (non-campaign) TT- folder. Since 0.28.0 a FOLDERLESS
+ * session is filed into the "New Campaign" fallback by the GM client; a
+ * session in a plain folder is left alone, so specs whose assertions depend
+ * on a session's own ownership or location put it here.
+ */
+export async function createTtPlainFolder(page, name) {
+  return page.evaluate(async (n) => (await Folder.create({ name: n, type: "JournalEntry" })).id, name);
+}
+
+/** The id of the root campaign folder named exactly "New Campaign" (the 0.28.0 fallback campaign), or null. */
+export async function fallbackCampaignId(page) {
+  return page.evaluate(() => {
+    const name = game.i18n.localize("MEJCampaignCompanion.campaign.fallbackName");
+    return game.folders.find((f) => f.type === "JournalEntry" && !f.folder && f.name === name && !!f.getFlag("mej-campaign-companion", "campaign"))?.id ?? null;
+  });
+}
+
+/**
+ * Reclaim a fallback "New Campaign" the suite's own sessions caused (specs
+ * that create folderless TT- sessions make the GM client create one). Deleted
+ * only when fallbackCampaignReclaimable says every member outside the portal,
+ * timelines and (empty) notes entry is TT- named and every timepoint is TT-
+ * labelled; a "New
+ * Campaign" holding real content is left alone. Clears autoCaptureCampaign
+ * if it pointed at the deleted folder. Returns the deleted name or null.
+ */
+export async function cleanupFallbackCampaign(page, { prefix = TT_PREFIX } = {}) {
+  const snapshot = await page.evaluate(async () => {
+    const M = "mej-campaign-companion";
+    const { campaignOf, isCampaignPortal, isTimelineJournal, isNotesEntry } = await import(`/modules/${M}/scripts/logic/campaigns.mjs`);
+    const { readNotes } = await import(`/modules/${M}/scripts/data/notes-store.mjs`);
+    const name = game.i18n.localize("MEJCampaignCompanion.campaign.fallbackName");
+    const folder = game.folders.find((f) => f.type === "JournalEntry" && !f.folder && f.name === name && !!f.getFlag(M, "campaign"));
+    if (!folder) return null;
+    const members = game.journal.filter((e) => campaignOf(e)?.id === folder.id).map((e) => ({
+      name: e.name,
+      portal: isCampaignPortal(e),
+      timeline: isTimelineJournal(e),
+      timepointLabels: (e.getFlag(M, "timeline")?.timepoints ?? []).map((t) => t.label ?? ""),
+      notes: isNotesEntry(e),
+      noteCount: isNotesEntry(e) ? readNotes(folder).length : 0
+    }));
+    return { id: folder.id, members };
+  });
+  if (!snapshot || !fallbackCampaignReclaimable(snapshot.members, prefix)) return null;
+  return page.evaluate(async (id) => {
+    const M = "mej-campaign-companion";
+    const f = game.folders.get(id);
+    if (!f) return null;
+    const name = f.name;
+    await f.delete({ deleteSubfolders: true, deleteContents: true });
+    if (game.settings.get(M, "autoCaptureCampaign") === id) await game.settings.set(M, "autoCaptureCampaign", "");
+    return name;
+  }, snapshot.id);
+}
+
+/**
+ * As a GM page: hide every member and the portal of every campaign NOT in
+ * `keepIds` from players (ownership.default -> NONE), so a player seat sees
+ * exactly the kept campaigns. Returns the restore list for restoreHidden.
+ * Lifted from 34-player-hub.spec.mjs's beforeAll.
+ */
+export async function hideOtherCampaignsFrom(gmPage, keepIds) {
+  const result = await gmPage.evaluate(async (keep) => {
+    const { getCampaigns, campaignPortal, campaignEntries } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
+    const out = [];
+    let error = null;
+    try {
+      for (const c of getCampaigns()) {
+        if (keep.includes(c.id)) continue;
+        for (const d of [...campaignEntries(c), campaignPortal(c)].filter(Boolean)) {
+          out.push({ id: d.id, def: d.ownership?.default ?? 0 });
+          await d.update({ "ownership.default": 0 });
+        }
+      }
+    } catch (e) { error = String(e); }
+    return { out, error };
+  }, keepIds);
+  if (result.error) {
+    // Restore what was hidden before surfacing the failure.
+    await restoreHidden(gmPage, result.out);
+    throw new Error(result.error);
+  }
+  return result.out;
+}
+
+/** Undo hideOtherCampaignsFrom. */
+export async function restoreHidden(gmPage, hidden) {
+  await gmPage.evaluate(async (list) => {
+    for (const h of list ?? []) await game.journal.get(h.id)?.update({ "ownership.default": h.def });
+  }, hidden ?? []);
 }
 
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */

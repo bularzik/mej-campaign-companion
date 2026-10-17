@@ -4,7 +4,8 @@
 import { test, expect } from "@playwright/test";
 import {
   login, settle, TT_PREFIX, deleteJournalsByPrefix, cleanupStrandedTestFolders, withGmPage,
-  trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404
+  trackConsoleErrors, assertNoConsoleErrors, KNOWN_MEJ_SESSION_ICON_404,
+  hideOtherCampaignsFrom, restoreHidden
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
@@ -54,34 +55,15 @@ test.describe("34 player Hub", () => {
       ids = await seed(gm);
       // A player counts a campaign when they can see any member entry or its
       // portal, so hide every member and the portal of every OTHER campaign
-      // (default ownership only) to leave User 1 exactly one; restored in afterAll.
-      const hide = await gm.evaluate(async (keep) => {
-        const { getCampaigns, campaignPortal, campaignEntries } = await import("/modules/mej-campaign-companion/scripts/data/campaign-store.mjs");
-        const out = [];
-        let error = null;
-        try {
-          for (const c of getCampaigns()) {
-            if (c.id === keep) continue;
-            const docs = [...campaignEntries(c), campaignPortal(c)].filter(Boolean);
-            for (const d of docs) {
-              out.push({ id: d.id, def: d.ownership?.default ?? 0 });
-              await d.update({ "ownership.default": 0 });
-            }
-          }
-        } catch (e) { error = String(e); }
-        return { out, error };
-      }, ids.folderId);
-      // Record before surfacing a failure so afterAll restores a partial hide.
-      ids.hidden = hide.out;
-      if (hide.error) throw new Error(hide.error);
+      // (default ownership only) to leave User 1 exactly one; restored in
+      // afterAll (a partial hide is restored by the helper before it throws).
+      ids.hidden = await hideOtherCampaignsFrom(gm, [ids.folderId]);
     });
   });
 
   test.afterAll(async ({ browser }) => {
     await withGmPage(browser, async (gm) => {
-      await gm.evaluate(async (hidden) => {
-        for (const h of hidden ?? []) await game.journal.get(h.id)?.update({ "ownership.default": h.def });
-      }, ids?.hidden);
+      await restoreHidden(gm, ids?.hidden);
       await deleteJournalsByPrefix(gm);
       await cleanupStrandedTestFolders(gm);
     });
