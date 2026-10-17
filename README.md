@@ -17,6 +17,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - The recap is a single document. Owners edit it through Foundry's collaborative editor, so simultaneous owners see each other's edits; everyone else reads it. A save raised by another field on the sheet (session number, date) leaves the recap and GM notes untouched, and open Session views refresh when another owner saves the recap.
 - Sessions are identified by their native page type, never by MEJ's type flag — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050).
 - The Hub's **New session** button creates one in both modes. Walkthrough: [GM Guide — Running your first session](docs/gm-guide.md#running-your-first-session).
+- Sessions always live in a campaign. A session created with no campaign chosen — from the Hub, the sidebar's New Entry, the API or an import — is filed by the GM's client into a campaign named **New Campaign** (created once, reused while a root campaign of that name exists; rename it like any folder). Sessions you placed in your own plain folders are left alone. Unfiled sessions that already exist are moved the first time a GM loads the world. The companion no longer creates a world-level timeline.
 
 ### Session notes and the current session
 
@@ -33,7 +34,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 ### Campaigns
 
 - A campaign is a flagged journal folder, a portal entry named after it, and a `<name> — Timeline` journal, created together by `createCampaign()` from the journal sidebar's GM-only **New campaign** button or the Hub's campaign picker. **Make this folder a campaign** on a plain top-level folder's context menu promotes it in place; campaigns never nest.
-- Everything filed in the folder is a member, including plain journal entries. The Hub's campaign picker (All campaigns / Unfiled / each campaign) scopes the Entries, Timeline, Graph, Search, Dashboards and Secrets panes.
+- Everything filed in the folder is a member, including plain journal entries. The Hub's campaign picker (All campaigns / Unfiled / each campaign) scopes the Entries, Timeline, Graph, Search, Dashboards and Secrets panes. GMs get that picker; a player's picker lists only the campaigns they can see (one campaign shows as a title, none shows "No campaigns yet"), and their Search tab's *Search all* widens only the search across those campaigns.
 - Each campaign has an ownership baseline (**GM only**, **Players can view**, **Players can edit**). Entries a GM creates inside the folder without an explicit ownership start at that baseline; **Apply to all current members now** pushes it onto existing members, skipping entries hidden with the Entries pane's per-entry eye toggle.
 - The portal entry opens the Hub scoped to its campaign. Renaming the folder renames the portal and vice versa; deleting the portal never deletes the campaign (campaign settings offers **Restore campaign entry**).
 - Campaign is not a page type: it is stripped from MEJ's New Entry dialog and Foundry's Create Page dialog, and a loose campaign page created any other way is upgraded into a real campaign or refused with a notification.
@@ -63,7 +64,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 
 ### Knowledge (tags, attributes, backlinks, knowledge bar, relationship graph)
 
-- **Tags and attributes** — custom tags and key/value attributes on MEJ entries, edited in a knowledge panel at the foot of each sheet. An attribute row marked `playerHidden` is kept off player sheets and out of player searches immediately.
+- **Tags and attributes** — custom tags and key/value attributes on MEJ entries, edited in the knowledge rail on the right of each sheet (click the vertical **Knowledge** tab to open or close it; the text column re-flows while it is open; on Foundry 13 with stock MEJ 13.06 the rail is shell-only, since a popped-out sheet gets no panel). An attribute row marked `playerHidden` is kept off player sheets and out of player searches immediately.
 - **Backlinks** — the panel's "Mentioned in" section lists the entries that link to this one through `@UUID` links, updates live, lists only sources in the entry's campaign scope (its campaign plus unfiled entries), and feeds the mention-count badges on the Hub Entries pane. Plain-text names count only once auto-link has turned them into links.
 - **Knowledge bar** — the panel collapses to a one-line bar summarizing what it holds. The collapsed state is per client (`knowledgePanelCollapsed`) and applies to every sheet. The expanded panel is capped at half the pane and scrolls, and paints its own surface under a dark colour scheme.
 - **Relationship graph** — the Hub's Graph pane draws entries connected through MEJ's `relationships` flags, with vendored d3-force layout. It follows the campaign picker; **Whole campaign** and **Focus** (one entry and its direct connections) modes; an optional dashed overlay of `@UUID` mention edges; nodes draw the entry's own picture or a per-type placeholder. It is capped at the 200 most-connected entries and says so when the cap applies. A player's graph shows only relationships revealed to them. Party relationships draw as dotted lines, toggled by **Show party relationships**.
@@ -238,8 +239,8 @@ Twenty settings are registered: eight visible in the module settings menu, all w
 | `shellHosting` | No (internal) | On | Client-scoped. In native mode, host the Hub and Session sheets inside MEJ's shell; off uses standalone windows. See [Error handling](#error-handling-and-troubleshooting). |
 | `dataVersion` | No (internal) | `0` | Schema version the active GM's migrations have reached (current: 7). Don't edit by hand. |
 | `autoCaptureCampaign` | No (internal) | `""` | Folder id of the campaign that receives auto-captured encounters and media; set from **Tools → Auto-capture campaign**. Empty with exactly one campaign means that campaign; empty with several means capture declines. |
-| `hubCampaignScope` | No (internal) | `""` | Client-scoped. The Hub campaign picker's choice: `""` (All campaigns), `unfiled`, or a campaign folder id. |
-| `knowledgePanelCollapsed` | No (internal) | Off | Client-scoped. The knowledge panel is collapsed to its one-line bar on every sheet. |
+| `hubCampaignScope` | No (internal) | `""` | Client-scoped. The Hub campaign picker's choice: `""` (All campaigns, GM only), `unfiled` (GM only), or a campaign folder id; players always resolve to one of their campaigns. |
+| `knowledgePanelCollapsed` | No (internal) | Off | Client-scoped. The knowledge rail is closed to its tab on every sheet. |
 | `adoptionPrompted` | No (internal) | Off | The one-time adoption offer has been shown or dismissed. |
 | `hubTimelineSelection` | No (internal) | `""` | Client-scoped. The Hub Timeline pane's selected timeline id; `""` is the scope's default view. |
 | `entityFromSelectionLastType` | No (internal) | `person` | Client-scoped. The type last picked in the Create entry from selection dialog. |

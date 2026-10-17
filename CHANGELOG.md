@@ -1,16 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.28.0 (2026-10-17)
+
+### Added
+- Sessions always live in a campaign. A session created with no campaign chosen — Hub New Session with the prompt dismissed, the sidebar's New Entry, the API, an import — is filed into a campaign named "New Campaign" (created once, reused while a root campaign of that exact name exists). Unfiled sessions are moved into a "New Campaign" campaign the first time a GM loads the world. Sessions in your own plain folders are never moved.
+- Knowledge rail: the knowledge panel is now a collapsible right-hand rail (vertical "Knowledge" tab, keyboard-focusable) that pushes the page text narrower while open; it stays available while editing. Open/closed is remembered per client as before. On Foundry 13 with stock MEJ 13.06 the rail appears in the shell only; a popped-out sheet gets no panel.
+- Player Hub: the campaign picker lists only the campaigns a player can see (no All / Unfiled / New Campaign); it opens on the remembered campaign or the first one, and "No campaigns yet" when none is visible. Search all widens only the search across those campaigns.
+
+### Changed
+- The companion never creates a world-level "Campaign Timeline" any more; a world that already has one keeps showing it. Add Timepoint, auto-capture and imports with no campaign use the "New Campaign" campaign's timeline.
+- Session tab: the "Drag an Actor here" hint shows to anyone who can edit the session — GM or owning player — so players who manage attendees are told how. View-only players see "No attendees recorded yet."
+- Start Session: dismissing its campaign prompt still starts nothing (unchanged); only New Session falls back to a created campaign.
 
 ### Fixed
+- `/note` on Foundry 13 keeps literal tag-like text (`/note the <div> tag`): a message is treated as HTML only when it starts with a block wrapper, which is what Foundry 14's chat box sends.
 - Tonight strip: "Start session"/"End session" buttons take the companion's field tokens and the idle "No session running" title takes the muted ink token (no opacity), so they clear 4.5:1 on every MEJ background in both colour schemes.
-- Session tab: players no longer see the "Drag an Actor here" coaching hint (it shows only to GMs who can edit); the empty attendee list reads "No attendees recorded yet." Owners can still drop Actors.
+- Session tab: view-only players no longer see the "Drag an Actor here" coaching hint (it shows to anyone who can edit the session); the empty attendee list reads "No attendees recorded yet." Owners can still drop Actors.
 - Session tab: the tab body scrolls and the GM Notes block keeps a 12em flex basis, so the GM Notes pencil stays reachable while the recap editor is open.
 - Image relay for players without upload rights works again: the GM-side receiver compared the page's in-memory type, which MEJ rewrites to `session` after 0.27.0's post-create timepoint update. It now compares the stored subtype. Session detection through `isSessionDoc` (current session, knowledge panel, the MEJ adapter) reads the stored subtype too, since MEJ's `fixType()` rewrites the in-memory type on many paths.
 - `/note` typed into Foundry 14's chat box works: the prose-mirror input sends the message HTML-wrapped (`<p>/note …</p>`), which the command parser now reads as text the way Foundry's own chat parser does. Foundry 13's plain-text chat box is unchanged.
-- Knowledge panel hides while an editor on the same sheet is open; the taller 0.27.0 panel squeezed the sheet body so edit-mode selections could not be clicked.
+- Knowledge panel no longer competes with page text for height (it is a side rail now); the 0.27.0 edit-mode squeeze is gone.
 
 ### Tests
+- New specs 37 (sessions in campaigns), 38 (player campaign picker), 39 (knowledge rail); spec 02 runs on a TT- campaign timeline; specs 01/05/06/09/10/21 keep their sessions in a TT- folder; global setup reclaims a 'New Campaign' that holds only the suite's leftovers.
 - The e2e suite (specs 03, 08, 14) bootstraps the MEJ shell from an unfiled plain entry so the 0.27.0 open-from-entry Hub scoping leaves its fixtures visible.
 - Specs 03, 08 and 14 are aligned with 0.27.0: player-seat fixtures live in a TT- campaign the player can observe, the Dashboards tab is asserted absent for players until a dashboard is shown to them, graph double-click opens the entry (single click focuses), New Session cancel in Unfiled scope still files the session loose as "New session", and the timeline empty state reads "No timeline yet." with a GM Add-timepoint button.
 - Player-seat halves of specs 03 and 08 scope the Hub to their TT- campaign rather than relying on an All scope players are not meant to get; spec 14's New Session cancel test deletes the loose session it creates even on failure.
