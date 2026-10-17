@@ -118,7 +118,7 @@
                                     {{/if}}
                                 </li>
                                 {{else}}
-                                {{#if @root.editable}}
+                                {{#if (and @root.editable @root.isGM)}}
                                 <li class="instruction">{{localize 'MEJCampaignCompanion.session.dragActorHint'}}</li>
                                 {{else}}
                                 <li class="instruction">{{localize 'MEJCampaignCompanion.session.noAttendees'}}</li>
