@@ -53,6 +53,10 @@ describe("fallbackCampaignReclaimable", () => {
     expect(fallbackCampaignReclaimable([portal, tl([]), { name: "Session 12", portal: false, timeline: false }])).toBe(false);
     expect(fallbackCampaignReclaimable([portal, tl(["TT-S1", "The Vault"])])).toBe(false);
   });
+  it("keeps a fallback whose timeline holds an unlabelled timepoint (empty-string label)", () => {
+    expect(fallbackCampaignReclaimable([portal, tl([""])])).toBe(false);
+    expect(fallbackCampaignReclaimable([portal, tl(["TT-S1", ""])])).toBe(false);
+  });
   it("treats an empty notes entry as structure and a notes entry holding notes as real content", () => {
     const notes = (count) => ({ name: "Notes — New Campaign", portal: false, timeline: false, notes: true, noteCount: count });
     expect(fallbackCampaignReclaimable([portal, tl([]), notes(0)])).toBe(true);

@@ -649,12 +649,13 @@ test.describe.serial("14 campaigns", () => {
       await expect(dialog).toBeVisible();
       await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
       await page.keyboard.press("Escape");
-      await settle(page, 1200);
 
-      const created = await page.evaluate(({ n, beforeIds }) => {
+      const readCreated = () => page.evaluate(({ n, beforeIds }) => {
         const e = game.journal.find((j) => j.name === n && !beforeIds.includes(j.id));
         return e ? { id: e.id, folder: e.folder?.id ?? null, folderName: e.folder?.name ?? null } : null;
       }, { n: sessionName, beforeIds });
+      await expect.poll(async () => (await readCreated())?.folder ?? null, { timeout: 10_000 }).not.toBeNull();
+      const created = await readCreated();
       expect(created).toBeTruthy();
       // Spec 2026-10-16 §1a/§1c: never loose; the fallback campaign holds it.
       expect(created.folderName).toBe("New Campaign");

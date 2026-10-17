@@ -62,16 +62,23 @@ test.describe("37 sessions in campaigns", () => {
   });
 
   test.afterEach(async ({ page }) => {
-    // No world timeline may appear and the legacy setting may not change (§1e).
+    // Capture first, clean up always, assert last: a failing guard must not
+    // strand TT- sessions or the spec's own fallback in World A.
     const after = await worldState(page);
+    let fallbackLeft = null;
+    try {
+      await deleteJournalsByPrefix(page);
+    } finally {
+      if (!fallbackExistedBefore) {
+        await cleanupFallbackCampaign(page);
+        fallbackLeft = await fallbackCampaignId(page);
+      }
+    }
+    // No world timeline may appear and the legacy setting may not change (§1e).
     expect(after.timelineSetting).toBe(before.timelineSetting);
     expect(after.rootTimelines).toEqual(before.rootTimelines);
-    await deleteJournalsByPrefix(page);
-    if (!fallbackExistedBefore) {
-      await cleanupFallbackCampaign(page);
-      // The suite's own fallback must be reclaimable once its TT- sessions are gone.
-      expect(await fallbackCampaignId(page)).toBeNull();
-    }
+    // The suite's own fallback must be reclaimable once its TT- sessions are gone.
+    if (!fallbackExistedBefore) expect(fallbackLeft).toBeNull();
   });
 
   // The Hub's New Session builds its page with buildSessionPageData, which
@@ -82,7 +89,10 @@ test.describe("37 sessions in campaigns", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     const sessionName = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.newSession"));
     const beforeIds = await page.evaluate((n) => game.journal.filter((j) => j.name === n).map((j) => j.id), sessionName);
-    let createdId = null;
+    const readCreated = () => page.evaluate(({ n, beforeIds }) => {
+      const e = game.journal.find((j) => j.name === n && !beforeIds.includes(j.id));
+      return e ? { id: e.id, folder: e.folder?.id ?? null, folderName: e.folder?.name ?? null } : null;
+    }, { n: sessionName, beforeIds });
     try {
       const shell = await openHub(page);
       await scopeHub(shell, page, "unfiled");
@@ -91,21 +101,23 @@ test.describe("37 sessions in campaigns", () => {
       await expect(dialog).toBeVisible();
       await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
       await page.keyboard.press("Escape");
-      await settle(page, 1200);
 
-      const created = await page.evaluate(({ n, beforeIds }) => {
-        const e = game.journal.find((j) => j.name === n && !beforeIds.includes(j.id));
-        return e ? { id: e.id, folder: e.folder?.id ?? null, folderName: e.folder?.name ?? null } : null;
-      }, { n: sessionName, beforeIds });
+      await expect.poll(async () => (await readCreated())?.folder ?? null, { timeout: 10_000 }).not.toBeNull();
+      const created = await readCreated();
       expect(created).toBeTruthy();
-      createdId = created.id;
       const fallback = await fallbackCampaignId(page);
       expect(fallback).toBeTruthy();
       expect(created.folder).toBe(fallback);
       expect(created.folderName).toBe("New Campaign");
       assertNoConsoleErrors(errors);
     } finally {
-      if (createdId) await page.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, createdId).catch(() => {});
+      // The "New session" has no TT- name, so no sweep would reclaim it (and
+      // it would keep the fallback unreclaimable): delete every same-named
+      // journal not in the pre-test snapshot, even when an assertion failed.
+      await page.evaluate(async ({ n, beforeIds }) => {
+        const ids = game.journal.filter((j) => j.name === n && !beforeIds.includes(j.id)).map((j) => j.id);
+        if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
+      }, { n: sessionName, beforeIds }).catch(() => {});
     }
   });
 

@@ -583,16 +583,26 @@ export async function fallbackCampaignId(page) {
  * labelled; a "New
  * Campaign" holding real content is left alone. Clears autoCaptureCampaign
  * if it pointed at the deleted folder. Returns the deleted name or null.
+ *
+ * The delete never reaches wider than what was inspected: it refuses a
+ * fallback with any subfolder (the suite never makes one), refuses when the
+ * folder tree holds a journal the member scan did not enumerate, and the
+ * delete step re-reads the folder and re-checks the same invariant (and the
+ * same member ids) in-page right before deleting, closing the window between
+ * snapshot and delete.
  */
 export async function cleanupFallbackCampaign(page, { prefix = TT_PREFIX } = {}) {
-  const snapshot = await page.evaluate(async () => {
+  // In-page reader shared by both steps (serialised into each evaluate).
+  const readFallback = async () => {
     const M = "mej-campaign-companion";
     const { campaignOf, isCampaignPortal, isTimelineJournal, isNotesEntry } = await import(`/modules/${M}/scripts/logic/campaigns.mjs`);
     const { readNotes } = await import(`/modules/${M}/scripts/data/notes-store.mjs`);
     const name = game.i18n.localize("MEJCampaignCompanion.campaign.fallbackName");
     const folder = game.folders.find((f) => f.type === "JournalEntry" && !f.folder && f.name === name && !!f.getFlag(M, "campaign"));
     if (!folder) return null;
+    const inTree = (e) => { for (let f = e.folder ?? null; f; f = f.folder ?? null) if (f.id === folder.id) return true; return false; };
     const members = game.journal.filter((e) => campaignOf(e)?.id === folder.id).map((e) => ({
+      id: e.id,
       name: e.name,
       portal: isCampaignPortal(e),
       timeline: isTimelineJournal(e),
@@ -600,18 +610,38 @@ export async function cleanupFallbackCampaign(page, { prefix = TT_PREFIX } = {})
       notes: isNotesEntry(e),
       noteCount: isNotesEntry(e) ? readNotes(folder).length : 0
     }));
-    return { id: folder.id, members };
-  });
-  if (!snapshot || !fallbackCampaignReclaimable(snapshot.members, prefix)) return null;
-  return page.evaluate(async (id) => {
+    return {
+      id: folder.id,
+      members,
+      childFolders: game.folders.filter((f) => f.folder?.id === folder.id).length,
+      treeCount: game.journal.filter(inTree).length
+    };
+  };
+  const snapshot = await page.evaluate(`(${readFallback.toString()})()`);
+  if (!snapshot) return null;
+  if (snapshot.childFolders > 0 || snapshot.treeCount !== snapshot.members.length) return null;
+  if (!fallbackCampaignReclaimable(snapshot.members, prefix)) return null;
+  return page.evaluate(`(async ({ expectId, expectMembers, prefix }) => {
     const M = "mej-campaign-companion";
-    const f = game.folders.get(id);
-    if (!f) return null;
+    const now = await (${readFallback.toString()})();
+    if (!now || now.id !== expectId) return null;
+    if (now.childFolders > 0 || now.treeCount !== now.members.length) return null;
+    const ids = now.members.map((m) => m.id).sort();
+    if (ids.length !== expectMembers.length || ids.some((id, i) => id !== expectMembers[i])) return null;
+    // Same invariant as sweep-rules.mjs fallbackCampaignReclaimable.
+    const ok = now.members.every((m) => {
+      if (m.portal) return true;
+      if (m.notes) return (m.noteCount ?? 0) === 0;
+      if (m.timeline) return (m.timepointLabels ?? []).every((l) => typeof l === "string" && l.startsWith(prefix));
+      return typeof m.name === "string" && m.name.startsWith(prefix);
+    });
+    if (!ok) return null;
+    const f = game.folders.get(expectId);
     const name = f.name;
     await f.delete({ deleteSubfolders: true, deleteContents: true });
-    if (game.settings.get(M, "autoCaptureCampaign") === id) await game.settings.set(M, "autoCaptureCampaign", "");
+    if (game.settings.get(M, "autoCaptureCampaign") === expectId) await game.settings.set(M, "autoCaptureCampaign", "");
     return name;
-  }, snapshot.id);
+  })(${JSON.stringify({ expectId: snapshot.id, expectMembers: snapshot.members.map((m) => m.id).sort(), prefix })})`);
 }
 
 /**
