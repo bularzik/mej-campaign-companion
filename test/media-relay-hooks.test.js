@@ -89,4 +89,17 @@ describe("handleUploadRequest", () => {
     expect(uploadCompanionFile).toHaveBeenCalledTimes(1);
     expect(emitted[0].msg.path).toContain("uploads/");
   });
+
+  it("accepts a session page whose in-memory type MEJ rewrote to 'session' (0.27.0 post-create update)", async () => {
+    vi.stubGlobal("fromUuid", vi.fn(async () => {
+      const page = new FakeJournalEntryPage();
+      page.type = "session";
+      page._source = { type: "mej-campaign-companion.session" };
+      page.parent = { testUserPermission: () => true };
+      return page;
+    }));
+    await handleUploadRequest(validPayload({ requestId: "req6" }));
+    expect(uploadCompanionFile).toHaveBeenCalledTimes(1);
+    expect(emitted[0].msg.path).toContain("uploads/");
+  });
 });

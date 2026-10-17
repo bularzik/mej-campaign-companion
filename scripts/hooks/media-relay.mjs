@@ -38,6 +38,7 @@ import {
   isSafeRelayPath, MAX_RELAY_FILE_BYTES
 } from "../logic/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
+import { storedPageType } from "../logic/mej-type.mjs";
 
 const RELAY_TIMEOUT_MS = 30_000;
 
@@ -132,7 +133,7 @@ export async function handleUploadRequest(payload) {
   const session = await fromUuid(outcome.request.groupId).catch(() => null);
   if (
     !(session instanceof JournalEntryPage) ||
-    session.type !== SESSION_DOCUMENT_TYPE ||
+    storedPageType(session) !== SESSION_DOCUMENT_TYPE ||
     !session.parent?.testUserPermission(sender, "OBSERVER")
   ) {
     console.debug(
