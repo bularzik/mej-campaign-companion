@@ -3,12 +3,12 @@
 ## 0.28.0 (2026-10-17)
 
 ### Added
-- Sessions always live in a campaign. A session created with no campaign chosen — Hub New Session with the prompt dismissed, the sidebar's New Entry, the API, an import — is filed into a campaign named "New Campaign" (created once, reused while a root campaign of that exact name exists). Unfiled sessions are moved into a "New Campaign" campaign the first time a GM loads the world. Sessions in your own plain folders are never moved.
+- Sessions always live in a campaign. A session created with no campaign chosen — Hub New Session with the prompt dismissed, the sidebar's New Entry, the API — is filed into a campaign named "New Campaign" (created once, reused while a root campaign of that exact name exists). Unfiled sessions are moved into a "New Campaign" campaign the first time a GM loads the world. Sessions in your own plain folders are never moved.
 - Knowledge rail: the knowledge panel is now a collapsible right-hand rail (vertical "Knowledge" tab, keyboard-focusable) that pushes the page text narrower while open; it stays available while editing. Open/closed is remembered per client as before. On Foundry 13 with stock MEJ 13.06 the rail appears in the shell only; a popped-out sheet gets no panel.
 - Player Hub: the campaign picker lists only the campaigns a player can see (no All / Unfiled / New Campaign); it opens on the remembered campaign or the first one, and "No campaigns yet" when none is visible. Search all widens only the search across those campaigns.
 
 ### Changed
-- The companion never creates a world-level "Campaign Timeline" any more; a world that already has one keeps showing it. Add Timepoint, auto-capture and imports with no campaign use the "New Campaign" campaign's timeline.
+- The companion never creates a world-level "Campaign Timeline" any more; a world that already has one keeps showing it. Add Timepoint and auto-capture with no campaign use the "New Campaign" campaign's timeline.
 - Session tab: the "Drag an Actor here" hint shows to anyone who can edit the session — GM or owning player — so players who manage attendees are told how. View-only players see "No attendees recorded yet."
 - Start Session: dismissing its campaign prompt still starts nothing (unchanged); only New Session falls back to a created campaign.
 

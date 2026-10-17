@@ -17,7 +17,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 - The recap is a single document. Owners edit it through Foundry's collaborative editor, so simultaneous owners see each other's edits; everyone else reads it. A save raised by another field on the sheet (session number, date) leaves the recap and GM notes untouched, and open Session views refresh when another owner saves the recap.
 - Sessions are identified by their native page type, never by MEJ's type flag — see [Running without the MEJ extension API](#running-without-the-mej-extension-api-050).
 - The Hub's **New session** button creates one in both modes. Walkthrough: [GM Guide — Running your first session](docs/gm-guide.md#running-your-first-session).
-- Sessions always live in a campaign. A session created with no campaign chosen — from the Hub, the sidebar's New Entry, the API or an import — is filed by the GM's client into a campaign named **New Campaign** (created once, reused while a root campaign of that name exists; rename it like any folder). Sessions you placed in your own plain folders are left alone. Unfiled sessions that already exist are moved the first time a GM loads the world. The companion no longer creates a world-level timeline.
+- Sessions always live in a campaign. A session created with no campaign chosen — from the Hub, the sidebar's New Entry or the API — is filed by the GM's client into a campaign named **New Campaign** (created once, reused while a root campaign of that name exists; rename it like any folder). Sessions you placed in your own plain folders are left alone. Unfiled sessions that already exist are moved the first time a GM loads the world. The companion no longer creates a world-level timeline.
 
 ### Session notes and the current session
 
@@ -66,7 +66,7 @@ The rest of this README is the technical reference: exact feature semantics, tru
 
 - **Tags and attributes** — custom tags and key/value attributes on MEJ entries, edited in the knowledge rail on the right of each sheet (click the vertical **Knowledge** tab to open or close it; the text column re-flows while it is open; on Foundry 13 with stock MEJ 13.06 the rail is shell-only, since a popped-out sheet gets no panel). An attribute row marked `playerHidden` is kept off player sheets and out of player searches immediately.
 - **Backlinks** — the panel's "Mentioned in" section lists the entries that link to this one through `@UUID` links, updates live, lists only sources in the entry's campaign scope (its campaign plus unfiled entries), and feeds the mention-count badges on the Hub Entries pane. Plain-text names count only once auto-link has turned them into links.
-- **Knowledge bar** — the panel collapses to a one-line bar summarizing what it holds. The collapsed state is per client (`knowledgePanelCollapsed`) and applies to every sheet. The expanded panel is capped at half the pane and scrolls, and paints its own surface under a dark colour scheme.
+- **Knowledge rail** — closed, it is a vertical **Knowledge** tab on the sheet's right edge showing the summary counts of what the panel holds; open, it is a right-hand rail (about 300 px, at most 40% of the sheet) that pushes the page text narrower, scrolls internally, and paints its own surface under a dark colour scheme. The choice is remembered per client (`knowledgePanelCollapsed`), applies to every sheet, and defaults to open.
 - **Relationship graph** — the Hub's Graph pane draws entries connected through MEJ's `relationships` flags, with vendored d3-force layout. It follows the campaign picker; **Whole campaign** and **Focus** (one entry and its direct connections) modes; an optional dashed overlay of `@UUID` mention edges; nodes draw the entry's own picture or a per-type placeholder. It is capped at the 200 most-connected entries and says so when the cap applies. A player's graph shows only relationships revealed to them. Party relationships draw as dotted lines, toggled by **Show party relationships**.
 - Mentions and relationships are separate layers: mentions are derived from links, relationships are curated on MEJ's Relationships tab. The module never turns one into the other.
 
@@ -232,7 +232,7 @@ Twenty settings are registered: eight visible in the module settings menu, all w
 | `warnPlayerAccess` | Yes | On | Warn a GM at login when Monk's Enhanced Journal's "Allow players to use Enhanced Journal" is off (Campaign Companion doesn't work properly for players without it), and offer to turn it on. Ticking "Don't show this again" in the dialog turns this setting off. |
 | `playerConnectionsEnabled` | Yes | On | Players can add party relationships: campaign Contributors get **Add relationship**, the drop target and editable party labels on the Relationships tab. Off makes party relationships read-only for players; existing ones still show. |
 | `autoStartSession` | Yes | Off | Offer to start a session at login: when a GM logs in and a campaign has no open session and none started today, ask once whether to start one. Never starts silently. |
-| `timelineJournalId` | No (internal) | `""` | Legacy: the id of the world-singleton "Campaign Timeline" JournalEntry used by a world with no campaigns. Adopting the world into a campaign moves that journal into the campaign and clears the setting. Don't edit by hand. |
+| `timelineJournalId` | No (internal) | `""` | Legacy: the id of the world-singleton "Campaign Timeline" JournalEntry, kept for worlds that already have one. Adopting the world into a campaign moves that journal into the campaign and clears the setting. Don't edit by hand. |
 | `savedQueries` | No (internal) | `[]` | Saved dashboard queries managed from the Hub Dashboards tab. Not user-facing; edit only via the Hub UI. |
 | `playerGroups` | No (internal) | `[]` | Named player groups managed from the Hub Secrets tab. Not user-facing; edit only via the Hub UI. |
 | `forceNativeMode` | No (internal) | Off | Client-scoped. Ignore the MEJ extension API and use native mode (testing / escape hatch). |
@@ -247,7 +247,7 @@ Twenty settings are registered: eight visible in the module settings menu, all w
 
 The authoritative list lives in `scripts/constants.mjs` (the setting-key constants) and `scripts/campaign-companion.mjs`'s `init` hook (the `game.settings.register` calls) — check those two files directly if this table and the code ever drift.
 
-A campaign's timeline journal is named `<campaign name> — Timeline`; the legacy world-singleton timeline that `timelineJournalId` points at is created with the literal name `"Campaign Timeline"` (`scripts/data/timeline-journal.mjs`). Both names are hardcoded English, not routed through `en.json`, the same deliberate scope as the docx field labels below.
+A campaign's timeline journal is named `<campaign name> — Timeline`; the legacy world-singleton timeline that `timelineJournalId` points at was created with the literal name `"Campaign Timeline"` (`scripts/data/timeline-journal.mjs`); existing worlds keep showing it. Both names are hardcoded English, not routed through `en.json`, the same deliberate scope as the docx field labels below.
 
 ## Docx round-trip notes
 
