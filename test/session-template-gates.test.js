@@ -5,9 +5,10 @@ const tpl = readFileSync(new URL("../templates/session.hbs", import.meta.url), "
 const between = (from, to) => tpl.slice(tpl.indexOf(from), tpl.indexOf(to, tpl.indexOf(from)));
 
 describe("session.hbs player gates (spec 2026-10-15 item 9)", () => {
-  it("the attendee drag hint renders only for GM editors", () => {
+  it("the attendee drag hint renders for anyone who can edit — GM or owning player (spec 2026-10-16 §4)", () => {
     const attendees = between('<div class="attendees-section">', '<div class="secrets-section">');
-    expect(attendees).toMatch(/\{\{#if \(and @root\.editable @root\.isGM\)\}\}\s*<li class="instruction">\{\{localize 'MEJCampaignCompanion\.session\.dragActorHint'\}\}<\/li>/);
+    expect(attendees).toMatch(/\{\{#if @root\.editable\}\}\s*<li class="instruction">\{\{localize 'MEJCampaignCompanion\.session\.dragActorHint'\}\}<\/li>/);
+    expect(attendees).not.toContain("(and @root.editable @root.isGM)");
   });
   it("the Secrets section renders for the GM, or for a player who has revealed secrets to read", () => {
     const idx = tpl.indexOf('<div class="secrets-section">');
