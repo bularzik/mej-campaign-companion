@@ -410,6 +410,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.state.portalScopedFor = this.document.uuid;
       const portalCampaign = campaignOf(this.document);
       if (portalCampaign) {
+        this.state.searchAllVisible = false;
         this.state.campaignId = portalCampaign.id;
         await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, portalCampaign.id);
       } else {
@@ -1401,6 +1402,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (!result) return;
     const campaign = await createCampaign(result.name, { ownershipDefault: result.baseline });
     if (campaign) {
+      this.state.searchAllVisible = false;
       this.state.campaignId = campaign.id;
       await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
       this.render({ parts: ["main"] });
@@ -1522,6 +1524,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     if (ids.length) await JournalEntry.updateDocuments(ids.map((id) => ({ _id: id, folder: campaign.id })));
     if (legacyId) await game.settings.set(MODULE_ID, TIMELINE_JOURNAL_SETTING, "");
     await game.settings.set(MODULE_ID, ADOPTION_PROMPTED_SETTING, true);
+    this.state.searchAllVisible = false;
     this.state.campaignId = campaign.id;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, campaign.id);
     ui.notifications.info(game.i18n.format(`${I18N}.hub.adopted`, { count: ids.length, name: campaign.name }));
@@ -1624,11 +1627,11 @@ export class CampaignHubPage extends EnhancedJournalSheet {
    * By default short-circuits to the sole campaign when exactly one exists
    * (fileIntoCampaign/fileAllShown/capture-target: there's nothing to
    * choose between, so no dialog is the right call). `alwaysPrompt: true`
-   * (onNewSession only) disables that short-circuit - RULING: a new
-   * session's destination is a real decision even with one campaign in the
-   * world, since the alternative is staying unfiled, and skipping the
-   * dialog would mean skipping the cancel-to-stay-unfiled path too.
-   * `silent` suppresses the zero-campaign warning for a caller that falls
+   * (passed by onNewSession and onStartSession) disables that short-circuit
+   * - RULING: a session's destination is a real decision even with one
+   * campaign in the world. Cancelling New Session's prompt files the new
+   * session into the fallback campaign ("New Campaign", §1c); cancelling
+   * Start Session's prompt starts nothing (§1h). `silent` suppresses the zero-campaign warning for a caller that falls
    * back instead.
    */
   static async promptCampaignChoice(title, { alwaysPrompt = false, silent = false } = {}) {
@@ -1675,6 +1678,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
       this.render({ parts: ["main"] });
       return;
     }
+    this.state.searchAllVisible = false;
     this.state.campaignId = "";
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, "");
     this.render({ parts: ["main"] });
@@ -2295,6 +2299,7 @@ export class CampaignHubPage extends EnhancedJournalSheet {
 
 /** Set the Hub's campaign scope without opening it (folder context menu, spec C §2). */
 export function setHubScope(campaignId) {
+  HUB_STATE.searchAllVisible = false;
   HUB_STATE.campaignId = campaignId;
 }
 
@@ -2308,6 +2313,7 @@ export async function showGraphFor(uuid) {
   const entry = doc?.documentName === "JournalEntryPage" ? doc.parent : doc;
   const cid = entry ? campaignIdOf(entry) : null;
   if (cid) {
+    HUB_STATE.searchAllVisible = false;
     HUB_STATE.campaignId = cid;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
   }
@@ -2327,6 +2333,7 @@ export async function openTimelineInHub(journal) {
   if (!journal || !isTimelineJournal(journal)) return;
   const cid = campaignIdOf(journal);
   if (cid) {
+    HUB_STATE.searchAllVisible = false;
     HUB_STATE.campaignId = cid;
     await game.settings.set(MODULE_ID, HUB_CAMPAIGN_SCOPE_SETTING, cid);
   }

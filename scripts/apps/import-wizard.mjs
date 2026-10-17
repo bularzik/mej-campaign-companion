@@ -24,7 +24,6 @@ import { loadVendorGlobal } from "../integrations/vendor-loader.mjs";
 import { uploadInlineImages } from "./import-upload.mjs";
 import { createMejEntry } from "../data/mej-entry.mjs";
 import { ensureTimelineJournal } from "../data/timeline-journal.mjs";
-import { ensureFallbackCampaign } from "../hooks/session-filing.mjs";
 import { getCampaigns, createCampaign, baselineOwnership } from "../data/campaign-store.mjs";
 import * as Timepoints from "../data/timepoints.mjs";
 import { queueFiling } from "../logic/filing-queue.mjs";
@@ -682,9 +681,8 @@ export class ImportWizard extends HandlebarsApplicationMixin(ApplicationV2) {
           if (page.timepoint) {
             // Spec D: this resolves the campaign's DEFAULT timeline; auto-filing
             // never prompts and never follows the Hub's currently-viewed one.
-            // Importing with no campaign chosen: timepoints go to the fallback
-            // campaign's timeline (spec 2026-10-16 §1e; a world timeline is never created).
-            timeline ??= await ensureTimelineJournal(campaign ?? await ensureFallbackCampaign());
+            // `campaign` is always set here: the wizard creates its own when none is chosen.
+            timeline ??= await ensureTimelineJournal(campaign);
             if (timeline) {
               let filingError = null;
               await queueFiling(async () => {
