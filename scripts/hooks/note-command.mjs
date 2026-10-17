@@ -53,6 +53,8 @@ async function echo(result) {
 
 export function registerNoteCommand() {
   // chatMessage(chatLog, message, chatData): returning false suppresses the message (Foundry 13/14).
+  // Foundry 14's prose-mirror input sends HTML (`<p>/note …</p>`);
+  // parseNoteCommand reads it as text the way ChatLog.parse does.
   Hooks.on("chatMessage", (log, message) => {
     const parsed = parseNoteCommand(message);
     if (!parsed) return true;

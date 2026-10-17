@@ -7,6 +7,23 @@
   position: relative;
 }
 
+/* Session tab: GM Notes is the last item of MEJ's `.tab-inner` flexcol, which
+   is `height:100%; overflow:hidden` (monks-journal-sheet.css:569-574), and
+   MEJ's `.editor-parent` is `flex:1; overflow:hidden` - so its min-height
+   resolves to 0 and number, date, attendees and secrets above it squeeze it
+   to nothing. The pencil (absolute, top:4px) is then clipped by its own
+   parent and a click lands on .secrets-section / the sheet instead
+   (29-readability, 0.27.0 live run). Keep the block at a usable height and
+   let the tab body scroll to it. `.sheet .sheet-body .tab` only clears MEJ's
+   specificity. */
+.monks-journal-sheet.sheet .sheet-body .tab .tab-inner.session-details {
+  overflow-y: auto;
+}
+
+.monks-journal-sheet.sheet .session-details > .editor-parent.gm-notes {
+  flex: 1 0 12em;
+}
+
 /* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
    so Foundry's own HTMLProseMirrorElement builds itself a second, native
    edit/save toggle button (prosemirror-editor.mjs #_buildElements,
@@ -687,6 +704,18 @@
   min-height: 0;
   max-height: 50%;
   overflow-y: auto;
+}
+
+/* An open editor needs the sheet's height more than the knowledge panel
+   does. The panel shares the sheet's flex column with .sheet-body, and MEJ
+   clips .sheet-body (overflow: hidden): with the panel expanded on a 900px
+   window the place sheet's body shrank to 58px, the ProseMirror toolbar took
+   ~50px of it, and the editor's first text line sat below the clipped body -
+   a right-click there hit the sheet itself, outside .editor-parent, so
+   MEJ's context menu never opened (spec 24 edit mode, 2026-10-16). The panel
+   comes back as soon as the editor is saved or closed. */
+.monks-journal-sheet.sheet:has(.editor-parent.editing) .mej-cc-knowledge {
+  display: none;
 }
 
 /* Collapsed state: only the bar stays (spec 2026-09-04 §D). */
@@ -1479,6 +1508,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    takes the image's colour underneath, so give them the field surface. */
 .monks-enhanced-journal .mej-cc-hub-container button,
 .monks-enhanced-journal .session-container .mej-cc-session-header-compact button,
+.monks-enhanced-journal .session-container .mej-cc-tonight button,
 .monks-enhanced-journal .session-container section.secret > button.reveal,
 .monks-enhanced-journal .mej-cc-secret-audience {
   color: var(--mej-cc-field-ink);
@@ -1661,7 +1691,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-tonight { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; margin: 0 0 6px; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); border-radius: 4px; color: var(--mej-cc-ink); }
 .mej-cc-tonight-head { display: flex; align-items: center; gap: 10px; }
 .mej-cc-tonight-title { font-weight: 700; }
-.mej-cc-tonight-none { opacity: .8; font-weight: 400; }
+.mej-cc-tonight-none { color: var(--mej-cc-ink-muted); font-weight: 400; }
 .mej-cc-tonight-meta { color: var(--mej-cc-ink-muted); font-size: .9em; flex: 1; }
 .mej-cc-tonight-capture { display: flex; gap: 4px; }
 .mej-cc-tonight-capture input { flex: 1; }

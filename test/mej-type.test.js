@@ -28,6 +28,16 @@ describe("isSessionDoc", () => {
     expect(isSessionDoc(null)).toBe(false);
     expect(isSessionDoc(undefined)).toBe(false);
   });
+
+  it("is true for a session page whose in-memory type MEJ rewrote to the short key", () => {
+    // MEJ's fixType() sets page.type = "session" after an update; _source keeps the subtype.
+    const rewritten = { type: "session", _source: { type: "mej-campaign-companion.session" } };
+    expect(isSessionDoc(rewritten)).toBe(true);
+  });
+
+  it("is false for a page whose stored type is not the session subtype even if the in-memory type says session", () => {
+    expect(isSessionDoc({ type: "session", _source: { type: "monks-enhanced-journal.person" } })).toBe(false);
+  });
 });
 
 describe("mejTypeWith", () => {

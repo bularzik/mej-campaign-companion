@@ -14,6 +14,18 @@
 import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
 
 /**
+ * The page type as stored. MEJ's fixType() rewrites the in-memory `type` of
+ * its pages to the short key ("session", "person", …) after every update,
+ * while `_source.type` keeps the real subtype — MEJ itself treats _source
+ * as authoritative. Compare against this, never against `doc.type` alone.
+ * @param {object|null|undefined} doc
+ * @returns {string|undefined}
+ */
+export function storedPageType(doc) {
+  return doc?._source?.type ?? doc?.type;
+}
+
+/**
  * Is this document one of our Session pages (or the single-page entry
  * wrapping one)? Mirrors getMEJType's contract: page OR entry, and an entry
  * only counts when it has exactly one page (MEJ's own rule).
@@ -22,10 +34,10 @@ import { SESSION_TYPE, SESSION_DOCUMENT_TYPE } from "../constants.mjs";
  */
 export function isSessionDoc(doc) {
   if (!doc) return false;
-  if (doc.type === SESSION_DOCUMENT_TYPE) return true;
+  if (storedPageType(doc) === SESSION_DOCUMENT_TYPE) return true;
   const pages = doc.pages?.contents;
   if (!Array.isArray(pages) || pages.length !== 1) return false;
-  return pages[0]?.type === SESSION_DOCUMENT_TYPE;
+  return storedPageType(pages[0]) === SESSION_DOCUMENT_TYPE;
 }
 
 /**

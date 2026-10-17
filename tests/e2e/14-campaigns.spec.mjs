@@ -13,7 +13,7 @@
 // comment for why real content is never mutated there).
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals,
+  login, TT_PREFIX, withGmPage, timelineJournalIds, cleanupTimelineJournals, unfiledBootstrapEntryId,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   gotoGame, KNOWN_MEJ_SESSION_ICON_404, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG
 } from "./helpers/foundry.mjs";
@@ -26,13 +26,10 @@ const DOCX_PATH = "/Users/danbularzik/Claude/Projects/campaign-record/examples/R
 async function openHub(page) {
   await page.locator('[data-tab="journal"][data-action="tab"]').click();
   await settle(page, 200);
-  // Not contents[0]: a timeline journal refuses to open in the MEJ shell
-  // (hooks/timeline-open.mjs, spec 2026-09-03 §C), so picking one bootstraps
-  // nothing and every later shell locator times out. See 16-multi-timeline's
-  // openHub() for the full account.
-  const anyEntryId = await page.evaluate(
-    () => game.journal.contents.find((e) => !e.getFlag("mej-campaign-companion", "timeline"))?.id
-  );
+  // Unfiled on purpose: since 0.27.0 the Hub button scopes the Hub to the
+  // campaign of the entry the shell shows, which would hide this spec's
+  // unfiled TT- fixtures. See unfiledBootstrapEntryId().
+  const anyEntryId = await unfiledBootstrapEntryId(page);
   await page.evaluate(async (id) => {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
   }, anyEntryId);
@@ -663,27 +660,39 @@ test.describe.serial("14 campaigns", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
-    const beforeIds = await page.evaluate(() => game.journal.filter((j) => j.name === "New Session").map((j) => j.id));
+    // The default name is the localized label, not a literal: 0.27.0's
+    // wording pass (UI-review spec 2026-10-15 §5.7, item 17) recased it to
+    // "New session" (lang/en.json hub.newSession).
+    const sessionName = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.newSession"));
+    const beforeIds = await page.evaluate((n) => game.journal.filter((j) => j.name === n).map((j) => j.id), sessionName);
 
-    const shell = await openHub(page);
-    await scopeHub(shell, page, "unfiled");
-    await shell.locator("button.mej-cc-new-session").click();
-    // Two (or more) campaigns exist by now (Alpha + Beta) - promptCampaignChoice()
-    // only short-circuits without a dialog when zero or exactly one exists.
-    const dialog = page.locator("dialog.application").last();
-    await expect(dialog).toBeVisible();
-    await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
-    await page.keyboard.press("Escape");
-    await settle(page, 500);
+    try {
+      const shell = await openHub(page);
+      await scopeHub(shell, page, "unfiled");
+      await shell.locator("button.mej-cc-new-session").click();
+      // Two (or more) campaigns exist by now (Alpha + Beta) - promptCampaignChoice()
+      // only short-circuits without a dialog when zero or exactly one exists.
+      const dialog = page.locator("dialog.application").last();
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('select[name="campaign"]')).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await settle(page, 500);
 
-    const afterList = await page.evaluate(() =>
-      game.journal.filter((j) => j.name === "New Session").map((j) => ({ id: j.id, folder: j.folder?.id ?? null })));
-    const created = afterList.find((e) => !beforeIds.includes(e.id));
-    expect(created).toBeTruthy();
-    expect(created.folder).toBeNull();
-
-    await page.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, created.id);
-    assertNoConsoleErrors(errors);
+      const afterList = await page.evaluate((n) =>
+        game.journal.filter((j) => j.name === n).map((j) => ({ id: j.id, folder: j.folder?.id ?? null })), sessionName);
+      const created = afterList.find((e) => !beforeIds.includes(e.id));
+      expect(created).toBeTruthy();
+      expect(created.folder).toBeNull();
+      assertNoConsoleErrors(errors);
+    } finally {
+      // The loose "New session" has no TT- name, so no sweep would reclaim it:
+      // delete every same-named journal that was not in the pre-test snapshot,
+      // even when an assertion above failed.
+      await page.evaluate(async ({ n, beforeIds }) => {
+        const ids = game.journal.filter((j) => j.name === n && !beforeIds.includes(j.id)).map((j) => j.id);
+        if (ids.length) await JournalEntry.implementation.deleteDocuments(ids);
+      }, { n: sessionName, beforeIds }).catch(() => {});
+    }
   });
 
   test("7. All-mode timeline stacks never lazily create a journal for a campaign no GM has scoped yet", async ({ page }) => {
@@ -705,8 +714,14 @@ test.describe.serial("14 campaigns", () => {
 
       const gammaStack = shell.locator(".mej-cc-timeline-stack", { hasText: `${TT_PREFIX}Gamma` });
       await expect(gammaStack).toHaveCount(1);
-      await expect(gammaStack).toContainText(/hasn't been created yet/i);
-      await expect(gammaStack.locator("button.mej-cc-add-timepoint")).toHaveCount(0);
+      // The empty state is the localized hub.timelineEmptyState ("No timeline
+      // yet." since 0.27.0: the UI-review spec 2026-10-15 §5.1 drops the old
+      // "...next time a GM opens this tab" line). A GM also gets Add timepoint
+      // on an empty stack since #45 (dfe27e9): it creates the journal only
+      // when clicked, so rendering still creates nothing - asserted below.
+      const emptyState = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.timelineEmptyState"));
+      await expect(gammaStack.locator("p.instruction")).toHaveText(emptyState);
+      await expect(gammaStack.locator("button.mej-cc-add-timepoint")).toHaveCount(1);
 
       const journalExists = await page.evaluate((id) => {
         const folder = game.folders.get(id);

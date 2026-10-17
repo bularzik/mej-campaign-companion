@@ -100,6 +100,14 @@ async function selectAndOpenMenu(page, text, nth = 0, root = ".editor-parent .ed
     const rect = r.getBoundingClientRect();
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   }, { text, nth, root });
+  // MEJ's ContextMenu is bound to .editor-parent and Foundry returns silently
+  // when the right-click target is outside it, so a squeezed/clipped editor
+  // would only show up as "#context-menu count 0". Fail with the layout cause.
+  const hit = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return el?.closest(".editor-parent") ? null : (el ? (el.getAttribute?.("class") || el.tagName) : "nothing");
+  }, box);
+  if (hit) throw new Error(`selectAndOpenMenu: right-click point is covered by <${hit}>, not the editor — layout squeeze`);
   await page.mouse.click(box.x, box.y, { button: "right" });
 }
 const menuItem = (page) => page.locator("#context-menu li", { hasText: MENU_LABEL });

@@ -469,6 +469,79 @@ export async function ensureMejPlayerAccess(page) {
   }, MEJ_MODULE_ID);
 }
 
+/**
+ * A journal entry that bootstraps the MEJ shell WITHOUT scoping the Hub.
+ * Since 0.27.0 the shell's Hub button scopes the Hub to the campaign of the
+ * entry the shell is showing (spec 2026-10-15 item 4; hub-open-scope.mjs) and
+ * only leaves the persisted scope alone when that entry is unfiled. World A's
+ * first entry lives in the owner's Radiant Citadel campaign, so bootstrapping
+ * from `contents[0]` hid every unfiled TT- fixture from search/graph/index.
+ * Timeline journals are skipped too: they refuse to open in the shell
+ * (hooks/timeline-open.mjs). Creates a TT- text entry when none qualifies;
+ * the TT- sweep reclaims it.
+ */
+export async function unfiledBootstrapEntryId(page) {
+  return page.evaluate(async () => {
+    const M = "mej-campaign-companion";
+    const MEJ = "monks-enhanced-journal";
+    // Plain entries only: a spec's own TT- fixtures (usually MEJ-typed people,
+    // sessions, ...) render a typed sheet in the shell that lacks the generic
+    // page markup the specs wait on, and they exist before the shell opens.
+    const ok = (e) => !e.folder && !e.getFlag(M, "timeline") && !e.getFlag(M, "campaign")
+      && (!e.name.startsWith("TT-") || e.name === "TT-Hub Bootstrap")
+      && e.pages.size > 0
+      && !e.pages.some((p) => p.type?.startsWith(`${M}.`) || p.type?.startsWith(`${MEJ}.`) || p.getFlag(MEJ, "type"));
+    const existing = game.journal.contents.find(ok);
+    if (existing) return existing.id;
+    const created = await JournalEntry.create({
+      name: "TT-Hub Bootstrap",
+      pages: [{ name: "TT-Hub Bootstrap", type: "text", text: { content: "<p>Shell bootstrap for the e2e suite.</p>" } }]
+    });
+    return created.id;
+  });
+}
+
+/**
+ * As a GM page: create a TT- campaign folder whose baseline lets players
+ * observe its members. Since 0.27.0 a player who can see exactly one campaign
+ * is locked to it and never sees unfiled entries (UI-review spec 2026-10-15
+ * §5.1/§5.6); on World A that one campaign is Radiant Citadel. Filing a
+ * spec's player-visible fixtures here gives the player a campaign that holds
+ * them; scope the player's Hub to it with scopeHubToCampaign (never rely on
+ * "All", which players are not meant to get). Delete it with deleteFoldersById.
+ */
+export async function createTtCampaignFolder(page, name) {
+  return page.evaluate(async (n) => (await Folder.create({
+    name: n, type: "JournalEntry",
+    flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
+  })).id, name);
+}
+
+/**
+ * On a player seat with the Hub open: scope it to one campaign (a folder from
+ * createTtCampaignFolder) rather than relying on "All". The UI-review spec
+ * (2026-10-15, design doc ~lines 109/168) says players should not get All, so
+ * the player halves must not depend on it. When the player is locked to one
+ * campaign there is no picker and this is a no-op.
+ */
+export async function scopeHubToCampaign(page, folderId) {
+  const picker = page.locator('#MonksEnhancedJournal select[name="campaign-scope"]').first();
+  if (await picker.count() === 0) return false;
+  await picker.selectOption(folderId);
+  await settle(page, 500);
+  return true;
+}
+
+/** As a GM page: delete folders by id, with their subfolders and contents. Missing ids are skipped. */
+export async function deleteFoldersById(page, ids) {
+  await page.evaluate(async (list) => {
+    for (const id of list) {
+      const f = game.folders.get(id);
+      if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+  }, ids.filter(Boolean));
+}
+
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */
 export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
   await page.evaluate(async (p) => {
