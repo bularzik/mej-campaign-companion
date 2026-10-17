@@ -7,6 +7,23 @@
   position: relative;
 }
 
+/* Session tab: GM Notes is the last item of MEJ's `.tab-inner` flexcol, which
+   is `height:100%; overflow:hidden` (monks-journal-sheet.css:569-574), and
+   MEJ's `.editor-parent` is `flex:1; overflow:hidden` - so its min-height
+   resolves to 0 and number, date, attendees and secrets above it squeeze it
+   to nothing. The pencil (absolute, top:4px) is then clipped by its own
+   parent and a click lands on .secrets-section / the sheet instead
+   (29-readability, 0.27.0 live run). Keep the block at a usable height and
+   let the tab body scroll to it. `.sheet .sheet-body .tab` only clears MEJ's
+   specificity. */
+.monks-journal-sheet.sheet .sheet-body .tab .tab-inner.session-details {
+  overflow-y: auto;
+}
+
+.monks-journal-sheet.sheet .session-details > .editor-parent.gm-notes {
+  flex: 1 0 12em;
+}
+
 /* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
    so Foundry's own HTMLProseMirrorElement builds itself a second, native
    edit/save toggle button (prosemirror-editor.mjs #_buildElements,
