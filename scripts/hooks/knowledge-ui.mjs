@@ -1,5 +1,6 @@
 // Injects the Phase B "knowledge panel" (tags, attributes, Mentioned in)
-// into every MEJ-typed journal sheet, both shell-hosted and popped out.
+// into every MEJ-typed journal sheet, both shell-hosted and popped out,
+// mounted as a right-hand rail beside the sheet body (mountRail).
 // Injection hooks (no libWrapper - see the spec's §5 refinement):
 //  - "renderJournalPageSheet": fired by MEJ's shell at the end of
 //    renderSubSheet (apps/enhanced-journal.js:691) with the subsheet, its
@@ -201,13 +202,43 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // adopts it into the live document along with the listeners bound below.
   const panel = new DOMParser().parseFromString(html, "text/html").body.firstElementChild;
   bindPanel(panel, page, sheet, shellHosted);
-  bindCollapseBar(panel);
+  bindRailTab(panel);
   // A newer injection started while this one was rendering: it read at least
   // as fresh a document state, so let it own the element and drop this panel
   // rather than appending a second one.
   if (injectionTokens.get(element) !== token) return;
   element.querySelectorAll(":scope .mej-cc-knowledge").forEach((stale) => stale.remove());
-  element.appendChild(panel);
+  mountRail(element, panel);
+}
+
+/**
+ * Mount the panel as a right-hand rail (spec 2026-10-16 §3). The sheet body -
+ * MEJ's .sheet-container, or the companion's own .mej-cc-media-page - sits
+ * alone in its parent (MEJ's .journal-subsheet in the shell, .window-content
+ * on a popped-out sheet); that parent is marked .mej-cc-rail-row, which lays
+ * it out as a flex row, and the panel is appended beside the body. The body
+ * is never moved: re-parenting it disconnects and reconnects every
+ * <prose-mirror> inside, and Foundry 13's connectedCallback then throws in
+ * EditorView.updateState ("Cannot read properties of null (reading
+ * 'matchesNode')", stock gate 2026-10-17). Marking is idempotent across
+ * re-injections. In the shell a re-render replaces the parent wholesale; a
+ * popped-out window keeps its .window-content, where the mark alone changes
+ * nothing visible (the body is the row's only flex item and fills it). A page
+ * with no panel is never marked. A sheet with no body, or whose body
+ * shares its parent with other content (an unexpected template), gets the
+ * panel appended to the sheet as before.
+ */
+function mountRail(element, panel) {
+  const body = element.querySelector(".sheet-container, .mej-cc-media-page");
+  const row = body?.parentElement;
+  const alone = row && element.contains(row)
+    && [...row.children].every((child) => child === body || child.classList.contains("mej-cc-knowledge"));
+  if (!alone) {
+    element.appendChild(panel);
+    return;
+  }
+  row.classList.add("mej-cc-rail-row");
+  row.appendChild(panel);
 }
 
 async function saveAttributes(panel, page) {
@@ -347,27 +378,23 @@ function bindPanel(panel, page, sheet, shellHosted) {
   bindBacklinks(panel);
 }
 
-// Whole-panel collapse (spec 2026-09-04 §D): one client setting, read on
-// every injection, so the state follows the user across sheets, re-renders
-// and reloads. The inner <details> keep their own open/closed state.
-function bindCollapseBar(panel) {
-  const bar = panel.querySelector(".mej-cc-knowledge-bar");
-  if (!bar) return;
-  const toggle = async () => {
+// Whole-rail open/closed (spec 2026-09-04 §D, rail form 2026-10-16 §3): one
+// client setting, read on every injection, so the state follows the user
+// across sheets, re-renders and reloads. The inner <details> keep their own
+// open/closed state. A real <button> toggles on Enter/Space natively.
+function bindRailTab(panel) {
+  const tab = panel.querySelector(".mej-cc-knowledge-tab");
+  if (!tab) return;
+  tab.addEventListener("click", async (event) => {
+    event.preventDefault();
     const collapsed = !panel.classList.contains("collapsed");
     panel.classList.toggle("collapsed", collapsed);
-    bar.setAttribute("aria-expanded", String(!collapsed));
+    tab.setAttribute("aria-expanded", String(!collapsed));
     try {
       await game.settings.set(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING, collapsed);
     } catch (err) {
-      console.error(`${MODULE_ID} | saving the knowledge panel state failed`, err);
+      console.error(`${MODULE_ID} | saving the knowledge rail state failed`, err);
     }
-  };
-  bar.addEventListener("click", toggle);
-  bar.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    toggle();
   });
 }
 

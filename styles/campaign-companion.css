@@ -672,15 +672,101 @@
   height: 100%;
 }
 
-/* Knowledge panel: tags/attributes/Mentioned-in, appended to the bottom of
-   every MEJ-typed sheet (scripts/hooks/knowledge-ui.mjs). */
-.mej-cc-knowledge {
-  border-top: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
-  margin-top: 0.75em;
-  padding-top: 0.5em;
+/* Knowledge rail (spec 2026-10-16 §3). The panel sits in a right-hand rail
+   beside the sheet body, inside a flex row made only when a panel mounts
+   (knowledge-ui.mjs marks the parent of MEJ's .sheet-container - or of the
+   companion's .mej-cc-media-page - .mej-cc-rail-row and appends the panel
+   beside the body, never moving it). Pages without a panel keep MEJ's DOM
+   and layout untouched. Push, not overlay: the text
+   column re-flows narrower while the rail is open. */
+.monks-enhanced-journal .mej-cc-rail-row {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.monks-enhanced-journal .mej-cc-rail-row > .sheet-container,
+.monks-enhanced-journal .mej-cc-rail-row > .mej-cc-media-page {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Open: 300px, or 40% of the row on a sheet narrower than 750px, so the text
+   column keeps at least 320px on any sheet 534px or wider. */
+.monks-enhanced-journal .mej-cc-knowledge {
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 min(300px, 40%);
+  min-width: 0;
+  height: 100%;
+  border-left: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+}
+
+/* Closed: only the tab remains. */
+.monks-enhanced-journal .mej-cc-knowledge.collapsed {
+  flex: 0 0 auto;
+}
+
+.monks-enhanced-journal .mej-cc-knowledge-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.4em;
+  padding: 0.5em 0.6em;
+}
+
+.monks-enhanced-journal .mej-cc-knowledge.collapsed > .mej-cc-knowledge-body {
+  display: none;
+}
+
+/* The tab: a real button on the sheet's right edge, vertical text, keyboard
+   focusable (Enter/Space toggle natively). Three classes deep so it beats
+   MEJ's `.sheet.standard-form button:not(.reveal)` styling. */
+.monks-enhanced-journal .mej-cc-knowledge .mej-cc-knowledge-tab {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  width: auto;
+  height: 100%;
+  margin: 0;
+  padding: 0.6em 0.2em;
+  writing-mode: vertical-rl;
+  line-height: 1;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  border: 0;
+  border-left: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
+  border-radius: 0;
+}
+
+.monks-enhanced-journal .mej-cc-knowledge .mej-cc-knowledge-tab:focus-visible {
+  outline: 2px solid var(--color-shadow-primary, #ff6400);
+  outline-offset: -2px;
+}
+
+.monks-enhanced-journal .mej-cc-knowledge-summary {
+  font-weight: normal;
+  font-size: 0.9em;
+  opacity: 0.75;
+}
+
+.monks-enhanced-journal .mej-cc-knowledge-chevron {
+  transition: transform 120ms ease;
+}
+
+/* Open: the chevron points at the rail (right); closed: it points back into the sheet. */
+.monks-enhanced-journal .mej-cc-knowledge.collapsed .mej-cc-knowledge-chevron {
+  transform: rotate(180deg);
 }
 
 .mej-cc-knowledge summary {
@@ -691,60 +777,6 @@
 .mej-cc-knowledge-empty {
   opacity: 0.7;
   font-style: italic;
-}
-
-/* Expanded, the panel never takes more than half of the sheet it sits in:
-   a person mentioned in thirty sessions used to grow the sheet by the whole
-   Mentioned-in list (nothing above the panel scrolls in MEJ's shell on
-   Foundry 13). The panel scrolls itself instead. Percentage against the
-   sheet's flex column (definite in MEJ's flexcol chain); min-height: 0 lets a
-   flex child actually shrink below its content. */
-.mej-cc-knowledge:not(.collapsed) {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 50%;
-  overflow-y: auto;
-}
-
-/* An open editor needs the sheet's height more than the knowledge panel
-   does. The panel shares the sheet's flex column with .sheet-body, and MEJ
-   clips .sheet-body (overflow: hidden): with the panel expanded on a 900px
-   window the place sheet's body shrank to 58px, the ProseMirror toolbar took
-   ~50px of it, and the editor's first text line sat below the clipped body -
-   a right-click there hit the sheet itself, outside .editor-parent, so
-   MEJ's context menu never opened (spec 24 edit mode, 2026-10-16). The panel
-   comes back as soon as the editor is saved or closed. */
-.monks-journal-sheet.sheet:has(.editor-parent.editing) .mej-cc-knowledge {
-  display: none;
-}
-
-/* Collapsed state: only the bar stays (spec 2026-09-04 §D). */
-.mej-cc-knowledge-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  cursor: pointer;
-  font-weight: bold;
-  user-select: none;
-}
-
-.mej-cc-knowledge-summary {
-  margin-left: auto;
-  font-weight: normal;
-  font-size: 0.9em;
-  opacity: 0.75;
-}
-
-.mej-cc-knowledge-chevron {
-  transition: transform 120ms ease;
-}
-
-.mej-cc-knowledge.collapsed > details {
-  display: none;
-}
-
-.mej-cc-knowledge.collapsed .mej-cc-knowledge-chevron {
-  transform: rotate(-90deg);
 }
 
 .mej-cc-tag-chips {
@@ -1285,7 +1317,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   background-color: var(--color-cool-5, #0b0a13);
 }
 
-/* The knowledge panel is appended below MEJ's own sheet content and sets no
+/* The knowledge rail sits beside MEJ's own sheet content and sets no
    colours of its own, so under a dark scheme it inherited the theme's light
    text - while MEJ 13.06's dark-themed shell still paints the parchment
    image behind it (measured 2026-09-22 on Foundry 13.351: text rgb(239,230,216)
@@ -1295,9 +1327,15 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .theme-dark .mej-cc-knowledge {
   background: rgba(11, 10, 19, 0.85);
   color: var(--color-text-primary, var(--color-light-2, #efe6d8));
-  border-top-color: var(--color-cool-4, #47474f);
-  border-radius: 4px;
-  padding: 0.5em 0.6em;
+  border-left-color: var(--color-cool-4, #47474f);
+}
+
+/* The rail tab sits on that same dark surface rather than a translucent
+   chip over it: the v13 stock gate reads the first painted background under
+   the title as opaque, and a 10%-white chip measured as white (1.24:1,
+   2026-10-17) although it paints near-black over the panel. */
+.theme-dark .mej-cc-knowledge .mej-cc-knowledge-tab {
+  background: transparent;
 }
 
 /* The graph draws on the window's dark surface in dark mode; the legacy
@@ -1482,7 +1520,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-index-name, .mej-cc-timepoint-label, .mej-cc-search-name, .mej-cc-dashboard-name,
   .mej-cc-row-campaign, .mej-cc-secret-source, .mej-cc-timeline-campaign),
 .monks-enhanced-journal .mej-cc-hub-container :is(label, legend, h3, h4, summary, .mej-cc-groups header),
-.monks-enhanced-journal .mej-cc-knowledge :is(summary, label, .mej-cc-knowledge-bar, .mej-cc-backlink-name, .mej-cc-attr-key-ro) {
+.monks-enhanced-journal .mej-cc-knowledge :is(summary, label, .mej-cc-knowledge-tab, .mej-cc-backlink-name, .mej-cc-attr-key-ro) {
   color: var(--mej-cc-ink);
 }
 
