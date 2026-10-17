@@ -660,7 +660,11 @@ test.describe.serial("14 campaigns", () => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
-    const beforeIds = await page.evaluate(() => game.journal.filter((j) => j.name === "New Session").map((j) => j.id));
+    // The default name is the localized label, not a literal: 0.27.0's
+    // wording pass (UI-review spec 2026-10-15 §5.7, item 17) recased it to
+    // "New session" (lang/en.json hub.newSession).
+    const sessionName = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.newSession"));
+    const beforeIds = await page.evaluate((n) => game.journal.filter((j) => j.name === n).map((j) => j.id), sessionName);
 
     const shell = await openHub(page);
     await scopeHub(shell, page, "unfiled");
@@ -673,8 +677,8 @@ test.describe.serial("14 campaigns", () => {
     await page.keyboard.press("Escape");
     await settle(page, 500);
 
-    const afterList = await page.evaluate(() =>
-      game.journal.filter((j) => j.name === "New Session").map((j) => ({ id: j.id, folder: j.folder?.id ?? null })));
+    const afterList = await page.evaluate((n) =>
+      game.journal.filter((j) => j.name === n).map((j) => ({ id: j.id, folder: j.folder?.id ?? null })), sessionName);
     const created = afterList.find((e) => !beforeIds.includes(e.id));
     expect(created).toBeTruthy();
     expect(created.folder).toBeNull();
@@ -702,8 +706,14 @@ test.describe.serial("14 campaigns", () => {
 
       const gammaStack = shell.locator(".mej-cc-timeline-stack", { hasText: `${TT_PREFIX}Gamma` });
       await expect(gammaStack).toHaveCount(1);
-      await expect(gammaStack).toContainText(/hasn't been created yet/i);
-      await expect(gammaStack.locator("button.mej-cc-add-timepoint")).toHaveCount(0);
+      // The empty state is the localized hub.timelineEmptyState ("No timeline
+      // yet." since 0.27.0: the UI-review spec 2026-10-15 §5.1 drops the old
+      // "...next time a GM opens this tab" line). A GM also gets Add timepoint
+      // on an empty stack since #45 (dfe27e9): it creates the journal only
+      // when clicked, so rendering still creates nothing - asserted below.
+      const emptyState = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.hub.timelineEmptyState"));
+      await expect(gammaStack.locator("p.instruction")).toHaveText(emptyState);
+      await expect(gammaStack.locator("button.mej-cc-add-timepoint")).toHaveCount(1);
 
       const journalExists = await page.evaluate((id) => {
         const folder = game.folders.get(id);

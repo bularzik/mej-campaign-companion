@@ -501,6 +501,32 @@ export async function unfiledBootstrapEntryId(page) {
   });
 }
 
+/**
+ * As a GM page: create a TT- campaign folder whose baseline lets players
+ * observe its members. Since 0.27.0 a player who can see exactly one campaign
+ * is locked to it and never sees unfiled entries (UI-review spec 2026-10-15
+ * §5.1/§5.6); on World A that one campaign is Radiant Citadel. Filing a
+ * spec's player-visible fixtures here gives the player a second campaign, so
+ * their Hub shows the picker on All and the fixtures are in scope. Delete it
+ * with deleteFoldersById.
+ */
+export async function createTtCampaignFolder(page, name) {
+  return page.evaluate(async (n) => (await Folder.create({
+    name: n, type: "JournalEntry",
+    flags: { "mej-campaign-companion": { campaign: { ownershipDefault: "observer" } } }
+  })).id, name);
+}
+
+/** As a GM page: delete folders by id, with their subfolders and contents. Missing ids are skipped. */
+export async function deleteFoldersById(page, ids) {
+  await page.evaluate(async (list) => {
+    for (const id of list) {
+      const f = game.folders.get(id);
+      if (f) await f.delete({ deleteSubfolders: true, deleteContents: true });
+    }
+  }, ids.filter(Boolean));
+}
+
 /** Delete all journal entries (and thus their pages) whose name starts with the prefix. */
 export async function deleteJournalsByPrefix(page, prefix = TT_PREFIX) {
   await page.evaluate(async (p) => {

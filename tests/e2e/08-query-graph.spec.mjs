@@ -1,16 +1,33 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, cleanupAsGm, unfiledBootstrapEntryId,
+  login, TT_PREFIX, cleanupAsGm, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 
-async function createPerson(page, name, { tags = [], ownership, text = "" } = {}) {
-  return page.evaluate(async ({ n, t, own, tg }) => {
+// TT- campaign folders made by playerCampaign(), deleted by the afterEach.
+const createdFolders = [];
+
+/**
+ * A TT- campaign the player can observe, for fixtures a player-seat half
+ * must see. Since 0.27.0 a player who sees exactly one campaign (Radiant
+ * Citadel on World A) is locked to it and never sees unfiled entries
+ * (UI-review spec 2026-10-15 §5.1/§5.6); a second visible campaign puts the
+ * player's Hub on All with these fixtures in scope.
+ */
+async function playerCampaign(page, name) {
+  const id = await createTtCampaignFolder(page, name);
+  createdFolders.push(id);
+  return id;
+}
+
+async function createPerson(page, name, { tags = [], ownership, text = "", folder = null } = {}) {
+  return page.evaluate(async ({ n, t, own, tg, folder }) => {
     const entry = await JournalEntry.create({
       name: n,
+      ...(folder ? { folder } : {}),
       pages: [{
         name: n,
         type: "monks-enhanced-journal.person",
@@ -23,7 +40,7 @@ async function createPerson(page, name, { tags = [], ownership, text = "" } = {}
       ...(own ? { ownership: { default: own } } : {})
     });
     return entry.id;
-  }, { n: name, t: text, own: ownership, tg: tags });
+  }, { n: name, t: text, own: ownership, tg: tags, folder });
 }
 
 async function entryUuid(page, entryId) {
@@ -76,6 +93,7 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
   test.afterEach(async ({ page, browser }) => {
     await cleanupAsGm(page, browser, async (gmPage) => {
       await cleanupAll(gmPage);
+      await deleteFoldersById(gmPage, createdFolders.splice(0));
     });
   });
 
@@ -142,7 +160,11 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     // entry once the dashboard itself is shown to them - runQueryAll()
     // permission-filters its hits same as search (spec §2's OBSERVER gate),
     // independent of the dashboard row's own showPlayers flag.
-    await createPerson(gmPage, name, { tags: ["villain"], ownership: 2 /* OBSERVER */ });
+    // In a TT- campaign the player can observe: dashboard rows are filtered to
+    // the viewer's Hub scope, and a single-campaign player would be locked to
+    // Radiant Citadel (0.27.0 player scoping, see playerCampaign()).
+    const folder = await playerCampaign(gmPage, `${TT_PREFIX}Dash Campaign`);
+    await createPerson(gmPage, name, { tags: ["villain"], ownership: 2 /* OBSERVER */, folder });
 
     let shell = await openHubTab(gmPage, "dashboards");
     await shell.locator('button[data-action="addDashboard"]').click();
@@ -157,12 +179,18 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     await expect(dashRow.locator(".mej-cc-index-row", { hasText: name })).toHaveCount(1);
 
     // showPlayers is off by default (checkbox unchecked in the add dialog) -
-    // a player must not even see the dashboard row.
+    // a player must not even see the dashboard row. Since 0.27.0 a player
+    // gets the Dashboards tab only while some dashboard is shown to players
+    // (UI-review spec 2026-10-15 §5.1; playerTabOrder), so with none shown
+    // the tab itself is absent. This relies on World A having no other
+    // player-visible dashboard.
     const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
     const playerPage = await playerContext.newPage();
     const playerErrors = trackConsoleErrors(playerPage, { ignore: IGNORE });
     await login(playerPage, "User 1");
-    let playerShell = await openHubTab(playerPage, "dashboards");
+    let playerShell = await openHub(playerPage);
+    await expect(playerShell.locator('nav.sheet-tabs a[data-tab="index"]')).toHaveCount(1);
+    await expect(playerShell.locator('nav.sheet-tabs a[data-tab="dashboards"]')).toHaveCount(0);
     await expect(playerShell.locator(".mej-cc-dashboard", { hasText: `${TT_PREFIX}Dash` })).toHaveCount(0);
 
     // Toggle showPlayers on via edit.
@@ -186,7 +214,10 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     await editDialog2.locator('button[data-action="ok"]').click();
     await settle(gmPage, 400);
 
-    playerShell = await openHubTab(playerPage, "dashboards");
+    // No dashboard is player-visible again, so the tab goes with it.
+    playerShell = await openHub(playerPage);
+    await expect(playerShell.locator('nav.sheet-tabs a[data-tab="index"]')).toHaveCount(1);
+    await expect(playerShell.locator('nav.sheet-tabs a[data-tab="dashboards"]')).toHaveCount(0);
     await expect(playerShell.locator(".mej-cc-dashboard", { hasText: `${TT_PREFIX}Dash` })).toHaveCount(0);
 
     assertNoConsoleErrors(errors);
@@ -241,7 +272,7 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     assertNoConsoleErrors(errors);
   });
 
-  test("graph smoke: two related entries render as nodes + an edge, clicking a node opens it", async ({ page }) => {
+  test("graph smoke: two related entries render as nodes + an edge, double-clicking a node opens it", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
 
@@ -288,8 +319,13 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     // used to be). Dispatch the click directly on the element instead - the
     // node's own listener is a plain "click" handler with no dependency on
     // real pointer coordinates.
+    //
+    // Since 0.27.0 a plain click focuses the node and double-click (or
+    // Ctrl/Cmd-click) opens the entry (UI-review spec 2026-10-15 §5.5 and
+    // item 12; hub-graph-pane.mjs node listeners, logic/graph-click.mjs), so
+    // the open gesture is a dblclick.
     await settle(page, 2000); // let the simulation's alpha decay toward rest
-    await nodeA.dispatchEvent("click");
+    await nodeA.dispatchEvent("dblclick");
     await settle(page, 500);
     const activeEntryUuid = await page.evaluate(() => game.MonksEnhancedJournal.journal.tabs.active()?.entityId);
     // openJournalEntry() resolves a single-page entry to its page's uuid
@@ -347,8 +383,11 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
 
     const nameA = `${TT_PREFIX}Graph-Hidden-A`;
     const nameB = `${TT_PREFIX}Graph-Hidden-B`;
-    const idA = await createPerson(gmPage, nameA, { ownership: 2 /* OBSERVER */ });
-    const idB = await createPerson(gmPage, nameB, { ownership: 2 /* OBSERVER */ });
+    // Filed in a TT- campaign the player can observe (0.27.0 player scoping,
+    // see playerCampaign()), or the player's graph would never draw them.
+    const folder = await playerCampaign(gmPage, `${TT_PREFIX}Graph-Hidden Campaign`);
+    const idA = await createPerson(gmPage, nameA, { ownership: 2 /* OBSERVER */, folder });
+    const idB = await createPerson(gmPage, nameB, { ownership: 2 /* OBSERVER */, folder });
     const uuidB = await entryUuid(gmPage, idB);
 
     const relId = "TT-rel-hidden";

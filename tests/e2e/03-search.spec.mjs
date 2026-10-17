@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  login, TT_PREFIX, unfiledBootstrapEntryId,
+  login, TT_PREFIX, unfiledBootstrapEntryId, createTtCampaignFolder, deleteFoldersById,
   trackConsoleErrors, assertNoConsoleErrors, settle,
   KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG, KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -86,9 +86,16 @@ test.describe("03 search", () => {
     await login(gmPage, "Gamemaster");
 
     const name = `${TT_PREFIX}Search Session GM`;
-    const entryId = await gmPage.evaluate(async (n) => {
-      const entry = await JournalEntry.create({
+    // Filed in a TT- campaign the player can observe: since 0.27.0 a player
+    // who sees exactly one campaign (Radiant Citadel on World A) is locked to
+    // it and never sees unfiled entries (UI-review spec §5.1/§5.6). A second
+    // visible campaign puts the player's Hub on All, with this entry in
+    // scope. See createTtCampaignFolder().
+    const folderId = await createTtCampaignFolder(gmPage, `${TT_PREFIX}Search Campaign GM`);
+    await gmPage.evaluate(async ({ n, folderId }) => {
+      await JournalEntry.create({
         name: n,
+        folder: folderId,
         pages: [{
           name: n,
           type: "mej-campaign-companion.session",
@@ -104,29 +111,32 @@ test.describe("03 search", () => {
         }],
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
       });
-      return entry.id;
-    }, name);
+    }, { n: name, folderId });
 
-    const gmShell = await openHubSearch(gmPage);
-    await search(gmShell, gmPage, "banshee");
-    await expect(gmShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
+    let playerContext = null;
+    try {
+      const gmShell = await openHubSearch(gmPage);
+      await search(gmShell, gmPage, "banshee");
+      await expect(gmShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
 
-    const playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
-    const playerPage = await playerContext.newPage();
-    const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
-    await login(playerPage, "User 1");
-    const playerShell = await openHubSearch(playerPage);
-    // Positive control: the player's search must find the public recap word.
-    await search(playerShell, playerPage, "cartographerslodge");
-    await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
+      playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
+      const playerPage = await playerContext.newPage();
+      const errors = trackConsoleErrors(playerPage, { ignore: [...IGNORE, KNOWN_MEJ_BLANKJOURNAL_COMPENDIUM_BUG] });
+      await login(playerPage, "User 1");
+      const playerShell = await openHubSearch(playerPage);
+      // Positive control: the player's search must find the public recap word.
+      await search(playerShell, playerPage, "cartographerslodge");
+      await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(1);
 
-    await search(playerShell, playerPage, "banshee");
-    await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(0);
+      await search(playerShell, playerPage, "banshee");
+      await expect(playerShell.locator("li.mej-cc-search-row", { hasText: name })).toHaveCount(0);
 
-    assertNoConsoleErrors(errors);
-    await playerContext.close();
-    await gmPage.evaluate(async (id) => { await JournalEntry.implementation.deleteDocuments([id]); }, entryId);
-    await gmContext.close();
+      assertNoConsoleErrors(errors);
+    } finally {
+      if (playerContext) await playerContext.close();
+      await deleteFoldersById(gmPage, [folderId]);
+      await gmContext.close();
+    }
   });
 
   test("index updates after an edit", async ({ page }) => {
@@ -186,12 +196,16 @@ test.describe("03 search", () => {
     const settingBefore = await gmPage.evaluate(() =>
       foundry.utils.duplicate(game.settings.get("monks-enhanced-journal", "sheet-settings") ?? {}));
 
-    let entryId = null;
+    let folderId = null;
     let playerContext = null;
     try {
-      entryId = await gmPage.evaluate(async (n) => {
-        const entry = await JournalEntry.create({
+      // In a TT- campaign the player can observe, for the same reason as the
+      // gmNotes test above (0.27.0 player scoping; see createTtCampaignFolder).
+      folderId = await createTtCampaignFolder(gmPage, `${TT_PREFIX}Search Campaign Hidden Attr`);
+      await gmPage.evaluate(async ({ n, folderId }) => {
+        await JournalEntry.create({
           name: n,
+          folder: folderId,
           pages: [{
             name: n,
             type: "monks-enhanced-journal.person",
@@ -207,8 +221,7 @@ test.describe("03 search", () => {
           }],
           ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }
         });
-        return entry.id;
-      }, name);
+      }, { n: name, folderId });
 
       playerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } });
       const playerPage = await playerContext.newPage();
@@ -242,10 +255,10 @@ test.describe("03 search", () => {
 
       assertNoConsoleErrors(errors);
     } finally {
-      await gmPage.evaluate(async ({ before, id }) => {
+      await gmPage.evaluate(async (before) => {
         await game.settings.set("monks-enhanced-journal", "sheet-settings", before);
-        if (id && game.journal.get(id)) await JournalEntry.implementation.deleteDocuments([id]);
-      }, { before: settingBefore, id: entryId });
+      }, settingBefore);
+      await deleteFoldersById(gmPage, folderId ? [folderId] : []);
       if (playerContext) await playerContext.close();
       await gmContext.close();
     }
