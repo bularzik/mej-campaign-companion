@@ -694,19 +694,29 @@
   min-width: 0;
 }
 
-/* Open: 300px, or 40% of the row on a sheet narrower than 750px, so the text
-   column keeps at least 320px on any sheet 534px or wider. */
+/* Column fallback (knowledge-ui.mjs mountRail appends the panel below a body
+   that is not alone in its parent): a capped strip, as before the rail. */
 .monks-enhanced-journal .mej-cc-knowledge {
   display: flex;
   flex-direction: row;
-  flex: 0 0 min(300px, 40%);
   min-width: 0;
+  max-height: 50%;
+  overflow-y: auto;
+}
+
+/* In the rail row. Open: 300px, or 40% of the row on a sheet narrower than
+   750px, so the text column keeps at least 320px on any sheet 534px or wider. */
+.monks-enhanced-journal .mej-cc-rail-row > .mej-cc-knowledge {
+  flex: 0 0 min(300px, 40%);
   height: 100%;
+  max-height: none;
+  overflow-y: visible;
   border-left: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
 }
 
 /* Closed: only the tab remains. */
-.monks-enhanced-journal .mej-cc-knowledge.collapsed {
+.monks-enhanced-journal .mej-cc-knowledge.collapsed,
+.monks-enhanced-journal .mej-cc-rail-row > .mej-cc-knowledge.collapsed {
   flex: 0 0 auto;
 }
 
@@ -725,9 +735,11 @@
 }
 
 /* The tab: a real button on the sheet's right edge, vertical text, keyboard
-   focusable (Enter/Space toggle natively). Three classes deep so it beats
-   MEJ's `.sheet.standard-form button:not(.reveal)` styling. */
-.monks-enhanced-journal .mej-cc-knowledge .mej-cc-knowledge-tab {
+   focusable (Enter/Space toggle natively). (0,3,1) - three classes and the
+   element - so it ties MEJ's `.sheet.standard-form button:not(.reveal)`
+   (0,3,1) and wins by loading after it. MEJ's longer `button:not(.reveal)`
+   rules (0,4,1) still set the padding. */
+.monks-enhanced-journal .mej-cc-knowledge button.mej-cc-knowledge-tab {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -749,7 +761,7 @@
   border-radius: 0;
 }
 
-.monks-enhanced-journal .mej-cc-knowledge .mej-cc-knowledge-tab:focus-visible {
+.monks-enhanced-journal .mej-cc-knowledge button.mej-cc-knowledge-tab:focus-visible {
   outline: 2px solid var(--color-shadow-primary, #ff6400);
   outline-offset: -2px;
 }
@@ -1334,7 +1346,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    chip over it: the v13 stock gate reads the first painted background under
    the title as opaque, and a 10%-white chip measured as white (1.24:1,
    2026-10-17) although it paints near-black over the panel. */
-.theme-dark .mej-cc-knowledge .mej-cc-knowledge-tab {
+.theme-dark .mej-cc-knowledge button.mej-cc-knowledge-tab {
   background: transparent;
 }
 
@@ -1521,6 +1533,14 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   .mej-cc-row-campaign, .mej-cc-secret-source, .mej-cc-timeline-campaign),
 .monks-enhanced-journal .mej-cc-hub-container :is(label, legend, h3, h4, summary, .mej-cc-groups header),
 .monks-enhanced-journal .mej-cc-knowledge :is(summary, label, .mej-cc-knowledge-tab, .mej-cc-backlink-name, .mej-cc-attr-key-ro) {
+  color: var(--mej-cc-ink);
+}
+
+/* Hub list rows carry Foundry's `item` class, and Foundry 13 colours list
+   items from the scheme directly (measured rgb(34,34,34) under the dark
+   scheme on Foundry 13.351 + MEJ 13.06, over the Hub's dark surface:
+   1.24:1), so the row does not inherit the container's ink. */
+.monks-enhanced-journal .mej-cc-hub-container :is(li.mej-cc-index-row, li.mej-cc-session-row, li.mej-cc-search-row) {
   color: var(--mej-cc-ink);
 }
 

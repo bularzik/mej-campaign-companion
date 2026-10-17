@@ -914,15 +914,17 @@ stockDescribe("stock smoke phase 1 — genuinely stock MEJ", () => {
         // session is in the index) so a missing row fails here rather than
         // silently degrading the measurement.
         await page.waitForSelector(".mej-cc-hub-container .mej-cc-index-row", { timeout: 15_000 });
-        const hub =await textContrast(page, ".mej-cc-hub-container .mej-cc-index-row");
+        const hub = await textContrast(page, ".mej-cc-hub-container .mej-cc-index-row");
 
         test.info().annotations.push({ type: `contrast-${scheme}`, description: JSON.stringify({ session, hub }) });
         // NaN means nothing was measured (no element, or no painted surface
         // found); reject it explicitly rather than leaning on NaN comparisons.
         expect(Number.isNaN(session.ratio), `session text unmeasurable, ${scheme}: ${session.surface}`).toBe(false);
         expect(Number.isNaN(hub.ratio), `hub row unmeasurable, ${scheme}: ${hub.surface}`).toBe(false);
-        expect(session.ratio, `session text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
-        expect(hub.ratio, `hub row text, ${scheme}`).toBeGreaterThanOrEqual(4.5);
+        // The messages carry the measured surface: the list reporter does not
+        // print annotations, and the painter is what a failure needs.
+        expect(session.ratio, `session text, ${scheme}: ${session.fg} on ${session.bg} (${session.surface})`).toBeGreaterThanOrEqual(4.5);
+        expect(hub.ratio, `hub row text, ${scheme}: ${hub.fg} on ${hub.bg} (${hub.surface})`).toBeGreaterThanOrEqual(4.5);
       }
     } finally {
       await setColorScheme(page, "");
