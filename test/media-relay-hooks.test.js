@@ -102,4 +102,17 @@ describe("handleUploadRequest", () => {
     expect(uploadCompanionFile).toHaveBeenCalledTimes(1);
     expect(emitted[0].msg.path).toContain("uploads/");
   });
+
+  it("replies bad-context when only the in-memory type says session but the stored subtype does not", async () => {
+    vi.stubGlobal("fromUuid", vi.fn(async () => {
+      const page = new FakeJournalEntryPage();
+      page.type = "mej-campaign-companion.session";
+      page._source = { type: "text" };
+      page.parent = { testUserPermission: () => true };
+      return page;
+    }));
+    await handleUploadRequest(validPayload({ requestId: "req7" }));
+    expect(emitted[0].msg.error).toBe("bad-context");
+    expect(uploadCompanionFile).not.toHaveBeenCalled();
+  });
 });
