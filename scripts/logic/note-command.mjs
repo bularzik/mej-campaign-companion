@@ -23,10 +23,15 @@ function decodeEntities(s) {
 export function chatMessageText(message) {
   if (typeof message !== "string") return "";
   if (!TAG.test(message)) return message.trim();
-  const text = message
-    .replace(/<br\b[^>]*>/gi, "\n")
-    .replace(/<\/p>\s*<p\b[^>]*>/gi, "\n")
-    .replace(/<[^>]*>/g, "");
+  let previous;
+  let text = message;
+  do {
+    previous = text;
+    text = text
+      .replace(/<br\b[^>]*>/gi, "\n")
+      .replace(/<\/p>\s*<p\b[^>]*>/gi, "\n")
+      .replace(/<[^>]*>/g, "");
+  } while (text !== previous);
   return decodeEntities(text).trim();
 }
 
