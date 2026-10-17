@@ -82,14 +82,15 @@ test.describe("35 session notes", () => {
   test("/note files into the open session with the Duke linked", async () => {
     test.setTimeout(90_000);
     await u1.page.evaluate(() => ui.sidebar.changeTab?.("chat", "primary"));
-    const box = u1.page.locator("#chat-message, textarea.chat-input").first();
-    await box.fill(`/note we think ${duke.name} is lying`);
-    await box.press("Enter");
+    // Foundry 14's chat box is a <prose-mirror>, which Playwright cannot
+    // fill(); submit the way the form does, through ChatLog#processMessage,
+    // which fires the chatMessage hook note-command.mjs listens on.
+    await u1.page.evaluate((text) => ui.chat.processMessage(text), `/note we think ${duke.name} is lying`);
     await expect.poll(async () => (await notesOf(u1.page, folderId))?.length ?? 0, { timeout: 20_000 }).toBe(1);
     const [note] = await notesOf(u1.page, folderId);
     expect(note.sessionUuid).toBe(sessionUuid);
     expect(note.text).toContain(`@UUID[${duke.uuid}]`);
-    await expect(u1.page.locator(".chat-message .mej-cc-note-echo", { hasText: "Noted in" }).last()).toBeVisible({ timeout: 15_000 });
+    await expect(u1.page.locator("#chat .chat-message .mej-cc-note-echo", { hasText: "Noted in" }).last()).toBeVisible({ timeout: 15_000 });
     assertNoConsoleErrors(u1.errors);
   });
 
