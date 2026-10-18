@@ -336,6 +336,65 @@ test.describe("08 query grammar, dashboards, enricher, graph", () => {
     assertNoConsoleErrors(errors);
   });
 
+  // Focus from inside the pane (UI-review spec 2026-10-15 item 12). Regression
+  // for 0.27.0-0.28.0, where CampaignHubPage.focusOn bailed on
+  // `this.rendered === false` - which is ALWAYS false for a shell-hosted page
+  // (the shell never runs ApplicationV2's render pipeline, see the file
+  // header), so neither the node click nor the Focus picker ever did anything,
+  // on Foundry 13 and 14 alike. The click is dispatched directly for the same
+  // reason as the smoke test above (the simulation keeps moving the node).
+  test("graph focus from inside the pane: a single click focuses the node, the Focus picker re-focuses", async ({ page }) => {
+    const errors = trackConsoleErrors(page, { ignore: IGNORE });
+    await login(page, "Gamemaster");
+
+    const nameA = `${TT_PREFIX}Focus-A`;
+    const nameB = `${TT_PREFIX}Focus-B`;
+    const nameC = `${TT_PREFIX}Focus-C`;
+    const idA = await createPerson(page, nameA);
+    const idB = await createPerson(page, nameB);
+    const idC = await createPerson(page, nameC); // related to nobody: drops out of A's ego view
+    const uuidB = await entryUuid(page, idB);
+    await page.evaluate(async ({ pid, relId, targetUuid }) => {
+      const p = game.journal.get(pid).pages.contents[0];
+      await p.setFlag("monks-enhanced-journal", "relationships", {
+        [relId]: { id: relId, uuid: targetUuid, hidden: false }
+      });
+    }, { pid: idA, relId: "TT-rel-focus", targetUuid: uuidB });
+
+    const shell = await openHub(page);
+    await shell.locator('nav.sheet-tabs a[data-tab="graph"]').click();
+    await settle(page, 600);
+    const pane = shell.locator(".mej-cc-graph-pane");
+    await expect(pane.locator(".mej-cc-graph-node", { hasText: nameC })).toHaveCount(1);
+    await expect(pane.locator('.mej-cc-graph-controls button[data-mode="ego"]')).toBeDisabled();
+    await expect(pane.locator(".mej-cc-graph-node.center")).toHaveCount(0);
+
+    // Single click -> Focus on A: Focus button active, A ringed, C (unrelated) gone.
+    await settle(page, 1500);
+    await pane.locator(".mej-cc-graph-node", { hasText: nameA }).dispatchEvent("click");
+    await expect(pane.locator('.mej-cc-graph-controls button[data-mode="ego"]')).toHaveClass(/active/);
+    await expect(pane.locator(".mej-cc-graph-node.center", { hasText: nameA })).toHaveCount(1);
+    await expect(pane.locator(".mej-cc-graph-node", { hasText: nameC })).toHaveCount(0);
+    expect(await pane.locator('select[name="graph-focus"]').inputValue()).toBe(await entryUuid(page, idA));
+
+    // Focus picker -> B becomes the center; A stays as B's neighbour.
+    await pane.locator('select[name="graph-focus"]').selectOption(uuidB);
+    await expect(pane.locator(".mej-cc-graph-node.center", { hasText: nameB })).toHaveCount(1);
+    await expect(pane.locator(".mej-cc-graph-node", { hasText: nameA })).toHaveCount(1);
+    await expect(pane.locator(".mej-cc-graph-node.center")).toHaveCount(1);
+
+    // Whole campaign brings C back. The center is retained (the ring stays on
+    // B and the Focus button stays enabled) so Focus can return to it - the
+    // same as after the entity header button's ego entry (test below).
+    await pane.locator('.mej-cc-graph-controls button[data-mode="all"]').click();
+    await expect(pane.locator(".mej-cc-graph-node", { hasText: nameC })).toHaveCount(1);
+    await expect(pane.locator(".mej-cc-graph-node.center", { hasText: nameB })).toHaveCount(1);
+    await expect(pane.locator('.mej-cc-graph-controls button[data-mode="ego"]')).toBeEnabled();
+    await expect(pane.locator('.mej-cc-graph-controls button[data-mode="ego"]')).not.toHaveClass(/active/);
+
+    assertNoConsoleErrors(errors);
+  });
+
   // Default-images (2026-09-05): a NEW, self-contained test rather than
   // extending "graph smoke" above - that test is a known-environmental
   // failure on a loaded machine (recorded in the task brief), and this
