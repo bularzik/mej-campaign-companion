@@ -1812,11 +1812,18 @@ export class CampaignHubPage extends EnhancedJournalSheet {
     this.render({ parts: ["main"] });
   }
 
-  /** Focus the graph on `uuid` from inside the pane (node click or picker). */
+  /**
+   * Focus the graph on `uuid` from inside the pane (node click or picker).
+   *
+   * No `this.rendered` guard here: for a shell-hosted page it is ALWAYS false
+   * (the shell mounts via _replaceHTML/activateListeners and never runs
+   * ApplicationV2's render pipeline, see the file header), so a guard on it
+   * silently disabled both entry points from 0.27.0 to 0.28.0, on Foundry 13
+   * and 14 alike. The one stale caller - a deferred node click landing after
+   * the Hub closed - is caught at its call site in activateListeners by
+   * checking that the graph SVG it was drawn on is still in the document.
+   */
   static focusOn(uuid) {
-    // A deferred node-click focus can land after the Hub closed; the shell page
-    // has no close hook, so bail on an explicitly un-rendered window.
-    if (this.rendered === false) return;
     const next = focusTransition(this.state, uuid);
     if (!next.changed) return;
     this.state.graphMode = next.graphMode;
@@ -2271,7 +2278,15 @@ export class CampaignHubPage extends EnhancedJournalSheet {
           const entry = await fromUuid(uuid);
           if (entry) game.MonksEnhancedJournal.openJournalEntry(entry);
         },
-        onFocus: (uuid) => CampaignHubPage.focusOn.call(this, uuid)
+        // Deferred by the click gate (400 ms, logic/graph-click.mjs): the Hub
+        // may have been closed or re-rendered in the meantime, in which case
+        // the SVG this draw bound its handlers to is no longer in the
+        // document. That is the stale case to drop - not `this.rendered`,
+        // which is always false for a shell-hosted page (see focusOn).
+        onFocus: (uuid) => {
+          if (!graphSvg.isConnected) return;
+          CampaignHubPage.focusOn.call(this, uuid);
+        }
       });
     };
     if (this.tabGroups?.primary === "graph") drawGraph();
