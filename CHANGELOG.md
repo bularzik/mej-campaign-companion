@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.28.1 (2026-10-18)
 
 ### Fixed
 - Graph: a single click on a node, and the **Focus on…** picker, now actually focus the graph. Since 0.27.0 both were silently ignored on Foundry 13 and 14 alike, because the focus handler bailed when the Hub reported itself as not rendered — which a page hosted inside Monk's Enhanced Journal's shell always does. The "already closed" case the guard was meant for is now caught by checking that the graph the click came from is still on screen. Double-click to open is unchanged.
