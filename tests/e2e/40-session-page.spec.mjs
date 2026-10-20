@@ -618,7 +618,8 @@ test.describe("40 session page", () => {
     // A view-only page for the player (default none - below observer, so the campaign's
     // ownership hook leaves it - plus an observer grant): My Notes saves go through MEJ's GM relay.
     const s14 = await newSession(`${PREFIX} S14`, 14, { default: 0, [playerId]: 2 });
-    expect(await player.page.evaluate(async (uuid) => (await fromUuid(uuid))?.isOwner, s14.uuid)).toBe(false);
+    // Polled: the new entry reaches the player's client a moment after the GM creates it.
+    await expect.poll(() => player.page.evaluate(async (uuid) => (await fromUuid(uuid))?.isOwner, s14.uuid), { timeout: 10_000 }).toBe(false);
     await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s14.uuid);
     await expect(player.page.locator("#MonksEnhancedJournal .session-container .mej-cc-session-header")).toHaveCount(1, { timeout: 15_000 });
 
