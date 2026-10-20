@@ -4,8 +4,7 @@
 // Foundry-served is imported lazily inside the functions that run in-game.
 import { MODULE_ID, CAMPAIGN_FLAG, I18N, AUTO_START_SESSION_SETTING } from "../constants.mjs";
 import { currentSession, currentSessionUpdate, clearCurrentSessionUpdate, nextSessionNumber, startedToday, recapOwnershipUpdate, adoptHeldUpdate, promotableSessionPage, sessionPagesOf } from "../logic/current-session.mjs";
-import { recapDraft } from "../logic/recap-draft.mjs";
-import { notesForSession } from "../logic/notes.mjs";
+import { startStamp, endStamp } from "../logic/session-state.mjs";
 import { attendeeUuidsFor } from "../logic/attendee-player.mjs";
 
 const connectedPlayers = () => game.users.filter((u) => u.active && !u.isGM);
@@ -82,6 +81,11 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   }
   if (!page) page = await createSessionFor(campaign);
   if (!page) return null;
+  // Start history (spec 2026-10-19 §4.2): the first start stamps startedAt and, when no date was entered by hand,
+  // the world date; every start (restart included) clears endedAt.
+  const { sessionData } = await import("../sheets/session-data.mjs");
+  const { currentWorldComponents } = await import("../logic/campaign-calendar.mjs");
+  await page.update(startStamp(sessionData(page), { now: Date.now(), worldDate: currentWorldComponents() }));
   await campaign.update(currentSessionUpdate(page.uuid, Date.now()));
   if (baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER) {
     const update = recapOwnershipUpdate(page.parent.ownership, connectedPlayerIds(), { ownerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER });
@@ -97,31 +101,15 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   return page;
 }
 
-/** GM-only. Clear the open session and offer a recap draft built from its notes (deviation 1: applied from a dialog). */
+/**
+ * GM-only. Stamp the open session's page as ended and clear it from the campaign. No dialog (spec 2026-10-19
+ * §4.2): building the recap from Table talk lives on the Session page's Table talk drawer.
+ */
 export async function endSession(campaign) {
   if (!game.user.isGM || !campaign) return;
   const page = openSessionPage(campaign);
+  if (page) await page.update(endStamp({ now: Date.now() }));
   await campaign.update(clearCurrentSessionUpdate());
-  if (!page) return;
-  const { readNotes } = await import("../data/notes-store.mjs");
-  const draft = recapDraft(notesForSession(readNotes(campaign), page.uuid), {
-    formatTime: (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  });
-  if (!draft) return;
-  // The draft is already built from escaped note text (recapDraft), so it is enriched as-is with notes' enricher set.
-  const { NOTE_ENRICH_OPTIONS } = await import("./note-links.mjs");
-  const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(draft, { relativeTo: page, async: true, ...NOTE_ENRICH_OPTIONS });
-  const append = await foundry.applications.api.DialogV2.confirm({
-    window: { title: game.i18n.localize(`${I18N}.session.draftTitle`) },
-    content: `<p>${game.i18n.localize(`${I18N}.session.draftHint`)}</p><div class="mej-cc-draft-preview">${enriched}</div>`,
-    yes: { label: game.i18n.localize(`${I18N}.session.draftAppend`) },
-    no: { label: game.i18n.localize(`${I18N}.session.draftSkip`) },
-    rejectClose: false
-  });
-  if (!append) return;
-  const current = page.system?.recap ?? "";
-  await page.update({ "system.recap": `${current}${draft}` });
-  ui.notifications.info(game.i18n.localize(`${I18N}.session.draftAppended`));
 }
 
 async function offerStartOnLogin() {

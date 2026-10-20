@@ -1,7 +1,7 @@
 // Session notes and the current session (spec 2026-10-15 items 1-3, 6, 1a).
 // GM creates a campaign and starts a session; players (no GM needed for the
 // write itself, but a GM stays online here to keep the run short) note via
-// /note and the Session page; the GM ends the session and appends the draft.
+// /note and the Session page; the GM ends the session (no dialog; the recap is untouched).
 import { test, expect } from "@playwright/test";
 import {
   login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, settle,
@@ -109,20 +109,23 @@ test.describe("35 session notes", () => {
     assertNoConsoleErrors(u1.errors);
   });
 
-  test("End session offers the draft; appending writes the recap", async () => {
+  test("End session asks nothing; the recap is unchanged", async () => {
     test.setTimeout(90_000);
-    const done = gm.page.evaluate(async (folderId) => {
+    const before = await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", sessionUuid);
+    const dialogs = await gm.page.locator("dialog.application").count();
+    await gm.page.evaluate(async (folderId) => {
       const { endSession } = await import("/modules/mej-campaign-companion/scripts/hooks/current-session.mjs");
       await endSession(game.folders.get(folderId));
     }, folderId);
-    const dialog = gm.page.locator("dialog.application", { hasText: "Recap draft" });
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-    await dialog.locator("button", { hasText: "Append to recap" }).click();
-    await done;
-    const recap = await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", sessionUuid);
-    expect(recap).toContain("is lying");
+    await settle(gm.page, 1000);
+    // Spec 2026-10-19 §4.2: no recap-draft prompt; adding Table talk to the recap lives on the drawer (spec 40).
+    await expect(gm.page.locator("dialog.application")).toHaveCount(dialogs);
+    const after = await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", sessionUuid);
+    expect(after).toBe(before);
     const flag = await gm.page.evaluate(({ MOD, folderId }) => game.folders.get(folderId).flags?.[MOD]?.campaign?.currentSession ?? null, { MOD, folderId });
     expect(flag).toBeNull();
+    const endedAt = await gm.page.evaluate(async ({ MOD, uuid }) => (await fromUuid(uuid))?.flags?.[MOD]?.session?.endedAt ?? null, { MOD, uuid: sessionUuid });
+    expect(typeof endedAt).toBe("number");
     assertNoConsoleErrors(gm.errors);
   });
 });

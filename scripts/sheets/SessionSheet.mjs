@@ -729,6 +729,29 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   static async onStartSession() {
+    if (!game.user.isGM) return;
+    const campaign = campaignOf(this.document);
+    if (!campaign) return;
+    // One running session per campaign (spec 2026-10-19 §4.2): another page running asks once, and a yes ends
+    // it exactly as its own End would before this page starts. No or close leaves both as they are.
+    const running = currentSession(campaign);
+    if (running && running.uuid !== this.document.uuid) {
+      const other = openCampaignSession(campaign);
+      const esc = foundry.utils.escapeHTML;
+      const ok = await foundry.applications.api.DialogV2.confirm({
+        window: { title: game.i18n.localize(`${I18N}.session.replaceTitle`) },
+        content: `<p>${game.i18n.format(`${I18N}.session.replaceBody`, { other: esc(other?.name ?? ""), name: esc(this.document.name) })}</p>`,
+        rejectClose: false
+      });
+      if (!ok) return;
+      try {
+        await endSession(campaign);
+      } catch (err) {
+        console.error(`${MODULE_ID} | endSession failed`, err);
+        ui.notifications.error(game.i18n.localize(`${I18N}.session.endFailed`));
+        return;
+      }
+    }
     // This sheet's own page becomes the open session (startSession validates it belongs to the campaign).
     await SessionSheet.#runSessionAction(this, startSession, "startFailed", { sessionUuid: this.document.uuid });
   }

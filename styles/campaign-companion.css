@@ -1764,7 +1764,6 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   color: var(--mej-cc-link);
   opacity: 1;
 }
-.mej-cc-draft-preview { max-height: 40vh; overflow: auto; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); padding: 6px; }
 .mej-cc-notes-stream { margin-top: 10px; }
 .mej-cc-notes-stream h3 { margin: 0 0 4px; }
 .mej-cc-notes-list { list-style: none; margin: 0; padding: 0; }
