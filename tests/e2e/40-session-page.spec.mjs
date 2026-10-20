@@ -414,6 +414,22 @@ test.describe("40 session page", () => {
     assertNoConsoleErrors(player.errors);
   });
 
+  // Keystrokes that land before the collaborative join is live are held and
+  // must be saved even when the user clicks away at once (spec §2 anti-goal).
+  test("typing straight after the click, then clicking away, is kept", async () => {
+    test.setTimeout(90_000);
+    const s15 = await newSession(`${PREFIX} S15`, 15);
+    await openSession(s15.id);
+    const recap = editorOf(gm.page, "recap");
+    await recap.locator(".editor-display").click();
+    await gm.page.keyboard.type("quick");
+    await header().locator(".mej-cc-session-meta").click();
+    await expect.poll(() => recapOf(s15.uuid), { timeout: 15_000 }).toContain("quick");
+    await expect(recap).not.toHaveClass(/\bediting\b/);
+    await expect(recap.locator(".editor-display")).toContainText("quick");
+    assertNoConsoleErrors(gm.errors);
+  });
+
   test("close saves", async () => {
     test.setTimeout(120_000);
     const s13 = await newSession(`${PREFIX} S13`, 13);

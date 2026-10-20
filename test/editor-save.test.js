@@ -76,3 +76,22 @@ describe("myNotesDraftKey", () => {
   it("keys the no-GM draft by page uuid", () =>
     expect(myNotesDraftKey("JournalEntry.a.JournalEntryPage.b")).toBe("mynotes:JournalEntry.a.JournalEntryPage.b"));
 });
+
+import { withBufferedText } from "../scripts/logic/editor-save.mjs";
+
+describe("withBufferedText (keystrokes typed before a collaborative join finished)", () => {
+  it("returns the value unchanged when nothing was buffered", () => {
+    expect(withBufferedText("<p>a</p>", "")).toBe("<p>a</p>");
+    expect(withBufferedText("<p>a</p>", undefined)).toBe("<p>a</p>");
+  });
+  it("appends the typed text to the last paragraph", () => {
+    expect(withBufferedText("<p>Opening line.</p>", " more")).toBe("<p>Opening line. more</p>");
+  });
+  it("starts a paragraph when the value is empty or does not end in one", () => {
+    expect(withBufferedText("", "hello")).toBe("<p>hello</p>");
+    expect(withBufferedText("<ul><li>x</li></ul>", "y")).toBe("<ul><li>x</li></ul><p>y</p>");
+  });
+  it("escapes the typed characters", () => {
+    expect(withBufferedText("", "<b>&")).toBe("<p>&lt;b&gt;&amp;</p>");
+  });
+});

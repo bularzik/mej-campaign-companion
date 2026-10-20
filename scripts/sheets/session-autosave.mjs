@@ -28,7 +28,7 @@
 // No MEJ import: this module is loaded by hooks that run before (and
 // without) MEJ's sheet classes.
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, saveStateKey, EDITOR_IDS } from "../logic/editor-save.mjs";
+import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, canRefreshIdleEditor, withBufferedText, saveStateKey, EDITOR_IDS } from "../logic/editor-save.mjs";
 import { NOTE_DRAFTS, myNotesDraftKey } from "../logic/input-draft.mjs";
 import { hasVisibleText } from "../logic/session-state.mjs";
 
@@ -39,6 +39,8 @@ const RELAY_RETRY_MS = 4000;
 const RELAY_MAX_TRIES = 10;
 const IDLE_BEFORE_INTERVAL_SAVE_MS = 2000;
 const RESTORE_WINDOW_MS = 5000;
+/** A collaborative join still not live after this long is given up; anything typed is kept. */
+const JOIN_TIMEOUT_MS = 10000;
 
 /** Live editor element -> { pageUuid, editorId, baseline, view, retiring }. */
 const EDITORS = new WeakMap();
@@ -229,6 +231,9 @@ function parentsIn(root) {
 function commitEditor(editor, trigger) {
   const st = EDITORS.get(editor);
   if (!st || st.retiring || !saveTriggers(trigger)) return null;
+  // Leaving an editor whose join never went live: what was typed meanwhile is
+  // saved like any other text, never dropped (spec 2026-10-19 §2 anti-goal).
+  if (st.buffer && !st.view && (trigger === "blur" || trigger === "close")) return salvageBuffer(st);
   let live;
   try {
     live = editor.value;
@@ -241,6 +246,26 @@ function commitEditor(editor, trigger) {
   if (!page) return null;
   st.baseline = live;
   return st.editorId === "myNotes" ? writeMyNotes(page, live) : writeDocField(page, st.editorId, live);
+}
+
+/**
+ * Merge characters typed before the editor went live into the editor's text
+ * and write it through the normal single-field path (which keeps it as
+ * unsaved text, shown and retried, if the write fails).
+ */
+function salvageBuffer(st, { failed = false } = {}) {
+  const page = pageOf(st.pageUuid);
+  if (!page || !st.buffer) return null;
+  const value = withBufferedText(editorValue(page, st.editorId), st.buffer);
+  st.buffer = "";
+  st.salvaged = value;
+  if (failed) {
+    if (st.editorId === "myNotes") NOTE_DRAFTS.set(myNotesDraftKey(page.uuid), { value });
+    else UNSAVED.set(keyOf(page.uuid, st.editorId), value);
+    setSaveState(page.uuid, st.editorId, "failed");
+    return null;
+  }
+  return st.editorId === "myNotes" ? writeMyNotes(page, value) : writeDocField(page, st.editorId, value);
 }
 
 function rememberCaret(editor) {
@@ -300,6 +325,21 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
     commitEditor(editor, "close");
   });
 
+  // A join that never goes live (core's activation rejected, or the server
+  // never answered): give the editor up, keep what was typed as unsaved text
+  // with "Couldn't save" (the interval retries it), and show the display.
+  setTimeout(() => {
+    if (!editor.isConnected || st.retiring || st.baseline !== undefined) return;
+    console.warn(`${MODULE_ID} | the ${editorId} editor did not become live within ${JOIN_TIMEOUT_MS}ms`);
+    salvageBuffer(st, { failed: true });
+    const html = st.salvaged;
+    st.retiring = true;
+    parent.classList.remove("editing");
+    editor.remove();
+    if (display && display.hasAttribute("tabindex")) display.tabIndex = 0;
+    if (typeof html === "string") refreshDisplay(parent, page, editorId, html);
+  }, JOIN_TIMEOUT_MS);
+
   // Until the editor is live, keep focus inside the block and hold typed characters.
   control.tabIndex = -1;
   parent.classList.add("editing");
@@ -346,7 +386,7 @@ export function exitEditing(parent, trigger = "blur") {
   if (editor && st) {
     commitEditor(editor, trigger);
     try {
-      html = editor.value;
+      html = st.salvaged ?? editor.value;
     } catch {
       html = null;
     }
@@ -394,9 +434,18 @@ export function focusSessionEditor(sheet, editorId, event) {
 /** Whether the user is typing in (or has unsaved text in) an editor - remote changes must leave it alone. */
 export function isEditorBusy(parent) {
   if (!parent) return false;
-  if (parent.classList.contains("editing")) return true;
-  const root = parent.closest(".session-container");
-  return UNSAVED.has(keyOf(root?.dataset.ccPage, parent.dataset.editorId));
+  const pageUuid = parent.closest(".session-container")?.dataset.ccPage;
+  const editorId = parent.dataset.editorId;
+  const { editor } = partsOf(parent);
+  const st = editor ? EDITORS.get(editor) : null;
+  let dirty = false;
+  try {
+    dirty = !!st && (!!st.buffer || needsCommit({ live: editor.value, baseline: st.baseline }));
+  } catch {
+    dirty = true;
+  }
+  const pending = editorId === "myNotes" ? NOTE_DRAFTS.has(myNotesDraftKey(pageUuid)) : UNSAVED.has(keyOf(pageUuid, editorId));
+  return !canRefreshIdleEditor({ editing: parent.classList.contains("editing"), dirty, pending });
 }
 
 /** Repaint idle displays from the stored values (a remote save, or our own landing). */
@@ -525,10 +574,14 @@ export function bindAutosave(sheet, html) {
         const wait = (st?.lastInput ?? 0) + IDLE_BEFORE_INTERVAL_SAVE_MS - Date.now();
         if (wait > 0) setTimeout(() => editor.isConnected && commitEditor(editor, "interval"), wait);
         else commitEditor(editor, "interval");
-      } else if (!editor && id !== "myNotes") {
+      } else if (!editor) {
+        // Retry a failed save (a draft waiting for a GM retries when one connects).
         const page = pageOf(root.querySelector(".session-container")?.dataset.ccPage);
-        const unsaved = page ? UNSAVED.get(keyOf(page.uuid, id)) : undefined;
-        if (typeof unsaved === "string" && saveStateOf(page.uuid, id) === "failed") writeDocField(page, id, unsaved);
+        if (!page || saveStateOf(page.uuid, id) !== "failed") continue;
+        const unsaved = id === "myNotes" ? NOTE_DRAFTS.get(myNotesDraftKey(page.uuid))?.value : UNSAVED.get(keyOf(page.uuid, id));
+        if (typeof unsaved !== "string") continue;
+        if (id === "myNotes") writeMyNotes(page, unsaved);
+        else writeDocField(page, id, unsaved);
       }
     }
   }, interval);
@@ -544,6 +597,13 @@ export function bindAutosave(sheet, html) {
       if (parent && parent.closest(".tab")?.classList.contains("active")) enterEditing(parent, { selection: restore });
     }
   }
+}
+
+/** The sheet is closing: stop its periodic save and window-level triggers (after its last commit). */
+export function unbindAutosave(sheet) {
+  clearInterval(sheet?._ccAutosaveTimer);
+  if (sheet) sheet._ccAutosaveTimer = null;
+  BOUND.delete(sheet);
 }
 
 let registered = false;

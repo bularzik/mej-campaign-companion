@@ -62,3 +62,18 @@ const SAVE_STATE_KEYS = { saving: "session.saving", saved: "session.saved", noGM
 export function saveStateKey(state) {
   return SAVE_STATE_KEYS[state] ?? null;
 }
+
+const escapeText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * Characters typed while a collaborative editor was still joining, merged
+ * into the editor's HTML so they can be saved (or kept) instead of dropped:
+ * appended to the last paragraph, or as a new one.
+ */
+export function withBufferedText(html, buffer) {
+  const value = typeof html === "string" ? html : "";
+  if (!buffer) return value;
+  const text = escapeText(String(buffer));
+  if (/<\/p>\s*$/i.test(value)) return value.replace(/<\/p>(\s*)$/i, `${text}</p>$1`);
+  return `${value}<p>${text}</p>`;
+}

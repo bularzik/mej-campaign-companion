@@ -18,7 +18,7 @@ import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
-import { bindAutosave, flushSessionEditors, focusSessionEditor, editorValue } from "./session-autosave.mjs";
+import { bindAutosave, unbindAutosave, flushSessionEditors, focusSessionEditor, editorValue } from "./session-autosave.mjs";
 import { patchSessionRegions } from "./session-regions.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
@@ -573,6 +573,7 @@ export class SessionSheet extends EnhancedJournalSheet {
   // the window; both save whatever is typed first.
   async close(options) {
     flushSessionEditors(this, "close");
+    unbindAutosave(this);
     return super.close(options);
   }
 
