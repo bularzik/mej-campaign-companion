@@ -309,17 +309,21 @@ function bindNoteAbout(panel, page) {
   });
 }
 
+// The rail owns its clicks: on a Session page it sits inside the sheet, whose own delegated
+// data-action handler would otherwise fire openNoteLink a second time.
 function bindNoteLinks(panel) {
   panel.addEventListener("click", async (event) => {
     const link = event.target.closest?.("[data-action='openNoteLink']");
     if (link) {
       event.preventDefault();
+      event.stopPropagation();
       await openNoteLink(link.dataset.kind, link.dataset.target);
       return;
     }
     const session = event.target.closest?.("[data-action='openNoteSession']");
     if (session) {
       event.preventDefault();
+      event.stopPropagation();
       await openNoteLink("entry", session.dataset.uuid);
     }
   });

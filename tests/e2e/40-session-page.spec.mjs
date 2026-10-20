@@ -94,6 +94,8 @@ test.describe("40 session page", () => {
     await settle(player.page, 800);
     await expect(playerStatus()).toHaveCount(0, { timeout: 15_000 });
 
+    // The rename re-rendered the sheet; let it finish before clicking its header.
+    await settle(gm.page, 1500);
     await header().locator('[data-action="startSession"]').click();
     const dialog = gm.page.locator("dialog.application", { hasText: "Start this session?" });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
@@ -319,6 +321,25 @@ test.describe("40 session page", () => {
     expect((await row.locator(".mej-cc-note-meta").textContent()).trim().startsWith(s9.name)).toBe(true);
     await sessionLink.click();
     await expect(header().locator('input[name="name"]')).toHaveValue(s9.name, { timeout: 15_000 });
+    // A rail row's image link on a Session page opens exactly one popout (the sheet's own
+    // openNoteLink action must not also fire).
+    await gm.page.evaluate(async ({ folderId, entryUuid }) => {
+      const { addNote } = await import("/modules/mej-campaign-companion/scripts/data/notes-store.mjs");
+      await addNote(game.folders.get(folderId), {
+        text: "TT-40 rail image", kind: "reveal", mentions: [entryUuid],
+        ref: { src: "icons/svg/mystery-man.svg", kind: "media" }
+      });
+    }, { folderId: campaignId, entryUuid: `JournalEntry.${s10.id}` });
+    await gm.page.evaluate(() => game.settings.set("mej-campaign-companion", "knowledgePanelCollapsed", false));
+    await openSession(s10.id);
+    const railLink = shell().locator(".mej-cc-knowledge .mej-cc-note-link", { hasText: "TT-40 rail image" });
+    await expect(railLink).toHaveCount(1, { timeout: 15_000 });
+    const popoutCount = () => gm.page.evaluate(() => [...foundry.applications.instances.values()].filter((a) => a instanceof foundry.applications.apps.ImagePopout).length);
+    const before = await popoutCount();
+    await railLink.click();
+    await expect.poll(popoutCount, { timeout: 10_000 }).toBe(before + 1);
+    await settle(gm.page, 800);
+    expect(await popoutCount()).toBe(before + 1);
     assertNoConsoleErrors(gm.errors);
     assertNoConsoleErrors(player.errors);
   });
