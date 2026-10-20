@@ -315,12 +315,16 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   // Core dispatches "open" without bubbling once the editor is live.
   editor.addEventListener("open", () => {
     st.baseline = editor.value;
-    // A collaborative join can finish after the user has already clicked away.
-    if (editor.isConnected && parent.classList.contains("editing")) placeCaret(st, { coords, selection });
+    // A collaborative join can finish after the user has already clicked away
+    // (or a re-render, a tab switch, a close or the join timeout removed the
+    // editor): end it, so no server authority outlives it.
+    if (!editor.isConnected || st.retiring) return retireAbandonedEditor(editor, st);
+    if (parent.classList.contains("editing")) placeCaret(st, { coords, selection });
   });
   // Every core save (Ctrl+S, the menu's save, leaving the DOM) comes here instead.
   editor.addEventListener("save", (event) => {
     event.preventDefault();
+    if (st.retiring) return;
     if (!editor.isConnected && parent.classList.contains("editing")) rememberCaret(editor);
     commitEditor(editor, "close");
   });
@@ -346,6 +350,49 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   control.append(editor);
   if (!editor.classList.contains("active")) control.focus({ preventScroll: true });
   if (display) display.tabIndex = -1;
+}
+
+/**
+ * A collaborative join that went live on an editor already taken out of the
+ * page. The server registered this user on `pm.editDocument` before the
+ * client had a view, but core's disconnectedCallback skipped
+ * `#editor.destroy()` (the editor was not active yet when it left), so
+ * `pm.endSession` was never sent. That authority would stay alive and its
+ * periodic autosave would write its stale copy over every later write to the
+ * field (Add to recap, an image drop, salvaged keystrokes). Putting the
+ * element back for a moment and taking it out again runs core's own
+ * disconnect with the editor active: its save is intercepted (a no-op while
+ * retiring) and destroy() sends pm.endSession (Foundry 13 and 14 alike).
+ * Anything still typed into the join buffer is saved first.
+ */
+function retireAbandonedEditor(editor, st) {
+  if (st.buffer) salvageBuffer(st);
+  st.retiring = true;
+  // Another editor of this field in this client (a click back in while this
+  // join was in flight) holds the same per-user server session; its own
+  // teardown ends it, and ending it now would cut that editor off.
+  if (liveSiblingOf(editor, st)) return;
+  const doc = editor.ownerDocument ?? document;
+  const holder = doc.createElement("div");
+  holder.hidden = true;
+  holder.className = "mej-cc-retired-editor";
+  try {
+    doc.body.append(holder);
+    holder.append(editor);
+  } catch (err) {
+    console.error(`${MODULE_ID} | ending the abandoned ${st.editorId} editing session failed`, err);
+  } finally {
+    holder.remove();
+  }
+}
+
+function liveSiblingOf(editor, st) {
+  const sel = `.session-container[data-cc-page="${CSS.escape(st.pageUuid)}"] .editor-parent[data-editor-id="${st.editorId}"] > .editor-control > prose-mirror`;
+  for (const other of document.querySelectorAll(sel)) {
+    const o = other !== editor ? EDITORS.get(other) : null;
+    if (o && !o.retiring) return true;
+  }
+  return false;
 }
 
 function placeCaret(st, { coords, selection }) {

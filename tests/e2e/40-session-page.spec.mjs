@@ -447,6 +447,59 @@ test.describe("40 session page", () => {
     assertNoConsoleErrors(gm.errors);
   });
 
+  // A collaborative join that goes live after the user already left the recap
+  // must still end its server session: core skips destroy() for an editor that
+  // was not active yet when it left the page, and the authority left behind
+  // would autosave its stale copy over every later recap write.
+  test("an abandoned recap join ends its editing session", async () => {
+    test.setTimeout(90_000);
+    const s16 = await newSession(`${PREFIX} S16`, 16);
+    await openSession(s16.id);
+    const instance = `${s16.uuid}#system.recap`;
+    const gmId = await gm.page.evaluate(() => game.user.id);
+    // Hold the join's reply so the click-away always lands while the join is in flight.
+    await gm.page.evaluate((instance) => {
+      window.__ccPmEnds = [];
+      window.__ccEmitBefore40 = game.socket.emit;
+      const emit = game.socket.emit.bind(game.socket);
+      game.socket.emit = (ev, ...args) => {
+        if (ev === "pm.endSession") window.__ccPmEnds.push(args[0]);
+        if (ev === "pm.editDocument" && args[0] === instance && typeof args.at(-1) === "function") {
+          const reply = args.pop();
+          return emit(ev, ...args, (authority) => setTimeout(() => reply(authority), 1500));
+        }
+        return emit(ev, ...args);
+      };
+    }, instance);
+    try {
+      const recap = editorOf(gm.page, "recap");
+      await recap.locator(".editor-display").click();
+      await header().locator(".mej-cc-session-meta").click();
+      await expect(recap).not.toHaveClass(/\bediting\b/);
+      expect(await gm.page.evaluate(() => window.__ccPmEnds.length)).toBe(0);
+      // The late join is ended by this client...
+      await expect.poll(() => gm.page.evaluate(() => window.__ccPmEnds), { timeout: 10_000 }).toContain(instance);
+      // ...and the server no longer counts the GM in it (a probe join lists who is).
+      const users = await player.page.evaluate((instance) => new Promise((resolve) => {
+        const state = ProseMirror.EditorState.create({ doc: ProseMirror.dom.parseString("") }).toJSON();
+        game.socket.emit("pm.editDocument", instance, state, (authority) => {
+          game.socket.emit("pm.endSession", instance);
+          resolve(authority?.users ?? null);
+        });
+      }), instance);
+      expect(users).not.toBeNull();
+      expect(users).not.toContain(gmId);
+      // A direct recap write (what Add to recap does) stays.
+      await gm.page.evaluate(async (uuid) => (await fromUuid(uuid)).update({ "system.recap": "<p>TT-40 written after the join</p>" }), s16.uuid);
+      await settle(gm.page, 3000);
+      expect(await recapOf(s16.uuid)).toBe("<p>TT-40 written after the join</p>");
+      await expect(recap.locator(".editor-display")).toContainText("TT-40 written after the join");
+      assertNoConsoleErrors(gm.errors);
+    } finally {
+      await gm.page.evaluate(() => { if (window.__ccEmitBefore40) game.socket.emit = window.__ccEmitBefore40; });
+    }
+  });
+
   test("close saves", async () => {
     test.setTimeout(120_000);
     const s13 = await newSession(`${PREFIX} S13`, 13);
