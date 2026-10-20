@@ -329,6 +329,14 @@ export function registerSecretsUi() {
     // whenever the shell happened to be closed - exactly the case the
     // popped-out path exists to serve. refreshRevealViews checks the shell
     // itself.
+    // A checklist-only change shows only in a Session sheet's Secrets &
+    // clues, a live region (spec 2026-10-19 §4.4): patched in place, so the
+    // sheet is not re-rendered under someone's typing and a folded section
+    // stays folded. Block reveals change the page body: full refresh.
+    if (flags?.[REVEALS_FLAG] === undefined) {
+      refreshViewsMatching((uuid) => uuid === entry.uuid, { patchSessions: true });
+      return;
+    }
     refreshRevealViews(entry);
   });
 

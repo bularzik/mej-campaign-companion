@@ -460,9 +460,9 @@ test.describe("40 session page", () => {
     assertNoConsoleErrors(gm.errors);
   });
 
-  // A collaborative join that goes live after the user already left the recap
-  // must still end its server session: core skips destroy() for an editor that
-  // was not active yet when it left the page, and the authority left behind
+  // A collaborative join still in flight when the user leaves the recap must
+  // still end its server session: core's activation throws on the detached
+  // editor, so no destroy() sends pm.endSession, and the authority left behind
   // would autosave its stale copy over every later recap write.
   test("an abandoned recap join ends its editing session", async () => {
     test.setTimeout(90_000);
@@ -489,8 +489,7 @@ test.describe("40 session page", () => {
       await recap.locator(".editor-display").click();
       await header().locator(".mej-cc-session-meta").click();
       await expect(recap).not.toHaveClass(/\bediting\b/);
-      expect(await gm.page.evaluate(() => window.__ccPmEnds.length)).toBe(0);
-      // The late join is ended by this client...
+      // The abandoned join is ended by this client...
       await expect.poll(() => gm.page.evaluate(() => window.__ccPmEnds), { timeout: 10_000 }).toContain(instance);
       // ...and the server no longer counts the GM in it (a probe join lists who is).
       const users = await player.page.evaluate((instance) => new Promise((resolve) => {
