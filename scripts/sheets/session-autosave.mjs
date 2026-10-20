@@ -57,6 +57,15 @@ const RESTORE = new Map();
 const BOUND = new Set();
 /** pageUuid -> pending relay retry timer. */
 const RELAY_TIMERS = new Map();
+/** pageUuid -> the My Notes values this client has written or relayed (recent first), for confirmMyNotes. */
+const SENT_NOTES = new Map();
+const SENT_NOTES_MAX = 20;
+
+function rememberSent(pageUuid, value) {
+  const list = (SENT_NOTES.get(pageUuid) ?? []).filter((v) => v !== value);
+  list.unshift(value);
+  SENT_NOTES.set(pageUuid, list.slice(0, SENT_NOTES_MAX));
+}
 
 const keyOf = (pageUuid, editorId) => `${pageUuid}|${editorId}`;
 
@@ -397,6 +406,7 @@ export async function writeMyNotes(page, value, base = storedText(page, "myNotes
     return true;
   }
   try {
+    rememberSent(page.uuid, value);
     await page.update({ [myNotesPath()]: value });
     settlePending(page.uuid, "myNotes", value);
     if (!NOTE_DRAFTS.has(draftKey)) setSaveState(page.uuid, "myNotes", "saved");
@@ -413,6 +423,8 @@ export async function writeMyNotes(page, value, base = storedText(page, "myNotes
 // listener up yet, so the request is repeated until it lands.
 function relayMyNotes(page, tries) {
   clearTimeout(RELAY_TIMERS.get(page.uuid));
+  // A repeat is an automatic write: only while the stored notes are still the draft's base.
+  if (tries > 0 && reconcile(page, "myNotes") !== "write") return;
   const draft = NOTE_DRAFTS.get(myNotesDraftKey(page.uuid));
   if (typeof draft?.value !== "string") return;
   if (!game.users.activeGM) {
@@ -420,6 +432,7 @@ function relayMyNotes(page, tries) {
     return;
   }
   try {
+    rememberSent(page.uuid, draft.value);
     game.MonksEnhancedJournal.emit("saveUserData", { documentId: page.uuid, userId: game.user.id, userdata: { notes: draft.value } });
   } catch (err) {
     console.error(`${MODULE_ID} | My Notes relay failed`, err);
@@ -439,9 +452,14 @@ function confirmMyNotes(page, changes) {
   if (foundry.utils.getProperty(changes, myNotesPath()) === undefined) return;
   const draftKey = myNotesDraftKey(page.uuid);
   const draft = NOTE_DRAFTS.get(draftKey);
-  if (draft && draft.value !== foundry.utils.getProperty(page, myNotesPath())) {
-    // Newer typing still pending: it is now edited from what just landed.
-    draft.base = storedText(page, "myNotes");
+  const landed = storedText(page, "myNotes");
+  // Only what this client sent counts: the same user's other browser saving
+  // leaves the draft and its base alone, so the next automatic retry sees the conflict.
+  const outcome = myNotesLanding({ landed, draftValue: draft?.value, sent: SENT_NOTES.get(page.uuid) ?? [] });
+  if (outcome === "ignore") return;
+  if (outcome === "rebase") {
+    // Newer typing still pending: it is now edited from what this client just saved.
+    draft.base = landed;
     deviceDrafts()?.save(page.uuid, "myNotes", draft.value, draft.base);
     return;
   }
