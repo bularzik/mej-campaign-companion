@@ -88,7 +88,8 @@ async function patch(sheet) {
     if (!old || !fresh) continue;
     // A GM typing a secret's text: its change (on blur) saves it, and the
     // list catches up with the next patch or render.
-    if (region === "secrets" && old.contains(old.ownerDocument.activeElement)) continue;
+    const active = old.ownerDocument.activeElement;
+    if (region === "secrets" && old.contains(active) && active.matches("input, textarea, select")) continue;
     const keep = carryOver(old, fresh);
     old.replaceWith(fresh);
     keep();
@@ -112,6 +113,10 @@ function carryOver(old, fresh) {
       twin.value = active.value;
       focused = { twin, start: active.selectionStart, end: active.selectionEnd };
     }
+  } else if (active && old.contains(active) && active.matches("summary")) {
+    // A section's summary (the user just folded it): its counterpart by position.
+    const twin = fresh.querySelectorAll("summary")[[...old.querySelectorAll("summary")].indexOf(active)];
+    if (twin) focused = { twin, start: null, end: null };
   }
   const LISTS = [".mej-cc-notes-list", ".secrets-list"];
   const scrolls = LISTS.map((sel) => old.querySelector(sel)?.scrollTop ?? 0);
@@ -126,6 +131,7 @@ function carryOver(old, fresh) {
     if (freshDetails.length === folds.length) freshDetails.forEach((d, i) => { d.open = folds[i]; });
     if (!focused) return;
     focused.twin.focus({ preventScroll: true });
+    if (focused.start === null) return;
     try {
       focused.twin.setSelectionRange?.(focused.start, focused.end);
     } catch {
