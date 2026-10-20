@@ -225,6 +225,21 @@ async function openEntry(page, entryId) {
   return page.locator("#MonksEnhancedJournal");
 }
 
+/** The MEJ tab strip remembers every entry the test user ever opened, so
+ * under a world with fixture debris it fills with dozens of tabs. Hide the
+ * inactive ones for a shot (CSS only, no tab data is touched). Returns the
+ * undo function. */
+async function hideTabClutter(page) {
+  await page.evaluate(() => {
+    const st = document.createElement("style");
+    st.id = "guide-shot-hide-tabs";
+    st.textContent = "#MonksEnhancedJournal .journal-tab:not(.active) { display: none !important; }";
+    document.head.append(st);
+  });
+  await settle(page, 200);
+  return () => page.evaluate(() => document.getElementById("guide-shot-hide-tabs")?.remove());
+}
+
 /** Open any entry (so the MEJ shell exists) then click the Campaign Hub
  * toolbar button. Idempotent — 08-query-graph.spec.mjs's openHub() pattern:
  * re-clicking the sidebar journal tab while the shell is already open can
@@ -954,6 +969,10 @@ guideDescribe("guide screenshots", () => {
 
     const indexShell = await openHub(page);
     await settle(page, 300);
+    // Since 0.27.0/0.28.0 the Hub opens on a remembered or current campaign
+    // (here the world's own Radiant Citadel), not on All campaigns. The shots
+    // below are of the All campaigns state, so scope there explicitly.
+    await scopeHub(indexShell, page, "");
     // The header bar (.mej-cc-hub-header — it sits ABOVE the tab nav, inside
     // the Hub subsheet), shot in its default "All campaigns" state: picker,
     // New Session, Tools. The campaign-settings gear is deliberately absent
@@ -1144,12 +1163,14 @@ guideDescribe("guide screenshots", () => {
     await scopeHub(paneShell, page, "");
 
     const sessionShell = await openEntry(page, demo.sessionId);
+    const showTabs = await hideTabClutter(page);
     await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
     await settle(page, 300);
     await shot(sessionShell, "session-sheet-gm");
     await sessionShell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(page, 300);
     await shot(sessionShell.locator(".secrets-section"), "session-checklist");
+    await showTabs();
 
     const miraShell = await openEntry(page, demo.miraId);
     const miraPanel = miraShell.locator(".mej-cc-knowledge");
@@ -1163,7 +1184,9 @@ guideDescribe("guide screenshots", () => {
     await shot(flagonPanel.locator(".mej-cc-knowledge-backlinks"), "knowledge-backlinks");
     // The @CampaignQuery enricher rendered on this same page.
     await expect(flagonShell.locator(".mej-cc-query-embed")).toHaveCount(1);
+    const showFlagonTabs = await hideTabClutter(page);
     await shot(flagonShell, "campaign-query-inline");
+    await showFlagonTabs();
   });
 
   test("capture standalone dialogs and windows", async ({ page }) => {
@@ -1544,6 +1567,7 @@ async function capturePlayerShots(page) {
   // §4.4) — User 1 owns the entry (seeded above), so a click into the text
   // opens the editor, matching the brief's "recap field editable" subject.
   const sessionShell = await openEntry(page, demo.sessionId);
+  const showTabs = await hideTabClutter(page);
   await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
   await settle(page, 300);
   await shot(sessionShell, "session-sheet-player");
@@ -1561,6 +1585,7 @@ async function capturePlayerShots(page) {
   await page.keyboard.type(" Someone should ask the harbor guard directly.");
   await settle(page, 300);
   await shot(sessionShell, "recap-editing");
+  await showTabs();
   // Click out before moving on (it saves) - tidy state, not load-bearing;
   // same route 06-player-collab's commitRecap takes.
   await sessionShell.locator('nav.sheet-tabs a[data-tab="description"]').click();

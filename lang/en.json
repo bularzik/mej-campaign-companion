@@ -79,7 +79,7 @@
     "settings": {
       "autoLink": {
         "name": "Auto-Link Entry Names",
-        "hint": "Newly-typed mentions of other Enhanced Journal entry names — in page text, session recaps and GM notes — become links when the page is saved. Linking stays within the entry's campaign (plus unfiled entries). Existing links, code blocks, and pages flagged to opt out are left untouched."
+        "hint": "Newly-typed mentions of other Enhanced Journal entry names — in page text, session recaps and GM Prep — become links when the page is saved. Linking stays within the entry's campaign (plus unfiled entries). Existing links, code blocks, and pages flagged to opt out are left untouched."
       },
       "autoCaptureEncounters": {
         "name": "Auto-Capture Encounters",
@@ -102,7 +102,7 @@
       },
       "retroLinkMode": {
         "name": "Retroactive Auto-Link",
-        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM notes. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",
+        "hint": "When a new Enhanced Journal entry is created, link existing plain-text mentions of its name in its campaign (and unfiled entries), including session recaps and GM Prep. Silent writes immediately and shows a notification; Confirm shows the GM a review dialog first.",
         "off": "Off",
         "confirm": "Confirm (review dialog)",
         "silent": "Silent (notification)"
@@ -355,7 +355,7 @@
           "objectives": "Objectives",
           "items": "Items",
           "secrets": "Secrets",
-          "gmNotes": "GM Notes"
+          "gmNotes": "GM Prep"
         }
       },
       "mentions": "Mentions",
@@ -487,7 +487,7 @@
       "scopeCampaign": "This campaign ({name}) with its timelines",
       "scopeWorld": "Whole world",
       "includeGM": "Include GM Content",
-      "includeGMHint": "When checked, session GM notes, GM-only objectives, relationships hidden from players, and unrevealed secret sections are included in the export. Party relationships are exported either way.",
+      "includeGMHint": "When checked, session GM Prep, GM-only objectives, relationships hidden from players, and unrevealed secret sections are included in the export. Party relationships are exported either way.",
       "nothingToExport": "There are no journal entries to export yet.",
       "defaultTitle": "Campaign Export",
       "relationships": "Relationships",
@@ -495,7 +495,7 @@
       "sessionNumber": "Session Number",
       "campaignDate": "Campaign Date",
       "timelineHeading": "Timeline",
-      "gmNotesHeading": "GM Notes",
+      "gmNotesHeading": "GM Prep",
       "done": "Exported {count} entries to a Word document.",
       "failed": "Could not generate the Word document. See the console for details."
     },
@@ -533,9 +533,9 @@
       "noSecrets": "No secrets on this session.",
       "linked": "Linked entries",
       "noLinked": "No linked entries.",
-      "gmNotes": "GM Notes",
+      "gmNotes": "GM Prep",
       "editGmNotes": "Edit on the session",
-      "noGmNotes": "No GM notes yet — add them on the session's Session tab.",
+      "noGmNotes": "No GM Prep yet — add it on the session's Details tab.",
       "scratchHeading": "Scratch notes"
     },
     "retroLink": {
@@ -548,7 +548,7 @@
       "hidden": "Mentioned in pages their readers cannot see this entry from (reveal the entry to link it):",
       "hiddenOnly": "\"{name}\" is mentioned in {count} page(s) whose readers cannot see it. Reveal \"{name}\" (or apply the campaign baseline) to link it.",
       "disabled": "Retroactive Auto-Link is set to Off — turn it on in the module settings first.",
-      "gmNotes": "GM notes",
+      "gmNotes": "GM Prep",
       "pageVanished": "the page no longer exists",
       "summary": "Linked \"{name}\" in {count} place(s).",
       "titleMany": "Auto-Link Entries",
@@ -613,7 +613,7 @@
     "playerAccess": {
       "title": "Campaign Companion: players need Enhanced Journal access",
       "body1": "Campaign Companion won't work properly for your players while Monk's Enhanced Journal's <strong>\"Allow players to use Enhanced Journal\"</strong> setting is off.",
-      "body2": "With it off, players can't use the Campaign Hub, Session sheets, the knowledge panel or campaign entries the way the companion expects. Anything they open or create opens in Foundry's default journal editor instead.",
+      "body2": "With it off, players can't use the Campaign Hub, Session sheets, the Links rail or campaign entries the way the companion expects. Anything they open or create opens in Foundry's default journal editor instead.",
       "body3": "Turn it on now to make Campaign Companion work for players?",
       "dontShowAgain": "Don't show this again",
       "enable": "Enable for players",

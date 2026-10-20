@@ -10,7 +10,7 @@ Your GM's world is organised into **campaigns** — a folder of entries plus a *
 
 The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. A header row sits above the tabs: the session's thumbnail (click it to see the image full size, on your screen only), its name, `#<number>`, the characters playing tonight as small chips, and a status chip that reads **Live** with the elapsed time while the session is running and **Ended** once it has finished. From a player's seat the page has three tabs: **Recap**, **Details** and **My Notes**, plus **Relationships** whenever you can add a party relationship there or have one to see (see [Recording relationships](#recording-relationships)).
 
-![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the header row and the tabs Recap, Details and My Notes, with the session's shared recap on the Recap tab (the image predates the redesign and still shows the older layout)](images/session-sheet-player.png)
+![A player's Session sheet for "Session 12 — Shadows over Daggerford": the header row with the session name, #12, two attendee chips and the Ended chip above the tabs Recap, Details and My Notes, with the shared recap and a collapsed Table talk line below and the Links tab at the right edge](images/session-sheet-player.png)
 
 The Recap tab holds one recap for the whole table — what happened, as the GM and the players write it together — and, under it, **Table talk**, the notes everyone jots down during play (see [Taking notes during play](#taking-notes-during-play)). The **Details** tab shows the session number, its in-game date and any secrets already revealed to you.
 
@@ -18,7 +18,7 @@ The Recap tab holds one recap for the whole table — what happened, as the GM a
 
 Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, there is nothing to open or save: click into the recap and type what your character remembers, noticed, or wants to flag for next time. The formatting toolbar appears while your cursor is in the recap:
 
-![The recap open for editing, with the full formatting toolbar directly above the recap text](images/recap-editing.png)
+![The recap being edited: the formatting toolbar sits directly above the recap text while the cursor is in it](images/recap-editing.png)
 
 Your text saves by itself. A small line beside the recap reads "Saving…", "Saved" or "Couldn't save"; it saves when you click away, switch tabs or close the sheet, and periodically while you type. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies, and notes arriving from the table never interrupt what you are typing. Click out of the recap before dropping or pasting an image onto it — while your cursor is in it, the drop is refused with a notice. If you mention another entry by name, it may become a link when you save — that's auto-linking, and it only touches text you just added.
 
