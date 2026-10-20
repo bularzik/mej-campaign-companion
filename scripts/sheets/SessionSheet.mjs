@@ -649,6 +649,11 @@ export class SessionSheet extends EnhancedJournalSheet {
     await super.activateListeners(html);
     this._applyGround(html);
     this._startElapsedClock(html);
+    // A section's actions sit on its <summary>, whose default click action
+    // folds the <details>. Cancel only that default: stopping propagation
+    // instead would also keep the click from the application's delegated
+    // data-action handler.
+    $("details.mej-cc-section > summary .mej-cc-section-actions", html).on("click", (event) => event.preventDefault());
     $(".editor-parent[data-editor-id='recap']", html).on("paste", this._onPasteRecapImage.bind(this));
 
     // Review round 2, finding 2. Core fires "close" on a toggled

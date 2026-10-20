@@ -178,7 +178,7 @@
       "removeAttendee": "Remove attendee",
       "dragActorHint": "Drag an Actor here to add them as an attendee.",
       "noAttendees": "No attendees recorded yet.",
-      "secrets": "Secrets",
+      "secrets": "Secrets & clues",
       "addSecret": "Add secret",
       "deleteSecret": "Delete secret",
       "secretPlaceholder": "Secret text…",

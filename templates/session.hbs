@@ -39,28 +39,26 @@
                 </div>
                 <div class="tab{{#if subtabs.session.active}} active{{/if}}" data-group="primary" data-tab="session">
                     <div class="tab-inner flexcol session-details">
-                        <div class="form-group">
+                        <div class="form-group mej-cc-number-row">
                             <label>{{localize 'MEJCampaignCompanion.session.sessionNumber'}}</label>
                             <input type="number" name="flags.mej-campaign-companion.session.sessionNumber" value="{{session.sessionNumber}}" min="1" step="1" />
                         </div>
 
-                        <fieldset class="campaign-date">
-                            <legend>{{localize 'MEJCampaignCompanion.session.campaignDate'}}</legend>
-                            <div class="form-group flexrow">
-                                <label>{{localize 'MEJCampaignCompanion.session.date.year'}}</label>
-                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.year" value="{{session.campaignDate.year}}" />
-                                <label>{{localize 'MEJCampaignCompanion.session.date.month'}}</label>
-                                <select name="flags.mej-campaign-companion.session.campaignDate.month" data-dtype="Number">
+                        {{!-- The same five fields as before on one row; each keeps its name as
+                              its accessible label and tooltip. --}}
+                        <div class="form-group mej-cc-date-row">
+                            <label>{{localize 'MEJCampaignCompanion.session.campaignDate'}}</label>
+                            <div class="mej-cc-date-fields">
+                                <input type="number" class="mej-cc-date-year" name="flags.mej-campaign-companion.session.campaignDate.year" value="{{session.campaignDate.year}}" placeholder="{{localize 'MEJCampaignCompanion.session.date.year'}}" aria-label="{{localize 'MEJCampaignCompanion.session.date.year'}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.date.year'}}" />
+                                <select name="flags.mej-campaign-companion.session.campaignDate.month" data-dtype="Number" aria-label="{{localize 'MEJCampaignCompanion.session.date.month'}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.date.month'}}">
                                     {{selectOptions monthOptions selected=session.campaignDate.month blank="" valueAttr="value" labelAttr="label"}}
                                 </select>
-                                <label>{{localize 'MEJCampaignCompanion.session.date.day'}}</label>
-                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.day" value="{{session.campaignDate.day}}" min="1" max="31" />
-                                <label>{{localize 'MEJCampaignCompanion.session.date.hour'}}</label>
-                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.hour" value="{{session.campaignDate.hour}}" min="0" max="23" />
-                                <label>{{localize 'MEJCampaignCompanion.session.date.minute'}}</label>
-                                <input type="number" name="flags.mej-campaign-companion.session.campaignDate.minute" value="{{session.campaignDate.minute}}" min="0" max="59" />
+                                <input type="number" class="mej-cc-date-day" name="flags.mej-campaign-companion.session.campaignDate.day" value="{{session.campaignDate.day}}" min="1" max="31" placeholder="{{localize 'MEJCampaignCompanion.session.date.day'}}" aria-label="{{localize 'MEJCampaignCompanion.session.date.day'}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.date.day'}}" />
+                                <input type="number" class="mej-cc-date-time" name="flags.mej-campaign-companion.session.campaignDate.hour" value="{{session.campaignDate.hour}}" min="0" max="23" placeholder="{{localize 'MEJCampaignCompanion.session.date.hour'}}" aria-label="{{localize 'MEJCampaignCompanion.session.date.hour'}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.date.hour'}}" />
+                                <span class="mej-cc-date-sep">:</span>
+                                <input type="number" class="mej-cc-date-time" name="flags.mej-campaign-companion.session.campaignDate.minute" value="{{session.campaignDate.minute}}" min="0" max="59" placeholder="{{localize 'MEJCampaignCompanion.session.date.minute'}}" aria-label="{{localize 'MEJCampaignCompanion.session.date.minute'}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.date.minute'}}" />
                             </div>
-                        </fieldset>
+                        </div>
 
                         <div class="attendees-section">
                             <h3>{{localize 'MEJCampaignCompanion.session.attendees'}}</h3>
@@ -85,14 +83,18 @@
                         </div>
 
                         {{#if (or @root.isGM secrets.length)}}
-                        <div class="secrets-section">
-                            <h3>
-                                {{localize 'MEJCampaignCompanion.session.secrets'}}
+                        <details class="mej-cc-section secrets-section" open>
+                            {{!-- The actions sit on the summary line; activateListeners keeps a
+                                  click on them from also folding the section. --}}
+                            <summary class="mej-cc-section-title">
+                                <span class="mej-cc-section-name">{{localize 'MEJCampaignCompanion.session.secrets'}} ({{secrets.length}})</span>
                                 {{#if @root.isGM}}
-                                <button type="button" class="unbutton" data-action="addSecret" data-tooltip="{{localize 'MEJCampaignCompanion.session.addSecret'}}"><i class="fas fa-plus"></i></button>
-                                <button type="button" class="unbutton" data-action="openPrepBoard" data-tooltip="{{localize 'MEJCampaignCompanion.prep.open'}}"><i class="fa-solid fa-clipboard-list"></i></button>
+                                <span class="mej-cc-section-actions">
+                                    <button type="button" class="unbutton" data-action="addSecret" data-tooltip="{{localize 'MEJCampaignCompanion.session.addSecret'}}"><i class="fas fa-plus" inert></i></button>
+                                    <button type="button" class="unbutton" data-action="openPrepBoard" data-tooltip="{{localize 'MEJCampaignCompanion.prep.open'}}"><i class="fa-solid fa-clipboard-list" inert></i></button>
+                                </span>
                                 {{/if}}
-                            </h3>
+                            </summary>
                             <ol class="secrets-list item-list scrollable">
                                 {{#each secrets as |secret|}}
                                 <li class="item flexrow{{#if secret.revealed}} revealed{{/if}}" data-id="{{secret.id}}">
@@ -108,24 +110,26 @@
                                 <li class="instruction">{{localize 'MEJCampaignCompanion.session.noSecrets'}}</li>
                                 {{/each}}
                             </ol>
-                        </div>
+                        </details>
                         {{/if}}
 
                         {{#if @root.isGM}}
-                        <div class="flexcol editor-parent gm-notes" data-editor-id="gmNotes">
-                            <h3>
-                                {{localize 'MEJCampaignCompanion.session.gmNotes'}}
+                        <details class="mej-cc-section gm-prep" open>
+                            <summary class="mej-cc-section-title">
+                                <span class="mej-cc-section-name">{{localize 'MEJCampaignCompanion.session.gmNotes'}}</span>
+                            </summary>
+                            <div class="flexcol editor-parent gm-notes" data-editor-id="gmNotes">
                                 <button type="button" class="unbutton control-button always-interactive editor-edit" data-action="editGmNotes" data-tooltip="{{localize 'MEJCampaignCompanion.session.editGmNotes'}}">
                                     <i class="fas fa-feather" inert></i>
                                 </button>
-                            </h3>
-                            <div class="editor editor-display wrapper scrollable" data-key="system.gmNotes">
-                                {{{ enrichedGmNotes }}}
+                                <div class="editor editor-display wrapper scrollable" data-key="system.gmNotes">
+                                    {{{ enrichedGmNotes }}}
+                                </div>
+                                <div class="editor editor-control wrapper">
+                                    <prose-mirror name="system.gmNotes" value="{{ data.system.gmNotes }}" document-uuid="{{ document.uuid }}"></prose-mirror>
+                                </div>
                             </div>
-                            <div class="editor editor-control wrapper">
-                                <prose-mirror name="system.gmNotes" value="{{ data.system.gmNotes }}" document-uuid="{{ document.uuid }}"></prose-mirror>
-                            </div>
-                        </div>
+                        </details>
                         {{/if}}
                     </div>
                 </div>

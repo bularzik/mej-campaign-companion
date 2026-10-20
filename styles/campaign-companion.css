@@ -20,8 +20,80 @@
   overflow-y: auto;
 }
 
-.monks-journal-sheet.sheet .session-details > .editor-parent.gm-notes {
-  flex: 1 0 12em;
+/* Details tab (spec 2026-10-19 §4.5): compact rows, then collapsible
+   sections whose actions sit on their summary line. GM Prep's editor sits
+   inside a <details>, whose height is its content's, so MEJ's
+   `flex:1; height:100%` editor chain is replaced by a usable fixed minimum
+   (the squeeze described above cannot happen to a content-sized block). */
+.session-container .session-details > .form-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+.session-container .session-details > .form-group > label {
+  flex: 0 0 9em;
+  font-weight: bold;
+}
+.session-container .session-details > .mej-cc-number-row input { flex: 0 0 5em; }
+.session-container .mej-cc-date-fields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.session-container .mej-cc-date-fields > input.mej-cc-date-year { flex: 0 0 5.5em; }
+.session-container .mej-cc-date-fields > select { flex: 0 1 10em; min-width: 6em; }
+.session-container .mej-cc-date-fields > input.mej-cc-date-day,
+.session-container .mej-cc-date-fields > input.mej-cc-date-time { flex: 0 0 3.6em; }
+.session-container details.mej-cc-section {
+  flex: 0 0 auto;
+  margin-top: 10px;
+}
+.session-container summary.mej-cc-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  border-bottom: 1px solid var(--mej-cc-field-border);
+  cursor: pointer;
+  list-style: none;
+}
+.session-container summary.mej-cc-section-title::-webkit-details-marker { display: none; }
+.session-container summary.mej-cc-section-title::before {
+  content: "\25B8";
+  width: 1em;
+  color: var(--mej-cc-ink);
+}
+.session-container details.mej-cc-section[open] > summary.mej-cc-section-title::before { content: "\25BE"; }
+.session-container .mej-cc-section-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.session-container .mej-cc-section-actions button {
+  width: auto;
+  line-height: 1;
+  padding: 2px 6px;
+  color: var(--mej-cc-ink);
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes {
+  flex: none;
+  height: auto;
+  min-height: 12em;
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor.editor-display {
+  height: auto;
+  min-height: 10em;
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor-control,
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor-control prose-mirror {
+  min-height: 14em;
 }
 
 /* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
@@ -1650,7 +1722,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 /* Foundry colours label/legend/headings directly from the scheme, and MEJ
    its tab strip and instruction lines from its own variables, so plain
    inheritance from the roots above is not enough. */
-.monks-enhanced-journal .session-container :is(label, legend, h1, h2, h3, h4, .editor-display, section.secret),
+.monks-enhanced-journal .session-container :is(label, legend, h1, h2, h3, h4, summary, .editor-display, section.secret),
 .monks-enhanced-journal .session-container nav.sheet-tabs a,
 .monks-enhanced-journal .session-container nav.sheet-tabs a > span,
 .monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-index-name, .mej-cc-timepoint-label, .mej-cc-search-name, .mej-cc-dashboard-name,
