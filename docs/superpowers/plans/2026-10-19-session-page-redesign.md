@@ -30,6 +30,20 @@
 4. **Reopening the attendee dialog after removing someone** → that character is unchecked, and confirming does not re-add them. Test: unit `attendeeChoices` "existing list wins" (Task 4); spec 40 attendee test step (Task 4).
 5. **A player who was not in the audience of a "Showed image" note** → sees no row and no link for it, in Table talk and in the rail. Test: unit `noteLinkTarget` + existing audience filter, spec 40 player test (Task 5).
 
+## Execution waves (owner-approved, 2026-10-20)
+
+The tasks run as one chain in five waves. One implementer per wave works its tasks in order and commits per task; one fresh reviewer checks each wave's diff before the next wave starts.
+
+| Wave | Tasks | Live e2e at the END of the wave only |
+|---|---|---|
+| 1. Logic | Task 1; the pure modules + unit tests of Tasks 3 (`sheet-ground`), 4 (`attendee-choices`), 5 (`note-link`), 7 (`editor-save`), 9 (`links-count`) | none |
+| 2. Page structure | Tasks 2, 3, 6, 8 (remaining steps) | 40, 01, 35, 09, 29 |
+| 3. Wiring | Tasks 4, 5, 9 (remaining steps) | 40, 31, 39, 07, 29 |
+| 4. Autosave | Task 7 (remaining steps) | 40, 01, 06, 24, 34 |
+| 5. Release | Task 10 | full vitest, `e2e:stock:v13` (+ cleanup), v13 spec 40, 29 |
+
+Test policy: unit tests run freely. A task's "Run e2e" steps are **deferred to its wave's end**; there each listed spec runs once, one at a time. After a fix, rerun only the failing spec(s). A spec listed in a task but not in its wave's row still runs in that wave's end pass.
+
 ---
 
 ## File map
