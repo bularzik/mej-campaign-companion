@@ -66,6 +66,13 @@ async function positionShell(page) {
 
 const shell = (page) => page.locator("#MonksEnhancedJournal");
 
+// The Session sheet's Details tab with its header and tab labels (spec 2026-10-19 §4.2, §4.5).
+const sessionDetailsRoots = (S) => [
+  `${S} .session-container .mej-cc-session-header`,
+  `${S} .session-container nav.sheet-tabs`,
+  `${S} .session-container .session-details`
+];
+
 async function openEntry(page, entryId) {
   await page.evaluate(async (id) => {
     await game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id));
@@ -355,7 +362,7 @@ test.describe("29 readability", () => {
           await page.waitForSelector(`${S} .session-container`, { timeout: 15_000 });
           await sheetTab(page, "description");
         }, `${S} .session-container`);
-        await check("session details", () => sheetTab(page, "session"), `${S} .session-container .session-details`);
+        await check("session details", () => sheetTab(page, "session"), sessionDetailsRoots(S));
 
         // MEJ person page carrying every companion injection.
         await check("person page injections", async () => {
@@ -497,7 +504,7 @@ test.describe("29 readability", () => {
             await openEntry(page, seed.sessionId);
             await page.waitForSelector(`${S} .session-container`, { timeout: 15_000 });
             await sheetTab(page, "session");
-          }, `${S} .session-container .session-details`);
+          }, sessionDetailsRoots(S));
           await check(`${bg}: session recap`, () => sheetTab(page, "description"), `${S} .session-container`);
           await check(`${bg}: person page`, async () => {
             await openEntry(page, seed.personId);
@@ -546,7 +553,7 @@ test.describe("29 readability", () => {
           await openEntry(page, seed.sessionId);
           await page.waitForSelector(`${S} .session-container`, { timeout: 15_000 });
           await sheetTab(page, "session");
-        }, `${S} .session-container .session-details`);
+        }, sessionDetailsRoots(S));
         await check("player person page", async () => {
           await openEntry(page, seed.personId);
           await page.waitForSelector(`${S} .mej-cc-knowledge`, { timeout: 15_000 });

@@ -1,0 +1,59 @@
+{{!-- Session header (spec 2026-10-19 §4.2, design "A"): thumbnail, title, one meta
+      line and the GM's session button, in one row above the tabs. Replaces both
+      MEJ's detailed header and the old compact row, so it keeps their two jobs:
+      the sheet's only rename input and its only add-image control. --}}
+<header class="mej-cc-session-header{{#if header.live}} live{{/if}}" data-cc-region="header">
+    <div class="mej-cc-session-thumb-wrap">
+        {{#if header.src}}
+        {{!-- An <a>, not a <button>: MEJ disables every button on a page the viewer
+              cannot edit, and anyone who can see the page may view its image.
+              `nopopout` keeps MEJ's own img click (a popout with Share) off it. --}}
+        <a class="mej-cc-session-thumb" data-action="viewImage" data-tooltip="{{localize 'MEJCampaignCompanion.session.viewImage'}}">
+            <img class="nopopout" src="{{header.src}}" alt="" />
+        </a>
+        {{#if editable}}
+        <a class="mej-cc-session-thumb-change" data-action="addImage" data-tooltip="{{localize 'MEJCampaignCompanion.session.changeImage'}}">
+            <i class="fa-solid fa-pen" inert></i>
+        </a>
+        {{/if}}
+        {{else if editable}}
+        <a class="mej-cc-session-thumb empty" data-action="addImage" data-tooltip="{{localize 'MEJCampaignCompanion.session.addImage'}}">
+            <i class="fa-solid fa-plus" inert></i>
+        </a>
+        {{/if}}
+        {{#if editable}}
+        {{!-- Value carrier, not decoration. MEJ's onAddImage -> _onEditImage opens a
+              FilePicker whose callback writes the chosen path onto
+              img[data-edit="src"] and calls submit(), and FormDataExtended reads
+              `src` off exactly that element's src ATTRIBUTE on every submit
+              (ux/form-data-extended.mjs #processEditableHTML) - without it a
+              picked image is silently dropped. So it carries the current src
+              (any other submit would otherwise clear the image), and no src
+              attribute at all when there is none: the schema's src is
+              blank:false/nullable:true, so a missing attribute submits null. --}}
+        <img class="mej-cc-compact-src" data-edit="src" {{#if header.src}}src="{{header.src}}" {{/if}}alt="" />
+        {{/if}}
+    </div>
+    <div class="mej-cc-session-heading">
+        {{#if editable}}
+        <input type="text" name="name" class="mej-cc-session-title" placeholder="{{localize placeholder}}" value="{{name}}" />
+        {{else}}
+        <h1 class="mej-cc-session-title">{{name}}</h1>
+        {{/if}}
+        <div class="mej-cc-session-meta">
+            {{#if header.number}}<span class="mej-cc-session-number">#{{header.number}}</span>{{/if}}
+            {{!-- Attendee chips and their control land here (Task 4). --}}
+            <span class="mej-cc-session-attendees"></span>
+            {{#if header.statusLabel}}
+            <span class="mej-cc-session-status {{header.status}}"{{#if header.startedAt}} data-started-at="{{header.startedAt}}"{{/if}}>
+                {{#if header.live}}<i class="fa-solid fa-circle" inert></i> {{/if}}{{header.statusLabel}}{{#if header.elapsed}} · <span class="mej-cc-session-elapsed">{{header.elapsed}}</span>{{/if}}
+            </span>
+            {{/if}}
+        </div>
+    </div>
+    {{#if header.button}}
+    <button type="button" class="mej-cc-session-button" data-action="{{header.button.action}}">
+        <i class="fa-solid {{header.button.icon}}" inert></i> {{localize header.button.labelKey}}
+    </button>
+    {{/if}}
+</header>

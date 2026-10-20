@@ -16,7 +16,6 @@ import { MODULE_ID, I18N, RELAY_UPLOAD_DIR, PLAYER_GROUPS_SETTING } from "../con
 import { sessionData } from "./session-data.mjs";
 import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
-import { sessionHeaderContext } from "../logic/session-header.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
 import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
@@ -25,13 +24,16 @@ import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
-import { listNotes, notesEntryOf, addNote, updateNote, deleteNote } from "../data/notes-store.mjs";
+import { listNotes, readNotes, notesEntryOf, addNote, updateNote, deleteNote } from "../data/notes-store.mjs";
 import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
 import { noteToPlainText } from "../logic/note-text.mjs";
 import { currentSession } from "../logic/current-session.mjs";
 // The hooks module's openSessionPage (the campaign's open Session page); a different openSessionPage lives in integrations/mej-adapter.mjs.
 import { openSessionPage as openCampaignSession, startSession, endSession } from "../hooks/current-session.mjs";
-import { tonightContext, streamRows } from "../logic/tonight.mjs";
+import { streamRows } from "../logic/tonight.mjs";
+import { sessionStatus, sessionButton, elapsedLabel } from "../logic/session-state.mjs";
+import { groundTone } from "../logic/sheet-ground.mjs";
+import { notesForSession } from "../logic/notes.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
@@ -85,7 +87,10 @@ export class SessionSheet extends EnhancedJournalSheet {
       editNote: SessionSheet.onEditNote,
       deleteNote: SessionSheet.onDeleteNote,
       startSession: SessionSheet.onStartSession,
-      endSession: SessionSheet.onEndSession
+      endSession: SessionSheet.onEndSession,
+      viewImage: SessionSheet.onViewImage,
+      // Shadows MEJ's own addImage, which only opens the picker while the page has no image.
+      addImage: SessionSheet.onAddImage
     }
   };
 
@@ -94,11 +99,10 @@ export class SessionSheet extends EnhancedJournalSheet {
       root: true,
       template: `modules/${MODULE_ID}/templates/session.hbs`,
       templates: [
-        "modules/monks-enhanced-journal/templates/sheets/partials/sheet-detailed-header.hbs",
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-relationships.hbs",
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-notes.hbs",
         "templates/generic/tab-navigation.hbs",
-        `modules/${MODULE_ID}/templates/hub-tonight.hbs`
+        `modules/${MODULE_ID}/templates/session-header.hbs`
       ],
       scrollable: [
         ".editor-display",
@@ -150,13 +154,6 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     const isGM = game.user.isGM;
     const session = sessionData(this.document);
-
-    // MEJ's shared header partial (session.hbs:4) iterates `fields`; see
-    // logic/session-header.mjs for what core leaves there and why.
-    Object.assign(context, sessionHeaderContext({
-      src: context.data?.src ?? null,
-      editable: context.editable ?? this.isEditable
-    }));
 
     // Month <select> options for the campaign-date field (I5): always 0-based, matching
     // both the module's storage contract and the Hub's own #promptTimepoint dialog - see
@@ -228,9 +225,10 @@ export class SessionSheet extends EnhancedJournalSheet {
       delete context.data.system.gmNotes;
     }
 
-    // Notes stream + Tonight strip (Plan B). Stored note text is escaped plus
-    // @UUID shorthand only (linkNoteText), so enriched output is safe for {{{ }}}.
+    // Notes stream (Plan B). Stored note text is escaped plus @UUID shorthand
+    // only (linkNoteText), so enriched output is safe for {{{ }}}.
     const campaign = campaignOf(this.document);
+    const running = campaign ? currentSession(campaign) : null;
     if (campaign) {
       const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const rows = streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime });
@@ -238,19 +236,32 @@ export class SessionSheet extends EnhancedJournalSheet {
         canWrite: !!notesEntryOf(campaign)?.isOwner,
         rows: await Promise.all(rows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
       };
-      const open = openCampaignSession(campaign);
-      const cs = currentSession(campaign);
-      // The strip only reports state here (canWrite false: no capture box of its own); the stream's box is the capture.
-      const tonight = tonightContext({
-        campaign, session: open && cs ? { uuid: open.uuid, name: open.name, startedAt: cs.startedAt } : null,
-        notes: listNotes(campaign), user: game.user, formatTime, canWrite: false
-      });
-      if (tonight) tonight.recent = await Promise.all(tonight.recent.map(async (n) => ({ ...n, text: await enrichNoteText(n.text) })));
-      context.tonight = tonight;
     } else {
       context.notesStream = { canWrite: false, rows: [] };
-      context.tonight = null;
     }
+
+    // Header (spec 2026-10-19 §4.2). Status is the same for every viewer, so
+    // Table talk is counted over all of this session's notes, not the
+    // viewer's visible ones.
+    const status = sessionStatus({
+      startedAt: session.startedAt, endedAt: session.endedAt,
+      isCurrent: running?.uuid === this.document.uuid,
+      hasTableTalk: campaign ? notesForSession(readNotes(campaign), this.document.uuid).length > 0 : false,
+      recap: this.document.system?.recap ?? ""
+    });
+    const live = status === "live";
+    const button = campaign ? sessionButton(status, isGM) : null;
+    context.header = {
+      status, live,
+      statusLabel: live ? game.i18n.localize(`${I18N}.session.statusLive`) : status === "ended" ? game.i18n.localize(`${I18N}.session.statusEnded`) : "",
+      startedAt: live ? running.startedAt : null,
+      elapsed: live ? elapsedLabel(Date.now() - running.startedAt) : "",
+      button: button ? { ...button, icon: button.action === "endSession" ? "fa-stop" : "fa-play" } : null,
+      attendees: context.attendeeDetails,
+      canManageAttendees: !!(context.editable ?? this.isEditable),
+      number: session.sessionNumber ?? null,
+      src: context.data?.src || null
+    };
 
     return context;
   }
@@ -611,9 +622,9 @@ export class SessionSheet extends EnhancedJournalSheet {
     // The notes capture box is gated by the notes entry's ownership instead
     // (the box only renders when notesStream.canWrite, and the store enforces
     // it), so a player who merely observes this page can still note. The
-    // strip's GM Start/End buttons are re-enabled for a GM for the same reason.
+    // header's GM Start/End button is re-enabled for a GM for the same reason.
     $('input[name="session-note"], [data-action="captureSessionNote"]', form).prop("disabled", false);
-    if (game.user.isGM) $('[data-cc-tonight] [data-action="startSession"], [data-cc-tonight] [data-action="endSession"]', form).prop("disabled", false);
+    if (game.user.isGM) $('.mej-cc-session-header .mej-cc-session-button', form).prop("disabled", false);
   }
 
   // Header comment at the top of this file: any DOM listener beyond the
@@ -622,6 +633,8 @@ export class SessionSheet extends EnhancedJournalSheet {
   // equivalent, so it's bound directly.
   async activateListeners(html) {
     await super.activateListeners(html);
+    this._applyGround(html);
+    this._startElapsedClock(html);
     $(".editor-parent[data-editor-id='recap']", html).on("paste", this._onPasteRecapImage.bind(this));
 
     // Review round 2, finding 2. Core fires "close" on a toggled
@@ -658,6 +671,67 @@ export class SessionSheet extends EnhancedJournalSheet {
       trackDraft(noteInput, NOTE_DRAFTS, key);
       restoreDraft(noteInput, NOTE_DRAFTS, key);
     }
+  }
+
+  // The sheet sits on MEJ's own ground (spec 2026-10-19 §4.1) and paints none
+  // of its own, so its ink has to follow whatever paints underneath. With an
+  // image chosen the [background-image] token blocks already do that; with
+  // none, MEJ 13.06 still paints parchment under a dark scheme while 14.x
+  // paints a dark ground, which CSS alone cannot tell apart - so read the
+  // computed ground off the nearest ancestor that paints one.
+  _applyGround(html) {
+    const root = $(".session-container", html).get(0);
+    if (!root) return;
+    const measure = () => {
+      let backgroundImage = "none";
+      for (let el = root.parentElement; el; el = el.parentElement) {
+        const bg = getComputedStyle(el).backgroundImage;
+        if (bg && bg !== "none") { backgroundImage = bg; break; }
+        if (el.classList.contains("monks-enhanced-journal")) break;
+      }
+      const themed = root.closest(".theme-dark, .theme-light");
+      const isDarkScheme = themed ? themed.classList.contains("theme-dark") : document.body.classList.contains("theme-dark");
+      root.dataset.mejCcGround = groundTone({ backgroundImage, isDarkScheme });
+    };
+    measure();
+    // MEJ's shell inserts the subsheet before calling activateListeners, but a
+    // popped-out sheet can still be detached here; measure again once laid out.
+    if (!root.isConnected) requestAnimationFrame(measure);
+  }
+
+  // The live chip's elapsed time ticks once a minute; the timer stops itself
+  // once its header leaves the DOM (any re-render replaces it).
+  _startElapsedClock(html) {
+    clearInterval(this._ccElapsedTimer);
+    const chip = $(".mej-cc-session-header .mej-cc-session-status.live[data-started-at]", html).get(0);
+    if (!chip) return;
+    const startedAt = Number(chip.dataset.startedAt);
+    const timer = setInterval(() => {
+      if (!chip.isConnected) return clearInterval(timer);
+      const label = chip.querySelector(".mej-cc-session-elapsed");
+      if (label) label.textContent = elapsedLabel(Date.now() - startedAt);
+    }, 60_000);
+    this._ccElapsedTimer = timer;
+  }
+
+  // Full-size view of the session image for this user only (no Share).
+  static onViewImage() {
+    const src = this.document.src;
+    if (!src) return;
+    new foundry.applications.apps.ImagePopout({ src, window: { title: this.document.name } }).render(true);
+  }
+
+  // Owners pick (or change) the image; Shift-click removes it.
+  static async onAddImage(event) {
+    if (!this.document.isOwner) return;
+    if (event?.shiftKey) {
+      if (this.document.src) {
+        await this.document.update({ src: null });
+        this.render();
+      }
+      return;
+    }
+    this._onEditImage(event);
   }
 
   // --- Notes stream (Plan B) ------------------------------------------------

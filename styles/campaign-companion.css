@@ -81,40 +81,129 @@
   flex: 0 0 auto;
 }
 
-/* Compact stand-in for MEJ's detailed header on an image-less Session (spec
-   amendment, review of Task 3). MEJ's header is a ~250px flexrow block; this
-   is deliberately one line — the rename input, an add-image button, and the
-   hidden img[data-edit="src"] the add-image round trip submits through (see
-   session.hbs for why that element has to exist). `flex: 0 0 auto` keeps it
-   from stretching inside .session-container's flexcol. */
-.session-container .mej-cc-session-header-compact {
+/* Session header (spec 2026-10-19 §4.2, design "A"): one row above the tabs -
+   56px thumbnail, title over one meta line, the GM's session button at the
+   right end. Own flex context, deliberately NOT class="flexrow": core's
+   `.flexrow > * { flex: 1 }` plus wrapping stacks every control on its own
+   line. `flex: 0 0 auto` keeps it from stretching inside .session-container's
+   flexcol. */
+.session-container .mej-cc-session-header {
   display: flex;
-  /* Deliberately NOT class="flexrow": core's `.flexrow > * { flex: 1 }` plus
-     `flex-wrap: wrap` put each control on its own line here (82px instead of
-     one 32px row, measured live). Own flex context, no wrapping. */
   flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  padding: 6px 4px;
   margin-bottom: 4px;
+  border-bottom: 2px solid var(--mej-cc-field-border);
 }
-
-.session-container .mej-cc-session-header-compact input[name="name"] {
+.session-container .mej-cc-session-thumb-wrap {
+  position: relative;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+}
+.session-container .mej-cc-session-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--mej-cc-field-border);
+}
+.session-container .mej-cc-session-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+}
+.session-container .mej-cc-session-thumb.empty {
+  border-style: dashed;
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  font-size: 18px;
+}
+.session-container .mej-cc-session-thumb-change {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+}
+/* Never displayed: it exists only to carry `src` into the form submit. */
+.session-container .mej-cc-session-header .mej-cc-compact-src {
+  display: none;
+}
+.session-container .mej-cc-session-heading {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
+  gap: 3px;
 }
-
-.session-container .mej-cc-session-header-compact .mej-cc-add-image {
+.session-container .mej-cc-session-heading .mej-cc-session-title {
+  margin: 0;
+  font-family: var(--mej-header-font, var(--font-h1, "Modesto Condensed", serif));
+  font-size: var(--font-size-24, 24px);
+  font-weight: bold;
+  line-height: 1.1;
+  border: none;
+  height: auto;
+}
+/* `.monks-enhanced-journal … .mej-cc-session-header` only clears the shell's
+   field rule below: the title reads as a title until it is hovered or edited. */
+.monks-enhanced-journal .session-container .mej-cc-session-header input.mej-cc-session-title {
+  width: 100%;
+  padding: 0 2px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.monks-enhanced-journal .session-container .mej-cc-session-header input.mej-cc-session-title:is(:hover, :focus) {
+  background: var(--mej-cc-field-bg);
+  border-color: var(--mej-cc-field-border);
+}
+.session-container .mej-cc-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .mej-cc-session-attendees:empty { display: none; }
+.session-container .mej-cc-session-status {
+  padding: 0 7px;
+  border-radius: 10px;
+  border: 1px solid var(--mej-cc-field-border);
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  white-space: nowrap;
+}
+/* Live: white on a green that clears 4.5:1 on its own, whatever is under it. */
+.monks-enhanced-journal .session-container .mej-cc-session-status.live {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+.session-container .mej-cc-session-status.live i { font-size: 0.7em; vertical-align: middle; }
+.session-container .mej-cc-session-button {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  line-height: 1;
-  padding: 0;
-}
-
-/* Never displayed: it exists only to carry `src` into the form submit. */
-.session-container .mej-cc-session-header-compact .mej-cc-compact-src {
-  display: none;
+  width: auto;
+  white-space: nowrap;
+  padding: 2px 10px;
+  line-height: 1.6;
 }
 
 /* Campaign Hub shell page - shell pages get no MEJ per-type theming (see
@@ -1514,6 +1603,41 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   --mej-cc-halo: #0b0a13;
 }
 
+/* The Session sheet paints no ground of its own (spec 2026-10-19 §4.1): it
+   sits on MEJ's, like any core entry. With an image chosen the blocks above
+   follow it; with none, SessionSheet._applyGround reads what actually paints
+   under the sheet (MEJ 13.06 keeps parchment under a dark scheme, 14.x paints
+   a dark ground) and marks the root, and the ink follows that. */
+.monks-enhanced-journal:is(:not([background-image]), [background-image='none']) .session-container[data-mej-cc-ground="light"] {
+  --mej-cc-ink: #191813;
+  --mej-cc-ink-muted: #3a372f;
+  --mej-cc-link: #7a2500;
+  --mej-cc-field-ink: #191813;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.6);
+  --mej-cc-field-border: rgba(25, 24, 19, 0.5);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.5);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+.monks-enhanced-journal:is(:not([background-image]), [background-image='none']) .session-container[data-mej-cc-ground="dark"] {
+  --mej-cc-ink: #efe6d8;
+  --mej-cc-ink-muted: #c9bfae;
+  --mej-cc-link: #ffa463;
+  --mej-cc-field-ink: #efe6d8;
+  --mej-cc-field-bg: rgba(11, 10, 19, 0.6);
+  --mej-cc-field-border: rgba(239, 230, 216, 0.35);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.1);
+  --mej-cc-surface: rgba(11, 10, 19, 0.85);
+  --mej-cc-halo: #0b0a13;
+}
+
+/* Section headings on the Session sheet are ordinary heading size, not
+   Foundry's oversized h3 (spec 2026-10-19 §4.1). */
+.monks-enhanced-journal .session-container .sheet-body :is(h3, summary.mej-cc-section-title) {
+  font-size: var(--font-size-14, 14px);
+}
+
 /* Where the tokens apply: companion-owned roots inside the shell only. */
 .monks-enhanced-journal .session-container,
 .monks-enhanced-journal .mej-cc-hub-container,
@@ -1565,8 +1689,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 /* Companion buttons in the shell: Foundry's translucent button surface
    takes the image's colour underneath, so give them the field surface. */
 .monks-enhanced-journal .mej-cc-hub-container button,
-.monks-enhanced-journal .session-container .mej-cc-session-header-compact button,
-.monks-enhanced-journal .session-container .mej-cc-tonight button,
+.monks-enhanced-journal .session-container .mej-cc-session-header button,
 .monks-enhanced-journal .session-container section.secret > button.reveal,
 .monks-enhanced-journal .mej-cc-secret-audience {
   color: var(--mej-cc-field-ink);
@@ -1620,7 +1743,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    while 14.x paints a dark ground, and CSS cannot tell the two apart - so
    the companion supplies the dark ground its light ink needs. Transparent
    everywhere else. */
-.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) {
+.monks-enhanced-journal :is(.mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) {
   background: var(--mej-cc-surface);
 }
 

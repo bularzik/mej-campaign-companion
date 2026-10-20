@@ -367,56 +367,44 @@ test.describe("01 session entries", () => {
     await gmContext.close();
   });
 
-  // S2 (spec Group S): SessionSheet never shadowed context.fields, so MEJ's
-  // shared detailed-header partial iterated Foundry's raw DataFields and drew
-  // "Page Name / Type / File Path / Page Category / Sort Order" over empty divs,
-  // with a broken image beside them (the partial's onerror fallback resolves to
-  // assets/session.png, which MEJ does not ship).
-  //
-  // Amendment (review of Task 3): that partial is also the sheet's ONLY rename
-  // input and its only add-image control, so suppressing it outright would
-  // strand an image-less Session with no way to ever gain an image. An editor
-  // therefore gets a compact companion row instead; a non-editor with no image
-  // gets nothing.
-  test("a fresh Session sheet renders no schema-labelled header rows, and keeps rename + add-image in a compact row", async ({ page, browser }) => {
+  // S2 (spec Group S), redone by spec 2026-10-19 §4.2: MEJ's shared
+  // detailed-header partial drew "Page Name / Type / File Path / Page
+  // Category / Sort Order" over empty divs on a Session. The companion header
+  // replaces it outright, so it has to keep that partial's two jobs: the
+  // sheet's only rename input and its only add-image control.
+  test("a fresh Session sheet renders the companion header: rename + add-image in one row, no MEJ header", async ({ page, browser }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Header`;
     const entryId = await createSessionEntry(page, name);
     const shell = page.locator("#MonksEnhancedJournal");
     await expect(shell.locator(".session-container .journal-sheet-header")).toHaveCount(0);
-    await expect(shell.locator(".session-container .journal-sheet-header .form-group")).toHaveCount(0);
-    // The sheet still works with the header suppressed: the tab strip is the
-    // first thing in the container, and the recap editor is present.
     await expect(shell.locator(".session-container nav.sheet-tabs")).toHaveCount(1);
     await expect(shell.locator('.editor-parent[data-editor-id="recap"]')).toHaveCount(1);
 
-    // The compact row stands in for the suppressed header: one rename input,
-    // one add-image control, and the img[data-edit="src"] value carrier that
-    // MEJ's FilePicker callback writes to and FormDataExtended reads `src` off
-    // (form-data-extended.mjs #processEditableHTML - without it a picked image
-    // would be dropped on submit).
-    const compact = shell.locator(".session-container .mej-cc-session-header-compact");
-    await expect(compact).toHaveCount(1);
-    await expect(compact.locator('input[name="name"]')).toHaveValue(name);
-    await expect(compact.locator('[data-action="addImage"]')).toHaveCount(1);
-    await expect(compact.locator('img[data-edit="src"]')).toHaveCount(1);
-    // It is one line, not a stacked block - the whole point of suppressing the
-    // ~250px header.
-    const compactHeight = await compact.evaluate((el) => el.getBoundingClientRect().height);
-    expect(compactHeight).toBeGreaterThan(0);
-    expect(compactHeight).toBeLessThan(60);
-    // The action the control names is actually registered on this sheet -
-    // SessionSheet declares its own DEFAULT_OPTIONS.actions, so this pins that
-    // ApplicationV2 still merges MEJ's map (EnhancedJournalSheet.js:48) in
-    // rather than replacing it, which is what makes the button do anything.
-    const inheritsAddImage = await page.evaluate(
-      () => typeof game.MonksEnhancedJournal?.journal?.subsheet?.options?.actions?.addImage === "function");
-    expect(inheritsAddImage).toBe(true);
+    // One rename input, one add-image control (the dashed "+" thumbnail), and
+    // the img[data-edit="src"] value carrier that MEJ's FilePicker callback
+    // writes to and FormDataExtended reads `src` off (form-data-extended.mjs
+    // #processEditableHTML - without it a picked image would be dropped).
+    const header = shell.locator(".session-container .mej-cc-session-header");
+    await expect(header).toHaveCount(1);
+    await expect(header.locator('input[name="name"]')).toHaveValue(name);
+    await expect(header.locator('.mej-cc-session-thumb.empty[data-action="addImage"]')).toHaveCount(1);
+    await expect(header.locator('img[data-edit="src"]')).toHaveCount(1);
+    // One row: thumbnail, title + meta, button - not a stacked block.
+    const headerHeight = await header.evaluate((el) => el.getBoundingClientRect().height);
+    expect(headerHeight).toBeGreaterThan(0);
+    expect(headerHeight).toBeLessThan(100);
+    // SessionSheet declares its own DEFAULT_OPTIONS.actions (addImage among
+    // them, shadowing MEJ's); ApplicationV2 must still merge MEJ's map in.
+    const actions = await page.evaluate(() => {
+      const a = game.MonksEnhancedJournal?.journal?.subsheet?.options?.actions ?? {};
+      return { addImage: typeof a.addImage, viewImage: typeof a.viewImage, showPlayers: typeof a.showPlayers };
+    });
+    expect(actions).toEqual({ addImage: "function", viewImage: "function", showPlayers: "function" });
 
-    // A submit that isn't about the name leaves the name alone, even though the
-    // compact row now DOES carry a name input, and does not write a bogus src
-    // through the value carrier (JournalEntryPage.src is blank:false).
+    // A submit that isn't about the name leaves the name alone and does not
+    // write a bogus src through the value carrier (JournalEntryPage.src is blank:false).
     await shell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(page, 200);
     const numberInput = shell.locator('input[name="flags.mej-campaign-companion.session.sessionNumber"]');
@@ -432,18 +420,17 @@ test.describe("01 session entries", () => {
     }, entryId);
     expect(afterNumber.name).toBe(name);
     expect(afterNumber.src ?? null).toBe(null);
+    await expect(header.locator(".mej-cc-session-number")).toHaveText("#3");
 
-    // And the compact input really is the rename control: a rename through it
-    // reaches the document.
+    // And the header input really is the rename control.
     const renamed = `${name} Renamed`;
-    await shell.locator('.session-container .mej-cc-session-header-compact input[name="name"]').fill(renamed);
-    await shell.locator('.session-container .mej-cc-session-header-compact input[name="name"]').blur();
+    await shell.locator('.session-container .mej-cc-session-header input[name="name"]').fill(renamed);
+    await shell.locator('.session-container .mej-cc-session-header input[name="name"]').blur();
     await page.waitForFunction(
       ({ id, n }) => game.journal.get(id).pages.contents[0].name === n, { id: entryId, n: renamed });
 
-    // The other side of the amendment's rule: a viewer who cannot edit and has
-    // no image to look at gets NEITHER header. The rename input and the
-    // add-image control must not follow a read-only player around (MEJ's
+    // A viewer who cannot edit sees the header (title, meta) but neither the
+    // rename input, the add-image control nor the value carrier (MEJ's
     // _toggleDisabled would only grey them out, which is not the same thing).
     await page.evaluate(async (id) => {
       await game.journal.get(id).update({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER } });
@@ -456,11 +443,14 @@ test.describe("01 session entries", () => {
     }, entryId);
     await settle(playerPage, 600);
     const playerShell = playerPage.locator("#MonksEnhancedJournal");
-    // Positive render guard first, so the two absence checks below cannot pass
-    // just because the sheet never mounted for this user.
     await expect(playerShell.locator('.editor-parent[data-editor-id="recap"]')).toHaveCount(1);
+    const playerHeader = playerShell.locator(".session-container .mej-cc-session-header");
+    await expect(playerHeader).toHaveCount(1);
+    await expect(playerHeader.locator(".mej-cc-session-title")).toHaveText(renamed);
+    await expect(playerHeader.locator('input[name="name"]')).toHaveCount(0);
+    await expect(playerHeader.locator('[data-action="addImage"]')).toHaveCount(0);
+    await expect(playerHeader.locator('img[data-edit="src"]')).toHaveCount(0);
     await expect(playerShell.locator(".session-container .journal-sheet-header")).toHaveCount(0);
-    await expect(playerShell.locator(".session-container .mej-cc-session-header-compact")).toHaveCount(0);
     // Closed before the delete below: MEJ's shell errors re-rendering a
     // subsheet whose document is deleted out from under it (see the player
     // gmNotes test's own note on that MEJ-side edge case).
@@ -470,20 +460,15 @@ test.describe("01 session entries", () => {
     assertNoConsoleErrors(errors);
   });
 
-  // The other half of S2: `fields` is shadowed to [] so the partial never
-  // iterates the raw page schema. `showHeader` alone cannot prove that - it
-  // hides the partial entirely - so this drives the case where MEJ's header
-  // DOES render (the page has an image) and pins that it draws zero schema
-  // rows. Reverting only the context.fields shadowing fails here and nowhere
-  // else.
-  test("an image-bearing Session renders MEJ's header with zero schema rows", async ({ page }) => {
+  // An image-bearing Session shows the image as the header's 56px thumbnail
+  // (MEJ's detailed header never renders), and the value carrier carries the
+  // current src - a submit about anything else must not clear the image.
+  test("an image-bearing Session shows the 56px thumbnail and no MEJ header", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Image Header`;
     const entryId = await createSessionEntry(page, name);
-    // A path Foundry actually ships, so the header's <img> resolves and the
-    // partial's onerror fallback (assets/session.png, which MEJ does not ship)
-    // never fires.
+    // A path Foundry actually ships, so the thumbnail resolves.
     await page.evaluate(async (id) => {
       const p = game.journal.get(id).pages.contents[0];
       await p.update({ src: "icons/svg/book.svg" });
@@ -492,14 +477,28 @@ test.describe("01 session entries", () => {
     await settle(page, 800);
 
     const shell = page.locator("#MonksEnhancedJournal");
-    const header = shell.locator(".session-container .journal-sheet-header");
-    await expect(header).toHaveCount(1);
-    await expect(header.locator("img.profile")).toHaveAttribute("src", "icons/svg/book.svg");
-    // The schema rows the partial used to draw ("Page Name / Type / File Path /
-    // Page Category / Sort Order") are the .form-group children of this header.
-    await expect(header.locator(".form-group")).toHaveCount(0);
-    // With the real header up, the compact stand-in must not also be there.
-    await expect(shell.locator(".session-container .mej-cc-session-header-compact")).toHaveCount(0);
+    await expect(shell.locator(".session-container .journal-sheet-header")).toHaveCount(0);
+    const header = shell.locator(".session-container .mej-cc-session-header");
+    const thumb = header.locator('.mej-cc-session-thumb[data-action="viewImage"] img');
+    await expect(thumb).toHaveAttribute("src", "icons/svg/book.svg");
+    const box = await thumb.evaluate((el) => el.getBoundingClientRect().width);
+    expect(Math.round(box)).toBeLessThanOrEqual(56);
+    expect(Math.round(box)).toBeGreaterThanOrEqual(50);
+    await expect(header.locator('.mej-cc-session-thumb-change[data-action="addImage"]')).toHaveCount(1);
+    await expect(header.locator('img[data-edit="src"]')).toHaveAttribute("src", "icons/svg/book.svg");
+
+    // A rename submit keeps the image.
+    await header.locator('input[name="name"]').fill(`${name} 2`);
+    await header.locator('input[name="name"]').blur();
+    await page.waitForFunction(({ id, n }) => game.journal.get(id).pages.contents[0].name === n, { id: entryId, n: `${name} 2` });
+    expect(await page.evaluate((id) => game.journal.get(id).pages.contents[0].src, entryId)).toBe("icons/svg/book.svg");
+
+    // Clicking the thumbnail opens a local image popout.
+    await shell.locator('.session-container .mej-cc-session-header .mej-cc-session-thumb[data-action="viewImage"]').click();
+    await expect.poll(() => page.evaluate(() => [...foundry.applications.instances.values()]
+      .some((a) => a instanceof foundry.applications.apps.ImagePopout && a.options?.src === "icons/svg/book.svg")), { timeout: 10_000 }).toBe(true);
+    await page.evaluate(() => Promise.all([...foundry.applications.instances.values()]
+      .filter((a) => a instanceof foundry.applications.apps.ImagePopout).map((a) => a.close())));
 
     await cleanupEntries(page, [entryId]);
     assertNoConsoleErrors(errors);

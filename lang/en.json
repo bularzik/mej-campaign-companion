@@ -137,9 +137,9 @@
     },
     "tabs": {
       "description": "Recap",
-      "session": "Session",
+      "session": "Details",
       "relationships": "Relationships",
-      "notes": "Notes"
+      "notes": "My Notes"
     },
     "session": {
       "autoName": "Session {n}",
@@ -177,10 +177,14 @@
       "deleteSecret": "Delete secret",
       "secretPlaceholder": "Secret text…",
       "noSecrets": "No secrets yet.",
-      "gmNotes": "GM Notes",
+      "gmNotes": "GM Prep",
       "editGmNotes": "Edit GM notes",
       "gmNotesSaveFailed": "GM notes could not be saved. See the console for details.",
-      "addImage": "Add image"
+      "addImage": "Add image",
+      "viewImage": "View image",
+      "changeImage": "Change image (Shift-click to remove it)",
+      "statusLive": "Live",
+      "statusEnded": "Ended"
     },
     "campaign": {
       "createButton": "New campaign",
