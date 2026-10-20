@@ -1902,7 +1902,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    (portrait + name), a hover x to remove, and a trailing control that opens
    the checklist. Ink and chip ground are the --mej-cc tokens the status chip
    already uses, so they hold 4.5:1 on every MEJ background. */
-.monks-enhanced-journal .mej-cc-session-attendees { gap: 4px 6px; align-items: center; }
+.monks-enhanced-journal .session-container .mej-cc-session-attendees { gap: 4px 6px; align-items: center; }
 .monks-enhanced-journal .mej-cc-attendee-chip,
 .monks-enhanced-journal .mej-cc-attendee-control {
   display: inline-flex;
