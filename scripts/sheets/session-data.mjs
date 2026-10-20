@@ -10,12 +10,14 @@ export const SESSION_DEFAULTS = Object.freeze({
   sessionNumber: null,
   campaignDate: null,
   attendees: [],
-  secrets: []
+  secrets: [],
+  startedAt: null,
+  endedAt: null
 });
 
 /**
  * @param {{ getFlag: (scope: string, key: string) => any }} page
- * @returns {{ sessionNumber: number|null, campaignDate: object|null, attendees: string[], secrets: object[] }}
+ * @returns {{ sessionNumber: number|null, campaignDate: object|null, attendees: string[], secrets: object[], startedAt: number|null, endedAt: number|null }}
  */
 export function sessionData(page) {
   const stored = page.getFlag("mej-campaign-companion", "session") ?? {};
