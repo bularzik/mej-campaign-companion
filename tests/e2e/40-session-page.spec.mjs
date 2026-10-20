@@ -363,11 +363,12 @@ test.describe("40 session page", () => {
   });
 
   // Spec 2026-10-19 §4.4: always-editable text with autosave.
-  const newSession = (name, n) => gm.page.evaluate(async ({ folder, name, n }) => {
+  // `ownership` defaults to observer, which the campaign's ownership hook raises to owner for players.
+  const newSession = (name, n, ownership = { default: 2 }) => gm.page.evaluate(async ({ folder, name, n, ownership }) => {
     const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
-    const e = await JournalEntry.create({ name, folder, ownership: { default: 2 }, pages: [buildSessionPageData(name, "<p>Opening line.</p>", null, n)] });
+    const e = await JournalEntry.create({ name, folder, ownership, pages: [buildSessionPageData(name, "<p>Opening line.</p>", null, n)] });
     return { id: e.id, uuid: e.pages.contents[0].uuid, name };
-  }, { folder: campaignId, name, n });
+  }, { folder: campaignId, name, n, ownership });
   const editorOf = (page, id) => page.locator(`#MonksEnhancedJournal .session-container .editor-parent[data-editor-id="${id}"]`);
 
   test("typing survives a live note", async () => {
@@ -437,9 +438,10 @@ test.describe("40 session page", () => {
   // Last: it logs the GM out and back in.
   test("My Notes without a GM", async ({ browser }) => {
     test.setTimeout(180_000);
-    const s14 = await newSession(`${PREFIX} S14`, 14);
     const playerId = await player.page.evaluate(() => game.user.id);
-    // A view-only page for the player: My Notes saves go through MEJ's GM relay.
+    // A view-only page for the player (default none - below observer, so the campaign's
+    // ownership hook leaves it - plus an observer grant): My Notes saves go through MEJ's GM relay.
+    const s14 = await newSession(`${PREFIX} S14`, 14, { default: 0, [playerId]: 2 });
     expect(await player.page.evaluate(async (uuid) => (await fromUuid(uuid))?.isOwner, s14.uuid)).toBe(false);
     await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s14.uuid);
     await expect(player.page.locator("#MonksEnhancedJournal .session-container .mej-cc-session-header")).toHaveCount(1, { timeout: 15_000 });
