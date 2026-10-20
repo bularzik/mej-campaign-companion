@@ -325,8 +325,10 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   async _onDropRecapImage(event) {
-    // A drop the live editor's own image plugin already took (an uploader typing in it).
-    if (event.defaultPrevented) return;
+    // An uploader typing in the recap who drops into the editor: its own image
+    // plugin inserts the file (DragDrop has already called preventDefault, so
+    // that cannot be read off the event).
+    if (event.target?.closest?.("prose-mirror") && game.user.can("FILES_UPLOAD")) return;
     const files = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type?.startsWith("image/"));
     if (!files.length) return; // not a file drop (e.g. a stray Actor drag) - nothing for us to do
     event.preventDefault();
@@ -335,7 +337,8 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   async _onPasteRecapImage(event) {
-    if (event.defaultPrevented) return;
+    // A paste the live editor's own image plugin already took (an uploader typing in it).
+    if (event.isDefaultPrevented?.() || event.originalEvent?.defaultPrevented) return;
     const files = [...(event.originalEvent?.clipboardData?.files ?? event.clipboardData?.files ?? [])]
       .filter((f) => f.type?.startsWith("image/"));
     if (!files.length) return;
