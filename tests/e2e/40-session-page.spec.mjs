@@ -223,6 +223,7 @@ test.describe("40 session page", () => {
       await boxes.nth(1).uncheck();
       await dialog.locator('button[data-action="confirm"]').click();
       await expect(chips()).toHaveCount(1, { timeout: 15_000 });
+      await expect(dialog).toHaveCount(0, { timeout: 10_000 });
 
       // Reopening keeps the unchecked one unchecked; confirming changes nothing.
       await header().locator('[data-action="manageAttendees"]').click();
@@ -231,6 +232,7 @@ test.describe("40 session page", () => {
       await expect(dialog.locator('input[name="attendee"]:checked')).toHaveCount(1);
       await expect(dialog.locator('button[data-action="confirm"]')).toContainText("Save attendees");
       await dialog.locator('button[data-action="confirm"]').click();
+      await expect(dialog).toHaveCount(0, { timeout: 10_000 });
       await settle(gm.page, 800);
       await expect(chips()).toHaveCount(1);
 
