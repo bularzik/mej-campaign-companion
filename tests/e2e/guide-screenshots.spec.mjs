@@ -225,6 +225,21 @@ async function openEntry(page, entryId) {
   return page.locator("#MonksEnhancedJournal");
 }
 
+/** The MEJ tab strip remembers every entry the test user ever opened, so
+ * under a world with fixture debris it fills with dozens of tabs. Hide the
+ * inactive ones for a shot (CSS only, no tab data is touched). Returns the
+ * undo function. */
+async function hideTabClutter(page) {
+  await page.evaluate(() => {
+    const st = document.createElement("style");
+    st.id = "guide-shot-hide-tabs";
+    st.textContent = "#MonksEnhancedJournal .journal-tab:not(.active) { display: none !important; }";
+    document.head.append(st);
+  });
+  await settle(page, 200);
+  return () => page.evaluate(() => document.getElementById("guide-shot-hide-tabs")?.remove());
+}
+
 /** Open any entry (so the MEJ shell exists) then click the Campaign Hub
  * toolbar button. Idempotent — 08-query-graph.spec.mjs's openHub() pattern:
  * re-clicking the sidebar journal tab while the shell is already open can
@@ -781,7 +796,7 @@ guideDescribe("guide screenshots", () => {
     }, { id: MODULE_ID, names: ["Kestrel Ashgrove", "Doran Emberhollow"] });
     const actorUuids = await page.evaluate((ids) => ids.map((id) => game.actors.get(id).uuid), actorIds);
     for (const uuid of actorUuids) {
-      await dropDocumentOnto(page, ".attendees-list", { type: "Actor", uuid });
+      await dropDocumentOnto(page, ".mej-cc-session-header", { type: "Actor", uuid });
       await settle(page, 400);
     }
 
@@ -954,6 +969,10 @@ guideDescribe("guide screenshots", () => {
 
     const indexShell = await openHub(page);
     await settle(page, 300);
+    // Since 0.27.0/0.28.0 the Hub opens on a remembered or current campaign
+    // (here the world's own Radiant Citadel), not on All campaigns. The shots
+    // below are of the All campaigns state, so scope there explicitly.
+    await scopeHub(indexShell, page, "");
     // The header bar (.mej-cc-hub-header — it sits ABOVE the tab nav, inside
     // the Hub subsheet), shot in its default "All campaigns" state: picker,
     // New Session, Tools. The campaign-settings gear is deliberately absent
@@ -1144,12 +1163,14 @@ guideDescribe("guide screenshots", () => {
     await scopeHub(paneShell, page, "");
 
     const sessionShell = await openEntry(page, demo.sessionId);
+    const showTabs = await hideTabClutter(page);
     await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
     await settle(page, 300);
     await shot(sessionShell, "session-sheet-gm");
     await sessionShell.locator('a[data-action="tab"][data-tab="session"]').click();
     await settle(page, 300);
     await shot(sessionShell.locator(".secrets-section"), "session-checklist");
+    await showTabs();
 
     const miraShell = await openEntry(page, demo.miraId);
     const miraPanel = miraShell.locator(".mej-cc-knowledge");
@@ -1163,7 +1184,9 @@ guideDescribe("guide screenshots", () => {
     await shot(flagonPanel.locator(".mej-cc-knowledge-backlinks"), "knowledge-backlinks");
     // The @CampaignQuery enricher rendered on this same page.
     await expect(flagonShell.locator(".mej-cc-query-embed")).toHaveCount(1);
+    const showFlagonTabs = await hideTabClutter(page);
     await shot(flagonShell, "campaign-query-inline");
+    await showFlagonTabs();
   });
 
   test("capture standalone dialogs and windows", async ({ page }) => {
@@ -1540,34 +1563,46 @@ async function capturePlayerShots(page) {
   // entire gm-notes block behind `{{#if @root.isGM}}` on the SESSION tab
   // (a different tab from "description"), so this shot is structurally
   // GM-content-free for any non-GM viewer regardless of what's captured.
-  // The recap section's pencil icon (editor-edit) is visible because
-  // SessionSheet.mjs's onEditRecap only gates on isEditable — User 1 owns
-  // the entry (seeded above), so the pencil on the shared recap renders
-  // enabled, matching the brief's "recap field editable" subject.
+  // The shared recap is always editable for its owners (spec 2026-10-19
+  // §4.4) — User 1 owns the entry (seeded above), so a click into the text
+  // opens the editor, matching the brief's "recap field editable" subject.
   const sessionShell = await openEntry(page, demo.sessionId);
+  const showTabs = await hideTabClutter(page);
   await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
+  // Nothing else on screen: another window (the User Configuration a player
+  // login can leave open) shows through MEJ's title bar otherwise.
+  await page.evaluate(async () => {
+    const shell = game.MonksEnhancedJournal?.journal;
+    const keep = new Set([shell, shell?.subsheet].filter(Boolean));
+    const stray = [
+      ...Object.values(ui.windows ?? {}),
+      ...[...(foundry.applications?.instances?.values?.() ?? [])].filter((app) => app.hasFrame && app.rendered)
+    ];
+    for (const app of new Set(stray)) {
+      if (keep.has(app)) continue;
+      try { await app.close({ animate: false }); } catch { /* already closing */ }
+    }
+  });
   await settle(page, 300);
   await shot(sessionShell, "session-sheet-player");
 
-  // The shared recap, mid-edit from User 1's seat: toggle the editRecap
-  // pencil (MEJ's shared `.editor-parent.editing` show/hide CSS), click
-  // into the now-visible <prose-mirror> and type an addition so the shot
+  // The shared recap, mid-edit from User 1's seat: click into the text (the
+  // editor mounts in place of the display - MEJ's shared
+  // `.editor-parent.editing` show/hide CSS) and type an addition so the shot
   // shows a real in-progress editing state.
   const recapSection = sessionShell.locator(".editor-parent[data-editor-id='recap']");
-  await recapSection.locator('button[data-action="editRecap"]').click();
+  await recapSection.locator(".editor-display").click();
   await settle(page, 300);
   await expect(recapSection).toHaveClass(/editing/);
-  const recapEditor = recapSection.locator("prose-mirror .editor-content, prose-mirror");
-  await recapEditor.first().click();
+  await expect(recapSection.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
   await page.keyboard.press("End");
   await page.keyboard.type(" Someone should ask the harbor guard directly.");
   await settle(page, 300);
   await shot(sessionShell, "recap-editing");
-  // Toggle back off before moving on - tidy state, not load-bearing. The
-  // inline pencil is hidden by MEJ's `.editor-parent.editing .editor-edit`
-  // CSS while the editor is open, so close through the shell header's edit
-  // control (same route 06-player-collab's commitRecap takes).
-  await sessionShell.locator('.nav-button.edit[data-action="editRecap"]').click();
+  await showTabs();
+  // Click out before moving on (it saves) - tidy state, not load-bearing;
+  // same route 06-player-collab's commitRecap takes.
+  await sessionShell.locator('nav.sheet-tabs a[data-tab="description"]').click();
   await settle(page, 300);
 
   // The revealed block secret, on the Quest entry (per this file's

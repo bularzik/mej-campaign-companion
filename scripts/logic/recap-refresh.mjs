@@ -13,10 +13,12 @@ export function recapChanged(changes) {
  * @param {string|null} args.activeEntityId uuid shown in the shell's active tab (MEJ: journal.tabs.active().entityId)
  * @param {string} args.pageId the updated page's id
  * @param {boolean} args.editing whether any `.editor-parent.editing` exists in that view
+ * @param {boolean} [args.isSessionView] the view is a Session sheet, whose editors are always
+ *   live: it is patched region by region instead (sheets/session-regions.mjs), never re-rendered
  */
-export function shouldRefreshForRecap({ changes, activeEntityId, pageId, editing }) {
+export function shouldRefreshForRecap({ changes, activeEntityId, pageId, editing, isSessionView = false }) {
   if (!recapChanged(changes)) return false;
-  if (editing) return false;
+  if (editing || isSessionView) return false;
   if (!activeEntityId || !pageId) return false;
   return activeEntityId.endsWith(`.${pageId}`);
 }

@@ -13,11 +13,11 @@ import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYP
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
-import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
+import { linksCount } from "../logic/links-count.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
 import { campaignEntries } from "../data/campaign-store.mjs";
-import { linkNoteText, canMentionInNotes, enrichNoteText } from "./note-links.mjs";
+import { linkNoteText, canMentionInNotes, enrichNoteText, openNoteLink } from "./note-links.mjs";
 import { openSessionPage as openCampaignSession } from "./current-session.mjs";
 import { streamRows } from "../logic/tonight.mjs";
 import { historyGroups } from "../logic/history.mjs";
@@ -171,7 +171,16 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
   // the enriched output is safe for {{{ }}}.
   const campaign = campaignOf(page);
   const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const noteRows = campaign ? streamRows(listNotes(campaign, { mentionsUuid: entryUuid }), game.user, { formatTime }).reverse() : [];
+  const mentionNotes = campaign ? listNotes(campaign, { mentionsUuid: entryUuid }) : [];
+  // The session a note was filed on, by name, when this user can see that page (listNotes already
+  // dropped notes they cannot read, but the session page has its own permission).
+  const sessionOf = new Map(mentionNotes.map((n) => {
+    const page = n.sessionUuid ? fromUuidSync(n.sessionUuid) : null;
+    const visible = page?.testUserPermission?.(game.user, "OBSERVER");
+    return [n.id, visible ? { sessionUuid: page.uuid, sessionName: page.parent?.name ?? page.name } : { sessionUuid: null, sessionName: null }];
+  }));
+  const noteRows = streamRows(mentionNotes, game.user, { formatTime }).reverse()
+    .map((r) => ({ ...r, ...sessionOf.get(r.id) }));
   const partyNotes = {
     // The button needs write access AND audience containment: the link prefix
     // is code-built, so it must not name an entry some notes reader cannot see.
@@ -183,15 +192,16 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
     uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER
   })) : [];
   const history = historyGroups(backlinks, sessions);
+  const count = linksCount({ notes: partyNotes.rows.length, tags: tags.length, attributes: attributes.length, backlinks: backlinks.length });
   const html = await foundry.applications.handlebars.renderTemplate(
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
     {
       pageUuid: page.uuid, canEdit, tags, attributes, backlinks, partyNotes, history,
       collapsed: game.settings.get(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING),
-      summary: knowledgeSummary(
-        { tags: tags.length, attributes: attributes.length, backlinks: backlinks.length, notes: partyNotes.rows.length },
-        (key, data) => game.i18n.format(key, data)
-      )
+      linksCount: count,
+      linksLabel: count > 0
+        ? game.i18n.format(`${I18N}.knowledge.titleCount`, { count })
+        : game.i18n.localize(`${I18N}.knowledge.title`)
     }
   );
   // DOMParser rather than createContextualFragment (S1). This html is our own
@@ -299,8 +309,29 @@ function bindNoteAbout(panel, page) {
   });
 }
 
+// The rail owns its clicks: on a Session page it sits inside the sheet, whose own delegated
+// data-action handler would otherwise fire openNoteLink a second time.
+function bindNoteLinks(panel) {
+  panel.addEventListener("click", async (event) => {
+    const link = event.target.closest?.("[data-action='openNoteLink']");
+    if (link) {
+      event.preventDefault();
+      event.stopPropagation();
+      await openNoteLink(link.dataset.kind, link.dataset.target);
+      return;
+    }
+    const session = event.target.closest?.("[data-action='openNoteSession']");
+    if (session) {
+      event.preventDefault();
+      event.stopPropagation();
+      await openNoteLink("entry", session.dataset.uuid);
+    }
+  });
+}
+
 function bindPanel(panel, page, sheet, shellHosted) {
   bindNoteAbout(panel, page);
+  bindNoteLinks(panel);
   if (!game.user.isGM) {
     bindBacklinks(panel);
     return;

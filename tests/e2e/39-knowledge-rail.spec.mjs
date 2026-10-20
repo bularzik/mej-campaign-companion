@@ -46,7 +46,8 @@ test.describe("39 knowledge rail", () => {
     await expect(panel).not.toHaveClass(/collapsed/);
     const tab = panel.locator("button.mej-cc-knowledge-tab");
     await expect(tab).toHaveAttribute("aria-expanded", "true");
-    await expect(panel.locator(".mej-cc-knowledge-summary")).toHaveText("1 tag");
+    await expect(tab).toHaveText(/^Links( \(\d+\))?$/);
+    await expect(tab).toHaveText("Links (1)");
     const openWidth = (await body.boundingBox()).width;
 
     await tab.click();
@@ -55,6 +56,9 @@ test.describe("39 knowledge rail", () => {
     await expect(panel.locator("details").first()).toBeHidden();
     const closedWidth = (await body.boundingBox()).width;
     expect(closedWidth).toBeGreaterThan(openWidth + 100);
+    // Closed, the rail is only an edge: at most 26px wide, the folder tab hanging off it.
+    expect((await panel.boundingBox()).width).toBeLessThanOrEqual(26);
+    await expect(tab).toHaveText(/^Links( \(\d+\))?$/);
     expect(await page.evaluate(() => game.settings.get("mej-campaign-companion", "knowledgePanelCollapsed"))).toBe(true);
 
     const second = await createPerson(page, `${TT_PREFIX}Rail Second ${RUN}`);

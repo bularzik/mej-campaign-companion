@@ -1,8 +1,7 @@
 .mej-campaign-companion {}
 
-/* Session sheet: MEJ's .editor-edit pencil is absolutely positioned against
-   whatever ancestor happens to be positioned. Give each editor parent its
-   own context so the recap and GM-notes pencils sit on their own editors. */
+/* Session sheet: each editor block is its own positioning context (MEJ
+   positions editor chrome absolutely against the nearest one). */
 .session-container .editor-parent {
   position: relative;
 }
@@ -20,18 +19,147 @@
   overflow-y: auto;
 }
 
-.monks-journal-sheet.sheet .session-details > .editor-parent.gm-notes {
-  flex: 1 0 12em;
+/* Details tab (spec 2026-10-19 §4.5): compact rows, then collapsible
+   sections whose actions sit on their summary line. GM Prep's editor sits
+   inside a <details>, whose height is its content's, so MEJ's
+   `flex:1; height:100%` editor chain is replaced by a usable fixed minimum
+   (the squeeze described above cannot happen to a content-sized block). */
+.session-container .session-details > .form-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+.session-container .session-details > .form-group > label {
+  flex: 0 0 9em;
+  font-weight: bold;
+}
+.session-container .session-details > .mej-cc-number-row input { flex: 0 0 5em; }
+.session-container .mej-cc-date-fields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.session-container .mej-cc-date-fields > input.mej-cc-date-year { flex: 0 0 5.5em; }
+/* Foundry colours form-group text from the scheme; the separator takes the ink. */
+.monks-enhanced-journal .session-container .mej-cc-date-fields > .mej-cc-date-sep { color: var(--mej-cc-ink); }
+.session-container .mej-cc-date-fields > select { flex: 0 1 10em; min-width: 6em; }
+.session-container .mej-cc-date-fields > input.mej-cc-date-day,
+.session-container .mej-cc-date-fields > input.mej-cc-date-time { flex: 0 0 3.6em; }
+.session-container details.mej-cc-section {
+  flex: 0 0 auto;
+  margin-top: 10px;
+}
+/* The Secrets live region (session-regions.mjs) adds no box of its own. */
+.session-container .mej-cc-secrets-region { display: contents; }
+.session-container summary.mej-cc-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+  font-weight: bold;
+  border-bottom: 1px solid var(--mej-cc-field-border);
+  cursor: pointer;
+  list-style: none;
+}
+.session-container summary.mej-cc-section-title::-webkit-details-marker { display: none; }
+.session-container summary.mej-cc-section-title::before {
+  content: "\25B8";
+  width: 1em;
+  color: var(--mej-cc-ink);
+}
+.session-container details.mej-cc-section[open] > summary.mej-cc-section-title::before { content: "\25BE"; }
+.session-container .mej-cc-section-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.session-container .mej-cc-section-actions button {
+  width: auto;
+  line-height: 1;
+  padding: 2px 6px;
+  color: var(--mej-cc-ink);
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes {
+  flex: none;
+  height: auto;
+  min-height: 12em;
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor.editor-display {
+  height: auto;
+  min-height: 10em;
+}
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor-control,
+.monks-journal-sheet.sheet .session-details .gm-prep > .editor-parent.gm-notes > .editor-control prose-mirror {
+  min-height: 14em;
 }
 
-/* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
-   so Foundry's own HTMLProseMirrorElement builds itself a second, native
-   edit/save toggle button (prosemirror-editor.mjs #_buildElements,
-   `button.icon.toggle`) alongside our own pencil (data-action="editRecap").
-   SessionSheet.onEditRecap drives `open` itself, so that native button is
-   pure redundant chrome once mounted inside .editor-control - hide it. */
-.session-container .editor-parent[data-editor-id='recap'] .editor-control prose-mirror > button.icon.toggle {
-  display: none;
+/* Always-editable Recap, GM Prep and My Notes (spec 2026-10-19 §4.4,
+   session-autosave.mjs): the enriched display until the user clicks into it,
+   then the live editor in its place (MEJ's own `.editing` swap, restated here
+   so a popped-out sheet gets it too), and a one-line save indicator under it.
+   The display shares the block with that line, so it takes the remaining
+   height instead of MEJ's height:100%. The formatting toolbar shows only
+   while the editor has focus. */
+.session-container .editor-parent[data-editor-id] > .editor.editor-display {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+.session-container .editor-parent[data-editor-id]:not(.editing) > .editor.editor-display[tabindex] { cursor: text; }
+.session-container .editor-parent[data-editor-id].editing > .editor.editor-display { display: none; }
+.session-container .editor-parent[data-editor-id]:not(.editing) > .editor-control { display: none; }
+.session-container .editor-parent[data-editor-id] > .editor-control {
+  flex: 1 1 auto;
+  min-height: 0;
+  outline: none;
+}
+.session-container .editor-parent[data-editor-id]:not(:focus-within) > .editor-control prose-mirror .editor-menu { display: none; }
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  min-height: 1.4em;
+  padding: 0 6px;
+  font-size: var(--font-size-12, 12px);
+  line-height: 1.4em;
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state:is([data-state="failed"], [data-state="noGM"]) {
+  color: var(--mej-cc-ink);
+  font-weight: bold;
+}
+/* Kept text that conflicts with newer stored text: full ink, with Show / Discard
+   as small buttons on the field surface, whose ink and ground come as a pair. */
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state > .mej-cc-kept {
+  color: var(--mej-cc-ink);
+  font-weight: bold;
+}
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state > .mej-cc-kept > button {
+  display: inline;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 6px;
+  font-size: inherit;
+  line-height: 1.3em;
+  font-weight: normal;
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+/* My Notes: the module's own hint, at full ink (MEJ's OnlyViewable line is faint). */
+.session-container .mej-cc-my-notes-hint {
+  flex: 0 0 auto;
+  margin: 4px 2px 6px;
+  color: var(--mej-cc-ink);
 }
 
 /* L3. The same height:100% chain (.editor-parent, then .editor.editor-display
@@ -81,40 +209,129 @@
   flex: 0 0 auto;
 }
 
-/* Compact stand-in for MEJ's detailed header on an image-less Session (spec
-   amendment, review of Task 3). MEJ's header is a ~250px flexrow block; this
-   is deliberately one line — the rename input, an add-image button, and the
-   hidden img[data-edit="src"] the add-image round trip submits through (see
-   session.hbs for why that element has to exist). `flex: 0 0 auto` keeps it
-   from stretching inside .session-container's flexcol. */
-.session-container .mej-cc-session-header-compact {
+/* Session header (spec 2026-10-19 §4.2, design "A"): one row above the tabs -
+   56px thumbnail, title over one meta line, the GM's session button at the
+   right end. Own flex context, deliberately NOT class="flexrow": core's
+   `.flexrow > * { flex: 1 }` plus wrapping stacks every control on its own
+   line. `flex: 0 0 auto` keeps it from stretching inside .session-container's
+   flexcol. */
+.session-container .mej-cc-session-header {
   display: flex;
-  /* Deliberately NOT class="flexrow": core's `.flexrow > * { flex: 1 }` plus
-     `flex-wrap: wrap` put each control on its own line here (82px instead of
-     one 32px row, measured live). Own flex context, no wrapping. */
   flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  padding: 6px 4px;
   margin-bottom: 4px;
+  border-bottom: 2px solid var(--mej-cc-field-border);
 }
-
-.session-container .mej-cc-session-header-compact input[name="name"] {
+.session-container .mej-cc-session-thumb-wrap {
+  position: relative;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+}
+.session-container .mej-cc-session-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--mej-cc-field-border);
+}
+.session-container .mej-cc-session-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+}
+.session-container .mej-cc-session-thumb.empty {
+  border-style: dashed;
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  font-size: 18px;
+}
+.session-container .mej-cc-session-thumb-change {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+}
+/* Never displayed: it exists only to carry `src` into the form submit. */
+.session-container .mej-cc-session-header .mej-cc-compact-src {
+  display: none;
+}
+.session-container .mej-cc-session-heading {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
+  gap: 3px;
 }
-
-.session-container .mej-cc-session-header-compact .mej-cc-add-image {
+.session-container .mej-cc-session-heading .mej-cc-session-title {
+  margin: 0;
+  font-family: var(--mej-header-font, var(--font-h1, "Modesto Condensed", serif));
+  font-size: var(--font-size-24, 24px);
+  font-weight: bold;
+  line-height: 1.1;
+  border: none;
+  height: auto;
+}
+/* `.monks-enhanced-journal … .mej-cc-session-header` only clears the shell's
+   field rule below: the title reads as a title until it is hovered or edited. */
+.monks-enhanced-journal .session-container .mej-cc-session-header input.mej-cc-session-title {
+  width: 100%;
+  padding: 0 2px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.monks-enhanced-journal .session-container .mej-cc-session-header input.mej-cc-session-title:is(:hover, :focus) {
+  background: var(--mej-cc-field-bg);
+  border-color: var(--mej-cc-field-border);
+}
+.session-container .mej-cc-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .mej-cc-session-attendees:empty { display: none; }
+.session-container .mej-cc-session-status {
+  padding: 0 7px;
+  border-radius: 10px;
+  border: 1px solid var(--mej-cc-field-border);
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  white-space: nowrap;
+}
+/* Live: white on a green that clears 4.5:1 on its own, whatever is under it. */
+.monks-enhanced-journal .session-container .mej-cc-session-status.live {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+.session-container .mej-cc-session-status.live i { font-size: 0.7em; vertical-align: middle; }
+.session-container .mej-cc-session-button {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  line-height: 1;
-  padding: 0;
-}
-
-/* Never displayed: it exists only to carry `src` into the form submit. */
-.session-container .mej-cc-session-header-compact .mej-cc-compact-src {
-  display: none;
+  width: auto;
+  white-space: nowrap;
+  padding: 2px 10px;
+  line-height: 1.6;
 }
 
 /* Campaign Hub shell page - shell pages get no MEJ per-type theming (see
@@ -714,10 +931,15 @@
   border-left: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
 }
 
-/* Closed: only the tab remains. */
+/* Closed (spec 2026-10-19 §4.7): a 22px edge with a 1.5px rule, and the
+   folder tab hanging off it. The edge is the panel itself, so the whole
+   closed rail stays narrower than 26px. */
 .monks-enhanced-journal .mej-cc-knowledge.collapsed,
 .monks-enhanced-journal .mej-cc-rail-row > .mej-cc-knowledge.collapsed {
-  flex: 0 0 auto;
+  flex: 0 0 22px;
+  position: relative;
+  width: 22px;
+  border-left: 1.5px solid var(--mej-cc-field-border);
 }
 
 .monks-enhanced-journal .mej-cc-knowledge-body {
@@ -766,19 +988,24 @@
   outline-offset: -2px;
 }
 
-.monks-enhanced-journal .mej-cc-knowledge-summary {
+/* Closed: a folder tab ~24x96px, rounded on the right, vertically centred at
+   ~38% of the rail, its text running down. A zero count reads fainter. */
+.monks-enhanced-journal .mej-cc-knowledge.collapsed button.mej-cc-knowledge-tab {
+  position: absolute;
+  top: 38%;
+  left: -1.5px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 96px;
+  padding: 0;
+  justify-content: center;
+  border: 1.5px solid var(--mej-cc-field-border);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+}
+.monks-enhanced-journal .mej-cc-knowledge button.mej-cc-knowledge-tab.empty {
   font-weight: normal;
-  font-size: 0.9em;
-  opacity: 0.75;
-}
-
-.monks-enhanced-journal .mej-cc-knowledge-chevron {
-  transition: transform 120ms ease;
-}
-
-/* Open: the chevron points at the rail (right); closed: it points back into the sheet. */
-.monks-enhanced-journal .mej-cc-knowledge.collapsed .mej-cc-knowledge-chevron {
-  transform: rotate(180deg);
+  color: var(--mej-cc-ink-muted);
 }
 
 .mej-cc-knowledge summary {
@@ -1514,6 +1741,41 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   --mej-cc-halo: #0b0a13;
 }
 
+/* The Session sheet paints no ground of its own (spec 2026-10-19 §4.1): it
+   sits on MEJ's, like any core entry. With an image chosen the blocks above
+   follow it; with none, SessionSheet._applyGround reads what actually paints
+   under the sheet (MEJ 13.06 keeps parchment under a dark scheme, 14.x paints
+   a dark ground) and marks the root, and the ink follows that. */
+.monks-enhanced-journal:is(:not([background-image]), [background-image='none']) .session-container[data-mej-cc-ground="light"] {
+  --mej-cc-ink: #191813;
+  --mej-cc-ink-muted: #3a372f;
+  --mej-cc-link: #7a2500;
+  --mej-cc-field-ink: #191813;
+  --mej-cc-field-bg: rgba(255, 255, 255, 0.6);
+  --mej-cc-field-border: rgba(25, 24, 19, 0.5);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.5);
+  --mej-cc-surface: transparent;
+  --mej-cc-halo: rgba(255, 255, 255, 0.85);
+}
+
+.monks-enhanced-journal:is(:not([background-image]), [background-image='none']) .session-container[data-mej-cc-ground="dark"] {
+  --mej-cc-ink: #efe6d8;
+  --mej-cc-ink-muted: #c9bfae;
+  --mej-cc-link: #ffa463;
+  --mej-cc-field-ink: #efe6d8;
+  --mej-cc-field-bg: rgba(11, 10, 19, 0.6);
+  --mej-cc-field-border: rgba(239, 230, 216, 0.35);
+  --mej-cc-chip-bg: rgba(255, 255, 255, 0.1);
+  --mej-cc-surface: rgba(11, 10, 19, 0.85);
+  --mej-cc-halo: #0b0a13;
+}
+
+/* Section headings on the Session sheet are ordinary heading size, not
+   Foundry's oversized h3 (spec 2026-10-19 §4.1). */
+.monks-enhanced-journal .session-container .sheet-body :is(h3, summary.mej-cc-section-title) {
+  font-size: var(--font-size-14, 14px);
+}
+
 /* Where the tokens apply: companion-owned roots inside the shell only. */
 .monks-enhanced-journal .session-container,
 .monks-enhanced-journal .mej-cc-hub-container,
@@ -1526,7 +1788,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 /* Foundry colours label/legend/headings directly from the scheme, and MEJ
    its tab strip and instruction lines from its own variables, so plain
    inheritance from the roots above is not enough. */
-.monks-enhanced-journal .session-container :is(label, legend, h1, h2, h3, h4, .editor-display, section.secret),
+.monks-enhanced-journal .session-container :is(label, legend, h1, h2, h3, h4, summary, .editor-display, section.secret),
 .monks-enhanced-journal .session-container nav.sheet-tabs a,
 .monks-enhanced-journal .session-container nav.sheet-tabs a > span,
 .monks-enhanced-journal .mej-cc-hub-container :is(.mej-cc-index-name, .mej-cc-timepoint-label, .mej-cc-search-name, .mej-cc-dashboard-name,
@@ -1565,8 +1827,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 /* Companion buttons in the shell: Foundry's translucent button surface
    takes the image's colour underneath, so give them the field surface. */
 .monks-enhanced-journal .mej-cc-hub-container button,
-.monks-enhanced-journal .session-container .mej-cc-session-header-compact button,
-.monks-enhanced-journal .session-container .mej-cc-tonight button,
+.monks-enhanced-journal .session-container .mej-cc-session-header button,
 .monks-enhanced-journal .session-container section.secret > button.reveal,
 .monks-enhanced-journal .mej-cc-secret-audience {
   color: var(--mej-cc-field-ink);
@@ -1620,7 +1881,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    while 14.x paints a dark ground, and CSS cannot tell the two apart - so
    the companion supplies the dark ground its light ink needs. Transparent
    everywhere else. */
-.monks-enhanced-journal :is(.session-container, .mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) {
+.monks-enhanced-journal :is(.mej-cc-hub-container, .mej-cc-knowledge, .mej-cc-query-embed) {
   background: var(--mej-cc-surface);
 }
 
@@ -1638,7 +1899,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    In the shell it takes the muted ink at full opacity instead. */
 .monks-enhanced-journal :is(
   .mej-cc-index-type, .mej-cc-filtered-count, .mej-cc-mention-badge, .mej-cc-timepoint-date,
-  .mej-cc-search-type, .mej-cc-search-match, .mej-cc-knowledge-summary, .mej-cc-knowledge-empty,
+  .mej-cc-search-type, .mej-cc-search-match, .mej-cc-knowledge-empty,
   .mej-cc-backlink-count, .mej-cc-backlink-gm, .mej-cc-audience-count, .mej-cc-dashboard-query,
   .mej-cc-query-embed-header, .mej-cc-graph-truncated, .mej-cc-secret-preview,
   .mej-cc-secret-audience-label
@@ -1659,64 +1920,52 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   border-radius: 3px;
 }
 
-/* Session sheet attendees: a wrapping row of small round tokens, character
-   name under each with the player's name beneath it. The unscoped .item-image
-   rule that used to size these is MEJ's and renders far too large. */
-.monks-enhanced-journal .attendees-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-}
-.monks-enhanced-journal .attendees-list > .mej-cc-attendee {
-  position: relative;
-  display: flex;
-  flex-direction: column;
+/* Session header attendees (spec 2026-10-19 §4.6): one chip per character
+   (portrait + name), a hover x to remove, and a trailing control that opens
+   the checklist. Ink and chip ground are the --mej-cc tokens the status chip
+   already uses, so they hold 4.5:1 on every MEJ background. */
+.monks-enhanced-journal .session-container .mej-cc-session-attendees { gap: 4px 6px; align-items: center; }
+.monks-enhanced-journal .mej-cc-attendee-chip,
+.monks-enhanced-journal .mej-cc-attendee-control {
+  display: inline-flex;
   align-items: center;
-  width: 84px;
-  padding: 0;
-  text-align: center;
+  gap: 4px;
+  padding: 0 7px 0 2px;
+  border-radius: 10px;
+  border: 1px solid var(--mej-cc-field-border);
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  font-size: var(--font-size-12, 12px);
+  line-height: 18px;
 }
-.monks-enhanced-journal .attendees-list > .instruction { flex: 1 1 100%; }
+.monks-enhanced-journal .mej-cc-attendee-control { padding: 0 8px; cursor: pointer; text-decoration: none; }
+.monks-enhanced-journal .mej-cc-attendee-control:hover,
+.monks-enhanced-journal .mej-cc-attendee-control:focus-visible { border-color: var(--mej-cc-ink); }
 .monks-enhanced-journal .mej-cc-attendee-token {
-  width: 64px;
-  height: 64px;
-  max-width: 64px;
+  width: 16px;
+  height: 16px;
+  max-width: 16px;
   object-fit: cover;
   border-radius: 50%;
-  border: 2px solid var(--mej-cc-field-border);
-  background: var(--mej-cc-chip-bg);
+  border: 0;
 }
-.monks-enhanced-journal .mej-cc-attendee-name {
-  margin-top: 4px;
-  max-width: 100%;
-  font-weight: bold;
-  line-height: 1.15;
-  color: var(--mej-cc-ink);
-  overflow-wrap: anywhere;
-}
-.monks-enhanced-journal .mej-cc-attendee-player {
-  max-width: 100%;
-  font-size: var(--font-size-11, 11px);
-  line-height: 1.15;
-  color: var(--mej-cc-ink-muted);
-  overflow-wrap: anywhere;
-}
+.monks-enhanced-journal .mej-cc-attendee-name { color: var(--mej-cc-ink); }
 .monks-enhanced-journal .mej-cc-attendee-remove {
-  position: absolute;
-  top: -2px;
-  right: 6px;
   display: none;
-  padding: 2px 4px;
-  border-radius: 50%;
+  margin-left: 2px;
   font-size: 10px;
-  background: var(--mej-cc-field-bg);
   color: var(--mej-cc-ink);
+  cursor: pointer;
 }
-.monks-enhanced-journal .mej-cc-attendee:hover .mej-cc-attendee-remove,
-.monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: block; }
+.monks-enhanced-journal .mej-cc-attendee-chip:hover .mej-cc-attendee-remove,
+.monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: inline; }
+
+/* "Who's playing tonight?" dialog. */
+.mej-cc-attendee-choices, .mej-cc-attendee-results { list-style: none; margin: 0; padding: 0; }
+.mej-cc-attendee-choice label, .mej-cc-attendee-result { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+.mej-cc-attendee-choice img, .mej-cc-attendee-result img { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; border: 0; }
+.mej-cc-attendee-choice-player { margin-left: auto; opacity: 0.75; font-size: var(--font-size-11, 11px); }
+.mej-cc-attendee-search { margin-top: 8px; }
 
 /* Party relationships inside MEJ's Relationships list (spec 2026-10-10 §3.2). */
 /* MEJ 13.06's dark shell with no image still paints parchment under the
@@ -1764,12 +2013,81 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   color: var(--mej-cc-link);
   opacity: 1;
 }
-.mej-cc-draft-preview { max-height: 40vh; overflow: auto; border: 1px solid var(--mej-cc-chip-bg, rgba(255,255,255,.12)); padding: 6px; }
-.mej-cc-notes-stream { margin-top: 10px; }
-.mej-cc-notes-stream h3 { margin: 0 0 4px; }
+/* Table talk drawer (spec 2026-10-19 §4.3) under the recap. Collapsed it is
+   one line and the recap fills the tab; open it takes the remaining height
+   and, while the page is live, the recap shrinks to its content. */
+.session-container .mej-cc-table-talk {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+  margin-top: 6px;
+  padding: 4px 2px 0;
+  border-top: 1px solid var(--mej-cc-field-border);
+  color: var(--mej-cc-ink);
+}
+.session-container .mej-cc-table-talk.open { flex: 1 1 0; min-height: 8em; }
+.session-container .mej-cc-table-talk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 2px 0;
+}
+.session-container .mej-cc-table-talk-toggle {
+  font-weight: bold;
+  font-size: var(--font-size-14, 14px);
+  color: var(--mej-cc-ink);
+  cursor: pointer;
+}
+.session-container .mej-cc-table-talk-caret { width: 1em; transition: transform 0.1s; }
+.session-container .mej-cc-table-talk.open .mej-cc-table-talk-caret { transform: rotate(90deg); }
+.session-container .mej-cc-table-talk-hint {
+  flex: 1 1 auto;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .mej-cc-table-talk:not(.open) .mej-cc-table-talk-hint { visibility: hidden; }
+.session-container .mej-cc-table-talk-add {
+  margin-left: auto;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-link);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.session-container .mej-cc-table-talk-add.added { color: var(--mej-cc-ink-muted); }
+.session-container .mej-cc-table-talk-body {
+  display: none;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+}
+.session-container .mej-cc-table-talk.open .mej-cc-table-talk-body { display: flex; }
+.session-container .mej-cc-table-talk .mej-cc-notes-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; font-size: var(--font-size-13, 13px); }
+.session-container .mej-cc-table-talk .mej-cc-note-meta { flex: 0 0 auto; white-space: nowrap; font-size: var(--font-size-12, 12px); color: var(--mej-cc-ink-muted); }
+.session-container .mej-cc-table-talk .mej-cc-note-text { color: var(--mej-cc-ink); }
+.session-container .mej-cc-table-talk :is(.mej-cc-note-edit, .mej-cc-note-delete) { color: var(--mej-cc-ink); }
+/* Live and open: the recap takes only what it needs (the placeholder line, or
+   its text up to a third of the tab) unless it is being edited. */
+.session-container .tab[data-tab='description'] > .tab-inner:has(> .mej-cc-table-talk.open.live) > .editor-parent[data-editor-id='recap']:not(.editing) {
+  flex: 0 1 auto;
+  max-height: 35%;
+  min-height: 2.5em;
+}
+.session-container .tab[data-tab='description'] > .tab-inner:has(> .mej-cc-table-talk.open.live) > .editor-parent[data-editor-id='recap']:not(.editing) > .editor-display {
+  height: auto;
+  max-height: 100%;
+}
+.session-container .mej-cc-no-recap { font-style: italic; margin: 0; }
 .mej-cc-notes-list { list-style: none; margin: 0; padding: 0; }
 .mej-cc-note { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px dotted var(--mej-cc-chip-bg, rgba(255,255,255,.12)); }
 .mej-cc-note .mej-cc-note-text { flex: 1; }
+/* Reveal and media notes link to their image or entry; a rail note links to its session.
+   Ink is inherited, so the link holds whatever contrast its row has. */
+.mej-cc-note-link, .mej-cc-note-session { color: inherit; text-decoration: underline; text-decoration-style: dotted; cursor: pointer; }
+.mej-cc-note-link:hover, .mej-cc-note-session:hover { text-decoration-style: solid; }
 .mej-cc-note-edit, .mej-cc-note-delete { opacity: .6; cursor: pointer; }
 .mej-cc-note-edit:hover, .mej-cc-note-delete:hover { opacity: 1; }
 .mej-cc-knowledge-notes summary .mej-cc-note-about { float: right; font-size: .85em; cursor: pointer; }

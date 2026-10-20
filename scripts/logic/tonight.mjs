@@ -1,4 +1,5 @@
 // View model for the Tonight strip (spec 2026-10-15 §5.1). Pure.
+import { noteLinkTarget } from "./note-link.mjs";
 import { notesForSession, heldNotes, canEditNote, noteBadges } from "./notes.mjs";
 
 export function tonightContext({ campaign, session, notes, user, formatTime, canWrite }) {
@@ -26,6 +27,7 @@ export function tonightContext({ campaign, session, notes, user, formatTime, can
 export function streamRows(notes, user, { formatTime }) {
   return [...(notes ?? [])].sort((a, b) => a.at - b.at).map((n) => ({
     id: n.id, authorName: n.authorName || n.authorId, timeLabel: formatTime(n.at), text: n.text,
-    edited: n.editedAt !== null, canEdit: canEditNote(n, user), retracted: noteBadges(n, user?.isGM).retracted
+    edited: n.editedAt !== null, canEdit: canEditNote(n, user), retracted: noteBadges(n, user?.isGM).retracted,
+    link: noteLinkTarget(n)
   }));
 }

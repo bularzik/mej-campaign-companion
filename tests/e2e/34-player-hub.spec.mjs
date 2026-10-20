@@ -105,17 +105,16 @@ test.describe("34 player Hub", () => {
     return shell;
   }
 
-  test("3a. an owning player sees the attendee drag hint and no Secrets block", async ({ page }) => {
+  test("3a. an owning player gets the header's Attendees control and no Secrets block", async ({ page }) => {
     const shell = await openSessionTab(page, ids.sessionId);
     await expect(shell.locator(".secrets-section")).toHaveCount(0);
-    const hint = await page.evaluate(() => game.i18n.localize("MEJCampaignCompanion.session.dragActorHint"));
-    await expect(shell.locator(".attendees-list .instruction")).toHaveText(hint);
+    await expect(shell.locator(".mej-cc-session-header .mej-cc-attendee-control")).toHaveCount(1);
   });
 
-  test("3b. a view-only player sees 'No attendees recorded yet.' and no Secrets block", async ({ page }) => {
+  test("3b. a view-only player gets no Attendees control and no Secrets block", async ({ page }) => {
     const shell = await openSessionTab(page, ids.roSessionId);
     await expect(shell.locator(".secrets-section")).toHaveCount(0);
-    await expect(shell.locator(".attendees-list .instruction")).toHaveText("No attendees recorded yet.");
+    await expect(shell.locator(".mej-cc-session-header .mej-cc-attendee-control")).toHaveCount(0);
   });
 
   test("4. the Help button opens the panel; the guide link is inside it", async ({ page }) => {

@@ -4,8 +4,7 @@
 // Foundry-served is imported lazily inside the functions that run in-game.
 import { MODULE_ID, CAMPAIGN_FLAG, I18N, AUTO_START_SESSION_SETTING } from "../constants.mjs";
 import { currentSession, currentSessionUpdate, clearCurrentSessionUpdate, nextSessionNumber, startedToday, recapOwnershipUpdate, adoptHeldUpdate, promotableSessionPage, sessionPagesOf } from "../logic/current-session.mjs";
-import { recapDraft } from "../logic/recap-draft.mjs";
-import { notesForSession } from "../logic/notes.mjs";
+import { startStamp, endStamp } from "../logic/session-state.mjs";
 import { attendeeUuidsFor } from "../logic/attendee-player.mjs";
 
 const connectedPlayers = () => game.users.filter((u) => u.active && !u.isGM);
@@ -68,8 +67,24 @@ async function createSessionFor(campaign) {
   return entry?.pages?.contents?.[0] ?? null;
 }
 
+// Not `shell.rendered`: the ownership grant above makes MEJ re-render the shell, and mid-render it reports
+// false. The shell is closed when MEJ's `journal` is null; its active tab names the entry it shows.
+function isShownInShell(page) {
+  const shell = game.MonksEnhancedJournal?.journal;
+  if (!shell) return false;
+  const active = shell.tabs?.active?.()?.entityId ?? null;
+  return shell.subsheet?.document?.uuid === page.uuid || (!!active && (active === page.uuid || active === page.parent?.uuid));
+}
+
+/** `sheet` (the one the GM pressed Start on) is a rendered, popped-out Session sheet of `page`, not the shell's subsheet. */
+function isOwnPopout(sheet, page) {
+  if (!sheet?.rendered || sheet.document?.uuid !== page.uuid) return false;
+  const shell = game.MonksEnhancedJournal?.journal ?? null;
+  return sheet !== shell && sheet !== shell?.subsheet;
+}
+
 /** GM-only. Open a session: create (or promote `sessionUuid`), flag the campaign, grant recap ownership, adopt held notes. */
-export async function startSession(campaign, { sessionUuid = null } = {}) {
+export async function startSession(campaign, { sessionUuid = null, fromSheet = null } = {}) {
   if (!game.user.isGM || !campaign) return null;
   const { baselineOwnership } = await import("../data/campaign-store.mjs");
   const { notesEntryOf, readNotes } = await import("../data/notes-store.mjs");
@@ -82,7 +97,15 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   }
   if (!page) page = await createSessionFor(campaign);
   if (!page) return null;
+  // The campaign flag goes first: the page stamp below re-renders every open sheet of this page, and a sheet only
+  // reads "live" from the flag, so the flag must already be there when that render happens (nothing re-renders a
+  // Session sheet on the flag change itself).
   await campaign.update(currentSessionUpdate(page.uuid, Date.now()));
+  // Start history (spec 2026-10-19 §4.2): the first start stamps startedAt and, when no date was entered by hand,
+  // the world date; every start (restart included) clears endedAt.
+  const { sessionData } = await import("../sheets/session-data.mjs");
+  const { currentWorldComponents } = await import("../logic/campaign-calendar.mjs");
+  await page.update(startStamp(sessionData(page), { now: Date.now(), worldDate: currentWorldComponents() }));
   if (baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER) {
     const update = recapOwnershipUpdate(page.parent.ownership, connectedPlayerIds(), { ownerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER });
     if (update) await page.parent.update(update);
@@ -93,35 +116,24 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   const notesEntry = notesEntryOf(campaign);
   const adopt = notesEntry ? adoptHeldUpdate(readNotes(campaign), page.uuid) : null;
   if (adopt) await notesEntry.update(adopt);
-  await open(page);
+  // Started from the page's own sheet in the shell: it is already showing. Opening it again renders a
+  // second, standalone Session sheet that sits over the shell's body (its recap intercepted clicks on the
+  // shell's header - spec 40's intermittent Start-click failure).
+  // Likewise when the GM started it from that page's own popped-out sheet: that view is live already.
+  if (!isShownInShell(page) && !isOwnPopout(fromSheet, page)) await open(page);
   return page;
 }
 
-/** GM-only. Clear the open session and offer a recap draft built from its notes (deviation 1: applied from a dialog). */
+/**
+ * GM-only. Stamp the open session's page as ended and clear it from the campaign. No dialog (spec 2026-10-19
+ * §4.2): building the recap from Table talk lives on the Session page's Table talk drawer.
+ */
 export async function endSession(campaign) {
   if (!game.user.isGM || !campaign) return;
   const page = openSessionPage(campaign);
+  // Flag first, then the stamp, whose page update re-renders open sheets (see startSession).
   await campaign.update(clearCurrentSessionUpdate());
-  if (!page) return;
-  const { readNotes } = await import("../data/notes-store.mjs");
-  const draft = recapDraft(notesForSession(readNotes(campaign), page.uuid), {
-    formatTime: (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  });
-  if (!draft) return;
-  // The draft is already built from escaped note text (recapDraft), so it is enriched as-is with notes' enricher set.
-  const { NOTE_ENRICH_OPTIONS } = await import("./note-links.mjs");
-  const enriched = await foundry.applications.ux.TextEditor.implementation.enrichHTML(draft, { relativeTo: page, async: true, ...NOTE_ENRICH_OPTIONS });
-  const append = await foundry.applications.api.DialogV2.confirm({
-    window: { title: game.i18n.localize(`${I18N}.session.draftTitle`) },
-    content: `<p>${game.i18n.localize(`${I18N}.session.draftHint`)}</p><div class="mej-cc-draft-preview">${enriched}</div>`,
-    yes: { label: game.i18n.localize(`${I18N}.session.draftAppend`) },
-    no: { label: game.i18n.localize(`${I18N}.session.draftSkip`) },
-    rejectClose: false
-  });
-  if (!append) return;
-  const current = page.system?.recap ?? "";
-  await page.update({ "system.recap": `${current}${draft}` });
-  ui.notifications.info(game.i18n.localize(`${I18N}.session.draftAppended`));
+  if (page) await page.update(endStamp({ now: Date.now() }));
 }
 
 async function offerStartOnLogin() {

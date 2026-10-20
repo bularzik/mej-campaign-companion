@@ -16,3 +16,22 @@ export function recapDraft(notes, { formatTime }) {
     .map((n) => `<p><strong>${esc(formatTime(n.at))} ${esc(n.authorName || n.authorId)}</strong> ${noteHtmlSource(n.text)}</p>`)
     .join("");
 }
+
+/**
+ * What "add to recap" appends (spec 2026-10-19 §4.3), so the same notes do not
+ * go in twice by accident. Only public live notes ever reach the recap
+ * (recapDraft), and "added" is judged over those same notes:
+ *   "newer"          - added before; append only public live notes after the stamp.
+ *   "again"          - added before and nothing public is newer; re-adding all asks first.
+ *   "maybeDuplicate" - never stamped but the recap already has text (e.g. the old
+ *                      End dialog's draft); adding all asks first.
+ *   "all"            - never added and the recap is empty; append all.
+ */
+export function tableTalkPlan(notes, { addedAt = null, recapHasText = false } = {}) {
+  const pub = (notes ?? []).filter(isPublicLive);
+  if (typeof addedAt === "number") {
+    const newer = pub.filter((n) => n.at > addedAt);
+    return newer.length ? { kind: "newer", notes: newer, added: false } : { kind: "again", notes: pub, added: true };
+  }
+  return { kind: recapHasText ? "maybeDuplicate" : "all", notes: pub, added: false };
+}

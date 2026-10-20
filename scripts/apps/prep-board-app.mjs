@@ -140,11 +140,11 @@ export class PrepBoardApp extends HandlebarsApplicationMixin(ApplicationV2) {
     try {
       const page = this.page;
       await game.MonksEnhancedJournal.openJournalEntry(page.parent);
-      // The Session sheet's own editGmNotes action opens the editor; find it
-      // once the shell has mounted the page.
+      // GM Prep is always editable (spec 2026-10-19 §4.4): once the shell has
+      // mounted the page, switch to its tab and put the caret in it.
       setTimeout(() => {
-        const btn = game.MonksEnhancedJournal?.journal?.element?.querySelector?.('[data-action="editGmNotes"]');
-        btn?.click();
+        const sheet = game.MonksEnhancedJournal?.journal?.subsheet;
+        if (sheet?.document?.uuid === page.uuid) sheet.focusEditor?.("gmNotes");
       }, 400);
     } catch (err) {
       console.error(`${MODULE_ID} | prep board edit GM notes failed`, err);
