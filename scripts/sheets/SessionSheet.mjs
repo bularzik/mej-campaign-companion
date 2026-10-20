@@ -45,6 +45,9 @@ import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
 const noteTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+/** pageUuid -> true when the user folded Secrets & clues (kept across renders). */
+const SECRETS_FOLDED = new Map();
+
 export class SessionSheet extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
     window: {
@@ -641,6 +644,15 @@ export class SessionSheet extends EnhancedJournalSheet {
     // folds the <details>. Cancel only that default: stopping propagation
     // instead would also keep the click from the application's delegated
     // data-action handler.
+    // Secrets & clues keeps the user's fold through the full re-render a
+    // reveal still triggers (secrets-ui.mjs) as well as a region patch.
+    const secrets = root.querySelector("details.secrets-section");
+    if (secrets && !secrets.dataset.ccFoldKept) {
+      secrets.dataset.ccFoldKept = "1";
+      const key = this.document?.uuid;
+      if (SECRETS_FOLDED.has(key)) secrets.open = !SECRETS_FOLDED.get(key);
+      secrets.addEventListener("toggle", () => SECRETS_FOLDED.set(key, !secrets.open));
+    }
     for (const el of root.querySelectorAll("details.mej-cc-section > summary .mej-cc-section-actions")) {
       if (el.dataset.ccFold) continue;
       el.dataset.ccFold = "1";

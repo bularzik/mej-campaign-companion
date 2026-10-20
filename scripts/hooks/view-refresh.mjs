@@ -12,13 +12,9 @@ import { patchesRegions, patchSessionRegions } from "../sheets/session-regions.m
 export function poppedOutPageSheets() {
   const registry = foundry.applications?.instances;
   if (!registry?.values) return [];
-  const shell = game.MonksEnhancedJournal?.journal ?? null;
-  const shellSubsheet = shell?.subsheet ?? null;
-  // The shell itself is an ApplicationV2 whose document is the page it shows:
-  // it is refreshed (or its subsheet patched) by refreshViewsMatching's shell
-  // branch, never as a popped-out sheet (that full render undid the patch).
+  const shellSubsheet = game.MonksEnhancedJournal?.journal?.subsheet ?? null;
   return [...registry.values()].filter((app) =>
-    app && app !== shell && app !== shellSubsheet && app.rendered && app.document instanceof JournalEntryPage);
+    app && app !== shellSubsheet && app.rendered && app.document instanceof JournalEntryPage);
 }
 
 /**
