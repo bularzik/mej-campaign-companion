@@ -63,6 +63,19 @@ export function saveStateKey(state) {
   return SAVE_STATE_KEYS[state] ?? null;
 }
 
+const FIELD_LABEL_KEYS = { recap: "tabs.description", gmNotes: "session.gmNotes", myNotes: "tabs.notes" };
+
+/**
+ * A save that failed where no indicator can show it (the sheet was closed or
+ * torn down while the write was in flight, or a draft from an earlier load
+ * failed again) is announced instead, naming the field. i18n keys under the
+ * module prefix; null when the indicator covers it or it is not a failure.
+ */
+export function saveFailureNotice({ state, indicators, editorId }) {
+  if (state !== "failed" || indicators > 0) return null;
+  return { key: "session.saveFailedField", fieldKey: FIELD_LABEL_KEYS[editorId] ?? "tabs.description" };
+}
+
 const escapeText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**

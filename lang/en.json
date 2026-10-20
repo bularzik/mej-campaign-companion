@@ -195,6 +195,7 @@
       "saved": "Saved",
       "saveNoGM": "Can't save until a GM connects",
       "saveFailed": "Couldn't save",
+      "saveFailedField": "{field} could not be saved. What you typed is kept on this device and tried again when you reopen the session. See the console for details.",
       "addImage": "Add image",
       "viewImage": "View image",
       "changeImage": "Change image (Shift-click to remove it)",

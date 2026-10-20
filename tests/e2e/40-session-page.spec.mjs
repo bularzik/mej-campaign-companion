@@ -3,7 +3,7 @@
 // talk drawer. One GM seat drives a TT- campaign with two prepared sessions.
 import { test, expect } from "@playwright/test";
 import {
-  login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, settle,
+  login, withGmPage, waitCompanionWired, trackConsoleErrors, assertNoConsoleErrors, settle,
   createTtCampaign, deleteFoldersById, deleteJournalsByPrefix, deleteActorsByPrefix, cleanupStrandedTestFolders,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
@@ -546,6 +546,16 @@ test.describe("40 session page", () => {
     await pShell.locator(".mej-cc-my-notes-hint").click();
     await expect(notes.locator(".mej-cc-save-state")).toHaveText("Can't save until a GM connects", { timeout: 10_000 });
     await expect(notes.locator(".editor-display")).toContainText("Ask about the second key.");
+
+    // A reload keeps the draft on this device: it is offered again, still waiting for a GM.
+    await player.page.reload();
+    await player.page.waitForFunction(() => window.game?.ready === true, null, { timeout: 60_000 });
+    await waitCompanionWired(player.page);
+    await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s14.uuid);
+    await expect(pShell.locator(".session-container .mej-cc-session-header")).toHaveCount(1, { timeout: 15_000 });
+    await pShell.locator('nav.sheet-tabs a[data-tab="notes"]').click();
+    await expect(editorOf(player.page, "myNotes").locator(".editor-display")).toContainText("Ask about the second key.", { timeout: 10_000 });
+    await expect(editorOf(player.page, "myNotes").locator(".mej-cc-save-state")).toHaveText("Can't save until a GM connects", { timeout: 10_000 });
 
     // The GM comes back: the draft is saved without the player doing anything.
     const context = await browser.newContext(VIEWPORT);

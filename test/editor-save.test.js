@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { saveTriggers, shouldPatchRegions } from "../scripts/logic/editor-save.mjs";
+import { saveTriggers, shouldPatchRegions, saveFailureNotice } from "../scripts/logic/editor-save.mjs";
 
 describe("saveTriggers", () => {
   it.each(["blur", "tabchange", "close", "interval", "visibilityhidden"])("%s saves", (e) => expect(saveTriggers(e)).toBe(true));
@@ -94,4 +94,16 @@ describe("withBufferedText (keystrokes typed before a collaborative join finishe
   it("escapes the typed characters", () => {
     expect(withBufferedText("", "<b>&")).toBe("<p>&lt;b&gt;&amp;</p>");
   });
+});
+
+describe("saveFailureNotice", () => {
+  it("a failure nobody can see on the page is announced, naming the field", () => {
+    expect(saveFailureNotice({ state: "failed", indicators: 0, editorId: "recap" })).toEqual({ key: "session.saveFailedField", fieldKey: "tabs.description" });
+    expect(saveFailureNotice({ state: "failed", indicators: 0, editorId: "gmNotes" })).toEqual({ key: "session.saveFailedField", fieldKey: "session.gmNotes" });
+    expect(saveFailureNotice({ state: "failed", indicators: 0, editorId: "myNotes" })).toEqual({ key: "session.saveFailedField", fieldKey: "tabs.notes" });
+  });
+  it("a failure shown on an open sheet's indicator is not", () =>
+    expect(saveFailureNotice({ state: "failed", indicators: 1, editorId: "recap" })).toBeNull());
+  it.each(["saving", "saved", "noGM", null])("state %s is not a failure", (state) =>
+    expect(saveFailureNotice({ state, indicators: 0, editorId: "recap" })).toBeNull());
 });

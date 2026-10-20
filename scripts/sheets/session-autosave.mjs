@@ -28,8 +28,9 @@
 // No MEJ import: this module is loaded by hooks that run before (and
 // without) MEJ's sheet classes.
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, canRefreshIdleEditor, withBufferedText, saveStateKey, EDITOR_IDS } from "../logic/editor-save.mjs";
+import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, canRefreshIdleEditor, withBufferedText, saveStateKey, saveFailureNotice, EDITOR_IDS } from "../logic/editor-save.mjs";
 import { NOTE_DRAFTS, myNotesDraftKey } from "../logic/input-draft.mjs";
+import { createDraftStore } from "../logic/draft-store.mjs";
 import { hasVisibleText } from "../logic/session-state.mjs";
 
 const MEJ_ID = "monks-enhanced-journal";
@@ -57,6 +58,97 @@ const RELAY_TIMERS = new Map();
 
 const keyOf = (pageUuid, editorId) => `${pageUuid}|${editorId}`;
 
+// --- Unsaved text --------------------------------------------------------------
+// Unsaved Recap / GM Prep text (UNSAVED) and My Notes drafts (NOTE_DRAFTS) are
+// held in memory and mirrored to this device's storage (logic/draft-store.mjs),
+// so a reload, a crash or a closed tab cannot lose them. A successful save
+// clears both copies.
+
+let draftStore = null;
+function deviceDrafts() {
+  const userId = game.user?.id;
+  if (!userId) return null;
+  if (draftStore?.userId !== userId) {
+    draftStore = Object.assign(createDraftStore(() => globalThis.localStorage, userId), { userId });
+  }
+  return draftStore;
+}
+
+const storedValue = (page, editorId) => foundry.utils.getProperty(page, editorId === "myNotes" ? myNotesPath() : DOC_FIELDS[editorId]);
+
+/** The in-memory unsaved text for an editor, if any. */
+function pendingOf(pageUuid, editorId) {
+  if (editorId === "myNotes") return NOTE_DRAFTS.get(myNotesDraftKey(pageUuid))?.value;
+  return UNSAVED.get(keyOf(pageUuid, editorId));
+}
+
+/** Hold `value` as not yet saved (in memory and on this device). */
+function keepPending(page, editorId, value) {
+  if (editorId === "myNotes") NOTE_DRAFTS.set(myNotesDraftKey(page.uuid), { value });
+  else UNSAVED.set(keyOf(page.uuid, editorId), value);
+  const base = storedValue(page, editorId);
+  deviceDrafts()?.save(page.uuid, editorId, value, typeof base === "string" ? base : null);
+}
+
+/** `value` was saved: drop the unsaved copies unless newer text replaced them meanwhile. */
+function settlePending(pageUuid, editorId, value) {
+  if (pendingOf(pageUuid, editorId) !== value) return;
+  if (editorId === "myNotes") NOTE_DRAFTS.delete(myNotesDraftKey(pageUuid));
+  else UNSAVED.delete(keyOf(pageUuid, editorId));
+  deviceDrafts()?.clear(pageUuid, editorId);
+}
+
+/**
+ * Bring a draft kept on this device by an earlier load back into memory, with
+ * its indicator state ("Couldn't save", or "Can't save until a GM connects"
+ * for My Notes that only a GM can save now). Returns the draft, or null.
+ */
+function rehydrate(page, editorId) {
+  if (!page) return null;
+  const draft = deviceDrafts()?.load(page.uuid, editorId);
+  if (!draft) return null;
+  if (typeof pendingOf(page.uuid, editorId) === "string") return draft;
+  if (draft.value === storedValue(page, editorId)) {
+    deviceDrafts()?.clear(page.uuid, editorId);
+    return null;
+  }
+  if (editorId === "myNotes") NOTE_DRAFTS.set(myNotesDraftKey(page.uuid), { value: draft.value });
+  else UNSAVED.set(keyOf(page.uuid, editorId), draft.value);
+  const key = keyOf(page.uuid, editorId);
+  if (!SAVE_STATES.has(key)) {
+    const noGM = editorId === "myNotes" && myNotesSavePath({ canEditPage: canEditPage(page), hasActiveGM: !!game.users.activeGM }) === "draft";
+    SAVE_STATES.set(key, noGM ? "noGM" : "failed");
+  }
+  return draft;
+}
+
+/**
+ * At load: offer every draft an earlier load left on this device and try to
+ * save it. A Recap or GM Prep draft is written only when the stored text is
+ * still what it replaced; one written over by someone else meanwhile is kept
+ * and shown ("Couldn't save") for the user to see before it is saved again.
+ */
+function restoreDeviceDrafts() {
+  for (const { pageUuid, field } of deviceDrafts()?.list() ?? []) {
+    if (!EDITOR_IDS.includes(field)) continue;
+    const page = pageOf(pageUuid);
+    // The page was deleted: nothing can show or save its draft any more.
+    if (!page && !pageUuid.startsWith("Compendium.")) {
+      deviceDrafts()?.clear(pageUuid, field);
+      continue;
+    }
+    const draft = rehydrate(page, field);
+    if (!draft) continue;
+    try {
+      if (field === "myNotes") writeMyNotes(page, draft.value);
+      else if (draft.base === null || draft.base === storedValue(page, field)) writeDocField(page, field, draft.value);
+      else setSaveState(page.uuid, field, "failed");
+    } catch (err) {
+      console.error(`${MODULE_ID} | restoring the ${field} draft failed`, err);
+    }
+  }
+}
+
 function pageOf(uuid) {
   try {
     return uuid ? fromUuidSync(uuid) : null;
@@ -68,14 +160,10 @@ function pageOf(uuid) {
 /** The text an editor opens with, and its display shows: anything not yet saved wins over the stored value. */
 export function editorValue(page, editorId) {
   if (!page) return "";
-  if (editorId === "myNotes") {
-    const draft = NOTE_DRAFTS.get(myNotesDraftKey(page.uuid));
-    if (typeof draft?.value === "string") return draft.value;
-    return foundry.utils.getProperty(page, myNotesPath()) ?? "";
-  }
-  const unsaved = UNSAVED.get(keyOf(page.uuid, editorId));
-  if (typeof unsaved === "string") return unsaved;
-  return foundry.utils.getProperty(page, DOC_FIELDS[editorId]) ?? "";
+  if (typeof pendingOf(page.uuid, editorId) !== "string") rehydrate(page, editorId);
+  const pending = pendingOf(page.uuid, editorId);
+  if (typeof pending === "string") return pending;
+  return storedValue(page, editorId) ?? "";
 }
 
 /** The indicator state to render for an editor (survives re-renders). */
@@ -83,13 +171,22 @@ export function saveStateOf(pageUuid, editorId) {
   return SAVE_STATES.get(keyOf(pageUuid, editorId)) ?? null;
 }
 
+/** Set and paint an editor's indicator state; returns how many indicators show it. */
 function setSaveState(pageUuid, editorId, state) {
   if (state) SAVE_STATES.set(keyOf(pageUuid, editorId), state);
   else SAVE_STATES.delete(keyOf(pageUuid, editorId));
   const key = saveStateKey(state);
   const text = key ? game.i18n.localize(`${I18N}.${key}`) : "";
   const sel = `.session-container[data-cc-page="${CSS.escape(pageUuid)}"] .editor-parent[data-editor-id="${editorId}"] .mej-cc-save-state`;
-  for (const el of document.querySelectorAll(sel)) paintState(el, state, text);
+  const indicators = [...document.querySelectorAll(sel)].filter((el) => el.isConnected);
+  for (const el of indicators) paintState(el, state, text);
+  // Nobody can see "Couldn't save" (the sheet closed while the write was in flight): say so.
+  const notice = saveFailureNotice({ state, indicators: indicators.length, editorId });
+  if (notice) {
+    const field = game.i18n.localize(`${I18N}.${notice.fieldKey}`);
+    ui.notifications?.error(game.i18n.format(`${I18N}.${notice.key}`, { field }), { permanent: true });
+  }
+  return indicators.length;
 }
 
 function paintState(el, state, text) {
@@ -102,23 +199,24 @@ function paintState(el, state, text) {
 async function writeDocField(page, editorId, value) {
   const key = keyOf(page.uuid, editorId);
   const field = DOC_FIELDS[editorId];
-  UNSAVED.set(key, value);
+  keepPending(page, editorId, value);
   // Already stored (core's collaborative autosave may have written it): nothing to send.
   if (foundry.utils.getProperty(page, field) === value) {
-    if (UNSAVED.get(key) === value) UNSAVED.delete(key);
+    settlePending(page.uuid, editorId, value);
     setSaveState(page.uuid, editorId, "saved");
     return true;
   }
   setSaveState(page.uuid, editorId, "saving");
   try {
     await page.update({ [field]: value });
-    if (UNSAVED.get(key) === value) UNSAVED.delete(key);
+    settlePending(page.uuid, editorId, value);
     if (!UNSAVED.has(key)) setSaveState(page.uuid, editorId, "saved");
     return true;
   } catch (err) {
     console.error(`${MODULE_ID} | ${editorId} could not be saved`, err);
-    setSaveState(page.uuid, editorId, "failed");
-    if (editorId === "gmNotes") ui.notifications.error(game.i18n.localize(`${I18N}.session.gmNotesSaveFailed`));
+    // With no indicator on screen, setSaveState announces the failure itself.
+    const shown = setSaveState(page.uuid, editorId, "failed");
+    if (shown && editorId === "gmNotes") ui.notifications.error(game.i18n.localize(`${I18N}.session.gmNotesSaveFailed`));
     return false;
   }
 }
@@ -134,14 +232,14 @@ function canEditPage(page) {
 /** Save My Notes for `page` by whichever path is open now (logic/editor-save.mjs myNotesSavePath). */
 export async function writeMyNotes(page, value) {
   const draftKey = myNotesDraftKey(page.uuid);
-  NOTE_DRAFTS.set(draftKey, { value });
+  keepPending(page, "myNotes", value);
   const path = myNotesSavePath({ canEditPage: canEditPage(page), hasActiveGM: !!game.users.activeGM });
   if (path === "draft") {
     setSaveState(page.uuid, "myNotes", "noGM");
     return false;
   }
   if (foundry.utils.getProperty(page, myNotesPath()) === value) {
-    if (NOTE_DRAFTS.get(draftKey)?.value === value) NOTE_DRAFTS.delete(draftKey);
+    settlePending(page.uuid, "myNotes", value);
     setSaveState(page.uuid, "myNotes", "saved");
     return true;
   }
@@ -152,7 +250,7 @@ export async function writeMyNotes(page, value) {
   }
   try {
     await page.update({ [myNotesPath()]: value });
-    if (NOTE_DRAFTS.get(draftKey)?.value === value) NOTE_DRAFTS.delete(draftKey);
+    settlePending(page.uuid, "myNotes", value);
     if (!NOTE_DRAFTS.has(draftKey)) setSaveState(page.uuid, "myNotes", "saved");
     return true;
   } catch (err) {
@@ -195,6 +293,7 @@ function confirmMyNotes(page, changes) {
   const draft = NOTE_DRAFTS.get(draftKey);
   if (draft && draft.value !== foundry.utils.getProperty(page, myNotesPath())) return; // newer typing still pending
   NOTE_DRAFTS.delete(draftKey);
+  deviceDrafts()?.clear(page.uuid, "myNotes");
   clearTimeout(RELAY_TIMERS.get(page.uuid));
   RELAY_TIMERS.delete(page.uuid);
   setSaveState(page.uuid, "myNotes", "saved");
@@ -202,7 +301,11 @@ function confirmMyNotes(page, changes) {
 
 /** Retry every My Notes draft a GM can now save (a GM connected). */
 function retryMyNotesDrafts() {
-  for (const key of NOTE_DRAFTS.keys()) {
+  // Drafts an earlier load left on this device are retried too.
+  for (const { pageUuid, field } of deviceDrafts()?.list() ?? []) {
+    if (field === "myNotes") rehydrate(pageOf(pageUuid), "myNotes");
+  }
+  for (const key of [...NOTE_DRAFTS.keys()]) {
     if (!key.startsWith("mynotes:")) continue;
     const page = pageOf(key.slice("mynotes:".length));
     if (page) writeMyNotes(page, NOTE_DRAFTS.get(key).value);
@@ -260,8 +363,7 @@ function salvageBuffer(st, { failed = false } = {}) {
   st.buffer = "";
   st.salvaged = value;
   if (failed) {
-    if (st.editorId === "myNotes") NOTE_DRAFTS.set(myNotesDraftKey(page.uuid), { value });
-    else UNSAVED.set(keyOf(page.uuid, st.editorId), value);
+    keepPending(page, st.editorId, value);
     setSaveState(page.uuid, st.editorId, "failed");
     return null;
   }
@@ -666,6 +768,15 @@ export function registerSessionAutosave() {
       else flushSessionEditors(sheet, "visibilityhidden");
     }
   });
+  // Drafts left on this device by an earlier load: offered and retried. MEJ's
+  // socket (the My Notes relay) is set up during its own ready.
+  Hooks.once("ready", () => setTimeout(() => {
+    try {
+      restoreDeviceDrafts();
+    } catch (err) {
+      console.error(`${MODULE_ID} | restoring unsaved Session text failed`, err);
+    }
+  }, 1000));
   Hooks.on("userConnected", (user, connected) => {
     if (!connected || !user?.isGM) return;
     // The GM's client is still loading when its socket connects; relayMyNotes repeats until it lands.
