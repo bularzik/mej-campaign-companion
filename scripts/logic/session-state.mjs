@@ -4,7 +4,7 @@ const P = "flags.mej-campaign-companion.session.";
 export function hasVisibleText(html) {
   if (!html) return false;
   if (/<img\b/i.test(html)) return true;
-  return html.replace(/<[^>]*>/g, "").trim().length > 0;
+  return html.split(/<[^>]*>/).some((text) => text.trim().length > 0);
 }
 
 /** "live" | "ended" | "notStarted". `isCurrent` wins; stamps and legacy content mean ended. */
