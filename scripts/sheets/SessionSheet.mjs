@@ -34,6 +34,7 @@ import { streamRows } from "../logic/tonight.mjs";
 import { sessionStatus, sessionButton, elapsedLabel } from "../logic/session-state.mjs";
 import { groundTone } from "../logic/sheet-ground.mjs";
 import { notesForSession } from "../logic/notes.mjs";
+import { recapDraft } from "../logic/recap-draft.mjs";
 import { validNoteText } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
@@ -43,6 +44,7 @@ import { normalizeGroups } from "../logic/player-groups.mjs";
 import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
+const noteTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // Commit the GM-notes editor through the element's PUBLIC value property.
 // `get value` is the live editor content while the editor is active (core's
@@ -88,6 +90,8 @@ export class SessionSheet extends EnhancedJournalSheet {
       deleteNote: SessionSheet.onDeleteNote,
       startSession: SessionSheet.onStartSession,
       endSession: SessionSheet.onEndSession,
+      toggleTableTalk: SessionSheet.onToggleTableTalk,
+      addTableTalkToRecap: SessionSheet.onAddTableTalkToRecap,
       viewImage: SessionSheet.onViewImage,
       // Shadows MEJ's own addImage, which only opens the picker while the page has no image.
       addImage: SessionSheet.onAddImage
@@ -102,7 +106,8 @@ export class SessionSheet extends EnhancedJournalSheet {
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-relationships.hbs",
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-notes.hbs",
         "templates/generic/tab-navigation.hbs",
-        `modules/${MODULE_ID}/templates/session-header.hbs`
+        `modules/${MODULE_ID}/templates/session-header.hbs`,
+        `modules/${MODULE_ID}/templates/table-talk.hbs`
       ],
       scrollable: [
         ".editor-display",
@@ -225,29 +230,18 @@ export class SessionSheet extends EnhancedJournalSheet {
       delete context.data.system.gmNotes;
     }
 
-    // Notes stream (Plan B). Stored note text is escaped plus @UUID shorthand
-    // only (linkNoteText), so enriched output is safe for {{{ }}}.
-    const campaign = campaignOf(this.document);
-    const running = campaign ? currentSession(campaign) : null;
-    if (campaign) {
-      const formatTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const rows = streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime });
-      context.notesStream = {
-        canWrite: !!notesEntryOf(campaign)?.isOwner,
-        rows: await Promise.all(rows.map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
-      };
-    } else {
-      context.notesStream = { canWrite: false, rows: [] };
-    }
-
     // Header (spec 2026-10-19 §4.2). Status is the same for every viewer, so
     // Table talk is counted over all of this session's notes, not the
     // viewer's visible ones.
+    const campaign = campaignOf(this.document);
+    const running = campaign ? currentSession(campaign) : null;
+    const sessionNotes = campaign ? notesForSession(readNotes(campaign), this.document.uuid) : [];
+    const recap = this.document.system?.recap ?? "";
     const status = sessionStatus({
       startedAt: session.startedAt, endedAt: session.endedAt,
       isCurrent: running?.uuid === this.document.uuid,
-      hasTableTalk: campaign ? notesForSession(readNotes(campaign), this.document.uuid).length > 0 : false,
-      recap: this.document.system?.recap ?? ""
+      hasTableTalk: sessionNotes.length > 0,
+      recap
     });
     const live = status === "live";
     const button = campaign ? sessionButton(status, isGM) : null;
@@ -261,6 +255,26 @@ export class SessionSheet extends EnhancedJournalSheet {
       canManageAttendees: !!(context.editable ?? this.isEditable),
       number: session.sessionNumber ?? null,
       src: context.data?.src || null
+    };
+    context.recapEmpty = !/<img\b/i.test(recap) && !recap.replace(/<[^>]*>/g, "").trim();
+
+    // Table talk (spec 2026-10-19 §4.3). Stored note text is escaped plus
+    // @UUID shorthand only (linkNoteText), so enriched output is safe for
+    // {{{ }}}. Open follows "live" unless this sheet's user toggled it.
+    const rows = campaign
+      ? await Promise.all(streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime: noteTime })
+        .map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
+      : [];
+    const addedAt = sessionData(this.document).tableTalkAddedAt ?? null;
+    const newest = Math.max(0, ...sessionNotes.map((n) => n.at));
+    context.tableTalk = {
+      open: this._ccTableTalkOpen ?? live,
+      live,
+      count: rows.length,
+      rows,
+      canWrite: campaign ? !!notesEntryOf(campaign)?.isOwner : false,
+      canAddToRecap: !!(context.editable ?? this.isEditable) && rows.length > 0,
+      added: typeof addedAt === "number" && sessionNotes.length > 0 && addedAt >= newest
     };
 
     return context;
@@ -620,7 +634,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     $(".editor-parent[data-editor-id='recap'] prose-mirror", form).prop("disabled", true);
     // MEJ's sweep disables every input/button on a page this user cannot edit.
     // The notes capture box is gated by the notes entry's ownership instead
-    // (the box only renders when notesStream.canWrite, and the store enforces
+    // (the box only renders when tableTalk.canWrite, and the store enforces
     // it), so a player who merely observes this page can still note. The
     // header's GM Start/End button is re-enabled for a GM for the same reason.
     $('input[name="session-note"], [data-action="captureSessionNote"]', form).prop("disabled", false);
@@ -735,6 +749,50 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   // --- Notes stream (Plan B) ------------------------------------------------
+
+  // Table talk drawer toggle: this sheet instance only, never persisted. Flips
+  // the class in place (the body is always rendered), so nothing re-renders.
+  static onToggleTableTalk(event, target) {
+    const section = target.closest(".mej-cc-table-talk");
+    if (!section) return;
+    const open = !section.classList.contains("open");
+    this._ccTableTalkOpen = open;
+    section.classList.toggle("open", open);
+    target.setAttribute("aria-expanded", String(open));
+  }
+
+  // Append the Table talk recap draft (the one End used to offer) to the end
+  // of the recap, and stamp when, so the link reads "added" and a second click
+  // asks first. Same editing guard as _ingestRecapImage: writing the recap
+  // under an open collaborative editor would lose the owner's typing.
+  static async onAddTableTalkToRecap() {
+    if (!this.isEditable) return;
+    const campaign = campaignOf(this.document);
+    if (!campaign) return;
+    if ($(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing")) {
+      ui.notifications.warn(game.i18n.localize(`${I18N}.notes.addWhileEditing`));
+      return;
+    }
+    const notes = notesForSession(readNotes(campaign), this.document.uuid);
+    const addedAt = sessionData(this.document).tableTalkAddedAt ?? null;
+    const newest = Math.max(0, ...notes.map((n) => n.at));
+    if (typeof addedAt === "number" && notes.length && addedAt >= newest) {
+      const again = await foundry.applications.api.DialogV2.confirm({
+        window: { title: game.i18n.localize(`${I18N}.notes.addToRecap`) },
+        content: `<p>${game.i18n.localize(`${I18N}.notes.addAgainConfirm`)}</p>`,
+        rejectClose: false
+      });
+      if (!again) return;
+    }
+    const draft = recapDraft(notes, { formatTime: noteTime });
+    if (!draft) {
+      ui.notifications.info(game.i18n.localize(`${I18N}.notes.nothingToAdd`));
+      return;
+    }
+    const current = this.document.system?.recap ?? "";
+    await this.document.update({ "system.recap": `${current}${draft}`, [`${FLAG_SESSION}.tableTalkAddedAt`]: Date.now() });
+    this.render();
+  }
 
   static async onCaptureSessionNote() {
     await this._captureNote($('input[name="session-note"]', this.trueElement).get(0));

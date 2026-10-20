@@ -67,6 +67,16 @@ async function positionShell(page) {
 const shell = (page) => page.locator("#MonksEnhancedJournal");
 
 // The Session sheet's Details tab with its header and tab labels (spec 2026-10-19 §4.2, §4.5).
+// Open the Recap tab's Table talk drawer (folded on a session that is not running).
+async function openTableTalk(page) {
+  await sheetTab(page, "description");
+  const drawer = shell(page).locator(".session-container .mej-cc-table-talk");
+  if (!(await drawer.evaluate((el) => el.classList.contains("open")))) {
+    await drawer.locator('[data-action="toggleTableTalk"]').click();
+    await settle(page, 200);
+  }
+}
+
 const sessionDetailsRoots = (S) => [
   `${S} .session-container .mej-cc-session-header`,
   `${S} .session-container nav.sheet-tabs`,
@@ -237,6 +247,10 @@ test.describe("29 readability", () => {
       const session = await JournalEntry.create({
         name: sessionName, folder: campaign.id, ownership: { default: 2 }, pages: [sessionPage]
       });
+      // A Table talk row on the session (spec 2026-10-19 §4.3), so the drawer has rows to read.
+      const { ensureNotesEntry, addNote } = await import(`${mod}/data/notes-store.mjs`);
+      await ensureNotesEntry(campaign);
+      await addNote(campaign, { text: "We should ask about the ledger.", sessionUuid: session.pages.contents[0].uuid });
       const media = await JournalEntry.create({
         name: `${P}Doc`, folder: campaign.id, ownership: { default: 2 },
         pages: [{ name: `${P}Doc`, type: "pdf", src: pdfSrc }]
@@ -506,6 +520,7 @@ test.describe("29 readability", () => {
             await sheetTab(page, "session");
           }, sessionDetailsRoots(S));
           await check(`${bg}: session recap`, () => sheetTab(page, "description"), `${S} .session-container`);
+          await check(`${bg}: session table talk`, () => openTableTalk(page), `${S} .session-container .mej-cc-table-talk`);
           await check(`${bg}: person page`, async () => {
             await openEntry(page, seed.personId);
             await page.waitForSelector(`${S} .mej-cc-knowledge`, { timeout: 15_000 });
@@ -554,6 +569,7 @@ test.describe("29 readability", () => {
           await page.waitForSelector(`${S} .session-container`, { timeout: 15_000 });
           await sheetTab(page, "session");
         }, sessionDetailsRoots(S));
+        await check("player session table talk", () => openTableTalk(page), `${S} .session-container .mej-cc-table-talk`);
         await check("player person page", async () => {
           await openEntry(page, seed.personId);
           await page.waitForSelector(`${S} .mej-cc-knowledge`, { timeout: 15_000 });

@@ -98,11 +98,11 @@ test.describe("35 session notes", () => {
     assertNoConsoleErrors(u1.errors);
   });
 
-  test("the note shows on the Session page stream and on the Duke's Party notes", async () => {
+  test("the note shows in the Session page's Table talk and on the Duke's Party notes", async () => {
     test.setTimeout(90_000);
     await u1.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry(await fromUuid(uuid)), sessionUuid);
     await settle(u1.page, 800);
-    await expect(u1.page.locator("#MonksEnhancedJournal .mej-cc-notes-stream .mej-cc-note")).toHaveCount(1, { timeout: 15_000 });
+    await expect(u1.page.locator("#MonksEnhancedJournal .mej-cc-table-talk .mej-cc-note")).toHaveCount(1, { timeout: 15_000 });
     await u1.page.evaluate((id) => game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)), duke.id);
     await settle(u1.page, 800);
     await expect(u1.page.locator("#MonksEnhancedJournal .mej-cc-knowledge-notes .mej-cc-note")).toHaveCount(1, { timeout: 15_000 });

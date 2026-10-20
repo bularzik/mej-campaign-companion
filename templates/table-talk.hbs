@@ -1,0 +1,39 @@
+{{!-- Table talk (spec 2026-10-19 §4.3): the session's notes stream as a drawer
+      under the recap. Open while this page is live, folded to its one-line
+      header otherwise; the toggle only flips the `open` class (no re-render),
+      so the body is always rendered and the capture box keeps its draft. --}}
+<section class="mej-cc-table-talk{{#if tableTalk.open}} open{{/if}}{{#if tableTalk.live}} live{{/if}}" data-cc-region="table-talk">
+    <div class="mej-cc-table-talk-head">
+        <a class="mej-cc-table-talk-toggle" data-action="toggleTableTalk" aria-expanded="{{#if tableTalk.open}}true{{else}}false{{/if}}">
+            <i class="fa-solid fa-caret-right mej-cc-table-talk-caret" inert></i>
+            {{localize 'MEJCampaignCompanion.notes.streamTitle'}} · <span class="mej-cc-table-talk-count">{{tableTalk.count}}</span>
+        </a>
+        <span class="mej-cc-table-talk-hint">{{localize 'MEJCampaignCompanion.notes.chatHint'}}</span>
+        {{#if tableTalk.canAddToRecap}}
+        <a class="mej-cc-table-talk-add{{#if tableTalk.added}} added{{/if}}" data-action="addTableTalkToRecap">{{#if tableTalk.added}}{{localize 'MEJCampaignCompanion.notes.addedToRecap'}}{{else}}{{localize 'MEJCampaignCompanion.notes.addToRecap'}}{{/if}}</a>
+        {{/if}}
+    </div>
+    <div class="mej-cc-table-talk-body">
+        {{#if tableTalk.canWrite}}
+        <div class="mej-cc-tonight-capture">
+            <input type="text" name="session-note" autocomplete="off" maxlength="2000"
+                   placeholder="{{localize 'MEJCampaignCompanion.notes.capturePlaceholder'}}" />
+            <button type="button" data-action="captureSessionNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.capture'}}"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+        {{/if}}
+        <ol class="mej-cc-notes-list">
+            {{#each tableTalk.rows}}
+            <li class="mej-cc-note" data-note-id="{{this.id}}">
+                <span class="mej-cc-note-meta">{{this.timeLabel}} · {{this.authorName}}{{#if this.edited}} · {{localize 'MEJCampaignCompanion.notes.edited'}}{{/if}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span>
+                <span class="mej-cc-note-text">{{{this.text}}}</span>
+                {{#if this.canEdit}}
+                <a class="mej-cc-note-edit" data-action="editNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.edit'}}"><i class="fa-solid fa-pen"></i></a>
+                <a class="mej-cc-note-delete" data-action="deleteNote" data-tooltip="{{localize 'MEJCampaignCompanion.notes.delete'}}"><i class="fa-solid fa-trash"></i></a>
+                {{/if}}
+            </li>
+            {{else}}
+            <li class="instruction">{{localize 'MEJCampaignCompanion.notes.none'}}</li>
+            {{/each}}
+        </ol>
+    </div>
+</section>

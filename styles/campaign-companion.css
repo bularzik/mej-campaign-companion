@@ -1887,8 +1887,74 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   color: var(--mej-cc-link);
   opacity: 1;
 }
-.mej-cc-notes-stream { margin-top: 10px; }
-.mej-cc-notes-stream h3 { margin: 0 0 4px; }
+/* Table talk drawer (spec 2026-10-19 §4.3) under the recap. Collapsed it is
+   one line and the recap fills the tab; open it takes the remaining height
+   and, while the page is live, the recap shrinks to its content. */
+.session-container .mej-cc-table-talk {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+  margin-top: 6px;
+  padding: 4px 2px 0;
+  border-top: 1px solid var(--mej-cc-field-border);
+  color: var(--mej-cc-ink);
+}
+.session-container .mej-cc-table-talk.open { flex: 1 1 0; min-height: 8em; }
+.session-container .mej-cc-table-talk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 2px 0;
+}
+.session-container .mej-cc-table-talk-toggle {
+  font-weight: bold;
+  font-size: var(--font-size-14, 14px);
+  color: var(--mej-cc-ink);
+  cursor: pointer;
+}
+.session-container .mej-cc-table-talk-caret { width: 1em; transition: transform 0.1s; }
+.session-container .mej-cc-table-talk.open .mej-cc-table-talk-caret { transform: rotate(90deg); }
+.session-container .mej-cc-table-talk-hint {
+  flex: 1 1 auto;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .mej-cc-table-talk:not(.open) .mej-cc-table-talk-hint { visibility: hidden; }
+.session-container .mej-cc-table-talk-add {
+  margin-left: auto;
+  font-size: var(--font-size-12, 12px);
+  color: var(--mej-cc-link);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.session-container .mej-cc-table-talk-add.added { color: var(--mej-cc-ink-muted); }
+.session-container .mej-cc-table-talk-body {
+  display: none;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+}
+.session-container .mej-cc-table-talk.open .mej-cc-table-talk-body { display: flex; }
+.session-container .mej-cc-table-talk .mej-cc-notes-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; font-size: var(--font-size-13, 13px); }
+.session-container .mej-cc-table-talk .mej-cc-note-meta { flex: 0 0 auto; white-space: nowrap; font-size: var(--font-size-12, 12px); color: var(--mej-cc-ink-muted); }
+.session-container .mej-cc-table-talk .mej-cc-note-text { color: var(--mej-cc-ink); }
+.session-container .mej-cc-table-talk :is(.mej-cc-note-edit, .mej-cc-note-delete) { color: var(--mej-cc-ink); }
+/* Live and open: the recap takes only what it needs (the placeholder line, or
+   its text up to a third of the tab) unless it is being edited. */
+.session-container .tab[data-tab='description'] > .tab-inner:has(> .mej-cc-table-talk.open.live) > .editor-parent[data-editor-id='recap']:not(.editing) {
+  flex: 0 1 auto;
+  max-height: 35%;
+  min-height: 2.5em;
+}
+.session-container .tab[data-tab='description'] > .tab-inner:has(> .mej-cc-table-talk.open.live) > .editor-parent[data-editor-id='recap']:not(.editing) > .editor-display {
+  height: auto;
+  max-height: 100%;
+}
+.session-container .mej-cc-no-recap { font-style: italic; margin: 0; }
 .mej-cc-notes-list { list-style: none; margin: 0; padding: 0; }
 .mej-cc-note { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px dotted var(--mej-cc-chip-bg, rgba(255,255,255,.12)); }
 .mej-cc-note .mej-cc-note-text { flex: 1; }

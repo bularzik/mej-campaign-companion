@@ -24,7 +24,13 @@
       "capturePlaceholder": "Note something…",
       "capture": "Note it",
       "captured": "Noted.",
-      "streamTitle": "Notes",
+      "streamTitle": "Table talk",
+      "addToRecap": "add to recap",
+      "addedToRecap": "added ✓",
+      "addAgainConfirm": "These notes were already added to the recap. Add them again?",
+      "addWhileEditing": "Close the recap editor first, then add Table talk to it.",
+      "nothingToAdd": "Nothing in Table talk can go into the recap yet (private and retracted notes stay out).",
+      "chatHint": "players can also type /note … in chat",
       "none": "No notes yet. Type one above, or use /note in chat.",
       "edited": "edited",
       "retracted": "Retracted",
@@ -184,7 +190,8 @@
       "viewImage": "View image",
       "changeImage": "Change image (Shift-click to remove it)",
       "statusLive": "Live",
-      "statusEnded": "Ended"
+      "statusEnded": "Ended",
+      "noRecap": "No recap yet. Write one when the session ends, or build it from Table talk."
     },
     "campaign": {
       "createButton": "New campaign",

@@ -99,4 +99,44 @@ test.describe("40 session page", () => {
     await expect(header().locator('[data-action="startSession"]')).toContainText("Restart");
     assertNoConsoleErrors(gm.errors);
   });
+
+  // Spec 2026-10-19 §4.3. Also the home of spec 35's old draft-append
+  // assertions: End no longer offers the draft, the drawer does.
+  test("table talk opens while live, folds when ended", async () => {
+    test.setTimeout(120_000);
+    await openSession(s9.id);
+    // Restart: nothing else is running, so no question.
+    await header().locator('[data-action="startSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBe(s9.uuid);
+    await openSession(s9.id);
+    const drawer = shell().locator(".session-container .mej-cc-table-talk");
+    await expect(drawer).toHaveClass(/\bopen\b/);
+    const input = drawer.locator('input[name="session-note"]');
+    await expect(input).toBeVisible();
+    const text = `${PREFIX} the ferryman lied`;
+    await input.fill(text);
+    await input.press("Enter");
+    await expect(drawer.locator(".mej-cc-note", { hasText: text })).toHaveCount(1, { timeout: 15_000 });
+
+    await header().locator('[data-action="endSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBeNull();
+    await expect(drawer).not.toHaveClass(/\bopen\b/, { timeout: 10_000 });
+    await expect(drawer.locator(".mej-cc-table-talk-head")).toContainText("Table talk · 1");
+    const add = drawer.locator('[data-action="addTableTalkToRecap"]');
+    await expect(add).toHaveText("add to recap");
+    await add.click();
+    await expect.poll(() => gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid), { timeout: 15_000 })
+      .toContain("the ferryman lied");
+    await expect(drawer.locator('[data-action="addTableTalkToRecap"]')).toHaveText("added ✓", { timeout: 10_000 });
+
+    // A second add asks first; declining leaves the recap as it is.
+    const recap = await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid);
+    await drawer.locator('[data-action="addTableTalkToRecap"]').click();
+    const confirm = gm.page.locator("dialog.application", { hasText: "already added to the recap" });
+    await expect(confirm).toBeVisible({ timeout: 10_000 });
+    await confirm.locator('button[data-action="no"]').click();
+    await settle(gm.page, 500);
+    expect(await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid)).toBe(recap);
+    assertNoConsoleErrors(gm.errors);
+  });
 });
