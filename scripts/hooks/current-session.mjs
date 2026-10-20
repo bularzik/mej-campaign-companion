@@ -67,9 +67,13 @@ async function createSessionFor(campaign) {
   return entry?.pages?.contents?.[0] ?? null;
 }
 
+// Not `shell.rendered`: the ownership grant above makes MEJ re-render the shell, and mid-render it reports
+// false. The shell is closed when MEJ's `journal` is null; its active tab names the entry it shows.
 function isShownInShell(page) {
   const shell = game.MonksEnhancedJournal?.journal;
-  return !!shell?.rendered && shell.subsheet?.document?.uuid === page.uuid;
+  if (!shell) return false;
+  const active = shell.tabs?.active?.()?.entityId ?? null;
+  return shell.subsheet?.document?.uuid === page.uuid || (!!active && (active === page.uuid || active === page.parent?.uuid));
 }
 
 /** GM-only. Open a session: create (or promote `sessionUuid`), flag the campaign, grant recap ownership, adopt held notes. */
