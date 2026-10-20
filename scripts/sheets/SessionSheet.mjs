@@ -33,9 +33,8 @@ import { openSessionPage as openCampaignSession, startSession, endSession } from
 import { streamRows } from "../logic/tonight.mjs";
 import { sessionStatus, sessionButton, elapsedLabel } from "../logic/session-state.mjs";
 import { groundTone } from "../logic/sheet-ground.mjs";
-import { notesForSession } from "../logic/notes.mjs";
 import { recapDraft } from "../logic/recap-draft.mjs";
-import { validNoteText } from "../logic/notes.mjs";
+import { validNoteText, notesForSession } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
 import { applyChecklistAudience, checklistSeed } from "../logic/checklist-reveal.mjs";
@@ -265,7 +264,8 @@ export class SessionSheet extends EnhancedJournalSheet {
       ? await Promise.all(streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime: noteTime })
         .map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
       : [];
-    const addedAt = sessionData(this.document).tableTalkAddedAt ?? null;
+    // Not in SESSION_DEFAULTS (wave ruling): read with a fallback.
+    const addedAt = session.tableTalkAddedAt ?? null;
     const newest = Math.max(0, ...sessionNotes.map((n) => n.at));
     context.tableTalk = {
       open: this._ccTableTalkOpen ?? live,

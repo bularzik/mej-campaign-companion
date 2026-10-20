@@ -46,6 +46,8 @@
   min-width: 0;
 }
 .session-container .mej-cc-date-fields > input.mej-cc-date-year { flex: 0 0 5.5em; }
+/* Foundry colours form-group text from the scheme; the separator takes the ink. */
+.monks-enhanced-journal .session-container .mej-cc-date-fields > .mej-cc-date-sep { color: var(--mej-cc-ink); }
 .session-container .mej-cc-date-fields > select { flex: 0 1 10em; min-width: 6em; }
 .session-container .mej-cc-date-fields > input.mej-cc-date-day,
 .session-container .mej-cc-date-fields > input.mej-cc-date-time { flex: 0 0 3.6em; }
