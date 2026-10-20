@@ -1,7 +1,7 @@
 // "Who's playing tonight?" (spec 2026-10-19 §4.6): a checklist of the
 // campaign's player characters plus a search that adds any other Actor.
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { attendeeChoices } from "../logic/attendee-choices.mjs";
+import { attendeeChoices, attendeeButtonKey } from "../logic/attendee-choices.mjs";
 import { campaignOf, campaignFlagOf, contributorsOf } from "../logic/campaigns.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
 import { patchSessionRegions } from "../sheets/session-regions.mjs";
@@ -44,7 +44,7 @@ export async function openAttendeeDialog(sheet) {
       <ul class="mej-cc-attendee-results"></ul>
     </div>`;
   const startedEmpty = current.length === 0;
-  const label = (n) => (startedEmpty ? L("attendeesAdd", { n }) : L("attendeesSave"));
+  const label = (n) => L(attendeeButtonKey({ startedEmpty, n }), { n });
 
   await foundry.applications.api.DialogV2.wait({
     window: { title: L("attendeesTitle") },

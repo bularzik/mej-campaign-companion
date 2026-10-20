@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { attendeeChoices } from "../scripts/logic/attendee-choices.mjs";
+import { attendeeChoices, attendeeButtonKey } from "../scripts/logic/attendee-choices.mjs";
 
 const users = [
   { id: "gm", name: "GM", isGM: true, characterUuid: null },
@@ -28,4 +28,10 @@ describe("attendeeChoices", () => {
   it("nobody has a character", () => {
     expect(attendeeChoices({ contributorUserIds: [], users: [users[0]], current: [], actorOf })).toEqual({ rows: [], source: "none" });
   });
+});
+
+describe("attendeeButtonKey", () => {
+  it("one checked reads singular", () => expect(attendeeButtonKey({ startedEmpty: true, n: 1 })).toBe("attendeesAddOne"));
+  it.each([0, 2, 5])("%i checked reads plural", (n) => expect(attendeeButtonKey({ startedEmpty: true, n })).toBe("attendeesAdd"));
+  it("a session that already had attendees saves", () => expect(attendeeButtonKey({ startedEmpty: false, n: 1 })).toBe("attendeesSave"));
 });

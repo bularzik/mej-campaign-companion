@@ -178,6 +178,7 @@
       "attendeesEdit": "Edit attendees",
       "attendeesTitle": "Who's playing tonight?",
       "attendeesAdd": "Add {n} attendees",
+      "attendeesAddOne": "Add 1 attendee",
       "attendeesSave": "Save attendees",
       "attendeesSearch": "Search Actors to add…",
       "attendeesAllPlayers": "No Contributors are set for this campaign, so all players' characters are listed.",

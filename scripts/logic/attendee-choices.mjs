@@ -32,3 +32,12 @@ export function attendeeChoices({ contributorUserIds, users, current, actorOf })
   }
   return { rows, source };
 }
+
+/**
+ * The confirm button's i18n key (under `session.`): "Add 1 attendee" /
+ * "Add {n} attendees" for a session that had none, "Save attendees" otherwise.
+ */
+export function attendeeButtonKey({ startedEmpty, n }) {
+  if (!startedEmpty) return "attendeesSave";
+  return n === 1 ? "attendeesAddOne" : "attendeesAdd";
+}
