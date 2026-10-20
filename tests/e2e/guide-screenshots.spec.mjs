@@ -1569,6 +1569,20 @@ async function capturePlayerShots(page) {
   const sessionShell = await openEntry(page, demo.sessionId);
   const showTabs = await hideTabClutter(page);
   await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
+  // Nothing else on screen: another window (the User Configuration a player
+  // login can leave open) shows through MEJ's title bar otherwise.
+  await page.evaluate(async () => {
+    const shell = game.MonksEnhancedJournal?.journal;
+    const keep = new Set([shell, shell?.subsheet].filter(Boolean));
+    const stray = [
+      ...Object.values(ui.windows ?? {}),
+      ...[...(foundry.applications?.instances?.values?.() ?? [])].filter((app) => app.hasFrame && app.rendered)
+    ];
+    for (const app of new Set(stray)) {
+      if (keep.has(app)) continue;
+      try { await app.close({ animate: false }); } catch { /* already closing */ }
+    }
+  });
   await settle(page, 300);
   await shot(sessionShell, "session-sheet-player");
 
