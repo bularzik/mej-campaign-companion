@@ -8,35 +8,39 @@ If you're running the game rather than playing in it, read the [GM guide](gm-gui
 
 Your GM's world is organised into **campaigns** — a folder of entries plus a **portal entry** that opens straight into the module's home base, the **Campaign Hub**. Everything you can reach from your seat comes through one of three things: session pages, the Hub, and the entries your GM has shared with you.
 
-The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. From a player's seat it has three tabs: **Recap**, **Session** and **Notes**, plus **Relationships** whenever you can add a party relationship there or have one to see (see [Recording relationships](#recording-relationships)).
+The piece you'll interact with most directly is the **Session** page — one per game session, opened the same way as any other journal entry your GM shares with you. A header row sits above the tabs: the session's thumbnail (click it to see the image full size, on your screen only), its name, `#<number>`, the characters playing tonight as small chips, and a status chip that reads **Live** with the elapsed time while the session is running and **Ended** once it has finished. From a player's seat the page has three tabs: **Recap**, **Details** and **My Notes**, plus **Relationships** whenever you can add a party relationship there or have one to see (see [Recording relationships](#recording-relationships)).
 
-![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the three tabs Recap, Session and Notes, and the session's shared recap on the Recap tab with an edit pencil beside it](images/session-sheet-player.png)
+![A player's Session sheet for "Session 12 — Shadows over Daggerford", showing the header row and the tabs Recap, Details and My Notes, with the session's shared recap on the Recap tab (the image predates the redesign and still shows the older layout)](images/session-sheet-player.png)
 
-The Recap tab holds one recap for the whole table — what happened, as the GM and the players write it together.
+The Recap tab holds one recap for the whole table — what happened, as the GM and the players write it together — and, under it, **Table talk**, the notes everyone jots down during play (see [Taking notes during play](#taking-notes-during-play)). The **Details** tab shows the session number, its in-game date and any secrets already revealed to you.
 
 ## Reading session pages & writing your recap
 
-Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, a pencil sits at the right of the recap, and the sheet header carries the same edit button — either opens the editor; click one to add what your character remembers, noticed, or wants to flag for next time:
+Your GM will let you know how to find a session page — usually by sharing it directly in Foundry, or by pointing you to it in the Hub's index (more on that below). If you own the entry, there is nothing to open or save: click into the recap and type what your character remembers, noticed, or wants to flag for next time. The formatting toolbar appears while your cursor is in the recap:
 
 ![The recap open for editing, with the full formatting toolbar directly above the recap text](images/recap-editing.png)
 
-**Click the pencil (or the header button, whichever you used to open it) again to close the editor when you're done, before you go anywhere else.** That is what commits your text: closing the editor takes focus off it, and the editor writes what you typed on its way out. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies. If someone else at the table saves while you're typing, your editor closes too — nothing you wrote is lost, it's all in the saved recap; click the pencil again to keep going. Close the editor before dropping or pasting an image onto the recap — while it's open, the drop is refused with a notice. If you mention another entry by name, it may become a link when you save — that's auto-linking, and it only touches text you just added.
+Your text saves by itself. A small line beside the recap reads "Saving…", "Saved" or "Couldn't save"; it saves when you click away, switch tabs or close the sheet, and periodically while you type. If someone else has the recap open at the same time you'll see their typing appear as they go — you're editing one document together, not two copies, and notes arriving from the table never interrupt what you are typing. Click out of the recap before dropping or pasting an image onto it — while your cursor is in it, the drop is refused with a notice. If you mention another entry by name, it may become a link when you save — that's auto-linking, and it only touches text you just added.
 
-If there's no pencil at all, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
+If you can't type in the recap, you don't own that session — the **Players Write Sessions** setting and per-entry ownership are both the GM's to set, so ask them. You can still read the recap, and it refreshes on your screen when someone else saves it.
+
+**My Notes** is a private notepad on the same page. It starts with "These notes can only be seen by you.", is always editable and saves by itself. Saving goes through the GM, so with no GM connected it reads "Can't save until a GM connects"; what you typed is kept on your screen and saved automatically as soon as a GM connects.
+
+**Who's playing.** The chips in the header show which characters are at the table tonight. If you can manage attendees, the **+ Attendees** control opens **Who's playing tonight?**, a checklist of the campaign's player characters; you can also drag an Actor onto the header.
 
 ## Taking notes during play
 
 Notes are short lines you jot down while the game runs: a name you heard, a clue, a promise. Each note is signed with your name, stamped with the time and the in-world date, and filed under the session in progress.
 
-- **Where to write:** the capture box on the Hub's Tonight strip, the notes stream on the Session page, or **Note about this** on an entry (the entry is filled in for you). In chat, type `/note your text` (or `/n`) from anywhere.
+- **Where to write:** the capture box on the Hub's Tonight strip, the **Table talk** drawer on the Session page's Recap tab, or **Note about this** on an entry (the entry is filled in for you). In chat, type `/note your text` (or `/n`) from anywhere.
 - **No session running:** the strip says "No session running". You can still write; your notes wait and join the next session your GM starts.
 - **Your notes are yours:** they are always signed as you. You can edit or delete your own notes (an edited one shows "edited"), and so can your GM; nobody else can.
 - **Plain text:** whatever you type stays as typed. Typed link codes are not turned into links; the Companion may link entry names it recognises, but only to entries everyone who reads the notes can see.
-- **Party notes:** notes that mention an entry show under **Party notes** in its knowledge panel. **Note about this** is missing on entries not everyone can see.
+- **Notes that mention this:** notes that mention an entry show under **Notes that mention this** in its Links rail, each starting with its session's name as a link. **Note about this** is missing on entries not everyone can see.
 - **Sessions tab:** each session shows how many notes it holds, and while a session is open, the Hub opens on Sessions if it has no tab remembered for you.
 - **Timeline:** notes with an in-world date appear on the timeline in date order when **Show party notes** is on.
 
-Notes are not canon. They are the table's scratch paper; the GM decides what goes into the recap.
+Table talk lines that record a shared image or a revealed secret link to it: click the image's name to open it on your screen only, or the entry's name to open the entry. You only ever see a link on a note you could already see. Notes are not canon. They are the table's scratch paper; the GM decides what goes into the recap with **add to recap**.
 
 ## If your GM has made you a contributor
 
@@ -66,7 +70,7 @@ The **Search** pane is faster than scrolling the index once you know roughly wha
 
 (That shot was taken from the GM's own seat — you can tell by the seven tabs and the **New session** button. It includes a **Secrets:** match line under Session 12 that a player's results would never turn up. Your own search only ever reaches what your permissions allow, the same rule that governs everything else in this guide.) Where a match falls inside a link, the snippet shows the link's text (for example "the Duke"), not its markup.
 
-Your GM's typed entries — Persons, Places, Quests and the rest — also carry a knowledge panel at the foot of the sheet, and its **Mentioned in (N)** section lists which other entries link to it with a ×N count each — handy for tracing how two people or places you've heard of connect. It sits alongside **Tags** and **Attributes** in the same panel; from your seat all three are read-only, and an entry with no tags reads "No tags".
+Your GM's typed entries — Persons, Places, Quests and the rest — also carry a **Links** rail on the right of the sheet (closed, it is a folder-style tab reading **Links (N)**), and its **Mentioned in (N)** section lists which other entries link to it with a ×N count each — handy for tracing how two people or places you've heard of connect. It sits alongside **Tags** and **Attributes** in the same rail; from your seat all three are read-only, and an entry with no tags reads "No tags".
 
 The **Dashboards** pane holds saved searches your GM has built. You'll see the ones they marked **Visible to players**, with their live results listed underneath — a ready-made search, filtered the same way as everything else. There are no controls on it from your seat, and an empty pane reads "No dashboards yet."
 

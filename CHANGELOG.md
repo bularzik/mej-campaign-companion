@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.29.0 (2026-10-20)
+
+The Session page is redesigned to sit on Monk's Enhanced Journal's own look and to be easier to run at the table. This release implements the 2026-10-19 Session page design (`docs/superpowers/specs/2026-10-19-session-page-redesign-design.md`).
+
+### Added
+- Session header: a compact MEJ-native row above the tabs with a 56 px thumbnail (click to see the image full size, for you only), the editable name, `#number`, attendee chips, a **Live** / **Ended** status chip and the GM's **Start session** / **End session** / **Restart** button.
+- Attendees: a **+ Attendees** control opens "Who's playing tonight?", listing each campaign Contributor's character (every player's character when the campaign has no Contributors), all checked when the session has none yet, with a search box for any other Actor. Dropping an Actor on the header or the Recap and Details tabs adds an attendee and says so.
+- Table talk on the Recap tab: open while the session is live, folded after. **add to recap** appends only the notes newer than the last add and asks before adding the same ones twice. Showed-image notes re-open the image for the clicking user only; reveal notes open their entry; notes in the Links rail link to their session.
+- Autosave for Recap, GM Prep and My Notes, with a quiet "Saving…" / "Saved" / "Couldn't save" line. Players' My Notes with no GM connected read "Can't save until a GM connects" and are saved when a GM connects.
+- At most one running session per campaign: starting another asks "End <other> and start this one?". A session's first start sets its in-game date from the world date when none was entered. Sessions record `startedAt` / `endedAt`; pages from older versions need no migration (a page with Table talk or a recap counts as ended).
+
+### Changed
+- Session tabs are **Recap**, **Details** (was "Session"), **Relationships** and **My Notes**. **GM Prep** (was "GM Notes") and **Secrets & clues** are collapsible sections on Details; the attendee list moved to the header.
+- Recap, GM Prep and My Notes are always editable: no pencil, no Save button. They save on blur, tab switch, close and periodically; live Table talk, attendee and status changes no longer re-render an editor that has focus.
+- **End session** shows no dialog; the end-of-session recap draft is now **add to recap** on Table talk.
+- The Knowledge panel is the **Links** rail, collapsing to a folder tab reading "Links (N)" with one total count; its notes section is "Notes that mention this".
+- The Session sheet draws on MEJ's own background, and its ink follows the sheet background in both colour schemes.
+
+### Fixed
+- Table talk text was near-invisible on dark MEJ backgrounds, so notes seemed to vanish once a session ended.
+- Dragging an Actor onto a session's attendees gave no feedback and could drop silently.
+- Starting a session from its own sheet opened a second Session sheet over the shell.
+- On Foundry 13 with stock MEJ 13.06, a player who could see but not edit a session threw "_disableFields is not a function" when the sheet opened.
+
+### Tests
+- New spec 40 (session page); spec 40's open helper waits for the opened session's own header and ignores third-party keybind errors that world-b's modules raise on Foundry 13. Full unit suite, the v13 stock gate, spec 40 and spec 29 pass on Foundry 13.351.
+
 ## 0.28.1 (2026-10-18)
 
 ### Fixed
