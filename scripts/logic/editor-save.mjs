@@ -92,6 +92,43 @@ export function keptTextDecision({ value, base, stored }) {
   return from === current ? "write" : "conflict";
 }
 
+/**
+ * A My Notes value landed for this user (any browser of theirs, or the GM's
+ * relay write). Only a value this client itself sent may confirm its draft
+ * ("confirm") or become the base of newer typing ("rebase"); anything else -
+ * the same user saving from another browser - leaves the draft and its base
+ * alone ("ignore"), so the next automatic retry sees the conflict.
+ * @returns {"confirm"|"rebase"|"ignore"}
+ */
+export function myNotesLanding({ landed, draftValue, sent }) {
+  if (!Array.isArray(sent) || !sent.includes(landed)) return "ignore";
+  return draftValue === undefined || draftValue === landed ? "confirm" : "rebase";
+}
+
+/** Kept text accumulates: a second conflict on the same field adds to the first (same text kept once). */
+export function appendKept(entries, entry) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.some((e) => e.value === entry.value)) return list;
+  return [...list, entry];
+}
+
+/**
+ * The kept entries from their stored form (a JSON list of { value, at }, or
+ * the single kept text an earlier version stored), newest first.
+ */
+export function keptEntries(stored, at = 0) {
+  if (typeof stored !== "string" || !stored) return [];
+  let list = null;
+  try {
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) list = parsed.filter((e) => typeof e?.value === "string").map((e) => ({ value: e.value, at: Number(e.at) || 0 }));
+  } catch {
+    list = null;
+  }
+  list ??= [{ value: stored, at }];
+  return list.sort((a, b) => b.at - a.at);
+}
+
 const escapeText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**

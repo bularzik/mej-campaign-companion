@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { saveTriggers, shouldPatchRegions, saveFailureNotice, keptTextDecision } from "../scripts/logic/editor-save.mjs";
+import { saveTriggers, shouldPatchRegions, saveFailureNotice, keptTextDecision, myNotesLanding, appendKept, keptEntries } from "../scripts/logic/editor-save.mjs";
 
 describe("saveTriggers", () => {
   it.each(["blur", "tabchange", "close", "interval", "visibilityhidden"])("%s saves", (e) => expect(saveTriggers(e)).toBe(true));
@@ -123,4 +123,36 @@ describe("keptTextDecision (automatic writes of kept text)", () => {
     expect(keptTextDecision({ value: "<p>new</p>", base: null, stored: "<p>theirs</p>" })).toBe("conflict"));
   it("treats a missing stored value as empty", () =>
     expect(keptTextDecision({ value: "<p>new</p>", base: "", stored: null })).toBe("write"));
+});
+
+describe("myNotesLanding (a My Notes value lands for this user)", () => {
+  it("confirms the draft when this client sent exactly it", () =>
+    expect(myNotesLanding({ landed: "X", draftValue: "X", sent: ["X"] })).toBe("confirm"));
+  it("rebases newer typing onto a value this client sent earlier", () =>
+    expect(myNotesLanding({ landed: "X1", draftValue: "X2", sent: ["X1", "X2"] })).toBe("rebase"));
+  it("ignores a value this client never sent (another browser of the same user)", () => {
+    expect(myNotesLanding({ landed: "C", draftValue: "X", sent: ["X"] })).toBe("ignore");
+    expect(myNotesLanding({ landed: "C", draftValue: "X", sent: [] })).toBe("ignore");
+  });
+  it("confirms a sent value when no draft is left", () =>
+    expect(myNotesLanding({ landed: "X", draftValue: undefined, sent: ["X"] })).toBe("confirm"));
+});
+
+describe("appendKept / keptEntries (kept text accumulates)", () => {
+  it("a second conflict adds to the first", () => {
+    const one = appendKept([], { value: "<p>a</p>", at: 1 });
+    const two = appendKept(one, { value: "<p>b</p>", at: 2 });
+    expect(two).toEqual([{ value: "<p>a</p>", at: 1 }, { value: "<p>b</p>", at: 2 }]);
+    expect(one).toHaveLength(1);
+  });
+  it("the same text is kept once", () =>
+    expect(appendKept([{ value: "<p>a</p>", at: 1 }], { value: "<p>a</p>", at: 5 })).toHaveLength(1));
+  it("reads a stored list, newest first", () =>
+    expect(keptEntries(JSON.stringify([{ value: "a", at: 1 }, { value: "b", at: 3 }]))).toEqual([{ value: "b", at: 3 }, { value: "a", at: 1 }]));
+  it("reads a single kept text from the earlier format", () =>
+    expect(keptEntries("<p>old</p>", 7)).toEqual([{ value: "<p>old</p>", at: 7 }]));
+  it("reads nothing from nothing", () => {
+    expect(keptEntries(null)).toEqual([]);
+    expect(keptEntries("[]")).toEqual([]);
+  });
 });

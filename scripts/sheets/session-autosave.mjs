@@ -28,7 +28,7 @@
 // No MEJ import: this module is loaded by hooks that run before (and
 // without) MEJ's sheet classes.
 import { MODULE_ID, I18N } from "../constants.mjs";
-import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, canRefreshIdleEditor, withBufferedText, saveStateKey, saveFailureNotice, keptTextDecision, EDITOR_IDS } from "../logic/editor-save.mjs";
+import { saveTriggers, autosaveIntervalMs, myNotesSavePath, needsCommit, canRefreshIdleEditor, withBufferedText, saveStateKey, saveFailureNotice, keptTextDecision, myNotesLanding, appendKept, keptEntries, EDITOR_IDS } from "../logic/editor-save.mjs";
 import { NOTE_DRAFTS, myNotesDraftKey } from "../logic/input-draft.mjs";
 import { createDraftStore } from "../logic/draft-store.mjs";
 import { hasVisibleText } from "../logic/session-state.mjs";
@@ -49,7 +49,7 @@ const EDITORS = new WeakMap();
 const SAVE_STATES = new Map();
 /** `${pageUuid}|${editorId}` -> { value, base }: Recap / GM Prep text written but not yet confirmed (kept on failure). */
 const UNSAVED = new Map();
-/** `${pageUuid}|${editorId}` -> { value }: kept text that conflicts with newer stored text (never written automatically). */
+/** `${pageUuid}|${editorId}` -> [{ value, at }] oldest first: kept text that conflicted with newer stored text (never written automatically). */
 const KEPT = new Map();
 /** pageUuid -> { editorId, from, to, at }: the editor a full re-render took from under the user. */
 const RESTORE = new Map();
@@ -127,13 +127,23 @@ function settlePending(pageUuid, editorId, value) {
   deviceDrafts()?.save(pageUuid, editorId, entry.value, value);
 }
 
-/** Kept text that conflicts with newer stored text: never written automatically. */
-const keptOf = (pageUuid, editorId) => KEPT.get(keyOf(pageUuid, editorId))?.value;
+/** Kept text that conflicted with newer stored text ([{ value, at }], oldest first): never written automatically. */
+const keptOf = (pageUuid, editorId) => KEPT.get(keyOf(pageUuid, editorId));
+
+function storeKept(pageUuid, editorId, entries) {
+  if (!entries?.length) {
+    KEPT.delete(keyOf(pageUuid, editorId));
+    deviceDrafts()?.clear(pageUuid, `${editorId}${KEPT_SUFFIX}`);
+    return;
+  }
+  KEPT.set(keyOf(pageUuid, editorId), entries);
+  deviceDrafts()?.save(pageUuid, `${editorId}${KEPT_SUFFIX}`, JSON.stringify(entries), null);
+}
 
 function moveToKept(page, editorId, value) {
   dropPending(page.uuid, editorId);
-  KEPT.set(keyOf(page.uuid, editorId), { value });
-  deviceDrafts()?.save(page.uuid, `${editorId}${KEPT_SUFFIX}`, value, null);
+  // A later conflict on the same field adds to what is already kept.
+  storeKept(page.uuid, editorId, appendKept(keptOf(page.uuid, editorId) ?? [], { value, at: Date.now() }));
   // No "Couldn't save" for text that is safely kept: the line shows the kept notice instead.
   if (["failed", "noGM", "saving"].includes(saveStateOf(page.uuid, editorId))) SAVE_STATES.delete(keyOf(page.uuid, editorId));
   repaintIndicators(page.uuid, editorId);
@@ -144,8 +154,7 @@ function moveToKept(page, editorId, value) {
 
 /** Throw away kept text (the user chose Discard). */
 export function discardKept(pageUuid, editorId) {
-  KEPT.delete(keyOf(pageUuid, editorId));
-  deviceDrafts()?.clear(pageUuid, `${editorId}${KEPT_SUFFIX}`);
+  storeKept(pageUuid, editorId, []);
   repaintIndicators(pageUuid, editorId);
 }
 
@@ -156,7 +165,11 @@ export function discardKept(pageUuid, editorId) {
  */
 function reconcile(page, editorId) {
   // Kept text that has since been stored (by anyone) is nothing to keep.
-  if (page && keptOf(page.uuid, editorId) === storedText(page, editorId)) discardKept(page.uuid, editorId);
+  const kept = page ? keptOf(page.uuid, editorId) : undefined;
+  if (kept?.some((e) => e.value === storedText(page, editorId))) {
+    storeKept(page.uuid, editorId, kept.filter((e) => e.value !== storedText(page, editorId)));
+    repaintIndicators(page.uuid, editorId);
+  }
   const entry = page ? pendingEntry(page.uuid, editorId) : undefined;
   if (!entry) return null;
   const decision = keptTextDecision({ value: entry.value, base: entry.base, stored: storedValue(page, editorId) });
@@ -178,8 +191,8 @@ function rehydrate(page, editorId) {
   if (!page) return;
   const kept = deviceDrafts()?.load(page.uuid, `${editorId}${KEPT_SUFFIX}`);
   if (kept && keptOf(page.uuid, editorId) === undefined) {
-    if (kept.value === storedText(page, editorId)) deviceDrafts()?.clear(page.uuid, `${editorId}${KEPT_SUFFIX}`);
-    else KEPT.set(keyOf(page.uuid, editorId), { value: kept.value });
+    const entries = keptEntries(kept.value, kept.at).reverse().filter((e) => e.value !== storedText(page, editorId));
+    storeKept(page.uuid, editorId, entries);
   }
   if (pendingEntry(page.uuid, editorId)) return;
   const draft = deviceDrafts()?.load(page.uuid, editorId);
@@ -311,15 +324,19 @@ function keptPlainText(html) {
 const FIELD_LABELS = { recap: "tabs.description", gmNotes: "session.gmNotes", myNotes: "tabs.notes" };
 
 async function showKept(pageUuid, editorId) {
-  const value = keptOf(pageUuid, editorId);
-  if (value === undefined) return;
+  const entries = [...(keptOf(pageUuid, editorId) ?? [])].sort((a, b) => b.at - a.at);
+  if (!entries.length) return;
   const esc = foundry.utils.escapeHTML;
   const field = game.i18n.localize(`${I18N}.${FIELD_LABELS[editorId]}`);
   await foundry.applications.api.DialogV2.prompt({
     window: { title: game.i18n.format(`${I18N}.session.keptTitle`, { field }) },
     classes: ["mej-cc-kept-dialog"],
+    // Every kept text, newest first, as plain selectable text.
     content: `<p>${esc(game.i18n.localize(`${I18N}.session.keptHint`))}</p>
-      <div class="mej-cc-kept-text" style="white-space: pre-wrap; user-select: text; max-height: 60vh; overflow: auto;">${esc(keptPlainText(value))}</div>`,
+      <div style="max-height: 60vh; overflow: auto;">${entries.map((e) => `<section class="mej-cc-kept-entry">
+        ${e.at ? `<p class="mej-cc-kept-time"><strong>${esc(new Date(e.at).toLocaleString())}</strong></p>` : ""}
+        <div class="mej-cc-kept-text" style="white-space: pre-wrap; user-select: text;">${esc(keptPlainText(e.value))}</div>
+      </section>`).join("")}</div>`,
     ok: { label: game.i18n.localize(`${I18N}.session.keptClose`) },
     rejectClose: false
   });
