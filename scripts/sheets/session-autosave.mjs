@@ -290,7 +290,8 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   // Core dispatches "open" without bubbling once the editor is live.
   editor.addEventListener("open", () => {
     st.baseline = editor.value;
-    placeCaret(st, { coords, selection });
+    // A collaborative join can finish after the user has already clicked away.
+    if (editor.isConnected && parent.classList.contains("editing")) placeCaret(st, { coords, selection });
   });
   // Every core save (Ctrl+S, the menu's save, leaving the DOM) comes here instead.
   editor.addEventListener("save", (event) => {
