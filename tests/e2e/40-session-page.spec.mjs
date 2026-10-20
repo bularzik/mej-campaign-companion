@@ -563,10 +563,15 @@ test.describe("40 session page", () => {
     expect(await recapOf(s18.uuid)).toBe("<p>TT-40 newer text</p>");
     await expect(gm.page.locator("#notifications .notification", { hasText: "could not be saved" })).toHaveCount(0);
 
-    // Show: the kept text as plain, selectable text.
+    // A second stale draft on the same field adds to what is kept, never replaces it.
+    await keep(s18.uuid, "<p>TT-40 second stale draft</p>", "<p>Opening line.</p>");
+    await restore();
+    expect(await recapOf(s18.uuid)).toBe("<p>TT-40 newer text</p>");
+
+    // Show: every kept text, newest first, as plain, selectable text.
     await kept.locator('[data-cc-kept="show"]').click();
     const dialog = gm.page.locator("dialog.application.mej-cc-kept-dialog");
-    await expect(dialog.locator(".mej-cc-kept-text")).toHaveText("TT-40 stale draft", { timeout: 10_000 });
+    await expect(dialog.locator(".mej-cc-kept-text")).toHaveText(["TT-40 second stale draft", "TT-40 stale draft"], { timeout: 10_000 });
     await dialog.locator('button[data-action="ok"]').click();
     await expect(dialog).toHaveCount(0, { timeout: 10_000 });
     // Discard: gone from the line and from this browser.
