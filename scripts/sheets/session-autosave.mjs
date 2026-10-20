@@ -774,9 +774,11 @@ export function exitEditing(parent, trigger = "blur") {
   const st = editor ? EDITORS.get(editor) : null;
   let html = null;
   if (editor && st) {
-    commitEditor(editor, trigger);
+    const wrote = commitEditor(editor, trigger);
     try {
-      html = st.salvaged ?? editor.value;
+      // Nothing written: show what the field holds now (the stored text, if the
+      // editor's earlier unsaved text has just been kept aside as a conflict).
+      html = wrote ? (st.salvaged ?? editor.value) : editorValue(pageOf(st.pageUuid), st.editorId);
     } catch {
       html = null;
     }
