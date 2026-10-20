@@ -76,6 +76,13 @@ function isShownInShell(page) {
   return shell.subsheet?.document?.uuid === page.uuid || (!!active && (active === page.uuid || active === page.parent?.uuid));
 }
 
+/** A rendered, popped-out Session sheet (not the shell's subsheet) is showing `page`. */
+async function isShownInPopout(page) {
+  const { sessionViews } = await import("../sheets/session-regions.mjs");
+  const sub = game.MonksEnhancedJournal?.journal?.subsheet ?? null;
+  return sessionViews((doc) => doc?.uuid === page.uuid).some((sheet) => sheet !== sub);
+}
+
 /** GM-only. Open a session: create (or promote `sessionUuid`), flag the campaign, grant recap ownership, adopt held notes. */
 export async function startSession(campaign, { sessionUuid = null } = {}) {
   if (!game.user.isGM || !campaign) return null;
@@ -112,7 +119,8 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   // Started from the page's own sheet in the shell: it is already showing. Opening it again renders a
   // second, standalone Session sheet that sits over the shell's body (its recap intercepted clicks on the
   // shell's header - spec 40's intermittent Start-click failure).
-  if (!isShownInShell(page)) await open(page);
+  // Likewise a popped-out Session sheet of this page (the GM started it there): that view is live already.
+  if (!isShownInShell(page) && !(await isShownInPopout(page))) await open(page);
   return page;
 }
 
