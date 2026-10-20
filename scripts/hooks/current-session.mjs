@@ -76,15 +76,15 @@ function isShownInShell(page) {
   return shell.subsheet?.document?.uuid === page.uuid || (!!active && (active === page.uuid || active === page.parent?.uuid));
 }
 
-/** A rendered, popped-out Session sheet (not the shell's subsheet) is showing `page`. */
-async function isShownInPopout(page) {
-  const { sessionViews } = await import("../sheets/session-regions.mjs");
-  const sub = game.MonksEnhancedJournal?.journal?.subsheet ?? null;
-  return sessionViews((doc) => doc?.uuid === page.uuid).some((sheet) => sheet !== sub);
+/** `sheet` (the one the GM pressed Start on) is a rendered, popped-out Session sheet of `page`, not the shell's subsheet. */
+function isOwnPopout(sheet, page) {
+  if (!sheet?.rendered || sheet.document?.uuid !== page.uuid) return false;
+  const shell = game.MonksEnhancedJournal?.journal ?? null;
+  return sheet !== shell && sheet !== shell?.subsheet;
 }
 
 /** GM-only. Open a session: create (or promote `sessionUuid`), flag the campaign, grant recap ownership, adopt held notes. */
-export async function startSession(campaign, { sessionUuid = null } = {}) {
+export async function startSession(campaign, { sessionUuid = null, fromSheet = null } = {}) {
   if (!game.user.isGM || !campaign) return null;
   const { baselineOwnership } = await import("../data/campaign-store.mjs");
   const { notesEntryOf, readNotes } = await import("../data/notes-store.mjs");
@@ -119,8 +119,8 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   // Started from the page's own sheet in the shell: it is already showing. Opening it again renders a
   // second, standalone Session sheet that sits over the shell's body (its recap intercepted clicks on the
   // shell's header - spec 40's intermittent Start-click failure).
-  // Likewise a popped-out Session sheet of this page (the GM started it there): that view is live already.
-  if (!isShownInShell(page) && !(await isShownInPopout(page))) await open(page);
+  // Likewise when the GM started it from that page's own popped-out sheet: that view is live already.
+  if (!isShownInShell(page) && !isOwnPopout(fromSheet, page)) await open(page);
   return page;
 }
 

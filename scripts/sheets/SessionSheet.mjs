@@ -906,7 +906,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       }
     }
     // This sheet's own page becomes the open session (startSession validates it belongs to the campaign).
-    await SessionSheet.#runSessionAction(this, startSession, "startFailed", { sessionUuid: this.document.uuid });
+    await SessionSheet.#runSessionAction(this, startSession, "startFailed", { sessionUuid: this.document.uuid, fromSheet: this });
   }
 
   static async onEndSession() {
