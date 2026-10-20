@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tonightContext } from "../scripts/logic/tonight.mjs";
+import { tonightContext, streamRows } from "../scripts/logic/tonight.mjs";
 import { normalizeNotes } from "../scripts/logic/notes.mjs";
 
 const S = "JournalEntry.s.JournalEntryPage.p";
@@ -27,5 +27,15 @@ describe("tonightContext", () => {
   it("GM with an open session can end it; a non-writer cannot capture", () => {
     expect(tonightContext({ ...base, user: { isGM: true, id: "gm" }, notes, session: { uuid: S, name: "S", startedAt: 1 } })).toMatchObject({ canEnd: true, canStart: false });
     expect(tonightContext({ ...base, canWrite: false, notes, session: null }).canCapture).toBe(false);
+  });
+});
+
+describe("streamRows", () => {
+  it("rows carry the note's link target", () => {
+    const rows = streamRows([
+      { id: "r", text: "r", authorId: "u1", at: 1, editedAt: null, kind: "reveal", mentions: ["JournalEntry.v"] },
+      { id: "p", text: "p", authorId: "u1", at: 2, editedAt: null }
+    ], { isGM: false, id: "u1" }, { formatTime: (ms) => `T${ms}` });
+    expect(rows.map((r) => r.link)).toEqual([{ kind: "entry", uuid: "JournalEntry.v" }, null]);
   });
 });
