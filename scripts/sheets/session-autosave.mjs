@@ -412,11 +412,15 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
     if (st.instance) trackJoin(editor, st);
     // Core's menu renders by looking itself up with document.getElementById,
     // which throws (an uncaught error) when the join lands on an editor that
-    // already left the page. Such an editor gets no menu; it is retired on
-    // "open" below.
+    // already left the page. Such an editor gets no menu, so its activation
+    // completes and "open" below retires it at once (synchronously after core
+    // registers it, so no pm.usersEditing broadcast can reach the menu-less
+    // editor in between). Not while another live editor of this field is in
+    // this client: a completed activation would replace that editor in core's
+    // per-instance editor map, so the abandoned one is left to fail instead.
     const menuView = event.plugins.menu?.spec?.view;
     if (typeof menuView === "function") {
-      event.plugins.menu.spec.view = (view) => (editor.isConnected ? menuView(view) : {});
+      event.plugins.menu.spec.view = (view) => (editor.isConnected || liveSiblingOf(editor, st) ? menuView(view) : {});
     }
     event.plugins.mejCcSessionEditor = new ProseMirror.Plugin({
       view: (view) => {
