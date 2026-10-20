@@ -10,7 +10,16 @@ import {
 
 const MOD = "mej-campaign-companion";
 const PREFIX = "TT-40";
-const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
+// world-b (Foundry 13) runs df-curvy-walls, whose Minus/Equal keybinds throw
+// "Cannot read properties of null (reading 'segments')" on any hyphen typed
+// into a rich-text editor while no canvas tool is active. Third-party, and
+// unrelated to the session page; the specs type hyphens in the recap.
+const KNOWN_DF_CURVY_WALLS_KEYBIND = /Cannot read properties of null \(reading 'segments'\)/;
+// Likewise multi-token-edit's keybind throws "reading 'options'" when a key
+// typed straight after a click reaches the keyboard manager before the editor
+// has taken focus (test "typing straight after the click").
+const KNOWN_MULTI_TOKEN_EDIT_KEYBIND = /Cannot read properties of null \(reading 'options'\)/;
+const IGNORE = [KNOWN_MEJ_SESSION_ICON_404, KNOWN_DF_CURVY_WALLS_KEYBIND, KNOWN_MULTI_TOKEN_EDIT_KEYBIND];
 const VIEWPORT = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } };
 
 let gm; let player; let campaignId; let s9; let s10;
@@ -19,9 +28,17 @@ const shell = () => gm.page.locator("#MonksEnhancedJournal");
 const header = () => shell().locator(".session-container .mej-cc-session-header");
 
 async function openSession(entryId) {
-  await gm.page.evaluate((id) => game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)), entryId);
-  await settle(gm.page, 800);
-  await expect(header()).toHaveCount(1, { timeout: 15_000 });
+  const name = await gm.page.evaluate((id) => game.journal.get(id)?.name ?? "", entryId);
+  // Right after a Start the shell is still re-rendering the running session, and
+  // that late render can put it back over an open issued in the meantime (seen
+  // on Foundry 13): the previous header is on screen, so a bare header count
+  // proves nothing. Re-issue the open until the header shows this entry.
+  await expect(async () => {
+    await gm.page.evaluate((id) => game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)), entryId);
+    await settle(gm.page, 800);
+    await expect(header()).toHaveCount(1, { timeout: 5_000 });
+    await expect(header().locator('input[name="name"]')).toHaveValue(name, { timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 // A player watching S9 sees status changes without reloading (fix round 1, item 3).
