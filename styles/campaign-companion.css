@@ -877,10 +877,15 @@
   border-left: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.1));
 }
 
-/* Closed: only the tab remains. */
+/* Closed (spec 2026-10-19 §4.7): a 22px edge with a 1.5px rule, and the
+   folder tab hanging off it. The edge is the panel itself, so the whole
+   closed rail stays narrower than 26px. */
 .monks-enhanced-journal .mej-cc-knowledge.collapsed,
 .monks-enhanced-journal .mej-cc-rail-row > .mej-cc-knowledge.collapsed {
-  flex: 0 0 auto;
+  flex: 0 0 22px;
+  position: relative;
+  width: 22px;
+  border-left: 1.5px solid var(--mej-cc-field-border);
 }
 
 .monks-enhanced-journal .mej-cc-knowledge-body {
@@ -929,19 +934,24 @@
   outline-offset: -2px;
 }
 
-.monks-enhanced-journal .mej-cc-knowledge-summary {
+/* Closed: a folder tab ~24x96px, rounded on the right, vertically centred at
+   ~38% of the rail, its text running down. A zero count reads fainter. */
+.monks-enhanced-journal .mej-cc-knowledge.collapsed button.mej-cc-knowledge-tab {
+  position: absolute;
+  top: 38%;
+  left: -1.5px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 96px;
+  padding: 0;
+  justify-content: center;
+  border: 1.5px solid var(--mej-cc-field-border);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+}
+.monks-enhanced-journal .mej-cc-knowledge button.mej-cc-knowledge-tab.empty {
   font-weight: normal;
-  font-size: 0.9em;
-  opacity: 0.75;
-}
-
-.monks-enhanced-journal .mej-cc-knowledge-chevron {
-  transition: transform 120ms ease;
-}
-
-/* Open: the chevron points at the rail (right); closed: it points back into the sheet. */
-.monks-enhanced-journal .mej-cc-knowledge.collapsed .mej-cc-knowledge-chevron {
-  transform: rotate(180deg);
+  color: var(--mej-cc-ink-muted);
 }
 
 .mej-cc-knowledge summary {
@@ -1835,7 +1845,7 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
    In the shell it takes the muted ink at full opacity instead. */
 .monks-enhanced-journal :is(
   .mej-cc-index-type, .mej-cc-filtered-count, .mej-cc-mention-badge, .mej-cc-timepoint-date,
-  .mej-cc-search-type, .mej-cc-search-match, .mej-cc-knowledge-summary, .mej-cc-knowledge-empty,
+  .mej-cc-search-type, .mej-cc-search-match, .mej-cc-knowledge-empty,
   .mej-cc-backlink-count, .mej-cc-backlink-gm, .mej-cc-audience-count, .mej-cc-dashboard-query,
   .mej-cc-query-embed-header, .mej-cc-graph-truncated, .mej-cc-secret-preview,
   .mej-cc-secret-audience-label

@@ -14,3 +14,13 @@ describe("note link markup (spec 2026-10-19 §4.3, §4.7)", () => {
     expect(read("knowledge-panel.hbs")).toMatch(/\{\{#if this\.sessionUuid\}\}<a class="mej-cc-note-session" data-action="openNoteSession" data-uuid="\{\{this\.sessionUuid\}\}">\{\{this\.sessionName\}\}<\/a> · \{\{\/if\}\}\{\{this\.timeLabel\}\}/);
   });
 });
+
+describe("Links rail tab (spec 2026-10-19 §4.7)", () => {
+  const tpl = read("knowledge-panel.hbs");
+  it("is one button with the count label, no summary span and no chevron", () => {
+    expect(tpl).toContain('class="mej-cc-knowledge-tab{{#unless linksCount}} empty{{/unless}}"');
+    expect(tpl).toContain("{{linksLabel}}");
+    expect(tpl).not.toContain("mej-cc-knowledge-summary");
+    expect(tpl).not.toContain("mej-cc-knowledge-chevron");
+  });
+});

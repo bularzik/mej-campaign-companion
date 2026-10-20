@@ -452,7 +452,7 @@ test.describe("07 knowledge panel", () => {
     try {
       const { panel } = await openEntry(page, personId);
       await expect(panel).not.toHaveClass(/collapsed/);
-      await expect(panel.locator(".mej-cc-knowledge-summary")).toHaveText("1 tag");
+      await expect(panel.locator(".mej-cc-knowledge-tab")).toHaveText("Links (1)");
       await panel.locator(".mej-cc-knowledge-tab").click();
       await expect(panel).toHaveClass(/collapsed/);
       await expect(panel.locator("details").first()).toBeHidden();
@@ -460,7 +460,7 @@ test.describe("07 knowledge panel", () => {
 
       const { panel: placePanel } = await openEntry(page, placeId);
       await expect(placePanel).toHaveClass(/collapsed/);
-      await expect(placePanel.locator(".mej-cc-knowledge-summary")).toHaveText("empty");
+      await expect(placePanel.locator(".mej-cc-knowledge-tab")).toHaveText("Links");
 
       await reloadGame(page);
       const { panel: afterReload } = await openEntry(page, placeId);

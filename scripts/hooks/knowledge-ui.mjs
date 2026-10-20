@@ -13,7 +13,7 @@ import { MODULE_ID, I18N, MEDIA_PAGE_TYPES, CAMPAIGN_DOCUMENT_TYPE, CAMPAIGN_TYP
 import { getTags, getAttributes, normalizeTagInput } from "../logic/knowledge-flags.mjs";
 import { backlinksForEntry } from "../search/live-index.mjs";
 import { mejType } from "../integrations/mej-adapter.mjs";
-import { knowledgeSummary } from "../logic/knowledge-summary.mjs";
+import { linksCount } from "../logic/links-count.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, notesEntryOf, addNote } from "../data/notes-store.mjs";
 import { campaignEntries } from "../data/campaign-store.mjs";
@@ -192,15 +192,16 @@ async function injectPanel(sheet, element, { shellHosted = false } = {}) {
     uuid: e.uuid, name: e.name, order: sessionData(e.pages.contents[0]).sessionNumber ?? Number.MAX_SAFE_INTEGER
   })) : [];
   const history = historyGroups(backlinks, sessions);
+  const count = linksCount({ notes: partyNotes.rows.length, tags: tags.length, attributes: attributes.length, backlinks: backlinks.length });
   const html = await foundry.applications.handlebars.renderTemplate(
     `modules/${MODULE_ID}/templates/knowledge-panel.hbs`,
     {
       pageUuid: page.uuid, canEdit, tags, attributes, backlinks, partyNotes, history,
       collapsed: game.settings.get(MODULE_ID, KNOWLEDGE_COLLAPSED_SETTING),
-      summary: knowledgeSummary(
-        { tags: tags.length, attributes: attributes.length, backlinks: backlinks.length, notes: partyNotes.rows.length },
-        (key, data) => game.i18n.format(key, data)
-      )
+      linksCount: count,
+      linksLabel: count > 0
+        ? game.i18n.format(`${I18N}.knowledge.titleCount`, { count })
+        : game.i18n.localize(`${I18N}.knowledge.title`)
     }
   );
   // DOMParser rather than createContextualFragment (S1). This html is our own
