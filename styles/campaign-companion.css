@@ -133,6 +133,28 @@
   color: var(--mej-cc-ink);
   font-weight: bold;
 }
+/* Kept text that conflicts with newer stored text: full ink, with Show / Discard
+   as small buttons on the field surface, whose ink and ground come as a pair. */
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state > .mej-cc-kept {
+  color: var(--mej-cc-ink);
+  font-weight: bold;
+}
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state > .mej-cc-kept > button {
+  display: inline;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 6px;
+  font-size: inherit;
+  line-height: 1.3em;
+  font-weight: normal;
+  color: var(--mej-cc-field-ink);
+  background: var(--mej-cc-field-bg);
+  border: 1px solid var(--mej-cc-field-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
 /* My Notes: the module's own hint, at full ink (MEJ's OnlyViewable line is faint). */
 .session-container .mej-cc-my-notes-hint {
   flex: 0 0 auto;

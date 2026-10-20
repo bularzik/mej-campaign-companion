@@ -76,6 +76,22 @@ export function saveFailureNotice({ state, indicators, editorId }) {
   return { key: "session.saveFailedField", fieldKey: FIELD_LABEL_KEYS[editorId] ?? "tabs.description" };
 }
 
+/**
+ * What an AUTOMATIC write of kept text (restored at load, retried on a timer
+ * or when a GM connects) may do (spec 2026-10-19 §2: no path where typed text
+ * is lost silently - neither the user's nor someone else's). `base` is the
+ * stored text the kept value was edited from (null when unknown); a missing
+ * stored value counts as empty.
+ * @returns {"write"|"conflict"|"clear"}
+ */
+export function keptTextDecision({ value, base, stored }) {
+  const current = typeof stored === "string" ? stored : "";
+  if (value === current) return "clear";
+  const from = typeof base === "string" ? base : null;
+  if (from === null) return current === "" ? "write" : "conflict";
+  return from === current ? "write" : "conflict";
+}
+
 const escapeText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**

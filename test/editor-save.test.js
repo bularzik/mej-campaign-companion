@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { saveTriggers, shouldPatchRegions, saveFailureNotice } from "../scripts/logic/editor-save.mjs";
+import { saveTriggers, shouldPatchRegions, saveFailureNotice, keptTextDecision } from "../scripts/logic/editor-save.mjs";
 
 describe("saveTriggers", () => {
   it.each(["blur", "tabchange", "close", "interval", "visibilityhidden"])("%s saves", (e) => expect(saveTriggers(e)).toBe(true));
@@ -106,4 +106,21 @@ describe("saveFailureNotice", () => {
     expect(saveFailureNotice({ state: "failed", indicators: 1, editorId: "recap" })).toBeNull());
   it.each(["saving", "saved", "noGM", null])("state %s is not a failure", (state) =>
     expect(saveFailureNotice({ state, indicators: 0, editorId: "recap" })).toBeNull());
+});
+
+describe("keptTextDecision (automatic writes of kept text)", () => {
+  it("writes when the stored text is still what the draft was edited from", () =>
+    expect(keptTextDecision({ value: "<p>new</p>", base: "<p>old</p>", stored: "<p>old</p>" })).toBe("write"));
+  it("is a conflict when the stored text changed since", () =>
+    expect(keptTextDecision({ value: "<p>new</p>", base: "<p>old</p>", stored: "<p>theirs</p>" })).toBe("conflict"));
+  it("clears a draft already stored", () =>
+    expect(keptTextDecision({ value: "<p>new</p>", base: "<p>old</p>", stored: "<p>new</p>" })).toBe("clear"));
+  it("writes with no base when nothing is stored", () => {
+    expect(keptTextDecision({ value: "<p>new</p>", base: null, stored: "" })).toBe("write");
+    expect(keptTextDecision({ value: "<p>new</p>", base: null, stored: undefined })).toBe("write");
+  });
+  it("is a conflict with no base when something is stored", () =>
+    expect(keptTextDecision({ value: "<p>new</p>", base: null, stored: "<p>theirs</p>" })).toBe("conflict"));
+  it("treats a missing stored value as empty", () =>
+    expect(keptTextDecision({ value: "<p>new</p>", base: "", stored: null })).toBe("write"));
 });

@@ -533,6 +533,50 @@ test.describe("40 session page", () => {
     assertNoConsoleErrors(gm.errors);
   });
 
+  // Fix round 2: text kept on this device is written automatically only while the
+  // stored text is still what it was edited from; otherwise it is kept aside.
+  test("a stale kept recap never overwrites newer text", async () => {
+    test.setTimeout(90_000);
+    const s18 = await newSession(`${PREFIX} S18`, 18);
+    const s19 = await newSession(`${PREFIX} S19`, 19);
+    const gmId = await gm.page.evaluate(() => game.user.id);
+    const keep = (uuid, value, base) => gm.page.evaluate(({ key, value, base }) =>
+      localStorage.setItem(key, JSON.stringify({ value, base, at: Date.now() })), { key: `mej-cc-draft|${gmId}|${uuid}|recap`, value, base });
+    // S18: a draft edited from "Opening line.", then someone else changes the recap.
+    await keep(s18.uuid, "<p>TT-40 stale draft</p>", "<p>Opening line.</p>");
+    await gm.page.evaluate(async (uuid) => (await fromUuid(uuid)).update({ "system.recap": "<p>TT-40 newer text</p>" }), s18.uuid);
+    // S19: a draft edited from what is still stored - that one is written.
+    await keep(s19.uuid, "<p>TT-40 safe draft</p>", "<p>Opening line.</p>");
+    const restore = () => gm.page.evaluate(async () => (await import("/modules/mej-campaign-companion/scripts/sheets/session-autosave.mjs")).restoreDeviceDrafts());
+    await restore();
+    await expect.poll(() => recapOf(s19.uuid), { timeout: 10_000 }).toBe("<p>TT-40 safe draft</p>");
+
+    await openSession(s18.id);
+    const recap = editorOf(gm.page, "recap");
+    await expect(recap.locator(".editor-display")).toContainText("TT-40 newer text");
+    await expect(recap.locator(".editor-display")).not.toContainText("TT-40 stale draft");
+    const kept = recap.locator(".mej-cc-save-state .mej-cc-kept");
+    await expect(kept).toContainText("Unsaved text from earlier was kept");
+    // Automatic retries leave the newer text alone.
+    await restore();
+    await settle(gm.page, 2000);
+    expect(await recapOf(s18.uuid)).toBe("<p>TT-40 newer text</p>");
+    await expect(gm.page.locator("#notifications .notification", { hasText: "could not be saved" })).toHaveCount(0);
+
+    // Show: the kept text as plain, selectable text.
+    await kept.locator('[data-cc-kept="show"]').click();
+    const dialog = gm.page.locator("dialog.application.mej-cc-kept-dialog");
+    await expect(dialog.locator(".mej-cc-kept-text")).toHaveText("TT-40 stale draft", { timeout: 10_000 });
+    await dialog.locator('button[data-action="ok"]').click();
+    await expect(dialog).toHaveCount(0, { timeout: 10_000 });
+    // Discard: gone from the line and from this browser.
+    await kept.locator('[data-cc-kept="discard"]').click();
+    await expect(recap.locator(".mej-cc-save-state .mej-cc-kept")).toHaveCount(0);
+    expect(await gm.page.evaluate((key) => localStorage.getItem(key), `mej-cc-draft|${gmId}|${s18.uuid}|recap:kept`)).toBeNull();
+    expect(await recapOf(s18.uuid)).toBe("<p>TT-40 newer text</p>");
+    assertNoConsoleErrors(gm.errors);
+  });
+
   // Final review item 3: a reveal patches the viewer's Details tab in place.
   test("a revealed secret shows on a player's open Details tab", async () => {
     test.setTimeout(90_000);

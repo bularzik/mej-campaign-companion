@@ -613,6 +613,8 @@ export class SessionSheet extends EnhancedJournalSheet {
     // it), so a player who merely observes this page can still note. The
     // header's GM Start/End button is re-enabled for a GM for the same reason.
     $('input[name="session-note"], [data-action="captureSessionNote"]', form).prop("disabled", false);
+    // The kept-text line's Show / Discard act only on this browser's own copy.
+    $(".mej-cc-save-state [data-cc-kept]", form).prop("disabled", false);
     if (game.user.isGM) $('.mej-cc-session-header .mej-cc-session-button', form).prop("disabled", false);
   }
 
