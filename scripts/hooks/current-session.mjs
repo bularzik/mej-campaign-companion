@@ -67,6 +67,11 @@ async function createSessionFor(campaign) {
   return entry?.pages?.contents?.[0] ?? null;
 }
 
+function isShownInShell(page) {
+  const shell = game.MonksEnhancedJournal?.journal;
+  return !!shell?.rendered && shell.subsheet?.document?.uuid === page.uuid;
+}
+
 /** GM-only. Open a session: create (or promote `sessionUuid`), flag the campaign, grant recap ownership, adopt held notes. */
 export async function startSession(campaign, { sessionUuid = null } = {}) {
   if (!game.user.isGM || !campaign) return null;
@@ -100,7 +105,10 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   const notesEntry = notesEntryOf(campaign);
   const adopt = notesEntry ? adoptHeldUpdate(readNotes(campaign), page.uuid) : null;
   if (adopt) await notesEntry.update(adopt);
-  await open(page);
+  // Started from the page's own sheet in the shell: it is already showing. Opening it again renders a
+  // second, standalone Session sheet that sits over the shell's body (its recap intercepted clicks on the
+  // shell's header - spec 40's intermittent Start-click failure).
+  if (!isShownInShell(page)) await open(page);
   return page;
 }
 
