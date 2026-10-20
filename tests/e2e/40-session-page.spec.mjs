@@ -259,4 +259,65 @@ test.describe("40 session page", () => {
       }, { MOD, folderId: campaignId, saved: setup.saved });
     }
   });
+  // Spec 2026-10-19 §4.3 (reveal/media links) and §4.7 (rail notes name their session).
+  test("note links", async () => {
+    test.setTimeout(150_000);
+    const mediaName = `${PREFIX} Harbor Map`;
+    const other = await gm.page.evaluate(() => game.users.filter((u) => !u.isGM)[1]?.id ?? null);
+    test.skip(!other, "needs a second non-GM user");
+    // S10 runs; the GM shows an image to ONE player (not the one watching) - a media note filed on S10.
+    await openSession(s10.id);
+    await header().locator('[data-action="startSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBe(s10.uuid);
+    await gm.page.evaluate(async ({ folderId, name, other }) => {
+      const { fileMediaNote } = await import("/modules/mej-campaign-companion/scripts/hooks/reveal-filing.mjs");
+      await fileMediaNote({ campaign: game.folders.get(folderId), src: "icons/svg/mystery-man.svg", name, users: [other] });
+    }, { folderId: campaignId, name: mediaName, other });
+    await openSession(s10.id);
+    const link = shell().locator(".session-container .mej-cc-table-talk .mej-cc-note-link", { hasText: mediaName });
+    await expect(link).toHaveCount(1, { timeout: 15_000 });
+
+    // Clicking opens a local popout and never relays (no shareImage over the socket).
+    await gm.page.evaluate(() => {
+      window.__ccEmits = [];
+      const emit = game.socket.emit.bind(game.socket);
+      game.socket.emit = (...args) => { window.__ccEmits.push(JSON.stringify(args)); return emit(...args); };
+    });
+    const popouts = await gm.page.locator(".application.image-popout").count();
+    await link.click();
+    await expect(gm.page.locator(".application.image-popout")).toHaveCount(popouts + 1, { timeout: 10_000 });
+    expect(await gm.page.evaluate(() => window.__ccEmits.filter((e) => /shareImage/i.test(e)))).toEqual([]);
+    await gm.page.locator(".application.image-popout").last().locator('[data-action="close"]').click();
+
+    // The player who was not shown the image has no such row.
+    await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s10.uuid);
+    await settle(player.page, 1000);
+    await expect(player.page.locator("#MonksEnhancedJournal .session-container .mej-cc-table-talk")).toHaveCount(1, { timeout: 15_000 });
+    await expect(player.page.locator("#MonksEnhancedJournal .mej-cc-note-link")).toHaveCount(0);
+    await header().locator('[data-action="endSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBeNull();
+
+    // Rail: a note filed on S9 that mentions an entry opens with the session's name; clicking it opens S9.
+    const person = await gm.page.evaluate(async ({ folderId, s9uuid, name }) => {
+      const entry = await JournalEntry.create({
+        name, folder: folderId, ownership: { default: 2 },
+        pages: [{ name, type: "monks-enhanced-journal.person", flags: { "monks-enhanced-journal": { type: "person" } }, text: { content: "<p>x</p>" } }]
+      });
+      const { addNote } = await import("/modules/mej-campaign-companion/scripts/data/notes-store.mjs");
+      await addNote(game.folders.get(folderId), { text: `saw @UUID[${entry.uuid}]{${name}} at the docks`, sessionUuid: s9uuid, mentions: [entry.uuid] });
+      return { id: entry.id };
+    }, { folderId: campaignId, s9uuid: s9.uuid, name: `${PREFIX} Harbormaster` });
+    await gm.page.evaluate(() => game.settings.set("mej-campaign-companion", "knowledgePanelCollapsed", false));
+    await gm.page.evaluate((id) => game.MonksEnhancedJournal.openJournalEntry(game.journal.get(id)), person.id);
+    await settle(gm.page, 800);
+    const row = shell().locator(".mej-cc-knowledge .mej-cc-note", { hasText: "at the docks" });
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
+    const sessionLink = row.locator('[data-action="openNoteSession"]');
+    await expect(sessionLink).toHaveText(s9.name);
+    expect((await row.locator(".mej-cc-note-meta").textContent()).trim().startsWith(s9.name)).toBe(true);
+    await sessionLink.click();
+    await expect(header().locator('input[name="name"]')).toHaveValue(s9.name, { timeout: 15_000 });
+    assertNoConsoleErrors(gm.errors);
+    assertNoConsoleErrors(player.errors);
+  });
 });

@@ -56,3 +56,21 @@ export function enrichNoteText(text, options = {}) {
     ...options, async: true, ...NOTE_ENRICH_OPTIONS
   });
 }
+
+/**
+ * Open what a note's label links to, for this user only. An image opens in a
+ * local popout (never `shareImage`, which would broadcast it); an entry opens
+ * in MEJ when it is there, else in its own sheet. `fromUuid` returns null for
+ * a document this user cannot see, and a null opens nothing.
+ */
+export async function openNoteLink(kind, target) {
+  if (!target) return;
+  if (kind === "image") {
+    new foundry.applications.apps.ImagePopout({ src: target }).render({ force: true });
+    return;
+  }
+  const doc = await fromUuid(target).catch(() => null);
+  if (!doc) return;
+  if (game.MonksEnhancedJournal?.openJournalEntry) game.MonksEnhancedJournal.openJournalEntry(doc);
+  else doc.sheet?.render(true);
+}

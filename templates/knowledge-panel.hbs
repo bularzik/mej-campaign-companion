@@ -7,8 +7,8 @@
         <ol class="mej-cc-notes-list">
             {{#each partyNotes.rows}}
             <li class="mej-cc-note" data-note-id="{{this.id}}">
-                <span class="mej-cc-note-meta">{{this.timeLabel}} {{this.authorName}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span>
-                <span class="mej-cc-note-text">{{{this.text}}}</span>
+                <span class="mej-cc-note-meta">{{#if this.sessionUuid}}<a class="mej-cc-note-session" data-action="openNoteSession" data-uuid="{{this.sessionUuid}}">{{this.sessionName}}</a> · {{/if}}{{this.timeLabel}} · {{this.authorName}}{{#if this.retracted}} · <span class="mej-cc-note-badge">{{localize 'MEJCampaignCompanion.notes.retracted'}}</span>{{/if}}</span>
+                <span class="mej-cc-note-text">{{#if this.link}}<a class="mej-cc-note-link" data-action="openNoteLink" data-kind="{{this.link.kind}}" data-target="{{#if this.link.src}}{{this.link.src}}{{else}}{{this.link.uuid}}{{/if}}">{{{this.text}}}</a>{{else}}{{{this.text}}}{{/if}}</span>
             </li>
             {{/each}}
         </ol>

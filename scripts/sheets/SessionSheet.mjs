@@ -25,7 +25,7 @@ import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
 import { campaignOf } from "../logic/campaigns.mjs";
 import { listNotes, readNotes, notesEntryOf, addNote, updateNote, deleteNote } from "../data/notes-store.mjs";
-import { linkNoteText, enrichNoteText } from "../hooks/note-links.mjs";
+import { linkNoteText, enrichNoteText, openNoteLink } from "../hooks/note-links.mjs";
 import { noteToPlainText } from "../logic/note-text.mjs";
 import { currentSession } from "../logic/current-session.mjs";
 // The hooks module's openSessionPage (the campaign's open Session page); a different openSessionPage lives in integrations/mej-adapter.mjs.
@@ -90,6 +90,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       deleteNote: SessionSheet.onDeleteNote,
       startSession: SessionSheet.onStartSession,
       endSession: SessionSheet.onEndSession,
+      openNoteLink: SessionSheet.onOpenNoteLink,
       toggleTableTalk: SessionSheet.onToggleTableTalk,
       addTableTalkToRecap: SessionSheet.onAddTableTalkToRecap,
       viewImage: SessionSheet.onViewImage,
@@ -813,6 +814,11 @@ export class SessionSheet extends EnhancedJournalSheet {
     const draft = recapDraft(plan.notes, { formatTime: noteTime });
     await this.document.update({ "system.recap": `${current}${draft}`, [`${FLAG_SESSION}.tableTalkAddedAt`]: Date.now() });
     this.render();
+  }
+
+  static async onOpenNoteLink(event, target) {
+    event.preventDefault();
+    await openNoteLink(target.dataset.kind, target.dataset.target);
   }
 
   static async onCaptureSessionNote() {

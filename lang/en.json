@@ -9,7 +9,7 @@
       "badText": "A note needs some text (2000 characters at most).",
       "notFound": "That note no longer exists.",
       "writeFailed": "Couldn't save the note.",
-      "partyNotes": "Party notes",
+      "partyNotes": "Notes that mention this",
       "noPartyNotes": "Nothing noted about this yet.",
       "about": "Note about this",
       "aboutTitle": "Note about {name}",

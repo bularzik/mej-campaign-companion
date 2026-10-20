@@ -2020,6 +2020,10 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
 .mej-cc-notes-list { list-style: none; margin: 0; padding: 0; }
 .mej-cc-note { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px dotted var(--mej-cc-chip-bg, rgba(255,255,255,.12)); }
 .mej-cc-note .mej-cc-note-text { flex: 1; }
+/* Reveal and media notes link to their image or entry; a rail note links to its session.
+   Ink is inherited, so the link holds whatever contrast its row has. */
+.mej-cc-note-link, .mej-cc-note-session { color: inherit; text-decoration: underline; text-decoration-style: dotted; cursor: pointer; }
+.mej-cc-note-link:hover, .mej-cc-note-session:hover { text-decoration-style: solid; }
 .mej-cc-note-edit, .mej-cc-note-delete { opacity: .6; cursor: pointer; }
 .mej-cc-note-edit:hover, .mej-cc-note-delete:hover { opacity: 1; }
 .mej-cc-knowledge-notes summary .mej-cc-note-about { float: right; font-size: .85em; cursor: pointer; }
