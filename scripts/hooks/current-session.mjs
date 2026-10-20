@@ -81,12 +81,15 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
   }
   if (!page) page = await createSessionFor(campaign);
   if (!page) return null;
+  // The campaign flag goes first: the page stamp below re-renders every open sheet of this page, and a sheet only
+  // reads "live" from the flag, so the flag must already be there when that render happens (nothing re-renders a
+  // Session sheet on the flag change itself).
+  await campaign.update(currentSessionUpdate(page.uuid, Date.now()));
   // Start history (spec 2026-10-19 §4.2): the first start stamps startedAt and, when no date was entered by hand,
   // the world date; every start (restart included) clears endedAt.
   const { sessionData } = await import("../sheets/session-data.mjs");
   const { currentWorldComponents } = await import("../logic/campaign-calendar.mjs");
   await page.update(startStamp(sessionData(page), { now: Date.now(), worldDate: currentWorldComponents() }));
-  await campaign.update(currentSessionUpdate(page.uuid, Date.now()));
   if (baselineOwnership(campaign) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER) {
     const update = recapOwnershipUpdate(page.parent.ownership, connectedPlayerIds(), { ownerLevel: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER });
     if (update) await page.parent.update(update);
@@ -108,8 +111,9 @@ export async function startSession(campaign, { sessionUuid = null } = {}) {
 export async function endSession(campaign) {
   if (!game.user.isGM || !campaign) return;
   const page = openSessionPage(campaign);
-  if (page) await page.update(endStamp({ now: Date.now() }));
+  // Flag first, then the stamp, whose page update re-renders open sheets (see startSession).
   await campaign.update(clearCurrentSessionUpdate());
+  if (page) await page.update(endStamp({ now: Date.now() }));
 }
 
 async function offerStartOnLogin() {

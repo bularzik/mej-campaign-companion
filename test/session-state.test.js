@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sessionStatus, startStamp, endStamp, sessionButton, elapsedLabel } from "../scripts/logic/session-state.mjs";
+import { sessionStatus, startStamp, endStamp, sessionButton, elapsedLabel, hasEnteredDate } from "../scripts/logic/session-state.mjs";
 
 const P = "flags.mej-campaign-companion.session.";
 
@@ -30,6 +30,11 @@ describe("startStamp", () => {
     const u = startStamp({ startedAt: 50, campaignDate: null }, { now: 100, worldDate: { year: 1492 } });
     expect(Object.keys(u)).toEqual([`${P}endedAt`]);
   });
+  it("a date whose submitted fields are all empty counts as not entered", () => {
+    const empty = { year: null, month: "", day: undefined, hour: null, minute: null };
+    const u = startStamp({ startedAt: null, campaignDate: empty }, { now: 1, worldDate: { year: 1492, month: 5, day: 14, hour: 20, minute: 0 } });
+    expect(u[`${P}campaignDate`]).toEqual({ year: 1492, month: 5, day: 14, hour: 20, minute: 0 });
+  });
   it("no calendar leaves the date alone", () => {
     expect(startStamp({ startedAt: null, campaignDate: null }, { now: 1, worldDate: null })).not.toHaveProperty(`${P}campaignDate`);
   });
@@ -53,5 +58,18 @@ describe("elapsedLabel", () => {
     expect(elapsedLabel(30_000)).toBe("<1m");
     expect(elapsedLabel(42 * 60_000)).toBe("42m");
     expect(elapsedLabel(70 * 60_000)).toBe("1h 10m");
+  });
+});
+
+describe("hasEnteredDate", () => {
+  it("null, empty object and blank fields are not entered", () => {
+    expect(hasEnteredDate(null)).toBe(false);
+    expect(hasEnteredDate({})).toBe(false);
+    expect(hasEnteredDate({ year: "", month: null, day: NaN, hour: 4 })).toBe(false);
+  });
+  it("any of year, month or day makes it entered (month 0 included)", () => {
+    expect(hasEnteredDate({ year: 3 })).toBe(true);
+    expect(hasEnteredDate({ month: 0 })).toBe(true);
+    expect(hasEnteredDate({ day: "12" })).toBe(true);
   });
 });

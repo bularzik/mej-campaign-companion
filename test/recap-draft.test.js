@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recapDraft } from "../scripts/logic/recap-draft.mjs";
+import { recapDraft, tableTalkPlan } from "../scripts/logic/recap-draft.mjs";
 import { normalizeNotes } from "../scripts/logic/notes.mjs";
 
 describe("recapDraft", () => {
@@ -60,5 +60,23 @@ describe("recapDraft", () => {
     const out = recapDraft(notes, { formatTime });
     expect(out).not.toContain("<script");
     expect(out).toContain("&lt;script&gt;x&lt;/script&gt;");
+  });
+});
+
+describe("tableTalkPlan (add Table talk to the recap)", () => {
+  const n = (id, at, extra = {}) => ({ id, at, text: id, authorName: "A", audience: null, retracted: null, ...extra });
+  const notes = [n("a", 10), n("b", 20), n("secret", 30, { audience: { all: false, users: ["u"], groups: [] } }), n("gone", 40, { retracted: 41 })];
+  it("never added, empty recap: all public live notes, no question", () => {
+    expect(tableTalkPlan(notes, { addedAt: null, recapHasText: false })).toEqual({ kind: "all", notes: [notes[0], notes[1]], added: false });
+  });
+  it("never added, recap already has text: ask before adding them all", () => {
+    expect(tableTalkPlan(notes, { addedAt: null, recapHasText: true }).kind).toBe("maybeDuplicate");
+  });
+  it("added before: only public live notes newer than the stamp", () => {
+    const later = [...notes, n("c", 50)];
+    expect(tableTalkPlan(later, { addedAt: 25, recapHasText: true })).toEqual({ kind: "newer", notes: [later[4]], added: false });
+  });
+  it("added before and only private or retracted notes since: still added, re-adding asks", () => {
+    expect(tableTalkPlan(notes, { addedAt: 25, recapHasText: true })).toEqual({ kind: "again", notes: [notes[0], notes[1]], added: true });
   });
 });

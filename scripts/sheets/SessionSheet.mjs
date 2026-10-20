@@ -31,9 +31,9 @@ import { currentSession } from "../logic/current-session.mjs";
 // The hooks module's openSessionPage (the campaign's open Session page); a different openSessionPage lives in integrations/mej-adapter.mjs.
 import { openSessionPage as openCampaignSession, startSession, endSession } from "../hooks/current-session.mjs";
 import { streamRows } from "../logic/tonight.mjs";
-import { sessionStatus, sessionButton, elapsedLabel } from "../logic/session-state.mjs";
+import { sessionStatus, sessionButton, elapsedLabel, hasVisibleText } from "../logic/session-state.mjs";
 import { groundTone } from "../logic/sheet-ground.mjs";
-import { recapDraft } from "../logic/recap-draft.mjs";
+import { recapDraft, tableTalkPlan } from "../logic/recap-draft.mjs";
 import { validNoteText, notesForSession } from "../logic/notes.mjs";
 import { NOTE_DRAFTS, sessionDraftKey, trackDraft, restoreDraft, clearDraft, keepDraft } from "../logic/input-draft.mjs";
 import { canSee, normalizeAudience } from "../logic/reveal-state.mjs";
@@ -255,7 +255,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       number: session.sessionNumber ?? null,
       src: context.data?.src || null
     };
-    context.recapEmpty = !/<img\b/i.test(recap) && !recap.replace(/<[^>]*>/g, "").trim();
+    context.recapEmpty = !hasVisibleText(recap);
 
     // Table talk (spec 2026-10-19 §4.3). Stored note text is escaped plus
     // @UUID shorthand only (linkNoteText), so enriched output is safe for
@@ -264,9 +264,8 @@ export class SessionSheet extends EnhancedJournalSheet {
       ? await Promise.all(streamRows(listNotes(campaign, { sessionUuid: this.document.uuid }), game.user, { formatTime: noteTime })
         .map(async (r) => ({ ...r, text: await enrichNoteText(r.text) })))
       : [];
-    // Not in SESSION_DEFAULTS (wave ruling): read with a fallback.
-    const addedAt = session.tableTalkAddedAt ?? null;
-    const newest = Math.max(0, ...sessionNotes.map((n) => n.at));
+    // tableTalkAddedAt is not in SESSION_DEFAULTS (wave ruling): read with a fallback.
+    const plan = tableTalkPlan(sessionNotes, { addedAt: session.tableTalkAddedAt ?? null, recapHasText: !context.recapEmpty });
     context.tableTalk = {
       open: this._ccTableTalkOpen ?? live,
       live,
@@ -274,7 +273,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       rows,
       canWrite: campaign ? !!notesEntryOf(campaign)?.isOwner : false,
       canAddToRecap: !!(context.editable ?? this.isEditable) && rows.length > 0,
-      added: typeof addedAt === "number" && sessionNotes.length > 0 && addedAt >= newest
+      added: plan.added
     };
 
     return context;
@@ -778,23 +777,26 @@ export class SessionSheet extends EnhancedJournalSheet {
       ui.notifications.warn(game.i18n.localize(`${I18N}.notes.addWhileEditing`));
       return;
     }
-    const notes = notesForSession(readNotes(campaign), this.document.uuid);
-    const addedAt = sessionData(this.document).tableTalkAddedAt ?? null;
-    const newest = Math.max(0, ...notes.map((n) => n.at));
-    if (typeof addedAt === "number" && notes.length && addedAt >= newest) {
-      const again = await foundry.applications.api.DialogV2.confirm({
-        window: { title: game.i18n.localize(`${I18N}.notes.addToRecap`) },
-        content: `<p>${game.i18n.localize(`${I18N}.notes.addAgainConfirm`)}</p>`,
-        rejectClose: false
-      });
-      if (!again) return;
-    }
-    const draft = recapDraft(notes, { formatTime: noteTime });
-    if (!draft) {
+    const current = this.document.system?.recap ?? "";
+    const plan = tableTalkPlan(notesForSession(readNotes(campaign), this.document.uuid), {
+      addedAt: sessionData(this.document).tableTalkAddedAt ?? null, recapHasText: hasVisibleText(current)
+    });
+    if (!plan.notes.length) {
       ui.notifications.info(game.i18n.localize(`${I18N}.notes.nothingToAdd`));
       return;
     }
-    const current = this.document.system?.recap ?? "";
+    if (plan.kind === "again" || plan.kind === "maybeDuplicate") {
+      const content = plan.kind === "again"
+        ? game.i18n.localize(`${I18N}.notes.addAgainConfirm`)
+        : game.i18n.format(`${I18N}.notes.addMaybeDuplicateConfirm`, { count: plan.notes.length });
+      const ok = await foundry.applications.api.DialogV2.confirm({
+        window: { title: game.i18n.localize(`${I18N}.notes.addToRecap`) },
+        content: `<p>${content}</p>`,
+        rejectClose: false
+      });
+      if (!ok) return;
+    }
+    const draft = recapDraft(plan.notes, { formatTime: noteTime });
     await this.document.update({ "system.recap": `${current}${draft}`, [`${FLAG_SESSION}.tableTalkAddedAt`]: Date.now() });
     this.render();
   }

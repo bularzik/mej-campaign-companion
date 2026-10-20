@@ -13,7 +13,7 @@ const PREFIX = "TT-40";
 const IGNORE = [KNOWN_MEJ_SESSION_ICON_404];
 const VIEWPORT = { viewport: { width: 1440, height: 900 }, screen: { width: 1440, height: 900 } };
 
-let gm; let campaignId; let s9; let s10;
+let gm; let player; let campaignId; let s9; let s10;
 
 const shell = () => gm.page.locator("#MonksEnhancedJournal");
 const header = () => shell().locator(".session-container .mej-cc-session-header");
@@ -23,6 +23,11 @@ async function openSession(entryId) {
   await settle(gm.page, 800);
   await expect(header()).toHaveCount(1, { timeout: 15_000 });
 }
+
+// A player watching S9 sees status changes without reloading (fix round 1, item 3).
+const playerStatus = () => player.page.locator("#MonksEnhancedJournal .session-container .mej-cc-session-header .mej-cc-session-status");
+const recapOf = (uuid) => gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", uuid);
+const occurrences = (hay, needle) => hay.split(needle).length - 1;
 
 const currentUuid = () => gm.page.evaluate(({ MOD, id }) => game.folders.get(id)?.flags?.[MOD]?.campaign?.currentSession?.uuid ?? null, { MOD, id: campaignId });
 const sessionFlag = (uuid) => gm.page.evaluate(async ({ MOD, uuid }) => foundry.utils.deepClone((await fromUuid(uuid))?.flags?.[MOD]?.session ?? {}), { MOD, uuid });
@@ -44,14 +49,19 @@ test.describe("40 session page", () => {
       const out = [];
       for (const [name, n] of names) {
         // No campaign date: the first start fills it from the world clock.
-        const entry = await JournalEntry.create({ name, folder, pages: [buildSessionPageData(name, "", null, n)] });
+        const entry = await JournalEntry.create({ name, folder, ownership: { default: 2 }, pages: [buildSessionPageData(name, "", null, n)] });
         out.push({ id: entry.id, uuid: entry.pages.contents[0].uuid, name });
       }
       return out;
     }, { folder: campaignId, names: [[`${PREFIX} S9`, 9], [`${PREFIX} S10`, 10]] });
+    const pContext = await browser.newContext(VIEWPORT);
+    const pPage = await pContext.newPage();
+    player = { context: pContext, page: pPage, errors: trackConsoleErrors(pPage, { ignore: IGNORE }) };
+    await login(pPage, "User 1");
   });
 
   test.afterAll(async ({ browser }) => {
+    await player?.context.close().catch(() => {});
     await gm?.context.close().catch(() => {});
     await withGmPage(browser, async (p) => {
       await deleteFoldersById(p, [campaignId]);
@@ -67,6 +77,22 @@ test.describe("40 session page", () => {
     await expect.poll(currentUuid, { timeout: 20_000 }).toBe(s10.uuid);
 
     await openSession(s9.id);
+    // Rename S9 from its header before its first start. MEJ's submit-on-change
+    // sends every field, the five empty date inputs included, so the stored
+    // campaignDate can become an object of blanks - which must still count as
+    // "no date entered" (fix round 1, item 2).
+    const renamed = `${PREFIX} S9 Renamed`;
+    await header().locator('input[name="name"]').fill(renamed);
+    await header().locator('input[name="name"]').blur();
+    await expect.poll(() => gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.name, s9.uuid), { timeout: 10_000 }).toBe(renamed);
+    s9.name = renamed;
+    await settle(gm.page, 500);
+
+    // The player watches S9 (not running yet) while the GM starts it.
+    await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s9.uuid);
+    await settle(player.page, 800);
+    await expect(playerStatus()).toHaveCount(0, { timeout: 15_000 });
+
     await header().locator('[data-action="startSession"]').click();
     const dialog = gm.page.locator("dialog.application", { hasText: "Start this session?" });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
@@ -83,7 +109,9 @@ test.describe("40 session page", () => {
       return currentWorldComponents();
     });
     expect(nine.campaignDate ?? null).toEqual(world);
+    await expect(playerStatus()).toHaveClass(/\blive\b/, { timeout: 15_000 });
     assertNoConsoleErrors(gm.errors);
+    assertNoConsoleErrors(player.errors);
   });
 
   test("end shows no dialog", async () => {
@@ -97,7 +125,9 @@ test.describe("40 session page", () => {
     await expect.poll(currentUuid, { timeout: 20_000 }).toBeNull();
     await expect(header().locator(".mej-cc-session-status.ended")).toHaveCount(1, { timeout: 10_000 });
     await expect(header().locator('[data-action="startSession"]')).toContainText("Restart");
+    await expect(playerStatus()).toHaveClass(/\bended\b/, { timeout: 15_000 });
     assertNoConsoleErrors(gm.errors);
+    assertNoConsoleErrors(player.errors);
   });
 
   // Spec 2026-10-19 §4.3. Also the home of spec 35's old draft-append
@@ -125,18 +155,31 @@ test.describe("40 session page", () => {
     const add = drawer.locator('[data-action="addTableTalkToRecap"]');
     await expect(add).toHaveText("add to recap");
     await add.click();
-    await expect.poll(() => gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid), { timeout: 15_000 })
-      .toContain("the ferryman lied");
+    await expect.poll(() => recapOf(s9.uuid), { timeout: 15_000 }).toContain("the ferryman lied");
     await expect(drawer.locator('[data-action="addTableTalkToRecap"]')).toHaveText("added ✓", { timeout: 10_000 });
 
-    // A second add asks first; declining leaves the recap as it is.
-    const recap = await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid);
+    // A newer note flips the link back; adding again appends only that note
+    // (fix round 1, item 1): each line is in the recap exactly once.
+    await drawer.locator('[data-action="toggleTableTalk"]').click();
+    const later = `${PREFIX} the toll was doubled`;
+    await drawer.locator('input[name="session-note"]').fill(later);
+    await drawer.locator('input[name="session-note"]').press("Enter");
+    await expect(drawer.locator(".mej-cc-note", { hasText: later })).toHaveCount(1, { timeout: 15_000 });
+    await expect(drawer.locator('[data-action="addTableTalkToRecap"]')).toHaveText("add to recap", { timeout: 10_000 });
+    await drawer.locator('[data-action="addTableTalkToRecap"]').click();
+    await expect.poll(() => recapOf(s9.uuid), { timeout: 15_000 }).toContain("the toll was doubled");
+    const both = await recapOf(s9.uuid);
+    expect(occurrences(both, "the ferryman lied")).toBe(1);
+    expect(occurrences(both, "the toll was doubled")).toBe(1);
+    await expect(drawer.locator('[data-action="addTableTalkToRecap"]')).toHaveText("added ✓", { timeout: 10_000 });
+
+    // With nothing newer, another add asks first; declining leaves the recap as it is.
     await drawer.locator('[data-action="addTableTalkToRecap"]').click();
     const confirm = gm.page.locator("dialog.application", { hasText: "already added to the recap" });
     await expect(confirm).toBeVisible({ timeout: 10_000 });
     await confirm.locator('button[data-action="no"]').click();
     await settle(gm.page, 500);
-    expect(await gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.recap ?? "", s9.uuid)).toBe(recap);
+    expect(await recapOf(s9.uuid)).toBe(both);
     assertNoConsoleErrors(gm.errors);
   });
 });

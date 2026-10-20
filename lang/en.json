@@ -28,6 +28,7 @@
       "addToRecap": "add to recap",
       "addedToRecap": "added ✓",
       "addAgainConfirm": "These notes were already added to the recap. Add them again?",
+      "addMaybeDuplicateConfirm": "Some of these notes may already be in the recap. Add all {count}?",
       "addWhileEditing": "Close the recap editor first, then add Table talk to it.",
       "nothingToAdd": "Nothing in Table talk can go into the recap yet (private and retracted notes stay out).",
       "chatHint": "players can also type /note … in chat",
