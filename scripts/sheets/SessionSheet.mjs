@@ -590,7 +590,15 @@ export class SessionSheet extends EnhancedJournalSheet {
   // owner-check is needed here. The recap renders no editor at all for a
   // viewer who cannot edit it (session.hbs), so nothing of it needs disabling.
   _disableFields(form) {
-    super._disableFields(form);
+    // MEJ's own _disableFields calls super._disableFields, which Foundry 13's
+    // sheet base classes do not have (stock MEJ 13.06 never calls it itself),
+    // so on 13 it throws. The regions were already disabled by _bindRegions;
+    // what follows only re-enables the fields that must stay live.
+    try {
+      super._disableFields(form);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+    }
     // MEJ's sweep disables every input/button on a page this user cannot edit.
     // The notes capture box is gated by the notes entry's ownership instead
     // (the box only renders when tableTalk.canWrite, and the store enforces
