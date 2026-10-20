@@ -18,8 +18,8 @@ import { confirmDelete } from "../apps/confirm-delete.mjs";
 import { attendeePlayerName } from "../logic/attendee-player.mjs";
 import { isRelayableImageType, MAX_RELAY_FILE_BYTES, enforcedImageName } from "../logic/media-relay.mjs";
 import { fieldsToStrip } from "../logic/session-submit.mjs";
-import { shouldCommitGmNotes } from "../logic/gm-notes-commit.mjs";
-import { recapClosePlan } from "../logic/recap-save-state.mjs";
+import { bindAutosave, flushSessionEditors, focusSessionEditor, editorValue } from "./session-autosave.mjs";
+import { patchSessionRegions } from "./session-regions.mjs";
 import { relayUploadMedia, relayFilename } from "../hooks/media-relay.mjs";
 import { uploadCompanionFile } from "../apps/import-upload.mjs";
 import { getCalendarMonths, sessionMonthOptions, currentWorldComponents } from "../logic/campaign-calendar.mjs";
@@ -45,30 +45,6 @@ import { promptAudience, sendRevealWhisper } from "../apps/audience-dialog.mjs";
 const FLAG_SESSION = `flags.${MODULE_ID}.session`;
 const noteTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-// Commit the GM-notes editor through the element's PUBLIC value property.
-// `get value` is the live editor content while the editor is active (core's
-// own _getValue, foundry.mjs 13.351:72762 / 14.368:97393) and the stored
-// value otherwise; `set value` stores it and fires the bubbling "change"
-// that MEJ's submit-on-change form turns into a submit with this element as
-// event.target (AbstractFormInputElement 13.351:70329 / 14.368:41256), which
-// SessionSheet._prepareSubmitData's stale-field guard keeps because the
-// target names system.gmNotes. Those are the same two steps core's own
-// save() performs for a non-toggled editor - but save() is private (#save)
-// on Foundry 13, where calling it threw and the notes were never written
-// (v13 sweep report, cause I). _refresh() after the set is a no-op while
-// the editor is active. A throw here is a real defect, so it is logged and
-// shown; the caller's .editing toggle runs regardless.
-function commitGmNotes(editor, stored) {
-  if (!editor) return;
-  try {
-    const live = editor.value;
-    if (shouldCommitGmNotes(live, stored)) editor.value = live;
-  } catch (err) {
-    console.error(`${MODULE_ID} | GM notes could not be saved`, err);
-    ui.notifications.error(game.i18n.localize(`${I18N}.session.gmNotesSaveFailed`));
-  }
-}
-
 export class SessionSheet extends EnhancedJournalSheet {
   static DEFAULT_OPTIONS = {
     window: {
@@ -76,8 +52,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       icon: "fa-solid fa-dice-d20"
     },
     actions: {
-      editRecap: SessionSheet.onEditRecap,
-      editGmNotes: SessionSheet.onEditGmNotes,
+      focusRecap: SessionSheet.onFocusRecap,
       addSecret: SessionSheet.onAddSecret,
       deleteSecret: SessionSheet.onDeleteSecret,
       updateSecretText: SessionSheet.onUpdateSecretText,
@@ -105,7 +80,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       template: `modules/${MODULE_ID}/templates/session.hbs`,
       templates: [
         "modules/monks-enhanced-journal/templates/sheets/partials/sheet-relationships.hbs",
-        "modules/monks-enhanced-journal/templates/sheets/partials/sheet-notes.hbs",
         "templates/generic/tab-navigation.hbs",
         `modules/${MODULE_ID}/templates/session-header.hbs`,
         `modules/${MODULE_ID}/templates/table-talk.hbs`
@@ -113,7 +87,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       scrollable: [
         ".editor-display",
         ".editor-content",
-        ".attendees-list",
         ".secrets-list",
         ".mej-cc-notes-list"
       ]
@@ -153,6 +126,18 @@ export class SessionSheet extends EnhancedJournalSheet {
 
   get canPlaySound() {
     return false;
+  }
+
+  /**
+   * A full render replaces the editors, so whatever is typed is saved first
+   * (session-autosave.mjs). A region patch (session-regions.mjs, `ccPatch`)
+   * reuses this context but leaves the editors alone. On MEJ's shell the
+   * subsheet's old DOM is already gone by now; its editors saved themselves
+   * on the way out (core's save on disconnect, routed to the same writer).
+   */
+  async _prepareContext(options) {
+    if (!options?.ccPatch) flushSessionEditors(this, "close");
+    return super._prepareContext(options);
   }
 
   async _prepareBodyContext(context, options) {
@@ -207,19 +192,22 @@ export class SessionSheet extends EnhancedJournalSheet {
       )
     );
 
+    // Recap, GM Prep and My Notes are always editable (spec 2026-10-19 §4.4):
+    // their displays show the stored text, or text this client has written
+    // but not yet had confirmed (a save in flight, a failed save, My Notes
+    // waiting for a GM), so nothing typed disappears on a re-render.
     const enrichmentOptions = { relativeTo: this.document, secrets: this.document.isOwner, async: true };
-    context.enrichedRecap = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
-      this.document.system?.recap ?? "",
-      enrichmentOptions
-    );
+    const TextEditor = foundry.applications.ux.TextEditor.implementation;
+    const recapValue = editorValue(this.document, "recap");
+    context.enrichedRecap = await TextEditor.enrichHTML(recapValue, enrichmentOptions);
+    context.myNotes = {
+      enriched: await TextEditor.enrichHTML(editorValue(this.document, "myNotes"), { ...enrichmentOptions, secrets: true })
+    };
 
     // gmNotes: excluded from the context entirely for non-GM users - a
     // player's client never receives this HTML in any form, DOM or otherwise.
     if (isGM) {
-      context.enrichedGmNotes = await foundry.applications.ux.TextEditor.implementation.enrichHTML(
-        this.document.system?.gmNotes ?? "",
-        enrichmentOptions
-      );
+      context.enrichedGmNotes = await TextEditor.enrichHTML(editorValue(this.document, "gmNotes"), enrichmentOptions);
     } else if (context.data?.system) {
       // context.data comes from the base class's this.document.toObject(false)
       // (a plain deep-cloned object, safe to mutate) and carries system.gmNotes
@@ -257,7 +245,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       number: session.sessionNumber ?? null,
       src: context.data?.src || null
     };
-    context.recapEmpty = !hasVisibleText(recap);
+    context.recapEmpty = !hasVisibleText(recapValue);
 
     // Table talk (spec 2026-10-19 §4.3). Stored note text is escaped plus
     // @UUID shorthand only (linkNoteText), so enriched output is safe for
@@ -286,7 +274,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       { label: '<i class="fas fa-search"></i>', type: "text" },
       { id: "search", type: "input", label: game.i18n.localize("MonksEnhancedJournal.SearchDescription"), visible: !!this.enhancedjournal, callback: this.searchText },
       { id: "show", label: game.i18n.localize("MonksEnhancedJournal.ShowToPlayers"), icon: "fas fa-eye", visible: game.user.isGM, action: "showPlayers" },
-      { id: "edit", label: game.i18n.localize("MonksEnhancedJournal.EditDescription"), icon: "fas fa-pencil-alt", visible: this.isEditable, action: "editRecap" }
+      { id: "edit", label: game.i18n.localize("MonksEnhancedJournal.EditDescription"), icon: "fas fa-pencil-alt", visible: this.isEditable, action: "focusRecap" }
     ];
     return ctrls.concat(super._documentControls());
   }
@@ -298,17 +286,9 @@ export class SessionSheet extends EnhancedJournalSheet {
   _dragDrop(html) {
     super._dragDrop(html);
 
-    new foundry.applications.ux.DragDrop.implementation({
-      // Anywhere a GM would naturally drop a character: the header and the two
-      // prose tabs. Relationships and the editors keep their own drops (§4.6).
-      dropSelector: ".mej-cc-session-header, .tab[data-tab='description'], .tab[data-tab='session']",
-      permissions: {
-        drop: () => game.user.isGM || this.document.isOwner
-      },
-      callbacks: {
-        drop: this._onDropAttendee.bind(this)
-      }
-    }).bind(html);
+    // Anywhere a GM would naturally drop a character: the header and the two
+    // prose tabs. Relationships and the editors keep their own drops (§4.6).
+    this._attendeeDropZone(".mej-cc-session-header, .tab[data-tab='description'], .tab[data-tab='session']").bind(html);
 
     // Image files dropped on the shared recap (spec 2026-09-04 §A). Owners
     // only - the editor is read-only for everyone else. File drops carry no
@@ -325,6 +305,18 @@ export class SessionSheet extends EnhancedJournalSheet {
     }).bind(html);
   }
 
+  _attendeeDropZone(dropSelector) {
+    return new foundry.applications.ux.DragDrop.implementation({
+      dropSelector,
+      permissions: {
+        drop: () => game.user.isGM || this.document.isOwner
+      },
+      callbacks: {
+        drop: this._onDropAttendee.bind(this)
+      }
+    });
+  }
+
   async _onDropAttendee(event) {
     // Let the editors and the Relationships tab handle their own drops.
     if (event.target?.closest?.(".editor-parent, prose-mirror, .tab[data-tab='relationships']")) return;
@@ -333,6 +325,8 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   async _onDropRecapImage(event) {
+    // A drop the live editor's own image plugin already took (an uploader typing in it).
+    if (event.defaultPrevented) return;
     const files = [...(event.dataTransfer?.files ?? [])].filter((f) => f.type?.startsWith("image/"));
     if (!files.length) return; // not a file drop (e.g. a stray Actor drag) - nothing for us to do
     event.preventDefault();
@@ -341,6 +335,7 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   async _onPasteRecapImage(event) {
+    if (event.defaultPrevented) return;
     const files = [...(event.originalEvent?.clipboardData?.files ?? event.clipboardData?.files ?? [])]
       .filter((f) => f.type?.startsWith("image/"));
     if (!files.length) return;
@@ -362,12 +357,11 @@ export class SessionSheet extends EnhancedJournalSheet {
    */
   async _ingestRecapImage(file) {
     if (!this.document.isOwner) return;
-    // Review round 2, finding 4 (plan-mandated, overrides the original
-    // brief): appending to the persisted recap and re-rendering while the
-    // live collaborative editor is open would tear that editor down on the
-    // very next save, silently losing whatever the owner was mid-typing.
-    // Owners with upload permission still have the editor's own image
-    // tools available while editing.
+    // Review round 2, finding 4: while this user is typing in the recap its
+    // collaborative editor holds the text, and a direct write would be
+    // overwritten by that editor's next save - so the drop waits until they
+    // click out (the editor saves and unmounts then). Owners with upload
+    // permission still have the editor's own image tools while typing.
     if ($(".editor-parent[data-editor-id='recap']", this.trueElement).hasClass("editing")) {
       ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageWhileEditing`));
       return;
@@ -401,7 +395,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       const img = document.createElement("img");
       img.src = path;
       await this.document.update({ "system.recap": `${current}<p>${img.outerHTML}</p>` });
-      this.render();
     } catch (error) {
       console.error(`${MODULE_ID} | image drop/paste into recap failed`, error);
       ui.notifications.warn(game.i18n.localize(`${I18N}.session.recapImageUploadFailed`));
@@ -422,78 +415,19 @@ export class SessionSheet extends EnhancedJournalSheet {
     const attendees = [...session.attendees, doc.uuid];
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
     ui.notifications.info(game.i18n.format(`${I18N}.session.attendeeAdded`, { name: doc.name }));
-    // Task 7's patchSessionRegions will patch only the header; until then, a full render.
-    this.render();
+    patchSessionRegions(this);
   }
 
-  // Mirrors EnhancedJournalSheet.onEditDescription (sheets/EnhancedJournalSheet.js)
-  // exactly, targeting the "recap" editor id instead of "description" - this
-  // is both the inline editor-edit pencil's action (data-action="editRecap"
-  // in the description tab) AND, via _documentControls()'s "edit" control,
-  // the shell header's toolbar pencil button. Sharing one handler for both
-  // paths keeps the header button's tab-switch and its pencil/save icon
-  // state in sync with the inline button rather than letting the two drift.
-  static onEditRecap(event, target) {
-    if (!this.isEditable) return null;
-
-    let navElement = $(".sheet-tabs.tabs", this.trueElement).get(0);
-    if (this.tabGroups["primary"])
-      this.changeTab.call(this.enhancedjournal || this, "description", "primary", { event, navElement });
-
-    // The recap prose-mirror is `toggled` (template comment explains why):
-    // its own activation/collaborative join only ever starts here, on the
-    // pencil, never at render time. Setting `open` false when leaving edit
-    // calls the element's own save() (prosemirror-editor.mjs), which fires
-    // "change" (picked up by MEJ's submitOnChange -> our _prepareSubmitData
-    // stale-field guard, event.target is this element) and then destroys
-    // the editor/ends the collab session - matching a manual save exactly.
-    //
-    // Review round 2, finding 2: `opening` is derived from the element's
-    // own `open` property, not from the `.editing` CSS class - core's
-    // save() also runs from the editor's own native save button, Ctrl+S,
-    // and disconnectedCallback, all of which close the editor WITHOUT this
-    // action ever running (the activateListeners "close" handler below is
-    // what keeps `.editing`/the nav icon in sync for those paths). Reading
-    // the class here instead of the element itself would let this action
-    // and that handler fight over which one is "current". State is set
-    // explicitly (not a blind two-argument-less toggle) from that one
-    // source of truth.
-    const editor = this.trueElement?.querySelector?.(".editor-parent[data-editor-id='recap'] prose-mirror")
-      ?? $(".editor-parent[data-editor-id='recap'] prose-mirror", this.trueElement).get(0);
-    const opening = !(editor?.open ?? false);
-    if (!opening && editor) {
-      const plan = recapClosePlan({ live: editor.value, stored: this.document?.system?.recap });
-      if (plan === "saving") {
-        const uuid = this.document.uuid;
-        ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaving`));
-        const hookId = Hooks.on("updateJournalEntryPage", (page, changes, options, userId) => {
-          if (page.uuid !== uuid || changes?.system?.recap === undefined || userId !== game.user.id) return;
-          Hooks.off("updateJournalEntryPage", hookId);
-          ui.notifications.info(game.i18n.localize(`${I18N}.session.recapSaved`));
-        });
-        setTimeout(() => Hooks.off("updateJournalEntryPage", hookId), 10_000);
-      }
-    }
-    $(".editor-parent[data-editor-id='recap']", this.trueElement).toggleClass("editing", opening);
-    $(".nav-button.edit i", this.enhancedjournal?.element || this.element).toggleClass("fa-pencil-alt", !opening).toggleClass("fa-save", opening);
-    if (editor) editor.open = opening;
+  // The shell toolbar's "edit" control (MEJ expects that id, so it stays):
+  // switch to Recap and start typing in it.
+  static onFocusRecap(event) {
+    if (!this.isEditable) return;
+    focusSessionEditor(this, "recap", event);
   }
 
-  static onEditGmNotes(event, target) {
-    const editing = $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).hasClass("editing");
-    // Unlike the recap editor, gmNotes is not toggled (no collaborative
-    // join to manage) - it activates at render time and just stays active,
-    // so the pencil here is purely a CSS show/hide. That means the pencil is
-    // ALSO this editor's only commit point: nothing else ever saves it (no
-    // toggle -> no open=false -> save() chain the way the recap editor gets
-    // from onEditRecap above). Commit explicitly, BEFORE removing .editing,
-    // while closing - see commitGmNotes above for why that goes through the
-    // element's public `value` and not its save() (private on Foundry 13).
-    if (editing) {
-      const editor = this.trueElement?.querySelector?.("prose-mirror[name='system.gmNotes']");
-      commitGmNotes(editor, this.document?.system?.gmNotes);
-    }
-    $(".editor-parent[data-editor-id='gmNotes']", this.trueElement).toggleClass("editing", !editing);
+  /** Open one of the sheet's editors for typing (the prep board's GM Prep link). */
+  focusEditor(editorId) {
+    focusSessionEditor(this, editorId);
   }
 
   // MEJ's shell hosts this sheet as a subsheet (see the header comment) and
@@ -503,9 +437,11 @@ export class SessionSheet extends EnhancedJournalSheet {
   // appeared in the DOM without an explicit render(), even 6+ seconds
   // later). Every handler below that mutates document data via a raw
   // document.update()/setFlag() (as opposed to going through the form
-  // submission pipeline, which does its own re-render) must call
-  // this.render() itself, matching the existing pattern in
-  // _ingestRecapImage() above.
+  // submission pipeline, which does its own re-render) must refresh the view
+  // itself: patchSessionRegions(this) when the change shows in the header or
+  // Table talk (spec 2026-10-19 §4.4 - a re-render would take the editors
+  // from under the user), this.render() for the Details lists below, whose
+  // editors save themselves before the render replaces them.
   static async onAddSecret(event, target) {
     if (!game.user.isGM) return;
     const session = sessionData(this.document);
@@ -585,7 +521,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     const session = sessionData(this.document);
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
-    this.render();
+    patchSessionRegions(this);
   }
 
   static async onManageAttendees() {
@@ -606,30 +542,35 @@ export class SessionSheet extends EnhancedJournalSheet {
 
   // Stale-field guard (spec 2026-09-04, Deviations). MEJ's submitOnChange
   // form resubmits every field, so a submit raised by the session-number
-  // input would write back whatever recap HTML this client rendered -
-  // stale the moment another owner saved. Only the editor that raised the
-  // submit, or an editor that is currently open, may write its field; every
-  // other submit leaves the rest of the rich text fields alone. The change
-  // event bubbles from the <prose-mirror> itself, so event.target is that
-  // element. "Currently open" is read straight off the live elements
-  // (`open === true` and the `active` class core adds once
-  // #activateEditor() finishes - see prosemirror-editor.mjs) rather than
-  // trusted from anywhere else: gmNotes is untoggled and so active from
-  // render (its field is effectively never stripped), while the recap
-  // editor is toggled and only active while a participant has it open -
-  // exactly the case where its live value is fresher than whatever this
-  // client last rendered.
+  // input would write back whatever recap HTML this client rendered - stale
+  // the moment another owner saved. Only the editor that raised the submit
+  // may write its field. The editors save themselves now
+  // (session-autosave.mjs writes their one field directly and cancels core's
+  // own save), so in practice every editor field is stripped from a form
+  // submit; the guard stays for any path that still raises one.
   _prepareSubmitData(event, form, formData, updateData) {
     const submitData = super._prepareSubmitData(event, form, formData, updateData);
     const target = event?.target;
     const targetName = target?.closest?.("prose-mirror")?.getAttribute("name") ?? target?.name ?? null;
-    const activeFields = [...form.querySelectorAll("prose-mirror[name]")]
-      .filter((el) => el.open === true && el.classList.contains("active"))
-      .map((el) => el.getAttribute("name"));
-    for (const field of fieldsToStrip(targetName, activeFields)) foundry.utils.deleteProperty(submitData, field);
+    for (const field of fieldsToStrip(targetName)) foundry.utils.deleteProperty(submitData, field);
     // The notes capture box lives inside this form but is not a document field.
     delete submitData["session-note"];
     return submitData;
+  }
+
+  // MEJ's close() asks "You have changes - close anyway?" whenever any
+  // <prose-mirror> reports isDirty(), which core's dirty flag never clears.
+  // These editors save themselves on close, so there is nothing to ask.
+  checkForChanges() {
+    flushSessionEditors(this, "close");
+    return false;
+  }
+
+  // MEJ closes the subsheet before switching its entry tab and before closing
+  // the window; both save whatever is typed first.
+  async close(options) {
+    flushSessionEditors(this, "close");
+    return super.close(options);
   }
 
   // EnhancedJournalSheet's generic disable pass (_toggleDisabled, called
@@ -642,10 +583,10 @@ export class SessionSheet extends EnhancedJournalSheet {
   // non-owner's recap editor rendered fully live-editable
   // (disabled === false) despite the sheet as a whole being non-editable.
   // Only ever called when !this.isEditable (see the base class), so no
-  // owner-check is needed here.
+  // owner-check is needed here. The recap renders no editor at all for a
+  // viewer who cannot edit it (session.hbs), so nothing of it needs disabling.
   _disableFields(form) {
     super._disableFields(form);
-    $(".editor-parent[data-editor-id='recap'] prose-mirror", form).prop("disabled", true);
     // MEJ's sweep disables every input/button on a page this user cannot edit.
     // The notes capture box is gated by the notes entry's ownership instead
     // (the box only renders when tableTalk.canWrite, and the store enforces
@@ -662,44 +603,48 @@ export class SessionSheet extends EnhancedJournalSheet {
   async activateListeners(html) {
     await super.activateListeners(html);
     this._applyGround(html);
-    this._startElapsedClock(html);
     // A section's actions sit on its <summary>, whose default click action
     // folds the <details>. Cancel only that default: stopping propagation
     // instead would also keep the click from the application's delegated
     // data-action handler.
     $("details.mej-cc-section > summary .mej-cc-section-actions", html).on("click", (event) => event.preventDefault());
     $(".editor-parent[data-editor-id='recap']", html).on("paste", this._onPasteRecapImage.bind(this));
+    bindAutosave(this, html);
+    this._bindRegions(html);
+  }
 
-    // Review round 2, finding 2. Core fires "close" on a toggled
-    // <prose-mirror> (prosemirror-editor.mjs save()) whenever it
-    // deactivates - not only via onEditRecap above, but also from the
-    // editor's own native save button, Ctrl+S, and disconnectedCallback
-    // (confirmed against that file: save() dispatches "close" for every
-    // toggled deactivation path). Any of those leaves `.editing` on the
-    // parent stuck and MEJ's own CSS then hides both the read view and the
-    // pencil (`.editing .editor-display, .editing .editor-edit { display:
-    // none }`) while our own CSS hides the element's native toggle button -
-    // no way back in without this. Idempotent (removing an absent class is
-    // a no-op), so it's safe regardless of which path fired it, including
-    // a re-render mid-close.
-    $(".editor-parent[data-editor-id='recap'] prose-mirror", html).on("close", () => {
-      $(".editor-parent[data-editor-id='recap']", html).removeClass("editing");
-      $(".nav-button.edit i", this.enhancedjournal?.element || this.element).removeClass("fa-save").addClass("fa-pencil-alt");
-    });
-
+  /**
+   * Listeners inside the header and Table talk regions. Run on every render
+   * and again by session-regions.mjs after it swaps a region in (the
+   * data-action clicks are delegated by the application and need nothing).
+   */
+  _bindRegions(html) {
+    const root = html instanceof HTMLElement ? html : html?.[0];
+    if (!root) return;
+    this._startElapsedClock(root);
+    const header = root.querySelector(".mej-cc-session-header");
+    if (header && !header.dataset.ccDrop) {
+      header.dataset.ccDrop = "1";
+      this._attendeeDropZone(".mej-cc-session-header").bind(header);
+    }
+    if (!this.isEditable) {
+      for (const region of root.querySelectorAll("[data-cc-region]")) {
+        for (const el of region.querySelectorAll("input, select, textarea, button")) el.disabled = true;
+      }
+      this._disableFields(root);
+    }
     // Notes capture box: Enter files the note; its change events must not
     // reach the sheet's submit-on-change form.
-    $('input[name="session-note"]', html)
-      .on("change", (event) => event.stopPropagation())
-      .on("keydown", (event) => {
+    const noteInput = root.querySelector('input[name="session-note"]');
+    if (noteInput && !noteInput.dataset.ccDraft) {
+      noteInput.dataset.ccDraft = "1";
+      noteInput.addEventListener("change", (event) => event.stopPropagation());
+      noteInput.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
         this._captureNote(event.currentTarget);
       });
-    // Every other author's note re-renders this view; keep the typed text, focus and caret.
-    const noteInput = $('input[name="session-note"]', html).get(0);
-    if (noteInput && !noteInput.dataset.ccDraft) {
-      noteInput.dataset.ccDraft = "1";
+      // A full re-render replaces the box; keep the typed text, focus and caret.
       const key = sessionDraftKey(this.document.uuid);
       trackDraft(noteInput, NOTE_DRAFTS, key);
       restoreDraft(noteInput, NOTE_DRAFTS, key);
@@ -813,7 +758,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     }
     const draft = recapDraft(plan.notes, { formatTime: noteTime });
     await this.document.update({ "system.recap": `${current}${draft}`, [`${FLAG_SESSION}.tableTalkAddedAt`]: Date.now() });
-    this.render();
+    patchSessionRegions(this);
   }
 
   static async onOpenNoteLink(event, target) {
@@ -842,7 +787,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       keepDraft(NOTE_DRAFTS, draftKey, raw);
       ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
     }
-    this.render();
+    patchSessionRegions(this);
   }
 
   static async onEditNote(event, target) {
@@ -866,7 +811,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     } catch (err) {
       ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
     }
-    this.render();
+    patchSessionRegions(this);
   }
 
   static async onDeleteNote(event, target) {
@@ -884,7 +829,7 @@ export class SessionSheet extends EnhancedJournalSheet {
     } catch (err) {
       ui.notifications.warn(game.i18n.localize(err?.reason ? `${I18N}.notes.${err.reason}` : `${I18N}.notes.writeFailed`));
     }
-    this.render();
+    patchSessionRegions(this);
   }
 
   static async onStartSession() {
@@ -929,6 +874,6 @@ export class SessionSheet extends EnhancedJournalSheet {
       console.error(`${MODULE_ID} | ${action.name} failed`, err);
       ui.notifications.error(game.i18n.localize(`${I18N}.session.${failKey}`));
     }
-    sheet.render();
+    patchSessionRegions(sheet);
   }
 }

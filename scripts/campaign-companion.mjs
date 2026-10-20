@@ -21,6 +21,7 @@ import { registerTimelineDirectory } from "./hooks/timeline-directory.mjs";
 import { registerCampaignDirectory } from "./hooks/campaign-directory.mjs";
 import { registerPartyNotebookDirectory } from "./hooks/party-notebook-directory.mjs";
 import { registerRecapRefresh } from "./hooks/recap-refresh.mjs";
+import { registerSessionAutosave } from "./sheets/session-autosave.mjs";
 import { registerCampaignGuard } from "./hooks/campaign-guard.mjs";
 import { registerEntityFromSelection } from "./hooks/entity-from-selection.mjs";
 import { registerRelationshipsTabWrap } from "./hooks/rel-tab-wrap.mjs";
@@ -229,8 +230,11 @@ Hooks.once("init", () => {
   // At init so the sidebar's first render is caught - pure-logic import only.
   registerPartyNotebookDirectory();
 
-  // Shared recap: other seats' saves re-render an idle view (spec 2026-09-04).
+  // Shared recap: other seats' saves refresh an idle view (spec 2026-09-04);
+  // a Session view is patched in place (spec 2026-10-19 §4.4).
   registerRecapRefresh();
+  // Session editors save on a hidden tab and My Notes drafts retry when a GM connects.
+  registerSessionAutosave();
 
   // Sheet classes at init, not ready (spec 2026-09-20-ready-wiring-window
   // §3.2): the imports start now and register the moment they resolve, so a

@@ -1,7 +1,7 @@
 // Notes entry lifecycle (spec 2026-10-15 item 1), the party-notebook pattern:
 // the GM writer seat creates one notes entry per campaign and keeps its
 // ownership in step with the baseline and the user list. Every seat
-// re-renders views that show a changed note's session or mentioned entries.
+// refreshes views that show a changed note's session or mentioned entries.
 import { MODULE_ID, CAMPAIGN_FLAG, NOTES_FLAG } from "../constants.mjs";
 import { isCampaignFolder, isNotesEntry, campaignOf } from "../logic/campaigns.mjs";
 import { normalizeNotes } from "../logic/notes.mjs";
@@ -38,6 +38,8 @@ export function refreshForNoteChange(entry, noteChanges) {
   // and mentions are unknown: refresh every view of the campaign instead.
   const deleted = !!ids && Object.keys(noteChanges).some((k) => k.startsWith("-="));
   const campaignId = campaignOf(entry)?.id ?? null;
+  // A Session page shows notes only in its Table talk (and the Links rail,
+  // which refreshes itself): patch it, never re-render it under its editors.
   refreshViewsMatching((uuid) => {
     if (!uuid || uuids.has(uuid)) return true; // the shell's synthetic hub page has no uuid: always refresh it
     if (!deleted || !campaignId) return false;
@@ -46,7 +48,7 @@ export function refreshForNoteChange(entry, noteChanges) {
     } catch {
       return false;
     }
-  });
+  }, { patchSessions: true });
 }
 
 export function registerNotesEntry() {

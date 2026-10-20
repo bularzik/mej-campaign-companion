@@ -67,15 +67,15 @@ async function openSession(page, entryId) {
   return shell;
 }
 
-/** Open the recap editor, type, and commit the way a real blur does (the prose-mirror element's own change event). */
+/** Click into the recap (always editable, spec 2026-10-19 §4.4 - no pencil) and type. */
 async function typeIntoRecap(page, shell, text) {
-  await shell.locator('button[data-action="editRecap"]').click();
+  const parent = shell.locator(RECAP_EDITOR);
+  if (!(await parent.evaluate((el) => el.classList.contains("editing")))) await parent.locator(".editor-display").click();
   const editor = shell.locator(`${RECAP_EDITOR} prose-mirror`);
-  // The recap editor is `toggled`: the pencil only flips `open`, and
-  // activation (construction of the ProseMirror view, plus the
-  // collaborative join for an owner) happens asynchronously from there
-  // (core adds the "active" class once it's actually up) - wait for it
-  // before typing, rather than a fixed settle.
+  // The click mounts the editor; activation (construction of the
+  // ProseMirror view, plus the collaborative join for an owner) happens
+  // asynchronously from there (core adds the "active" class once it's
+  // actually up) - wait for it before typing, rather than a fixed settle.
   await expect(editor).toHaveClass(/active/, { timeout: 10_000 });
   await editor.click();
   await page.keyboard.press("End");
@@ -84,33 +84,17 @@ async function typeIntoRecap(page, shell, text) {
 }
 
 /**
- * Close the recap editor the way a real user does - the shell header's own
- * edit/save toolbar control (shares onEditRecap with the inline pencil,
- * SessionSheet.mjs's own doc comment) - rather than dispatching a synthetic
- * "change" straight onto the still-open element (review round 2, finding 3:
- * that bypassed open=false -> save() -> change -> MEJ submit ->
- * _prepareSubmitData entirely). NOT the inline `button[data-action=
- * "editRecap"]` typeIntoRecap opens with: MEJ's own base CSS
- * (`.editor-parent.editing .editor-edit { display: none }`) hides that
- * specific button while editing - confirmed live (a `<div class="nav-button
- * edit">` in the shell header is the one still visible, icon swapped to
- * fa-save). Persistence itself is still asserted with a waitForFunction on
- * the GM seat by each caller.
+ * Leave the recap the way a real user does - click somewhere else on the
+ * sheet (the Recap tab's own nav link) - which saves it and closes the
+ * editor (session-autosave.mjs, blur). Persistence itself is still asserted
+ * with a waitForFunction on the GM seat by each caller.
  *
- * Checks `.editing` first rather than clicking unconditionally: confirmed
- * live that when two owners share one collaborative session, ONE of them
- * saving (closing) flushes the OTHER's pending steps into the same
- * document.update() too (core tears the whole shared session down, not
- * just the closer's own view) and fires that other editor's own "close"
- * event, which the activateListeners handler above already reacts to by
- * clearing `.editing`. Calling this again on an editor already closed that
- * way would blindly re-toggle it back open (onEditRecap's `opening` reads
- * false -> true) instead of being the no-op it should be.
+ * Checks `.editing` first: an editor already left needs no second click.
  */
 async function commitRecap(page, shell) {
   const parent = shell.locator(RECAP_EDITOR);
   if (!(await parent.evaluate((el) => el.classList.contains("editing")))) return;
-  await shell.locator('.nav-button.edit[data-action="editRecap"]').click();
+  await shell.locator('nav.sheet-tabs a[data-tab="description"]').click();
   await expect(parent).not.toHaveClass(/editing/);
 }
 
@@ -168,10 +152,10 @@ test.describe("06 player collaboration", () => {
     expect(await p1.page.evaluate((id) => game.journal.get(id).isOwner, entryId)).toBe(true);
     await typeIntoRecap(p1.page, p1Shell, " Player one adds the ambush.");
 
-    // Review round 2, finding 4: dropping an image while the recap editor
-    // is open must be refused (appending to the persisted value and
-    // re-rendering would tear the live editor down and lose the in-flight
-    // edit). The editor is still open here (typeIntoRecap left it that way).
+    // Review round 2, finding 4: dropping an image while the user is typing
+    // in the recap must be refused (the live editor holds the text, and its
+    // next save would overwrite a direct append). The editor is still open
+    // here (typeIntoRecap left it that way).
     await dropFileOnRecap(p1.page, { url: "icons/svg/mystery-man.svg", name: "TT-while-editing.svg", type: "image/svg+xml" });
     await settle(p1.page, 500);
     await expect(p1.page.locator("#notifications li.notification.warning", { hasText: /close the recap editor/i })).toHaveCount(1);
@@ -206,8 +190,9 @@ test.describe("06 player collaboration", () => {
     const p2 = await newSeat(browser, "User 2");
     const p2Shell = await openSession(p2.page, entryId);
     await expect(p2Shell.locator(`${RECAP_EDITOR} .editor-display`)).toContainText("Player one adds the ambush.");
-    // Exactly one recap editor on the tab - the Player Recaps section is gone.
-    await expect(p2Shell.locator('.tab[data-tab="description"] prose-mirror')).toHaveCount(1);
+    // Exactly one recap editor on the tab (mounted on a click from its
+    // template) - the Player Recaps section is gone.
+    await expect(p2Shell.locator('.tab[data-tab="description"] template.mej-cc-editor-template')).toHaveCount(1);
     await expect(p2Shell.locator(".player-recaps-section, .player-recap-self, .other-recap")).toHaveCount(0);
 
     assertNoConsoleErrors(p1.errors);
@@ -217,7 +202,7 @@ test.describe("06 player collaboration", () => {
     await gm.context.close();
   });
 
-  test("a non-owner player sees the recap read-only: no pencil, disabled editor, drops ignored", async ({ browser }) => {
+  test("a non-owner player sees the recap read-only: no editor at all, drops ignored", async ({ browser }) => {
     const gm = await newSeat(browser, "Gamemaster");
     const entryId = await createSession(gm.page, `${TT_PREFIX}Observer Session`, "OBSERVER");
 
@@ -225,9 +210,13 @@ test.describe("06 player collaboration", () => {
     const shell = await openSession(p1.page, entryId);
     expect(await p1.page.evaluate((id) => game.journal.get(id).isOwner, entryId)).toBe(false);
     await expect(shell.locator(`${RECAP_EDITOR} .editor-display`)).toContainText("GM opening line.");
-    await expect(shell.locator('button[data-action="editRecap"]')).toHaveCount(0);
-    await expect(shell.locator(`${RECAP_EDITOR} prose-mirror`)).toHaveJSProperty("disabled", true);
-    await expect(shell.locator(`${RECAP_EDITOR} prose-mirror`)).not.toHaveAttribute("collaborate", "");
+    // Read-only: the display alone - no editor to mount (so no collaborative
+    // join a non-owner would be refused), and a click into it opens nothing.
+    await expect(shell.locator(`${RECAP_EDITOR} template.mej-cc-editor-template`)).toHaveCount(0);
+    await shell.locator(`${RECAP_EDITOR} .editor-display`).click();
+    await settle(p1.page, 300);
+    await expect(shell.locator(RECAP_EDITOR)).not.toHaveClass(/editing/);
+    await expect(shell.locator(`${RECAP_EDITOR} prose-mirror`)).toHaveCount(0);
 
     await dropFileOnRecap(p1.page, { url: "icons/svg/mystery-man.svg", name: "TT-ignored.svg", type: "image/svg+xml" });
     await settle(p1.page, 1500);
@@ -251,9 +240,9 @@ test.describe("06 player collaboration", () => {
     const p2 = await newSeat(browser, "User 2");
     const p1Shell = await openSession(p1.page, entryId);
     const p2Shell = await openSession(p2.page, entryId);
-    await expect(p1Shell.locator(`${RECAP_EDITOR} prose-mirror`)).toHaveAttribute("collaborate", "");
 
     await typeIntoRecap(p1.page, p1Shell, " Alpha sentence from one.");
+    await expect(p1Shell.locator(`${RECAP_EDITOR} prose-mirror`)).toHaveAttribute("collaborate", "");
     await typeIntoRecap(p2.page, p2Shell, " Beta sentence from two.");
     // Each seat's editor receives the other's steps before either saves.
     await expect(p1Shell.locator(`${RECAP_EDITOR} prose-mirror`)).toContainText("Beta sentence from two.", { timeout: 10_000 });
@@ -311,7 +300,7 @@ test.describe("06 player collaboration", () => {
     await typeIntoRecap(p1.page, p1Shell, " Live update from one.");
     await commitRecap(p1.page, p1Shell);
 
-    // The GM never reopened the page: the hook re-rendered the shell.
+    // The GM never reopened the page: the hook repainted the idle recap in place.
     await expect(gmShell.locator(`${RECAP_EDITOR} .editor-display`)).toContainText("Live update from one.", { timeout: 10_000 });
     await expect(gmShell.locator(RECAP_EDITOR)).not.toHaveClass(/editing/);
 
@@ -336,13 +325,11 @@ test.describe("06 player collaboration", () => {
   });
 
   // Final-review fix wave, spec 2026-09-04 §A: the stale-field guard must not
-  // remove GM Notes' only save path. gmNotes has no toggle/collaborative join
-  // (unlike recap) - the pencil is purely a CSS show/hide, so on close,
-  // onEditGmNotes reads the editor's public `value` and assigns it back through
-  // the public setter, which stores it and fires the `change` that MEJ's
-  // submit-on-change form turns into the write (the editor's `save()` is
-  // private on Foundry 13, so it is not used).
-  test("GM notes commit on pencil close", async ({ page }) => {
+  // remove GM Prep's save path. GM Prep is always editable (spec 2026-10-19
+  // §4.4): a click into it mounts the editor, and leaving it (blur) writes
+  // system.gmNotes directly (session-autosave.mjs), never through MEJ's
+  // submit-on-change form.
+  test("GM notes commit on click-out", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const entryId = await createSession(page, `${TT_PREFIX}GM Notes Session`, "OBSERVER");
@@ -350,14 +337,14 @@ test.describe("06 player collaboration", () => {
     await shell.locator('nav.sheet-tabs a[data-tab="session"]').click();
     await settle(page, 200);
 
-    // In-page click, not locator.click(): the pencil is absolutely positioned
-    // inside MEJ's clipped scrolling session-details body, and Playwright's
-    // actionability check sees the scroll container intercepting the pointer
-    // even though the button is genuinely visible/clickable to a real user.
-    await shell.locator('button[data-action="editGmNotes"]').evaluate((b) => b.click());
+    // In-page click, not locator.click(): the editor sits inside MEJ's
+    // clipped scrolling session-details body, and Playwright's actionability
+    // check can see the scroll container intercepting the pointer even
+    // though the text is genuinely visible/clickable to a real user.
+    await shell.locator(".editor-parent[data-editor-id='gmNotes'] .editor-display").evaluate((d) => d.click());
     const editor = shell.locator(".editor-parent[data-editor-id='gmNotes'] prose-mirror");
     await expect(editor).toHaveClass(/active/, { timeout: 10_000 });
-    // Same clipped-scroll-container interception as the pencil above -
+    // Same clipped-scroll-container interception as the click above -
     // focus the element directly rather than a pointer click.
     // HTMLProseMirrorElement.focus() delegates to the live ProseMirror view
     // on Foundry 14 (foundry.mjs:97553) but has no override on Foundry 13,
@@ -369,7 +356,8 @@ test.describe("06 player collaboration", () => {
     await page.keyboard.press("End");
     await page.keyboard.type("Notes for next week.");
     await settle(page, 200);
-    await shell.locator('button[data-action="editGmNotes"]').evaluate((b) => b.click());
+    // Click out: the Details tab's own nav link.
+    await shell.locator('nav.sheet-tabs a[data-tab="session"]').click();
 
     await page.waitForFunction(
       (id) => game.journal.get(id)?.pages?.contents?.[0]?.system?.gmNotes?.includes("Notes for next week."),
@@ -393,15 +381,11 @@ test.describe("06 player collaboration", () => {
     const p1Shell = await openSession(p1.page, entryId);
     await typeIntoRecap(p1.page, p1Shell, " Left open when the shell closes.");
 
-    // Fire-and-forget: MEJ's close() awaits its own "unsaved changes"
-    // DialogV2.confirm before resolving (EnhancedJournalSheet.js), so
-    // awaiting the evaluate here would block until the dialog is answered -
-    // which is the very thing the next lines do.
+    // The editor saves itself on close (spec 2026-10-19 §4.4), so MEJ's
+    // "unsaved changes" question no longer appears: the window just closes.
     await p1.page.evaluate(() => { game.MonksEnhancedJournal.journal.close(); });
-    const unsavedDialog = p1.page.locator("dialog.application").last();
-    await expect(unsavedDialog).toBeVisible({ timeout: 10_000 });
-    await unsavedDialog.locator('button[data-action="yes"]').click();
     await expect(p1.page.locator("#MonksEnhancedJournal")).toHaveCount(0);
+    await expect(p1.page.locator("dialog.application")).toHaveCount(0);
 
     await reloadGame(p1.page);
     await p1.page.waitForFunction(

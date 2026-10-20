@@ -235,23 +235,23 @@ test.describe("01 session entries", () => {
     assertNoConsoleErrors(errors);
   });
 
-  test("recap editor: header edit button opens it, and the base-class editor context menu doesn't error (smoke)", async ({ page }) => {
+  test("recap editor: clicking into the recap opens it, and the base-class editor context menu doesn't error (smoke)", async ({ page }) => {
     const errors = trackConsoleErrors(page, { ignore: IGNORE });
     await login(page, "Gamemaster");
     const name = `${TT_PREFIX}Session Recap Editor`;
     const entryId = await createSessionEntry(page, name);
     const shell = page.locator("#MonksEnhancedJournal");
 
-    // ⚠️ parked item: header edit button opens the recap editor.
+    // Always editable (spec 2026-10-19 §4.4): no pencil - a click into the
+    // recap's text opens the editor.
     const editorParent = shell.locator('.editor-parent[data-editor-id="recap"]');
     await expect(editorParent).not.toHaveClass(/editing/);
-    await shell.locator('button[data-action="editRecap"]').click();
+    await editorParent.locator(".editor-display").click();
     await settle(page, 200);
     await expect(editorParent).toHaveClass(/editing/);
-    // The recap prose-mirror is `toggled` (spec 2026-09-04 §A): the pencil
-    // only flips `open`, and activation (constructing the ProseMirror view)
-    // happens asynchronously from there - wait for it before interacting,
-    // rather than trusting the fixed settle above.
+    // The editor is mounted on the click and activates (constructing the
+    // ProseMirror view, plus the collaborative join) asynchronously - wait
+    // for it before interacting, rather than trusting the fixed settle above.
     await expect(editorParent.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
 
     // ⚠️ parked item: base-class editor context menu on system.recap — smoke

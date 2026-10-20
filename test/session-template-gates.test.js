@@ -74,3 +74,39 @@ describe("session.hbs header (spec 2026-10-19 §4.2)", () => {
     expect(headerTpl).toContain('class="mej-cc-session-attendees"');
   });
 });
+
+describe("session.hbs always-editable text (spec 2026-10-19 §4.4)", () => {
+  const editorBlock = (id) => {
+    const at = tpl.indexOf(`data-editor-id="${id}"`);
+    return at === -1 ? "" : tpl.slice(tpl.lastIndexOf("<div", at), tpl.indexOf("{{!-- /editor --}}", at));
+  };
+  it("no editor is toggled and none has an edit button", () => {
+    expect(tpl).not.toMatch(/<prose-mirror[^>]*\btoggled\b/);
+    expect(tpl).not.toContain("editor-edit");
+    expect(tpl).not.toContain('data-action="editRecap"');
+    expect(tpl).not.toContain('data-action="editGmNotes"');
+  });
+  it("Recap, GM Prep and My Notes each carry a display, an editor and a save indicator", () => {
+    for (const id of ["recap", "gmNotes", "myNotes"]) {
+      const block = editorBlock(id);
+      expect(block, id).toContain("editor-display");
+      expect(block, id).toContain("<prose-mirror");
+      expect(block, id).toContain("mej-cc-save-state");
+    }
+  });
+  it("the recap editor renders only for who may edit it, collaborative for owners", () => {
+    const block = editorBlock("recap");
+    const pm = block.indexOf("<prose-mirror");
+    expect(block.slice(0, pm)).toContain("{{#if editable}}");
+    expect(block.slice(pm, block.indexOf(">", pm))).toContain("{{#if owner}} collaborate{{/if}}");
+  });
+  it("My Notes is the module's own block with the full-ink hint, not MEJ's sheet-notes partial", () => {
+    expect(tpl).not.toContain("sheet-notes.hbs");
+    const notesTab = tpl.slice(tpl.indexOf('data-tab="notes"'));
+    expect(notesTab).toContain("{{localize 'MEJCampaignCompanion.session.myNotesHint'}}");
+    expect(notesTab).toContain('data-editor-id="myNotes"');
+    // Not a document field: its saves go through MEJ's per-user path, never the sheet's form.
+    const block = editorBlock("myNotes");
+    expect(block.slice(block.indexOf("<prose-mirror"), block.indexOf(">", block.indexOf("<prose-mirror")))).not.toContain("name=");
+  });
+});

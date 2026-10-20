@@ -94,8 +94,26 @@ test.describe("40 session page", () => {
     await settle(player.page, 800);
     await expect(playerStatus()).toHaveCount(0, { timeout: 15_000 });
 
-    // The rename re-rendered the sheet; let it finish before clicking its header.
-    await settle(gm.page, 1500);
+    // With the Links rail open the recap stays inside the Recap tab: below the
+    // header, left of the rail, and nothing covers the header's Start button
+    // (a second, standalone Session sheet used to sit over the shell after a
+    // start - its recap took this click).
+    await gm.page.evaluate(() => game.settings.set("mej-campaign-companion", "knowledgePanelCollapsed", false));
+    await openSession(s9.id);
+    await expect(shell().locator(".mej-cc-knowledge:not(.collapsed)")).toHaveCount(1, { timeout: 15_000 });
+    const layout = await gm.page.evaluate(() => {
+      const box = (sel) => document.querySelector(`#MonksEnhancedJournal ${sel}`)?.getBoundingClientRect();
+      const recap = box(".session-container .editor-parent[data-editor-id='recap']");
+      const head = box(".session-container .mej-cc-session-header");
+      const rail = box(".mej-cc-knowledge");
+      const button = document.querySelector("#MonksEnhancedJournal .mej-cc-session-header .mej-cc-session-button");
+      const b = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+      return { recapTop: recap.top, recapRight: recap.right, headerBottom: head.bottom, railLeft: rail.left, buttonHit: button.contains(hit) };
+    });
+    expect(layout.recapTop).toBeGreaterThanOrEqual(layout.headerBottom);
+    expect(layout.recapRight).toBeLessThanOrEqual(layout.railLeft);
+    expect(layout.buttonHit).toBe(true);
     await header().locator('[data-action="startSession"]').click();
     const dialog = gm.page.locator("dialog.application", { hasText: "Start this session?" });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
@@ -342,5 +360,115 @@ test.describe("40 session page", () => {
     expect(await popoutCount()).toBe(before + 1);
     assertNoConsoleErrors(gm.errors);
     assertNoConsoleErrors(player.errors);
+  });
+
+  // Spec 2026-10-19 §4.4: always-editable text with autosave.
+  const newSession = (name, n) => gm.page.evaluate(async ({ folder, name, n }) => {
+    const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
+    const e = await JournalEntry.create({ name, folder, ownership: { default: 2 }, pages: [buildSessionPageData(name, "<p>Opening line.</p>", null, n)] });
+    return { id: e.id, uuid: e.pages.contents[0].uuid, name };
+  }, { folder: campaignId, name, n });
+  const editorOf = (page, id) => page.locator(`#MonksEnhancedJournal .session-container .editor-parent[data-editor-id="${id}"]`);
+
+  test("typing survives a live note", async () => {
+    test.setTimeout(150_000);
+    const s12 = await newSession(`${PREFIX} S12`, 12);
+    await openSession(s12.id);
+    await header().locator('[data-action="startSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBe(s12.uuid);
+    // The player can file notes into this campaign (the GM seat owns the notes entry's ownership sync).
+    const playerId = await player.page.evaluate(() => game.user.id);
+    await expect.poll(() => gm.page.evaluate(({ MOD, folderId, playerId }) => {
+      const e = game.journal.find((j) => j.flags?.[MOD]?.notesEntry === true && j.folder?.id === folderId);
+      return e?.ownership?.[playerId] ?? null;
+    }, { MOD, folderId: campaignId, playerId }), { timeout: 30_000 }).toBe(3);
+
+    // The GM clicks into the recap - no pencil - and types.
+    const recap = editorOf(gm.page, "recap");
+    await recap.locator(".editor-display").click();
+    await expect(recap.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
+    await gm.page.keyboard.type(" The GM is mid-sentence");
+
+    // A player files /note into the live session while the GM is typing.
+    const noteText = `${PREFIX} the bridge is out`;
+    await player.page.evaluate((text) => ui.chat.processMessage(`/note ${text}`), noteText);
+    await expect(shell().locator(".session-container .mej-cc-table-talk .mej-cc-note", { hasText: noteText })).toHaveCount(1, { timeout: 20_000 });
+
+    // Nothing re-rendered under the GM: the text, the focus and the editor are all still there.
+    await expect(recap).toHaveClass(/\bediting\b/);
+    await expect(recap.locator("prose-mirror .editor-content")).toContainText("The GM is mid-sentence");
+    expect(await gm.page.evaluate(() => !!document.activeElement?.closest?.("#MonksEnhancedJournal .editor-parent[data-editor-id='recap'] prose-mirror"))).toBe(true);
+    await gm.page.keyboard.type(" and keeps going.");
+
+    // Clicking out saves it.
+    await header().locator(".mej-cc-session-meta").click();
+    await expect.poll(() => recapOf(s12.uuid), { timeout: 15_000 }).toContain("The GM is mid-sentence and keeps going.");
+    await expect(recap).not.toHaveClass(/\bediting\b/);
+    await expect(recap.locator(".mej-cc-save-state")).toHaveText("Saved", { timeout: 10_000 });
+    await expect(recap.locator(".editor-display")).toContainText("and keeps going.");
+
+    await header().locator('[data-action="endSession"]').click();
+    await expect.poll(currentUuid, { timeout: 20_000 }).toBeNull();
+    assertNoConsoleErrors(gm.errors);
+    assertNoConsoleErrors(player.errors);
+  });
+
+  test("close saves", async () => {
+    test.setTimeout(120_000);
+    const s13 = await newSession(`${PREFIX} S13`, 13);
+    await openSession(s13.id);
+    await shell().locator('nav.sheet-tabs a[data-tab="session"]').click();
+    const prep = editorOf(gm.page, "gmNotes");
+    await prep.locator(".editor-display").click();
+    await expect(prep.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
+    await gm.page.keyboard.type("Prep: the ferryman owes the duke.");
+    // Close the whole MEJ window at once: no "unsaved changes" question, and the text is kept.
+    await gm.page.evaluate(() => game.MonksEnhancedJournal.journal.close());
+    await expect(shell()).toHaveCount(0, { timeout: 10_000 });
+    await expect(gm.page.locator("dialog.application")).toHaveCount(0);
+    await expect.poll(() => gm.page.evaluate(async (uuid) => (await fromUuid(uuid))?.system?.gmNotes ?? "", s13.uuid), { timeout: 15_000 })
+      .toContain("Prep: the ferryman owes the duke.");
+    await openSession(s13.id);
+    await shell().locator('nav.sheet-tabs a[data-tab="session"]').click();
+    await expect(editorOf(gm.page, "gmNotes").locator(".editor-display")).toContainText("Prep: the ferryman owes the duke.");
+    assertNoConsoleErrors(gm.errors);
+  });
+
+  // Last: it logs the GM out and back in.
+  test("My Notes without a GM", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const s14 = await newSession(`${PREFIX} S14`, 14);
+    const playerId = await player.page.evaluate(() => game.user.id);
+    // A view-only page for the player: My Notes saves go through MEJ's GM relay.
+    expect(await player.page.evaluate(async (uuid) => (await fromUuid(uuid))?.isOwner, s14.uuid)).toBe(false);
+    await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s14.uuid);
+    await expect(player.page.locator("#MonksEnhancedJournal .session-container .mej-cc-session-header")).toHaveCount(1, { timeout: 15_000 });
+
+    // The GM leaves.
+    await gm.context.close();
+    await expect.poll(() => player.page.evaluate(() => !!game.users.activeGM), { timeout: 20_000 }).toBe(false);
+
+    const pShell = player.page.locator("#MonksEnhancedJournal");
+    await pShell.locator('nav.sheet-tabs a[data-tab="notes"]').click();
+    await expect(pShell.locator(".mej-cc-my-notes-hint")).toHaveText("These notes can only be seen by you.");
+    const notes = editorOf(player.page, "myNotes");
+    await notes.locator(".editor-display").click();
+    await expect(notes.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
+    await player.page.keyboard.type("Ask about the second key.");
+    await pShell.locator(".mej-cc-my-notes-hint").click();
+    await expect(notes.locator(".mej-cc-save-state")).toHaveText("Can't save until a GM connects", { timeout: 10_000 });
+    await expect(notes.locator(".editor-display")).toContainText("Ask about the second key.");
+
+    // The GM comes back: the draft is saved without the player doing anything.
+    const context = await browser.newContext(VIEWPORT);
+    const page = await context.newPage();
+    gm = { context, page, errors: trackConsoleErrors(page, { ignore: IGNORE }) };
+    await login(page, "Gamemaster");
+    await expect.poll(() => gm.page.evaluate(async ({ uuid, playerId }) =>
+      foundry.utils.getProperty(await fromUuid(uuid), `flags.monks-enhanced-journal.${playerId}.notes`) ?? "", { uuid: s14.uuid, playerId }), { timeout: 10_000 })
+      .toContain("Ask about the second key.");
+    await expect(editorOf(player.page, "myNotes").locator(".mej-cc-save-state")).toHaveText("Saved", { timeout: 10_000 });
+    assertNoConsoleErrors(player.errors);
+    assertNoConsoleErrors(gm.errors);
   });
 });

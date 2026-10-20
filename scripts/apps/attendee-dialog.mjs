@@ -4,6 +4,7 @@ import { MODULE_ID, I18N } from "../constants.mjs";
 import { attendeeChoices } from "../logic/attendee-choices.mjs";
 import { campaignOf, campaignFlagOf, contributorsOf } from "../logic/campaigns.mjs";
 import { sessionData } from "../sheets/session-data.mjs";
+import { patchSessionRegions } from "../sheets/session-regions.mjs";
 
 const FALLBACK_IMG = "icons/svg/mystery-man.svg";
 const SEARCH_LIMIT = 10;
@@ -56,7 +57,7 @@ export async function openAttendeeDialog(sheet) {
         callback: async (event, button, dialog) => {
           const uuids = [...dialog.element.querySelectorAll("input[name='attendee']:checked")].map((i) => i.value);
           await document.update({ [`flags.${MODULE_ID}.session.attendees`]: uuids });
-          sheet.render();
+          patchSessionRegions(sheet);
         }
       },
       { action: "cancel", icon: "fa-solid fa-xmark", label: game.i18n.localize("Cancel") }

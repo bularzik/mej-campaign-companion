@@ -1,8 +1,7 @@
 .mej-campaign-companion {}
 
-/* Session sheet: MEJ's .editor-edit pencil is absolutely positioned against
-   whatever ancestor happens to be positioned. Give each editor parent its
-   own context so the recap and GM-notes pencils sit on their own editors. */
+/* Session sheet: each editor block is its own positioning context (MEJ
+   positions editor chrome absolutely against the nearest one). */
 .session-container .editor-parent {
   position: relative;
 }
@@ -98,14 +97,45 @@
   min-height: 14em;
 }
 
-/* The recap prose-mirror is `toggled` (session.hbs's comment explains why),
-   so Foundry's own HTMLProseMirrorElement builds itself a second, native
-   edit/save toggle button (prosemirror-editor.mjs #_buildElements,
-   `button.icon.toggle`) alongside our own pencil (data-action="editRecap").
-   SessionSheet.onEditRecap drives `open` itself, so that native button is
-   pure redundant chrome once mounted inside .editor-control - hide it. */
-.session-container .editor-parent[data-editor-id='recap'] .editor-control prose-mirror > button.icon.toggle {
-  display: none;
+/* Always-editable Recap, GM Prep and My Notes (spec 2026-10-19 §4.4,
+   session-autosave.mjs): the enriched display until the user clicks into it,
+   then the live editor in its place (MEJ's own `.editing` swap, restated here
+   so a popped-out sheet gets it too), and a one-line save indicator under it.
+   The display shares the block with that line, so it takes the remaining
+   height instead of MEJ's height:100%. The formatting toolbar shows only
+   while the editor has focus. */
+.session-container .editor-parent[data-editor-id] > .editor.editor-display {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+.session-container .editor-parent[data-editor-id]:not(.editing) > .editor.editor-display[tabindex] { cursor: text; }
+.session-container .editor-parent[data-editor-id].editing > .editor.editor-display { display: none; }
+.session-container .editor-parent[data-editor-id]:not(.editing) > .editor-control { display: none; }
+.session-container .editor-parent[data-editor-id] > .editor-control {
+  flex: 1 1 auto;
+  min-height: 0;
+  outline: none;
+}
+.session-container .editor-parent[data-editor-id]:not(:focus-within) > .editor-control prose-mirror .editor-menu { display: none; }
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  min-height: 1.4em;
+  padding: 0 6px;
+  font-size: var(--font-size-12, 12px);
+  line-height: 1.4em;
+  color: var(--mej-cc-ink-muted);
+}
+.session-container .editor-parent[data-editor-id] > .mej-cc-save-state:is([data-state="failed"], [data-state="noGM"]) {
+  color: var(--mej-cc-ink);
+  font-weight: bold;
+}
+/* My Notes: the module's own hint, at full ink (MEJ's OnlyViewable line is faint). */
+.session-container .mej-cc-my-notes-hint {
+  flex: 0 0 auto;
+  margin: 4px 2px 6px;
+  color: var(--mej-cc-ink);
 }
 
 /* L3. The same height:100% chain (.editor-parent, then .editor.editor-display

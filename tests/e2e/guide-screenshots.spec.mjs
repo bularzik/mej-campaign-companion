@@ -1540,34 +1540,30 @@ async function capturePlayerShots(page) {
   // entire gm-notes block behind `{{#if @root.isGM}}` on the SESSION tab
   // (a different tab from "description"), so this shot is structurally
   // GM-content-free for any non-GM viewer regardless of what's captured.
-  // The recap section's pencil icon (editor-edit) is visible because
-  // SessionSheet.mjs's onEditRecap only gates on isEditable — User 1 owns
-  // the entry (seeded above), so the pencil on the shared recap renders
-  // enabled, matching the brief's "recap field editable" subject.
+  // The shared recap is always editable for its owners (spec 2026-10-19
+  // §4.4) — User 1 owns the entry (seeded above), so a click into the text
+  // opens the editor, matching the brief's "recap field editable" subject.
   const sessionShell = await openEntry(page, demo.sessionId);
   await sessionShell.locator('a[data-action="tab"][data-tab="description"]').click();
   await settle(page, 300);
   await shot(sessionShell, "session-sheet-player");
 
-  // The shared recap, mid-edit from User 1's seat: toggle the editRecap
-  // pencil (MEJ's shared `.editor-parent.editing` show/hide CSS), click
-  // into the now-visible <prose-mirror> and type an addition so the shot
+  // The shared recap, mid-edit from User 1's seat: click into the text (the
+  // editor mounts in place of the display - MEJ's shared
+  // `.editor-parent.editing` show/hide CSS) and type an addition so the shot
   // shows a real in-progress editing state.
   const recapSection = sessionShell.locator(".editor-parent[data-editor-id='recap']");
-  await recapSection.locator('button[data-action="editRecap"]').click();
+  await recapSection.locator(".editor-display").click();
   await settle(page, 300);
   await expect(recapSection).toHaveClass(/editing/);
-  const recapEditor = recapSection.locator("prose-mirror .editor-content, prose-mirror");
-  await recapEditor.first().click();
+  await expect(recapSection.locator("prose-mirror")).toHaveClass(/active/, { timeout: 10_000 });
   await page.keyboard.press("End");
   await page.keyboard.type(" Someone should ask the harbor guard directly.");
   await settle(page, 300);
   await shot(sessionShell, "recap-editing");
-  // Toggle back off before moving on - tidy state, not load-bearing. The
-  // inline pencil is hidden by MEJ's `.editor-parent.editing .editor-edit`
-  // CSS while the editor is open, so close through the shell header's edit
-  // control (same route 06-player-collab's commitRecap takes).
-  await sessionShell.locator('.nav-button.edit[data-action="editRecap"]').click();
+  // Click out before moving on (it saves) - tidy state, not load-bearing;
+  // same route 06-player-collab's commitRecap takes.
+  await sessionShell.locator('nav.sheet-tabs a[data-tab="description"]').click();
   await settle(page, 300);
 
   // The revealed block secret, on the Quest entry (per this file's

@@ -138,14 +138,13 @@ async function closeDialogs(page) {
 }
 
 /**
- * Put one of the session sheet's editors into edit mode via its pencil, wait for ProseMirror to
- * mount and type some text. Returns the selector of the editing region. The editor is left open
- * (the next surface closes the shell).
+ * Put one of the session sheet's editors into edit mode by clicking into its text (always
+ * editable, spec 2026-10-19 §4.4), wait for ProseMirror to mount and type some text. Returns the
+ * selector of the editing region. The editor is left open (the next surface closes the shell).
  */
 async function enterEditMode(page, editorId) {
   const parent = `#MonksEnhancedJournal .session-container .editor-parent[data-editor-id='${editorId}']`;
-  // A reopened sheet can still be in edit mode from the last pass, and then the pencil is hidden.
-  if (!await page.locator(`${parent}.editing`).count()) await page.locator(`${parent} button.editor-edit`).first().click();
+  if (!await page.locator(`${parent}.editing`).count()) await page.locator(`${parent} .editor-display`).first().click();
   await page.waitForSelector(`${parent}.editing .editor-control .ProseMirror`, { timeout: 15_000 });
   await page.locator(`${parent} .editor-control .ProseMirror`).first().click();
   await page.keyboard.type("Edit mode readability text");
@@ -521,6 +520,8 @@ test.describe("29 readability", () => {
           }, sessionDetailsRoots(S));
           await check(`${bg}: session recap`, () => sheetTab(page, "description"), `${S} .session-container`);
           await check(`${bg}: session table talk`, () => openTableTalk(page), `${S} .session-container .mej-cc-table-talk`);
+          // My Notes (spec 2026-10-19 §4.4): the module's own hint, at full ink.
+          await check(`${bg}: session my notes`, () => sheetTab(page, "notes"), `${S} .session-container .tab[data-tab='notes']`);
           await check(`${bg}: person page`, async () => {
             await openEntry(page, seed.personId);
             await page.waitForSelector(`${S} .mej-cc-knowledge`, { timeout: 15_000 });
