@@ -27,4 +27,7 @@ describe("shouldRefreshForRecap", () => {
   it("rejects suffix-only matches (pageId without delimiter boundary)", () => {
     expect(shouldRefreshForRecap({ changes, activeEntityId: "JournalEntry.a.JournalEntryPage.Xp1", pageId: "p1", editing: false })).toBe(false);
   });
+  it("never refreshes a Session page view: its regions are patched in place instead", () => {
+    expect(shouldRefreshForRecap({ changes, activeEntityId: "JournalEntry.a.JournalEntryPage.p1", pageId: "p1", editing: false, isSessionView: true })).toBe(false);
+  });
 });

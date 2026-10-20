@@ -9,6 +9,8 @@ export const NOTE_DRAFTS = new Map();
 
 export const tonightDraftKey = () => "hub-tonight";
 export const sessionDraftKey = (uuid) => `session:${uuid}`;
+/** My Notes typed while no GM could save them (spec 2026-10-19 §4.4). */
+export const myNotesDraftKey = (uuid) => `mynotes:${uuid}`;
 
 function remember(input, drafts, key) {
   const value = input.value ?? "";
