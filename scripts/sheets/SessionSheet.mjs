@@ -288,7 +288,9 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     // Anywhere a GM would naturally drop a character: the header and the two
     // prose tabs. Relationships and the editors keep their own drops (§4.6).
-    this._attendeeDropZone(".mej-cc-session-header, .tab[data-tab='description'], .tab[data-tab='session']").bind(html);
+    // The header is a live region (session-regions.mjs), so _bindRegions binds
+    // its drop, once, on every render and after every patch.
+    this._attendeeDropZone(".tab[data-tab='description'], .tab[data-tab='session']").bind(html);
 
     // Image files dropped on the shared recap (spec 2026-09-04 §A). Owners
     // only - the editor is read-only for everyone else. File drops carry no
@@ -413,7 +415,10 @@ export class SessionSheet extends EnhancedJournalSheet {
     if (!doc) return;
 
     const session = sessionData(this.document);
-    if (session.attendees.includes(doc.uuid)) return;
+    if (session.attendees.includes(doc.uuid)) {
+      ui.notifications.info(game.i18n.format(`${I18N}.session.attendeeAlready`, { name: doc.name }));
+      return;
+    }
 
     const attendees = [...session.attendees, doc.uuid];
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });

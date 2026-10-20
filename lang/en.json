@@ -183,6 +183,7 @@
       "attendeesAllPlayers": "No Contributors are set for this campaign, so all players' characters are listed.",
       "attendeesNone": "No player characters found — use search to add attendees.",
       "attendeeAdded": "Added {name}",
+      "attendeeAlready": "{name} is already attending",
       "secrets": "Secrets & clues",
       "addSecret": "Add secret",
       "deleteSecret": "Delete secret",

@@ -290,6 +290,19 @@ test.describe("40 session page", () => {
       await settle(gm.page, 1000);
       await expect(chips()).toHaveCount(2);
       expect(await chipNames()).not.toContain(`${PREFIX} Elsewhere`);
+
+      // The header takes a drop through one handler: one chip, one notice.
+      const toasts = (text) => gm.page.locator("#notifications .notification", { hasText: text });
+      await drop(".session-container .mej-cc-session-header", setup.fourth);
+      await expect(chips()).toHaveCount(3, { timeout: 15_000 });
+      await settle(gm.page, 1000);
+      await expect(toasts(`Added ${PREFIX} Elsewhere`)).toHaveCount(1);
+      // Dropping someone already attending says so, once, and adds nothing.
+      await drop(".session-container .mej-cc-session-header", setup.fourth);
+      await expect(toasts(`${PREFIX} Elsewhere is already attending`)).toHaveCount(1, { timeout: 10_000 });
+      await settle(gm.page, 1000);
+      await expect(toasts(`${PREFIX} Elsewhere is already attending`)).toHaveCount(1);
+      await expect(chips()).toHaveCount(3);
       assertNoConsoleErrors(gm.errors);
     } finally {
       await gm.page.evaluate(async ({ MOD, folderId, saved }) => {
