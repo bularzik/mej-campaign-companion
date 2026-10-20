@@ -13,7 +13,7 @@ The Session page is redesigned to sit on Monk's Enhanced Journal's own look and 
 
 ### Changed
 - Session tabs are **Recap**, **Details** (was "Session"), **Relationships** and **My Notes**. **GM Prep** (was "GM Notes") and **Secrets & clues** are collapsible sections on Details; the attendee list moved to the header.
-- Recap, GM Prep and My Notes are always editable: no pencil, no Save button. They save on blur, tab switch, close and periodically; live Table talk, attendee, status and Secrets & clues changes (a reveal shows on a player's open Details tab) no longer re-render an editor that has focus.
+- Recap, GM Prep and My Notes are always editable: no pencil, no Save button. They save on blur, tab switch, close and periodically; live Table talk, attendee and status changes no longer re-render an editor that has focus. A reveal shows on a player's open Details tab at once, and Secrets & clues stays folded if they folded it.
 - **End session** shows no dialog; the end-of-session recap draft is now **add to recap** on Table talk.
 - The Knowledge panel is the **Links** rail, collapsing to a folder tab reading "Links (N)" with one total count; its notes section is "Notes that mention this".
 - The Session sheet draws on MEJ's own background, and its ink follows the sheet background in both colour schemes.
