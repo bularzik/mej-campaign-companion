@@ -403,10 +403,13 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   editor.setAttribute("value", editorValue(page, editorId));
   const st = { pageUuid: page.uuid, editorId, baseline: undefined, view: null, retiring: false, buffer: "" };
   EDITORS.set(editor, st);
+  if (editor.hasAttribute("collaborate")) st.instance = `${page.uuid}#${editor.getAttribute("name")}`;
 
   // Capture the view through core's documented plugin hook (prosemirror-editor.mjs
   // _configurePlugins dispatches "plugins" with the plugin record it will use).
   editor.addEventListener("plugins", (event) => {
+    // Core emits pm.editDocument right after this event, in the same task.
+    if (st.instance) trackJoin(editor, st);
     event.plugins.mejCcSessionEditor = new ProseMirror.Plugin({
       view: (view) => {
         st.view = view;
@@ -420,6 +423,7 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
     // A collaborative join can finish after the user has already clicked away
     // (or a re-render, a tab switch, a close or the join timeout removed the
     // editor): end it, so no server authority outlives it.
+    untrackJoin(st);
     if (!editor.isConnected || st.retiring) return retireAbandonedEditor(editor, st);
     if (parent.classList.contains("editing")) placeCaret(st, { coords, selection });
   });
@@ -442,6 +446,7 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
     st.retiring = true;
     parent.classList.remove("editing");
     editor.remove();
+    endAbandonedJoin(editor, st);
     if (display && display.hasAttribute("tabindex")) display.tabIndex = 0;
     if (typeof html === "string") refreshDisplay(parent, page, editorId, html);
   }, JOIN_TIMEOUT_MS);
@@ -454,9 +459,63 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   if (display) display.tabIndex = -1;
 }
 
+// --- Abandoned collaborative joins ------------------------------------------------
+// The server adds this user to a field's editing session (its ProseMirror
+// authority) as soon as pm.editDocument arrives, before the client has a view.
+// If the <prose-mirror> leaves the page while that join is in flight (a
+// click-away within the join's latency, a tab or sheet re-render, a close, the
+// join timeout), core's activation then throws on the detached element (its
+// menu looks itself up with document.getElementById), so no editor instance
+// exists, nothing calls destroy(), and pm.endSession is never sent. The
+// authority would stay alive and its periodic autosave would write its stale
+// copy over every later write to the field (Add to recap, an image drop,
+// salvaged keystrokes). The server confirms the join with a pm.usersEditing
+// broadcast to everyone in the session, this user included; an abandoned
+// join is ended from there (or at once, if that broadcast already came).
+
+/** instance ("<pageUuid>#system.recap") -> Set of { editor, st } joins still in flight. */
+const JOINS = new Map();
+
+function trackJoin(editor, st) {
+  if (!JOINS.has(st.instance)) JOINS.set(st.instance, new Set());
+  st.join = { editor, st };
+  JOINS.get(st.instance).add(st.join);
+}
+
+function untrackJoin(st) {
+  if (!st.join) return;
+  JOINS.get(st.instance)?.delete(st.join);
+  if (!JOINS.get(st.instance)?.size) JOINS.delete(st.instance);
+  st.join = null;
+}
+
+/** The editor left the page before its join went live: end the server session once the server has it. */
+function endAbandonedJoin(editor, st) {
+  if (!st.instance || !st.join || st.baseline !== undefined) return;
+  if (!st.registered) return; // onUsersEditing ends it when the server's confirmation arrives
+  untrackJoin(st);
+  // Another editor of this field in this client holds the same per-user session.
+  if (liveSiblingOf(editor, st)) return;
+  try {
+    game.socket.emit("pm.endSession", st.instance);
+  } catch (err) {
+    console.error(`${MODULE_ID} | ending the abandoned ${st.editorId} editing session failed`, err);
+  }
+}
+
+function onUsersEditing(instance, users) {
+  const joins = JOINS.get(instance);
+  if (!joins || !users?.includes?.(game.user.id)) return;
+  for (const { editor, st } of [...joins]) {
+    st.registered = true;
+    if (!editor.isConnected || st.retiring) endAbandonedJoin(editor, st);
+  }
+}
+
 /**
  * A collaborative join that went live on an editor already taken out of the
- * page. The server registered this user on `pm.editDocument` before the
+ * page (defensive: on Foundry 13.351 and 14.368 that activation throws
+ * instead, see above). The server registered this user on `pm.editDocument` before the
  * client had a view, but core's disconnectedCallback skipped
  * `#editor.destroy()` (the editor was not active yet when it left), so
  * `pm.endSession` was never sent. That authority would stay alive and its
@@ -543,6 +602,7 @@ export function exitEditing(parent, trigger = "blur") {
   }
   parent.classList.remove("editing");
   editor?.remove();
+  if (editor && st) endAbandonedJoin(editor, st);
   if (display && display.hasAttribute("tabindex")) display.tabIndex = 0;
   if (st && typeof html === "string") refreshDisplay(parent, pageOf(st.pageUuid), st.editorId, html);
 }
@@ -777,6 +837,13 @@ export function registerSessionAutosave() {
       console.error(`${MODULE_ID} | restoring unsaved Session text failed`, err);
     }
   }, 1000));
+  Hooks.once("ready", () => {
+    try {
+      game.socket.on("pm.usersEditing", onUsersEditing);
+    } catch (err) {
+      console.error(`${MODULE_ID} | watching collaborative joins failed`, err);
+    }
+  });
   Hooks.on("userConnected", (user, connected) => {
     if (!connected || !user?.isGM) return;
     // The GM's client is still loading when its socket connects; relayMyNotes repeats until it lands.
