@@ -410,6 +410,14 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
   editor.addEventListener("plugins", (event) => {
     // Core emits pm.editDocument right after this event, in the same task.
     if (st.instance) trackJoin(editor, st);
+    // Core's menu renders by looking itself up with document.getElementById,
+    // which throws (an uncaught error) when the join lands on an editor that
+    // already left the page. Such an editor gets no menu; it is retired on
+    // "open" below.
+    const menuView = event.plugins.menu?.spec?.view;
+    if (typeof menuView === "function") {
+      event.plugins.menu.spec.view = (view) => (editor.isConnected ? menuView(view) : {});
+    }
     event.plugins.mejCcSessionEditor = new ProseMirror.Plugin({
       view: (view) => {
         st.view = view;
@@ -463,15 +471,18 @@ export function enterEditing(parent, { coords = null, selection = null } = {}) {
 // The server adds this user to a field's editing session (its ProseMirror
 // authority) as soon as pm.editDocument arrives, before the client has a view.
 // If the <prose-mirror> leaves the page while that join is in flight (a
-// click-away within the join's latency, a tab or sheet re-render, a close, the
-// join timeout), core's activation then throws on the detached element (its
-// menu looks itself up with document.getElementById), so no editor instance
-// exists, nothing calls destroy(), and pm.endSession is never sent. The
-// authority would stay alive and its periodic autosave would write its stale
-// copy over every later write to the field (Add to recap, an image drop,
-// salvaged keystrokes). The server confirms the join with a pm.usersEditing
-// broadcast to everyone in the session, this user included; an abandoned
-// join is ended from there (or at once, if that broadcast already came).
+// click-away within the join's latency, a sheet re-render, a close, the join
+// timeout), core's disconnectedCallback skips destroy() (the editor was not
+// active yet) and, unaided, its activation then throws on the detached element
+// (its menu looks itself up with document.getElementById): no editor instance,
+// no destroy(), and pm.endSession is never sent. The authority would stay
+// alive and its periodic autosave would write its stale copy over every later
+// write to the field (Add to recap, an image drop, salvaged keystrokes).
+// Two guards, each enough on its own: the server confirms a join with a
+// pm.usersEditing broadcast to everyone in the session, this user included,
+// and an abandoned join is ended from there (or at once, if that broadcast
+// already came); and the menu is skipped on a detached editor, so the
+// activation completes and "open" retires it through core's own destroy().
 
 /** instance ("<pageUuid>#system.recap") -> Set of { editor, st } joins still in flight. */
 const JOINS = new Map();
@@ -514,17 +525,13 @@ function onUsersEditing(instance, users) {
 
 /**
  * A collaborative join that went live on an editor already taken out of the
- * page (defensive: on Foundry 13.351 and 14.368 that activation throws
- * instead, see above). The server registered this user on `pm.editDocument` before the
- * client had a view, but core's disconnectedCallback skipped
- * `#editor.destroy()` (the editor was not active yet when it left), so
- * `pm.endSession` was never sent. That authority would stay alive and its
- * periodic autosave would write its stale copy over every later write to the
- * field (Add to recap, an image drop, salvaged keystrokes). Putting the
- * element back for a moment and taking it out again runs core's own
- * disconnect with the editor active: its save is intercepted (a no-op while
- * retiring) and destroy() sends pm.endSession (Foundry 13 and 14 alike).
- * Anything still typed into the join buffer is saved first.
+ * page (its menu skipped, see the "plugins" listener). Putting the element
+ * back for a moment and taking it out again runs core's own disconnect with
+ * the editor active: its save is intercepted (a no-op while retiring) and
+ * destroy() sends pm.endSession (Foundry 13 and 14 alike). A second
+ * pm.endSession after onUsersEditing's is harmless: the server ignores a user
+ * who is no longer in the session. Anything still in the join buffer is
+ * saved first.
  */
 function retireAbandonedEditor(editor, st) {
   if (st.buffer) salvageBuffer(st);
