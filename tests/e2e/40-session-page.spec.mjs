@@ -4,7 +4,7 @@
 import { test, expect } from "@playwright/test";
 import {
   login, withGmPage, trackConsoleErrors, assertNoConsoleErrors, settle,
-  createTtCampaign, deleteFoldersById, deleteJournalsByPrefix, cleanupStrandedTestFolders,
+  createTtCampaign, deleteFoldersById, deleteJournalsByPrefix, deleteActorsByPrefix, cleanupStrandedTestFolders,
   KNOWN_MEJ_SESSION_ICON_404
 } from "./helpers/foundry.mjs";
 
@@ -66,6 +66,7 @@ test.describe("40 session page", () => {
     await withGmPage(browser, async (p) => {
       await deleteFoldersById(p, [campaignId]);
       await deleteJournalsByPrefix(p, PREFIX);
+      await deleteActorsByPrefix(p, PREFIX);
       await cleanupStrandedTestFolders(p, { prefix: PREFIX });
     });
   });
@@ -181,5 +182,81 @@ test.describe("40 session page", () => {
     await settle(gm.page, 500);
     expect(await recapOf(s9.uuid)).toBe(both);
     assertNoConsoleErrors(gm.errors);
+  });
+  // Spec 2026-10-19 §4.6: chips in the header, the checklist, drop anywhere.
+  test("attendee checklist", async () => {
+    test.setTimeout(150_000);
+    const chips = () => header().locator(".mej-cc-attendee-chip");
+    const chipNames = () => chips().locator(".mej-cc-attendee-name").allTextContents();
+    // Two players become contributors with an assigned TT- character; both are restored below.
+    const setup = await gm.page.evaluate(async ({ MOD, folderId, prefix }) => {
+      const folder = game.folders.get(folderId);
+      const players = game.users.filter((u) => !u.isGM).slice(0, 2);
+      const made = [];
+      const saved = [];
+      for (const [i, u] of players.entries()) {
+        const actor = await Actor.create({ name: `${prefix} Hero ${i + 1}`, type: "character", ownership: { default: 0, [u.id]: 3 } });
+        saved.push({ id: u.id, character: u.character?.id ?? null });
+        await u.update({ character: actor.id });
+        made.push(actor.uuid);
+      }
+      const third = await Actor.create({ name: `${prefix} Guest`, type: "npc" });
+      const fourth = await Actor.create({ name: `${prefix} Elsewhere`, type: "npc" });
+      await folder.update({ [`flags.${MOD}.campaign.contributors`]: { userIds: players.map((u) => u.id), groupIds: [] } });
+      return { made, saved, third: third.uuid, fourth: fourth.uuid, thirdName: third.name };
+    }, { MOD, folderId: campaignId, prefix: PREFIX });
+    try {
+      const entry = await gm.page.evaluate(async ({ folder, name }) => {
+        const { buildSessionPageData } = await import("/modules/mej-campaign-companion/scripts/logic/session-page-data.mjs");
+        const e = await JournalEntry.create({ name, folder, ownership: { default: 2 }, pages: [buildSessionPageData(name, "", null, 11)] });
+        return { id: e.id, uuid: e.pages.contents[0].uuid };
+      }, { folder: campaignId, name: `${PREFIX} S11` });
+      await openSession(entry.id);
+      await expect(chips()).toHaveCount(0);
+      await header().locator('[data-action="manageAttendees"]').click();
+      const dialog = gm.page.locator("dialog.application", { hasText: "Who's playing tonight?" });
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+      const boxes = dialog.locator('input[name="attendee"]');
+      await expect(boxes).toHaveCount(2);
+      await expect(dialog.locator('input[name="attendee"]:checked')).toHaveCount(2);
+      await expect(dialog.locator('button[data-action="confirm"]')).toContainText("Add 2 attendees");
+      await boxes.nth(1).uncheck();
+      await dialog.locator('button[data-action="confirm"]').click();
+      await expect(chips()).toHaveCount(1, { timeout: 15_000 });
+
+      // Reopening keeps the unchecked one unchecked; confirming changes nothing.
+      await header().locator('[data-action="manageAttendees"]').click();
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+      await expect(dialog.locator('input[name="attendee"]')).toHaveCount(2);
+      await expect(dialog.locator('input[name="attendee"]:checked')).toHaveCount(1);
+      await expect(dialog.locator('button[data-action="confirm"]')).toContainText("Save attendees");
+      await dialog.locator('button[data-action="confirm"]').click();
+      await settle(gm.page, 800);
+      await expect(chips()).toHaveCount(1);
+
+      // Drop a third character on the Recap tab's Table talk: a chip and an "Added" notice.
+      const drop = (selector, uuid) => gm.page.evaluate(({ selector, uuid }) => {
+        const el = document.querySelector(`#MonksEnhancedJournal ${selector}`);
+        const dt = new DataTransfer();
+        dt.setData("text/plain", JSON.stringify({ type: "Actor", uuid }));
+        const opts = { bubbles: true, cancelable: true, dataTransfer: dt };
+        for (const t of ["dragenter", "dragover", "drop"]) el.dispatchEvent(new DragEvent(t, opts));
+      }, { selector, uuid });
+      await drop(".session-container .mej-cc-table-talk", setup.third);
+      await expect(chips()).toHaveCount(2, { timeout: 15_000 });
+      await expect(gm.page.locator("#notifications .notification", { hasText: `Added ${setup.thirdName}` })).toHaveCount(1);
+
+      // The Relationships tab keeps its own drops: no new chip.
+      await drop(".session-container .tab[data-tab='relationships']", setup.fourth);
+      await settle(gm.page, 1000);
+      await expect(chips()).toHaveCount(2);
+      expect(await chipNames()).not.toContain(`${PREFIX} Elsewhere`);
+      assertNoConsoleErrors(gm.errors);
+    } finally {
+      await gm.page.evaluate(async ({ MOD, folderId, saved }) => {
+        for (const s of saved) await game.users.get(s.id)?.update({ character: s.character });
+        await game.folders.get(folderId)?.update({ [`flags.${MOD}.campaign.-=contributors`]: null });
+      }, { MOD, folderId: campaignId, saved: setup.saved });
+    }
   });
 });

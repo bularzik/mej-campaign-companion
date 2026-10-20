@@ -1856,64 +1856,52 @@ section.secret.mej-cc-revealed-to-you { border-left: 3px solid var(--color-borde
   border-radius: 3px;
 }
 
-/* Session sheet attendees: a wrapping row of small round tokens, character
-   name under each with the player's name beneath it. The unscoped .item-image
-   rule that used to size these is MEJ's and renders far too large. */
-.monks-enhanced-journal .attendees-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-}
-.monks-enhanced-journal .attendees-list > .mej-cc-attendee {
-  position: relative;
-  display: flex;
-  flex-direction: column;
+/* Session header attendees (spec 2026-10-19 §4.6): one chip per character
+   (portrait + name), a hover x to remove, and a trailing control that opens
+   the checklist. Ink and chip ground are the --mej-cc tokens the status chip
+   already uses, so they hold 4.5:1 on every MEJ background. */
+.monks-enhanced-journal .mej-cc-session-attendees { gap: 4px 6px; align-items: center; }
+.monks-enhanced-journal .mej-cc-attendee-chip,
+.monks-enhanced-journal .mej-cc-attendee-control {
+  display: inline-flex;
   align-items: center;
-  width: 84px;
-  padding: 0;
-  text-align: center;
+  gap: 4px;
+  padding: 0 7px 0 2px;
+  border-radius: 10px;
+  border: 1px solid var(--mej-cc-field-border);
+  background: var(--mej-cc-chip-bg);
+  color: var(--mej-cc-ink);
+  font-size: var(--font-size-12, 12px);
+  line-height: 18px;
 }
-.monks-enhanced-journal .attendees-list > .instruction { flex: 1 1 100%; }
+.monks-enhanced-journal .mej-cc-attendee-control { padding: 0 8px; cursor: pointer; text-decoration: none; }
+.monks-enhanced-journal .mej-cc-attendee-control:hover,
+.monks-enhanced-journal .mej-cc-attendee-control:focus-visible { border-color: var(--mej-cc-ink); }
 .monks-enhanced-journal .mej-cc-attendee-token {
-  width: 64px;
-  height: 64px;
-  max-width: 64px;
+  width: 16px;
+  height: 16px;
+  max-width: 16px;
   object-fit: cover;
   border-radius: 50%;
-  border: 2px solid var(--mej-cc-field-border);
-  background: var(--mej-cc-chip-bg);
+  border: 0;
 }
-.monks-enhanced-journal .mej-cc-attendee-name {
-  margin-top: 4px;
-  max-width: 100%;
-  font-weight: bold;
-  line-height: 1.15;
-  color: var(--mej-cc-ink);
-  overflow-wrap: anywhere;
-}
-.monks-enhanced-journal .mej-cc-attendee-player {
-  max-width: 100%;
-  font-size: var(--font-size-11, 11px);
-  line-height: 1.15;
-  color: var(--mej-cc-ink-muted);
-  overflow-wrap: anywhere;
-}
+.monks-enhanced-journal .mej-cc-attendee-name { color: var(--mej-cc-ink); }
 .monks-enhanced-journal .mej-cc-attendee-remove {
-  position: absolute;
-  top: -2px;
-  right: 6px;
   display: none;
-  padding: 2px 4px;
-  border-radius: 50%;
+  margin-left: 2px;
   font-size: 10px;
-  background: var(--mej-cc-field-bg);
   color: var(--mej-cc-ink);
+  cursor: pointer;
 }
-.monks-enhanced-journal .mej-cc-attendee:hover .mej-cc-attendee-remove,
-.monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: block; }
+.monks-enhanced-journal .mej-cc-attendee-chip:hover .mej-cc-attendee-remove,
+.monks-enhanced-journal .mej-cc-attendee-remove:focus-visible { display: inline; }
+
+/* "Who's playing tonight?" dialog. */
+.mej-cc-attendee-choices, .mej-cc-attendee-results { list-style: none; margin: 0; padding: 0; }
+.mej-cc-attendee-choice label, .mej-cc-attendee-result { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+.mej-cc-attendee-choice img, .mej-cc-attendee-result img { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; border: 0; }
+.mej-cc-attendee-choice-player { margin-left: auto; opacity: 0.75; font-size: var(--font-size-11, 11px); }
+.mej-cc-attendee-search { margin-top: 8px; }
 
 /* Party relationships inside MEJ's Relationships list (spec 2026-10-10 §3.2). */
 /* MEJ 13.06's dark shell with no image still paints parchment under the

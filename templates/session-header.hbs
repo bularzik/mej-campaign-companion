@@ -42,8 +42,28 @@
         {{/if}}
         <div class="mej-cc-session-meta">
             {{#if header.number}}<span class="mej-cc-session-number">#{{header.number}}</span>{{/if}}
-            {{!-- Attendee chips and their control land here (Task 4). --}}
-            <span class="mej-cc-session-attendees"></span>
+            {{!-- Attendee chips (spec 2026-10-19 §4.6): portrait + character name,
+                  × to remove, and one control that opens the checklist. They are
+                  <a>s, not <button>s, so MEJ's read-only sweep leaves them alone;
+                  the control is only rendered for who may manage attendees. --}}
+            <span class="mej-cc-session-attendees">
+                {{#each header.attendees as |attendee|}}
+                <span class="mej-cc-attendee-chip mej-cc-attendee" data-uuid="{{attendee.uuid}}"{{#if attendee.player}} data-tooltip="{{attendee.player}}"{{/if}}>
+                    <img class="mej-cc-attendee-token" src="{{attendee.img}}" alt="" />
+                    <span class="mej-cc-attendee-name">{{attendee.name}}</span>
+                    {{#if @root.header.canManageAttendees}}
+                    <a class="mej-cc-attendee-remove" data-action="removeAttendee" data-uuid="{{attendee.uuid}}" data-tooltip="{{localize 'MEJCampaignCompanion.session.removeAttendee'}}"><i class="fa-solid fa-xmark" inert></i></a>
+                    {{/if}}
+                </span>
+                {{/each}}
+                {{#if header.canManageAttendees}}
+                {{#if header.attendees.length}}
+                <a class="mej-cc-attendee-control" data-action="manageAttendees" data-tooltip="{{localize 'MEJCampaignCompanion.session.attendeesEdit'}}"><i class="fa-solid fa-pen" inert></i></a>
+                {{else}}
+                <a class="mej-cc-attendee-control empty" data-action="manageAttendees"><i class="fa-solid fa-plus" inert></i> {{localize 'MEJCampaignCompanion.session.attendeesControl'}}</a>
+                {{/if}}
+                {{/if}}
+            </span>
             {{#if header.statusLabel}}
             <span class="mej-cc-session-status {{header.status}}"{{#if header.startedAt}} data-started-at="{{header.startedAt}}"{{/if}}>
                 {{#if header.live}}<i class="fa-solid fa-circle" inert></i> {{/if}}{{header.statusLabel}}{{#if header.elapsed}} · <span class="mej-cc-session-elapsed">{{header.elapsed}}</span>{{/if}}

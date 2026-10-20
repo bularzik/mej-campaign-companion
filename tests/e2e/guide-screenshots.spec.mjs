@@ -781,7 +781,7 @@ guideDescribe("guide screenshots", () => {
     }, { id: MODULE_ID, names: ["Kestrel Ashgrove", "Doran Emberhollow"] });
     const actorUuids = await page.evaluate((ids) => ids.map((id) => game.actors.get(id).uuid), actorIds);
     for (const uuid of actorUuids) {
-      await dropDocumentOnto(page, ".attendees-list", { type: "Actor", uuid });
+      await dropDocumentOnto(page, ".mej-cc-session-header", { type: "Actor", uuid });
       await settle(page, 400);
     }
 

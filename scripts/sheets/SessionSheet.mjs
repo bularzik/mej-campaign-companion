@@ -83,6 +83,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       updateSecretText: SessionSheet.onUpdateSecretText,
       secretAudience: SessionSheet.onSecretAudience,
       removeAttendee: SessionSheet.onRemoveAttendee,
+      manageAttendees: SessionSheet.onManageAttendees,
       openPrepBoard: SessionSheet.onOpenPrepBoard,
       captureSessionNote: SessionSheet.onCaptureSessionNote,
       editNote: SessionSheet.onEditNote,
@@ -251,7 +252,7 @@ export class SessionSheet extends EnhancedJournalSheet {
       elapsed: live ? elapsedLabel(Date.now() - running.startedAt) : "",
       button: button ? { ...button, icon: button.action === "endSession" ? "fa-stop" : "fa-play" } : null,
       attendees: context.attendeeDetails,
-      canManageAttendees: !!(context.editable ?? this.isEditable),
+      canManageAttendees: game.user.isGM || !!this.document.isOwner,
       number: session.sessionNumber ?? null,
       src: context.data?.src || null
     };
@@ -297,7 +298,9 @@ export class SessionSheet extends EnhancedJournalSheet {
     super._dragDrop(html);
 
     new foundry.applications.ux.DragDrop.implementation({
-      dropSelector: ".attendees-list",
+      // Anywhere a GM would naturally drop a character: the header and the two
+      // prose tabs. Relationships and the editors keep their own drops (§4.6).
+      dropSelector: ".mej-cc-session-header, .tab[data-tab='description'], .tab[data-tab='session']",
       permissions: {
         drop: () => game.user.isGM || this.document.isOwner
       },
@@ -322,6 +325,8 @@ export class SessionSheet extends EnhancedJournalSheet {
   }
 
   async _onDropAttendee(event) {
+    // Let the editors and the Relationships tab handle their own drops.
+    if (event.target?.closest?.(".editor-parent, prose-mirror, .tab[data-tab='relationships']")) return;
     const data = foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
     if (data.type === "Actor") await this.addActor(data);
   }
@@ -415,6 +420,9 @@ export class SessionSheet extends EnhancedJournalSheet {
 
     const attendees = [...session.attendees, doc.uuid];
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
+    ui.notifications.info(game.i18n.format(`${I18N}.session.attendeeAdded`, { name: doc.name }));
+    // Task 7's patchSessionRegions will patch only the header; until then, a full render.
+    this.render();
   }
 
   // Mirrors EnhancedJournalSheet.onEditDescription (sheets/EnhancedJournalSheet.js)
@@ -577,6 +585,12 @@ export class SessionSheet extends EnhancedJournalSheet {
     const attendees = session.attendees.filter((a) => a !== uuid);
     await this.document.update({ [`${FLAG_SESSION}.attendees`]: attendees });
     this.render();
+  }
+
+  static async onManageAttendees() {
+    if (!(game.user.isGM || this.document.isOwner)) return;
+    const { openAttendeeDialog } = await import("../apps/attendee-dialog.mjs");
+    await openAttendeeDialog(this);
   }
 
   static async onOpenPrepBoard() {

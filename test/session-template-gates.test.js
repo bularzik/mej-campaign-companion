@@ -9,10 +9,15 @@ const GM_PREP = '<details class="mej-cc-section gm-prep"';
 const details = between('data-tab="session"', 'data-tab="relationships"');
 
 describe("session.hbs player gates (spec 2026-10-15 item 9)", () => {
-  it("the attendee drag hint renders for anyone who can edit — GM or owning player (spec 2026-10-16 §4)", () => {
-    const attendees = between('<div class="attendees-section">', SECRETS);
-    expect(attendees).toMatch(/\{\{#if @root\.editable\}\}\s*<li class="instruction">\{\{localize 'MEJCampaignCompanion\.session\.dragActorHint'\}\}<\/li>/);
-    expect(attendees).not.toContain("(and @root.editable @root.isGM)");
+  it("the Details tab no longer carries an attendees section (they live in the header)", () => {
+    expect(tpl).not.toContain("attendees-section");
+    expect(tpl).not.toContain("attendees-list");
+  });
+  it("the header's attendee control and chip remove render only when canManageAttendees (GM or owner)", () => {
+    const control = headerTpl.slice(headerTpl.indexOf('data-action="manageAttendees"') - 200, headerTpl.indexOf('data-action="manageAttendees"'));
+    expect(control).toContain("{{#if header.canManageAttendees}}");
+    const remove = headerTpl.slice(headerTpl.indexOf('data-action="removeAttendee"') - 120, headerTpl.indexOf('data-action="removeAttendee"'));
+    expect(remove).toContain("{{#if @root.header.canManageAttendees}}");
   });
   it("the Secrets section renders for the GM, or for a player who has revealed secrets to read", () => {
     const idx = tpl.indexOf(SECRETS);

@@ -1,7 +1,6 @@
-// Session sheet attendees render as small tokens (<= 80px) with the
-// character name under each and, when a player owns the character, the
-// player's name beneath that. They used to inherit MEJ's .item-image sizing
-// and filled the tab.
+// Session attendees render as small chips in the page header (portrait +
+// character name, the owning player's name as the tooltip). They used to be
+// 64px tokens on the Details tab.
 import { test, expect } from "@playwright/test";
 import {
   login, TT_PREFIX, cleanupAsGm, trackConsoleErrors, assertNoConsoleErrors,
@@ -51,21 +50,23 @@ test.describe("31 attendee tokens", () => {
     const shell = page.locator("#MonksEnhancedJournal");
     await expect(shell).toContainText(pcName);
 
-    // The attendees live on the Session tab, which is not the default one.
-    await shell.locator('nav.tabs a[data-tab="session"]').first().click();
-    const tiles = shell.locator(".attendees-list .mej-cc-attendee");
-    await expect(tiles).toHaveCount(2);
-    await expect(tiles.first()).toBeVisible();
-    for (const box of await tiles.locator(".mej-cc-attendee-token").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
-      expect(box.width).toBeGreaterThan(24);
-      expect(box.width).toBeLessThanOrEqual(80);
-      expect(box.height).toBeLessThanOrEqual(80);
+    // Attendees are chips in the session header: portrait + character name,
+    // the owning player's name in the tooltip.
+    const chips = shell.locator(".mej-cc-session-header .mej-cc-attendee-chip");
+    await expect(chips).toHaveCount(2);
+    await expect(chips.first()).toBeVisible();
+    for (const box of await chips.locator(".mej-cc-attendee-token").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
+      expect(box.width).toBeGreaterThanOrEqual(12);
+      expect(box.width).toBeLessThanOrEqual(32);
+      expect(box.height).toBeLessThanOrEqual(32);
     }
-    const pcTile = tiles.filter({ hasText: pcName });
-    await expect(pcTile.locator(".mej-cc-attendee-name")).toHaveText(pcName);
-    await expect(pcTile.locator(".mej-cc-attendee-player")).toHaveText(playerName);
-    // An actor no player owns shows no player line at all.
-    await expect(tiles.filter({ hasText: npcName }).locator(".mej-cc-attendee-player")).toHaveCount(0);
+    const pcChip = chips.filter({ hasText: pcName });
+    await expect(pcChip.locator(".mej-cc-attendee-name")).toHaveText(pcName);
+    await expect(pcChip).toHaveAttribute("data-tooltip", playerName);
+    // An actor no player owns carries no player name at all.
+    await expect(chips.filter({ hasText: npcName })).not.toHaveAttribute("data-tooltip", /.+/);
+    // The Details tab no longer lists attendees.
+    await expect(shell.locator(".attendees-list")).toHaveCount(0);
 
     assertNoConsoleErrors(errors);
   });
