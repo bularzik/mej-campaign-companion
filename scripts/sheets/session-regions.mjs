@@ -1,11 +1,12 @@
 // In-place region updates for the Session sheet (spec 2026-10-19 §4.4). Its
 // editors are always available, so a live change - a Table talk note, an
 // attendee, a start or end - must never re-render the sheet under someone's
-// typing. Instead the two regions that show live state, the header
-// (session-header.hbs, data-cc-region="header") and Table talk
-// (table-talk.hbs, data-cc-region="table-talk"), are rendered again from a
-// fresh body context and swapped in; the editors, the tabs and everything
-// else stay as they are. Never touches `.editor-parent`.
+// typing. Instead the regions that show live state, the header
+// (session-header.hbs, data-cc-region="header"), Table talk (table-talk.hbs,
+// data-cc-region="table-talk") and the Details tab's Secrets & clues
+// (session.hbs, data-cc-region="secrets": a reveal shows to viewers), are
+// rendered again from a fresh body context and swapped in; the editors, the
+// tabs and everything else stay as they are. Never touches `.editor-parent`.
 //
 // No MEJ import (hooks load this before MEJ's sheet classes): a Session sheet
 // is recognised by its type.
@@ -16,7 +17,9 @@ import { refreshIdleDisplays } from "./session-autosave.mjs";
 
 const REGIONS = {
   header: `modules/${MODULE_ID}/templates/session-header.hbs`,
-  "table-talk": `modules/${MODULE_ID}/templates/table-talk.hbs`
+  "table-talk": `modules/${MODULE_ID}/templates/table-talk.hbs`,
+  // Inline in the sheet's own template: rendered whole, the region picked out.
+  secrets: `modules/${MODULE_ID}/templates/session.hbs`
 };
 
 /** A Session sheet (shell-hosted subsheet or popped out). */
@@ -83,6 +86,9 @@ async function patch(sheet) {
   for (const [region, fresh] of Object.entries(rendered)) {
     const old = container.querySelector(`[data-cc-region="${region}"]`);
     if (!old || !fresh) continue;
+    // A GM typing a secret's text: its change (on blur) saves it, and the
+    // list catches up with the next patch or render.
+    if (region === "secrets" && old.contains(old.ownerDocument.activeElement)) continue;
     const keep = carryOver(old, fresh);
     old.replaceWith(fresh);
     keep();
@@ -107,11 +113,17 @@ function carryOver(old, fresh) {
       focused = { twin, start: active.selectionStart, end: active.selectionEnd };
     }
   }
-  const list = old.querySelector(".mej-cc-notes-list");
-  const scrollTop = list?.scrollTop ?? 0;
+  const LISTS = [".mej-cc-notes-list", ".secrets-list"];
+  const scrolls = LISTS.map((sel) => old.querySelector(sel)?.scrollTop ?? 0);
+  // A folded section stays folded (Secrets & clues is a <details>).
+  const folds = [...old.querySelectorAll("details")].map((d) => d.open);
   return () => {
-    const newList = fresh.querySelector(".mej-cc-notes-list");
-    if (newList && scrollTop) newList.scrollTop = scrollTop;
+    LISTS.forEach((sel, i) => {
+      const newList = fresh.querySelector(sel);
+      if (newList && scrolls[i]) newList.scrollTop = scrolls[i];
+    });
+    const freshDetails = [...fresh.querySelectorAll("details")];
+    if (freshDetails.length === folds.length) freshDetails.forEach((d, i) => { d.open = folds[i]; });
     if (!focused) return;
     focused.twin.focus({ preventScroll: true });
     try {

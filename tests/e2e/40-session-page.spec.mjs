@@ -521,6 +521,40 @@ test.describe("40 session page", () => {
     assertNoConsoleErrors(gm.errors);
   });
 
+  // Final review item 3: a reveal patches the viewer's Details tab in place.
+  test("a revealed secret shows on a player's open Details tab", async () => {
+    test.setTimeout(90_000);
+    const s17 = await newSession(`${PREFIX} S17`, 17);
+    const secretsPath = `flags.${MOD}.session.secrets`;
+    const writeSecrets = (secrets) => gm.page.evaluate(async ({ uuid, path, secrets }) =>
+      (await fromUuid(uuid)).update({ [path]: secrets }), { uuid: s17.uuid, path: secretsPath, secrets });
+    const hidden = { id: "tt40hidden", text: "TT-40 the duke is the thief", revealed: false, revealedAt: null };
+    await writeSecrets([hidden]);
+    await player.page.evaluate(async (uuid) => game.MonksEnhancedJournal.openJournalEntry((await fromUuid(uuid)).parent), s17.uuid);
+    const pShell = player.page.locator("#MonksEnhancedJournal");
+    await expect(pShell.locator(".session-container .mej-cc-session-header input[name='name']")).toHaveValue(s17.name, { timeout: 15_000 });
+    await pShell.locator('nav.sheet-tabs a[data-tab="session"]').click();
+    const rows = pShell.locator(".session-container [data-cc-region='secrets'] .secrets-list li[data-id]");
+    await expect(pShell.locator(".session-container [data-cc-region='secrets']")).toHaveCount(1);
+    await expect(rows).toHaveCount(0);
+
+    // The GM reveals one: it shows without a reload; the unrevealed one never does.
+    const shown = { id: "tt40shown", text: "TT-40 the ferry runs at dawn", revealed: true, revealedAt: Date.now() };
+    await writeSecrets([hidden, shown]);
+    await expect(rows).toHaveCount(1, { timeout: 15_000 });
+    await expect(rows.first()).toContainText(shown.text);
+    await expect(pShell.locator(".session-container")).not.toContainText(hidden.text);
+
+    // A folded section stays folded through the next reveal.
+    await pShell.locator(".session-container .secrets-section > summary").click();
+    await expect(pShell.locator(".session-container details.secrets-section")).not.toHaveAttribute("open", /.*/);
+    await writeSecrets([hidden, shown, { id: "tt40second", text: "TT-40 the bell tolls twice", revealed: true, revealedAt: Date.now() }]);
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+    await expect(pShell.locator(".session-container details.secrets-section")).not.toHaveAttribute("open", /.*/);
+    assertNoConsoleErrors(player.errors);
+    assertNoConsoleErrors(gm.errors);
+  });
+
   // Last: it logs the GM out and back in.
   test("My Notes without a GM", async ({ browser }) => {
     test.setTimeout(180_000);

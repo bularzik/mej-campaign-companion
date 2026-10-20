@@ -58,6 +58,9 @@
                             </div>
                         </div>
 
+                        {{!-- A live region (session-regions.mjs): a reveal or a new secret
+                              shows without a re-render. No editors inside. --}}
+                        <div class="mej-cc-secrets-region" data-cc-region="secrets">
                         {{#if (or @root.isGM secrets.length)}}
                         <details class="mej-cc-section secrets-section" open>
                             {{!-- The actions sit on the summary line; activateListeners keeps a
@@ -88,6 +91,7 @@
                             </ol>
                         </details>
                         {{/if}}
+                        </div>
 
                         {{#if @root.isGM}}
                         <details class="mej-cc-section gm-prep" open>

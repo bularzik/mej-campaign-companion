@@ -110,3 +110,18 @@ describe("session.hbs always-editable text (spec 2026-10-19 §4.4)", () => {
     expect(block.slice(block.indexOf("<prose-mirror"), block.indexOf(">", block.indexOf("<prose-mirror")))).not.toContain("name=");
   });
 });
+
+describe("session.hbs live regions (final review item 3)", () => {
+  it("Secrets & clues sits in a patchable region that holds no editor", () => {
+    const start = tpl.indexOf('data-cc-region="secrets"');
+    expect(start).toBeGreaterThan(-1);
+    const region = tpl.slice(start, tpl.indexOf('<details class="mej-cc-section gm-prep"', start));
+    expect(region).toContain(SECRETS);
+    expect(region).not.toContain("editor-parent");
+    expect(region).not.toContain("prose-mirror");
+  });
+  it("the region wraps the section's gate, so a first reveal can add the section", () => {
+    const start = tpl.indexOf('data-cc-region="secrets"');
+    expect(tpl.indexOf("{{#if (or @root.isGM secrets.length)}}", start)).toBeGreaterThan(start);
+  });
+});

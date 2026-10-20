@@ -615,12 +615,10 @@ export class SessionSheet extends EnhancedJournalSheet {
   async activateListeners(html) {
     await super.activateListeners(html);
     this._applyGround(html);
-    // A section's actions sit on its <summary>, whose default click action
-    // folds the <details>. Cancel only that default: stopping propagation
-    // instead would also keep the click from the application's delegated
-    // data-action handler.
-    $("details.mej-cc-section > summary .mej-cc-section-actions", html).on("click", (event) => event.preventDefault());
     $(".editor-parent[data-editor-id='recap']", html).on("paste", this._onPasteRecapImage.bind(this));
+    // MEJ's activateListeners (above) bound the change actions of this render;
+    // _bindRegions binds only those of a region swapped in later.
+    $("[data-cc-region] [data-change-action]", html).each((_, el) => { el.dataset.ccChange = "1"; });
     bindAutosave(this, html);
     this._bindRegions(html);
   }
@@ -634,6 +632,28 @@ export class SessionSheet extends EnhancedJournalSheet {
     const root = html instanceof HTMLElement ? html : html?.[0];
     if (!root) return;
     this._startElapsedClock(root);
+    // A section's actions sit on its <summary>, whose default click action
+    // folds the <details>. Cancel only that default: stopping propagation
+    // instead would also keep the click from the application's delegated
+    // data-action handler.
+    for (const el of root.querySelectorAll("details.mej-cc-section > summary .mej-cc-section-actions")) {
+      if (el.dataset.ccFold) continue;
+      el.dataset.ccFold = "1";
+      el.addEventListener("click", (event) => event.preventDefault());
+    }
+    // A secret's text saves on change (MEJ's data-change-action, which MEJ
+    // binds per element at render: a swapped-in Secrets region needs it again).
+    for (const el of root.querySelectorAll("[data-cc-region] [data-change-action]")) {
+      if (el.dataset.ccChange) continue;
+      el.dataset.ccChange = "1";
+      el.addEventListener("change", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = this.options.actions?.[el.dataset.changeAction];
+        const handler = typeof action === "function" ? action : action?.handler;
+        handler?.call(this, event, el);
+      });
+    }
     const header = root.querySelector(".mej-cc-session-header");
     if (header && !header.dataset.ccDrop) {
       header.dataset.ccDrop = "1";

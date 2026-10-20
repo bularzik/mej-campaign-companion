@@ -54,6 +54,8 @@
   flex: 0 0 auto;
   margin-top: 10px;
 }
+/* The Secrets live region (session-regions.mjs) adds no box of its own. */
+.session-container .mej-cc-secrets-region { display: contents; }
 .session-container summary.mej-cc-section-title {
   display: flex;
   align-items: center;
